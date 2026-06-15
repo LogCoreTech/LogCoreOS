@@ -1,0 +1,33 @@
+services:
+
+  app:
+    build: ../app/backend
+    container_name: logcore-app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../brain:/data/brain
+      - ../auth.json:/data/auth.json
+      - ../app/frontend/dist:/app/frontend/dist
+    environment:
+      BRAIN_PATH: /data/brain
+      SECRET_KEY: ${SECRET_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      AI_MODEL: ${AI_MODEL:-claude-sonnet-4-6}
+      NTFY_URL: http://ntfy:80
+    depends_on:
+      - ntfy
+
+  ntfy:
+    image: binwiederhier/ntfy
+    container_name: logcore-ntfy
+    restart: unless-stopped
+    ports:
+      - "5680:80"
+    volumes:
+      - ntfy_data:/var/lib/ntfy
+    command: serve
+
+volumes:
+  ntfy_data:

@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg: #ffffff;
+    --bg-secondary: #f5f5f5;
+    --bg-card: #ebebeb;
+    --border: #d4d4d4;
+    --text: #1a1a1a;
+    --text-secondary: #555555;
+  }
+
+  .dark {
+    --bg: #1a1a1a;
+    --bg-secondary: #242424;
+    --bg-card: #2a2a2a;
+    --border: #3a3a3a;
+    --text: #f0f0f0;
+    --text-secondary: #9ca3af;
+  }
+
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  body {
+    @apply bg-white text-charcoal-900 dark:bg-charcoal-900 dark:text-gray-100;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-charcoal-300 dark:bg-charcoal-600 rounded-full; }
+}
+
+@layer components {
+  .card {
+    @apply bg-charcoal-50 dark:bg-charcoal-800 rounded-xl border border-charcoal-200 dark:border-charcoal-700;
+  }
+
+  .btn-primary {
+    @apply bg-orange-500 hover:bg-orange-600 text-white font-medium px-4 py-2 rounded-lg transition-colors;
+  }
+
+  .btn-ghost {
+    @apply text-charcoal-600 dark:text-charcoal-300 hover:bg-charcoal-100 dark:hover:bg-charcoal-700 px-3 py-2 rounded-lg transition-colors;
+  }
+
+  .input {
+    @apply bg-white dark:bg-charcoal-700 border border-charcoal-300 dark:border-charcoal-600 rounded-lg px-3 py-2 text-charcoal-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500 w-full;
+  }
+
+  .badge {
+    @apply text-xs font-medium px-2 py-0.5 rounded-full;
+  }
+}

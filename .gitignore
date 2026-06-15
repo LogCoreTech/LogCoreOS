@@ -1,0 +1,38 @@
+# ── User data (real user folders — keep only the _template) ──────────────────
+brain/USERS/*/
+!brain/USERS/_template/
+!brain/USERS/_template/**
+
+# ── Personal session memory (generated per deployment) ────────────────────────
+brain/Memory/Daily Notes/
+
+# ── Auth registry (contains hashed passwords) ─────────────────────────────────
+auth.json
+
+# ── Environment / secrets ─────────────────────────────────────────────────────
+docker/.env
+.env
+*.env
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+
+# ── Node / frontend ───────────────────────────────────────────────────────────
+app/frontend/node_modules/
+app/frontend/dist/
+
+# ── Docker volume data ────────────────────────────────────────────────────────
+docker/ntfy_data/
+docker/postgres_data/
+
+# ── OS / editor ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
