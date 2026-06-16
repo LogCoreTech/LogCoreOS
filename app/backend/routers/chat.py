@@ -3,6 +3,7 @@ from pydantic import BaseModel
 
 from config import settings
 from routers.auth import get_current_user
+from services.ai_provider import chat_completion
 from services.file_service import (
     read_markdown,
     profile_path,
@@ -58,9 +59,6 @@ async def chat(req: ChatRequest, current_user: dict = Depends(get_current_user))
     if not settings.anthropic_api_key:
         return {"response": "No AI API key configured. Set ANTHROPIC_API_KEY in .env."}
 
-    import anthropic
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-
     system_prompt = (
         "You are the AI layer of LogCore Brain — a personal life operating system. "
         "You know this user personally from the context below. Be direct and concise. "
@@ -69,12 +67,5 @@ async def chat(req: ChatRequest, current_user: dict = Depends(get_current_user))
     )
 
     messages = req.history + [{"role": "user", "content": req.message}]
-
-    response = client.messages.create(
-        model=settings.ai_model,
-        max_tokens=1024,
-        system=system_prompt,
-        messages=messages,
-    )
-
-    return {"response": response.content[0].text}
+    response = chat_completion(system_prompt, messages)
+    return {"response": response}

@@ -2,10 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr
 
+from config import settings
 from services import auth_service
 
 router = APIRouter()
 bearer = HTTPBearer()
+bearer_optional = HTTPBearer(auto_error=False)
 
 
 class RegisterRequest(BaseModel):
@@ -30,9 +32,23 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer)
 
 
 @router.post("/register")
-def register(req: RegisterRequest):
+def register(
+    req: RegisterRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_optional),
+):
+    is_first_user = auth_service.user_count() == 0
+
+    if not is_first_user and not settings.allow_open_registration:
+        # Subsequent users must be created by an authenticated admin
+        if not credentials:
+            raise HTTPException(status_code=403, detail="Registration is closed. An admin must add new users.")
+        payload = auth_service.decode_token(credentials.credentials)
+        if not payload or payload.get("role") != "admin":
+            raise HTTPException(status_code=403, detail="Only admins can register new users.")
+
+    role = "admin" if is_first_user else "member"
     try:
-        user = auth_service.create_user(req.email, req.password, req.name)
+        user = auth_service.create_user(req.email, req.password, req.name, role=role)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     token = auth_service.create_token(user)
