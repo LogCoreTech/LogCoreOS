@@ -8,7 +8,7 @@ from services.priority_service import get_top3
 from services.recurring_service import process_all_users
 from services.notification_service import send
 
-scheduler = BackgroundScheduler(timezone="America/Chicago")
+scheduler = BackgroundScheduler(timezone=settings.scheduler_timezone)
 
 
 def _all_users() -> list[str]:

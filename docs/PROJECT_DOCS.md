@@ -36,11 +36,11 @@ User Interface (React PWA)
       ↓
 Application Layer (FastAPI)
       ↓
-AI Agent Layer (Brain context → Anthropic API)
+AI Agent Layer (ai_provider abstraction → current: Anthropic)
       ↓
 The Brain (Source of Truth — Markdown + JSON files)
       ↓
-Automation Layer (Scheduler / future: n8n)
+Automation Layer (Built-in Scheduler + future: LogCore Workflows)
       ↓
 External Services & Devices
 ```
@@ -100,7 +100,7 @@ At the start of every session, the AI reads the Brain in this order:
 
 After loading, the agent scores the user's tasks and surfaces the **top 3 most pressing tasks** using the Life Priorities skill.
 
-Current AI provider: Anthropic (configurable via `AI_MODEL` environment variable). Multi-provider support (local models, OpenAI, Ollama) is a planned roadmap item.
+**AI Provider:** The App routes all AI calls through `services/ai_provider.py` — a thin abstraction layer so swapping providers requires changing one file, not refactoring the whole codebase. Currently wired to Anthropic. Multi-provider support (local models, OpenAI, Ollama) is Phase 6. The `AI_PROVIDER` and `AI_MODEL` env vars control the active model.
 
 ---
 
@@ -130,13 +130,15 @@ The App currently provides:
 
 **Active (Phase 1):**
 
-- User authentication
-- Task management (create, complete, skip, recurring)
+- User authentication (JWT, bcrypt, role-based: admin / member / guest)
+- Task management (create, complete, skip, recurring, streaks, history)
 - Life priority scoring and top-3 dashboard
-- AI chat interface (Brain context injected into every message)
-- Push notifications via ntfy
-- Setup wizard (creates user Brain folder from template)
-- Background scheduler (nightly recurring task processor)
+- AI chat interface (full Brain context injected into every message)
+- Push notifications via ntfy (self-hosted)
+- Setup wizard (creates user Brain folder from template on first login)
+- Background scheduler (nightly recurring processor, morning digest, overdue alerts, weekly review)
+- React PWA (installable on phone and desktop)
+- Docker Compose deployment
 
 **Planned:**
 
@@ -163,15 +165,30 @@ Each user receives:
 - Individual AI preferences (defined in their Profile)
 - Individual life priority hierarchy
 
-Shared spaces and family-level features are planned for a later phase.
+**Registration model:** The first user to register automatically becomes admin. After that, registration is closed by default — admins add new users by calling the register endpoint with their admin token. This prevents unauthorized access on self-hosted installs. Set `ALLOW_OPEN_REGISTRATION=true` in `.env` for dev or testing environments.
+
+Shared spaces and family-level features (shared calendar, chores, family dashboard) are planned for Phase 5.
 
 ---
 
 ## 6. Automation System
 
-**Current:** A Python scheduler (`scheduler.py`) runs nightly to advance recurring tasks, reset streaks for broken habits, and trigger push notifications.
+**Built-in scheduler (system automation) — active now:**
 
-**Planned (Phase 3):** n8n as a visual automation engine for user-defined workflows, event triggers, and smart home control. The custom scheduler may coexist with n8n for internal task processing.
+The `scheduler.py` background service handles all internal automation:
+
+| Job | Schedule | What it does |
+|-----|----------|--------------|
+| Recurring processor | Nightly 00:01 | Advances due dates, resets broken streaks |
+| Morning digest | 06:00 | Sends top-3 tasks via ntfy |
+| Overdue check | 19:00 | Alerts on overdue tasks |
+| Weekly review | Sunday 19:00 | Summary of completed tasks by category |
+
+Scheduler timezone is configurable via `SCHEDULER_TIMEZONE` in `.env`.
+
+**LogCore Workflows (user-defined automation) — Phase 3:**
+
+Users will define automations through the app or via AI command. Workflows run natively inside the scheduler engine. For users who want n8n, workflows can be exported in n8n-compatible format and imported there — but n8n is never a required dependency. This keeps the system vendor-agnostic and self-contained by default.
 
 ---
 
@@ -179,11 +196,11 @@ Shared spaces and family-level features are planned for a later phase.
 
 Planned connectors:
 
-- Calendars
+- Calendars (Google, Apple)
 - Email
 - Cloud storage
-- Health devices
-- Smart home systems
+- Health devices (Apple Health, Garmin)
+- Smart home systems (Home Assistant)
 - Messaging platforms
 - Financial services
 - External APIs
@@ -206,7 +223,39 @@ logcore-app    → FastAPI backend + React frontend (port 8000)
 logcore-ntfy   → ntfy push notification server (port 5680)
 ```
 
-The `brain/` folder is mounted as a volume — all Brain files persist outside the container.
+The `brain/` folder and `auth.json` are mounted as volumes — all data persists outside the container.
+
+**Key environment variables (see `docker/.env.example`):**
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `SECRET_KEY` | *(required)* | JWT signing key |
+| `AI_PROVIDER` | `anthropic` | Active AI provider |
+| `ANTHROPIC_API_KEY` | *(required for chat)* | Anthropic API key |
+| `AI_MODEL` | `claude-sonnet-4-6` | Model to use |
+| `ALLOWED_ORIGINS` | `*` | CORS origins (lock down in production) |
+| `SCHEDULER_TIMEZONE` | `America/Chicago` | IANA timezone for all scheduled jobs |
+| `ALLOW_OPEN_REGISTRATION` | `false` | Allow self-registration after first user |
+
+**Backups:**
+
+The Brain is the source of truth. Back it up.
+
+```bash
+# Manual backup (saves to ./backups/)
+bash docker/backup.sh
+
+# Custom backup destination
+bash docker/backup.sh /path/to/backup/folder
+```
+
+Keeps the 30 most recent backups automatically. For automated backups, add to cron on the host:
+
+```
+0 3 * * * /path/to/logcoreos/docker/backup.sh >> /var/log/logcore-backup.log 2>&1
+```
+
+**PWA on mobile:** The app installs as a PWA on Android and desktop. iOS (Safari) supports PWA installation but has historically limited background push notification support — ntfy's native app handles notifications on iOS reliably regardless of PWA limits.
 
 **Deployment models:**
 
@@ -238,13 +287,17 @@ Done:
 
 Done:
 
-- User authentication
-- Setup wizard (creates user from template)
+- User authentication (JWT, bcrypt, roles)
+- Admin-only registration (first user = admin; admin adds subsequent users)
+- Setup wizard (creates user Brain folder from template)
 - Task management (CRUD, recurring, streaks, history)
 - Life priority scoring (top 3 dashboard)
 - AI chat interface with full Brain context injection
+- AI provider abstraction layer (swap providers by changing one env var)
 - Push notifications (ntfy)
-- Background scheduler (nightly recurring task processor)
+- Background scheduler (recurring processor, morning digest, overdue alerts, weekly review)
+- Configurable CORS, timezone, and registration settings
+- Backup script (`docker/backup.sh`)
 - React PWA (installable on phone and desktop)
 - Docker Compose deployment
 
@@ -276,19 +329,20 @@ Create a natural language command interface. Examples:
 
 ---
 
-## Phase 3: Automation
+## Phase 3: LogCore Workflows (Automation)
 
-Integrate n8n alongside the existing scheduler.
+Build a native workflow engine inside the scheduler.
 
 Features:
 
-- Visual automation editor
-- AI-generated workflows
-- Event triggers
-- Notifications
-- Device control
+- Workflow definition format (JSON-based, human-readable)
+- Trigger types: time-based, event-based (task completed, Brain file changed, etc.)
+- Actions: send notification, update Brain file, call external API, run a skill
+- AI-generated workflows ("create an automation that reminds me every Sunday to review my goals")
+- App UI to view, create, and manage workflows
+- n8n export: workflows can be exported to n8n-compatible format for users who prefer n8n — but n8n is never required
 
-Clarify boundary between n8n (user-defined workflows) and the internal scheduler (Brain file processing).
+The built-in scheduler handles all system jobs. LogCore Workflows handles everything the user defines.
 
 ---
 
@@ -319,18 +373,20 @@ Build on the existing multi-user foundation:
 - Family dashboard
 - Shared shopping lists
 - Chore management
-- Household automation
+- Household automation via LogCore Workflows
 
 ---
 
 ## Phase 6: AI Provider Expansion
 
-Deliver on the vendor-agnostic promise:
+Deliver on the vendor-agnostic promise. The abstraction layer (`ai_provider.py`) is already in place — this phase wires up additional providers.
 
-- Plug-in AI provider system
-- Support for local models (Ollama, LM Studio)
-- Support for OpenAI, Gemini, and other cloud providers
-- Maintain the Brain-as-context-layer regardless of provider
+- Local models via Ollama and LM Studio
+- OpenAI and Gemini
+- Any provider with an OpenAI-compatible API
+- Provider selection per-user (one household member uses local, another uses cloud)
+
+The Brain context layer works identically regardless of provider.
 
 ---
 

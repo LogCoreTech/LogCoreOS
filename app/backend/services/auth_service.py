@@ -28,6 +28,10 @@ def _save_auth(data: dict) -> None:
         json.dump(data, f, indent=2)
 
 
+def user_count() -> int:
+    return len(_load_auth()["users"])
+
+
 def get_user_by_email(email: str) -> dict | None:
     return next(
         (u for u in _load_auth()["users"] if u["email"].lower() == email.lower()), None
