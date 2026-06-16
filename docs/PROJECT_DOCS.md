@@ -21,168 +21,163 @@ The core principles:
 
 ---
 
+## Two Products
+
+**LogCore Brain** (`brain/`) — Free and open source. Markdown and JSON files. Works with any AI — Claude Code, GPT, Ollama, anything. Take your Brain folder anywhere and your AI context comes with you.
+
+**LogCore App** (`app/`) — The software layer. Python FastAPI backend + React frontend, installable as a PWA on phones and desktops. Dashboards, task management, integrated AI chat, background scheduling, push notifications. This is what you run (or pay to have hosted).
+
+---
+
 ## High-Level Architecture
 
 ```
-User Interface
+User Interface (React PWA)
       ↓
-Application Layer
+Application Layer (FastAPI)
       ↓
-AI Agent Layer
+AI Agent Layer (Brain context → Anthropic API)
       ↓
-Knowledge Verse (Source of Truth)
+The Brain (Source of Truth — Markdown + JSON files)
       ↓
-Automation Layer
+Automation Layer (Scheduler / future: n8n)
       ↓
 External Services & Devices
 ```
 
 ---
 
-## 1. Knowledge Verse
+## 1. The Brain
 
-The Knowledge Verse is the heart of LogCoreOS.
+The Brain is the heart of LogCoreOS.
 
-All important user data exists as organized folders and Markdown files.
+All user data exists as organized Markdown and JSON files inside `brain/`. The Brain is fully portable — it works with any AI out of the box. If the AI provider changes, the Brain comes with you.
 
-Example structure:
+Structure:
 
 ```
-/Life
-├── /People
-├── /Journal
-├── /Projects
-├── /Tasks
-├── /Calendar
-├── /Health
-├── /Fitness
-├── /Research
-├── /Documents
-├── /Home
-├── /Finances
-├── /Media
-└── /Settings
+brain/
+├── AGENTS.md              ← AI boot protocol (session start order, memory rules)
+├── SOUL.md                ← AI personality and communication principles
+├── USERS.md               ← User registry and selection logic
+├── MEMORY_MAP.md          ← Navigation index for all memory files, skills, plugins
+├── Memory/
+│   ├── Long_Term_Memory.md    ← System-wide stable knowledge
+│   └── Daily Notes/           ← One file per session day (YYYY-MM-DD.md)
+├── USERS/
+│   ├── _template/             ← Copied for each new user at setup
+│   │   ├── Profile.md
+│   │   ├── Long_Term_Memory.md
+│   │   ├── Short_Term_Memory.md
+│   │   └── Tasks/
+│   │       ├── tasks.json
+│   │       ├── tasks_history.json
+│   │       ├── tasks_view.md
+│   │       └── daily_override.json
+│   └── {User Name}/           ← Created by the setup wizard on first login
+└── skills/
+    ├── life-priorities/       ← Task scoring + recurring task logic
+    └── skill-creator/         ← Template and process for building new skills
 ```
 
-Additional files may include:
-
-- Metadata
-- Relationships
-- History
-- Preferences
-- AI memories
-
-Databases exist only as generated indexes for:
-
-- Search
-- Vector embeddings
-- Caching
-- Performance optimization
-
-The files remain the permanent source of truth.
+The Brain files are the permanent source of truth. Databases exist only as generated indexes for search, caching, or performance.
 
 ---
 
 ## 2. AI Agent System
 
-The AI agent serves as the operating interface for LogCoreOS.
+The AI agent is the operating interface for LogCoreOS.
 
-Capabilities:
+At the start of every session, the AI reads the Brain in this order:
 
-- Read and write Knowledge Verse files
-- Understand user history
-- Manage tasks and schedules
-- Research information
-- Create plans
-- Manage smart home systems
-- Configure automations
-- Analyze health trends
-- Assist with learning
-- Manage family information
+1. `SOUL.md` — personality and principles
+2. `USERS.md` — who is being helped
+3. `Memory/Long_Term_Memory.md` — system-wide stable knowledge
+4. `USERS/{name}/Long_Term_Memory.md` — personal stable knowledge
+5. `USERS/{name}/Short_Term_Memory.md` — recent active context
+6. `USERS/{name}/Tasks/tasks.json` — active tasks
+7. `MEMORY_MAP.md` — navigation index
 
-The agent supports:
+After loading, the agent scores the user's tasks and surfaces the **top 3 most pressing tasks** using the Life Priorities skill.
 
-- Local models
-- Cloud models
-- Multiple providers
-- Future AI systems
-
-No vendor dependency.
+Current AI provider: Anthropic (configurable via `AI_MODEL` environment variable). Multi-provider support (local models, OpenAI, Ollama) is a planned roadmap item.
 
 ---
 
-## 3. Application Modules
+## 3. Life Priority Scoring
 
-Modules are independent and optional.
+The Life Priorities skill is a core built-in feature.
 
-Core modules:
+Each user defines their priority order in `Profile.md` (e.g., God → Family → Job → Personal Growth → Hobbies). Tasks are scored by category weight, urgency, and priority to surface what matters most right now.
 
-**Life Management:**
+**Scoring formula:**
 
-- Tasks
-- Goals
-- Calendar
-- Habits
-- Time blocking
+```
+category_weight = total_categories - position_index
+priority_weight: High=3, Medium=2, Low=1
+urgency_bonus:  overdue=10, due_today=5, due_this_week=2, no_due_date=0
 
-**Knowledge:**
+final_score = (category_weight × priority_weight) + urgency_bonus
+```
+
+Implemented in both the AI layer (`skills/life-priorities/`) and the App backend (`priority_service.py`). The dashboard displays top 3 automatically via `/api/tasks/top3`.
+
+---
+
+## 4. Application Modules
+
+The App currently provides:
+
+**Active (Phase 1):**
+
+- User authentication
+- Task management (create, complete, skip, recurring)
+- Life priority scoring and top-3 dashboard
+- AI chat interface (Brain context injected into every message)
+- Push notifications via ntfy
+- Setup wizard (creates user Brain folder from template)
+- Background scheduler (nightly recurring task processor)
+
+**Planned:**
 
 - Notes
 - Journal
-- Research
-- Books
-- Learning
-
-**Health:**
-
-- Sleep
-- Exercise
-- Nutrition
-- Biometrics
-
-**Home:**
-
-- Smart devices
-- Sensors
-- Cameras
-- Energy tracking
-
-**Family:**
-
-- Shared schedules
-- Chores
-- Shopping
-- Shared projects
+- Projects
+- Calendar
+- Health tracking
+- Home automation
+- Research tools
 
 ---
 
-## 4. Automation System
+## 5. Multi-User Architecture
 
-n8n acts as the automation engine.
+Multi-user is foundational from Phase 0, not a later addition.
 
-Examples:
+One installation supports a single person, couple, family, or household.
 
-**Event:** "User arrives home"
+Each user receives:
 
-**Automation:**
+- Their own `USERS/{name}/` Brain folder
+- Private memory and tasks
+- Individual AI preferences (defined in their Profile)
+- Individual life priority hierarchy
 
-- Turn lights on
-- Adjust climate
-- Start music
-- Update presence status
-
-The AI can:
-
-- Create workflows
-- Modify workflows
-- Explain workflows
-- Monitor failures
+Shared spaces and family-level features are planned for a later phase.
 
 ---
 
-## 5. Integration Layer
+## 6. Automation System
 
-Connectors include:
+**Current:** A Python scheduler (`scheduler.py`) runs nightly to advance recurring tasks, reset streaks for broken habits, and trigger push notifications.
+
+**Planned (Phase 3):** n8n as a visual automation engine for user-defined workflows, event triggers, and smart home control. The custom scheduler may coexist with n8n for internal task processing.
+
+---
+
+## 7. Integration Layer
+
+Planned connectors:
 
 - Calendars
 - Email
@@ -195,84 +190,70 @@ Connectors include:
 
 ---
 
-## 6. Multi-User Architecture
+## 8. Deployment
 
-One installation may support:
+**Tech stack:**
 
-- Single person
-- Couple
-- Family
-- Household
+- Backend: Python FastAPI
+- Frontend: React + Vite + Tailwind CSS (served as PWA)
+- Notifications: ntfy (self-hosted)
+- Containers: Docker Compose
 
-Each user receives:
+**Docker services:**
 
-- Private space
-- Shared spaces
-- Individual AI preferences
-- Permission controls
+```
+logcore-app    → FastAPI backend + React frontend (port 8000)
+logcore-ntfy   → ntfy push notification server (port 5680)
+```
 
----
+The `brain/` folder is mounted as a volume — all Brain files persist outside the container.
 
-## 7. Deployment Models
+**Deployment models:**
 
-**Community:**
-
-- Free
-- Self-hosted
-- Full ownership
-
-**Managed:**
-
-- LogCore hosted
-- Automatic backups
-- Easy updates
-- Remote access
-
-**Appliance:**
-
-- Dedicated hardware with LogCoreOS pre-installed
+- **Community:** Self-hosted via Docker Compose. Free, full data ownership.
+- **Managed:** LogCore hosted. Automatic backups, easy updates, remote access. *(planned)*
+- **Appliance:** Dedicated hardware with LogCoreOS pre-installed. *(planned)*
 
 ---
 
 # Part 2 — Development Roadmap
 
-## Phase 0: Foundation
+## Phase 0: Foundation ✅ Complete
 
-Create the Knowledge Verse standard.
+Create the Brain standard.
 
-Design:
+Done:
 
-- Folder structures
-- Metadata conventions
-- Relationships
-- Import/export rules
-- AI context rules
-
-Build a small CLI agent that can:
-
-- Read files
-- Write files
-- Search information
-- Manage the Knowledge Verse
+- Brain folder structure (`AGENTS.md`, `SOUL.md`, `USERS.md`, `MEMORY_MAP.md`, `Memory/`, `USERS/_template/`)
+- Per-user memory system (Profile, Long-Term Memory, Short-Term Memory)
+- Life Priorities skill (`skills/life-priorities/`) with scoring formula, task schema, recurring logic
+- Skill-creator system for building new skills
+- AI boot protocol and end-of-turn memory rules
 
 ---
 
-## Phase 1: Core MVP
+## Phase 1: Core MVP 🔄 In Progress
 
 **Goal:** A usable personal life operating system.
 
-Build:
+Done:
 
 - User authentication
-- Knowledge Verse manager
+- Setup wizard (creates user from template)
+- Task management (CRUD, recurring, streaks, history)
+- Life priority scoring (top 3 dashboard)
+- AI chat interface with full Brain context injection
+- Push notifications (ntfy)
+- Background scheduler (nightly recurring task processor)
+- React PWA (installable on phone and desktop)
+- Docker Compose deployment
+
+Still to build:
+
 - Notes
 - Journal
-- Tasks
 - Projects
 - Basic calendar
-- AI chat interface
-
-The AI should already be capable of managing the system.
 
 ---
 
@@ -280,25 +261,24 @@ The AI should already be capable of managing the system.
 
 Expand the agent with:
 
-- Long-term memory
+- Long-term memory writes from the App (not just CLI)
 - Planning abilities
-- Tool use
-- Personalization
-- File modification
+- Proactive suggestions
+- File modification from chat
 - Research assistance
 
-Create an AI command interface. Examples:
+Create a natural language command interface. Examples:
 
 - "Plan my week."
-- "Summarize my health progress."
-- "Organize my research."
-- "Create a project roadmap."
+- "Summarize my progress this month."
+- "Organize my tasks by project."
+- "Create a goal and break it into tasks."
 
 ---
 
 ## Phase 3: Automation
 
-Integrate n8n.
+Integrate n8n alongside the existing scheduler.
 
 Features:
 
@@ -308,52 +288,64 @@ Features:
 - Notifications
 - Device control
 
+Clarify boundary between n8n (user-defined workflows) and the internal scheduler (Brain file processing).
+
 ---
 
 ## Phase 4: Integrations and Migration
 
 Develop connectors:
 
-- Existing note applications
-- Calendar systems
-- Task managers
-- Health platforms
-- Smart home systems
+- Existing note applications (Notion, Obsidian, Apple Notes)
+- Calendar systems (Google, Apple)
+- Task managers (Todoist, Things)
+- Health platforms (Apple Health, Garmin)
+- Smart home systems (Home Assistant)
 
 Build AI-assisted migration:
 
 - "Import my digital life."
 
-The AI organizes everything into the Knowledge Verse.
+The AI organizes everything into the Brain.
 
 ---
 
 ## Phase 5: Family Operating System
 
-Add:
+Build on the existing multi-user foundation:
 
-- Multiple users
-- Permissions
-- Shared spaces
-- Family calendars
-- Shopping
-- Chores
+- Shared spaces (family calendar, shared tasks)
+- Permission controls (what each user can see)
+- Family dashboard
+- Shared shopping lists
+- Chore management
 - Household automation
 
 ---
 
-## Phase 6: Ecosystem
+## Phase 6: AI Provider Expansion
+
+Deliver on the vendor-agnostic promise:
+
+- Plug-in AI provider system
+- Support for local models (Ollama, LM Studio)
+- Support for OpenAI, Gemini, and other cloud providers
+- Maintain the Brain-as-context-layer regardless of provider
+
+---
+
+## Phase 7: Ecosystem
 
 Create:
 
 - Plugin system
-- Public Knowledge Verse specification
+- Public Brain specification
 - Developer API
 - Community marketplace
 
 ---
 
-## Phase 7: Commercial Platform
+## Phase 8: Commercial Platform
 
 Launch:
 
@@ -371,7 +363,9 @@ Do not begin by building every feature.
 The first goal is to create the foundation:
 
 ```
-Knowledge Verse → AI Agent → Core Applications → Automations → Ecosystem
+Brain → AI Agent → Core Applications → Automations → Ecosystem
 ```
 
 If the foundation is correct, every future feature becomes easier to build.
+
+All logic, skills, and plugins live in the Brain. Provider-specific configs are thin wrappers. If the AI provider changes tomorrow, the Brain — and everything the user has built — comes with them.
