@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from config import settings
 from services import auth_service
@@ -143,6 +144,30 @@ def logout(current_user: dict = Depends(get_current_user)):
     return {"ok": True}
 
 
+def _validate_timezone(tz: str) -> str:
+    try:
+        ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, Exception):
+        raise HTTPException(status_code=400, detail=f"Invalid timezone: '{tz}'. Use an IANA zone name like 'America/Chicago'.")
+    return tz
+
+
+class MeUpdateRequest(BaseModel):
+    timezone: str | None = Field(None, max_length=50)
+
+
+@router.patch("/me")
+def update_me(req: MeUpdateRequest, current_user: dict = Depends(get_current_user)):
+    """Update the current user's own profile fields (timezone for now)."""
+    updates = {k: v for k, v in req.model_dump().items() if v is not None}
+    if "timezone" in updates:
+        _validate_timezone(updates["timezone"])
+    if not updates:
+        return {"ok": True}
+    auth_service.update_user(current_user["id"], updates)
+    return {"ok": True, **updates}
+
+
 @router.get("/me")
 def me(current_user: dict = Depends(get_current_user)):
     return {
@@ -184,6 +209,28 @@ def update_user_modules(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return {"ok": True, "disabled_modules": req.disabled_modules}
+
+
+class UserUpdateRequest(BaseModel):
+    timezone: str | None = Field(None, max_length=50)
+
+
+@router.patch("/users/{user_id}")
+def update_user_by_admin(
+    user_id: str,
+    req: UserUpdateRequest,
+    current_user: dict = Depends(require_admin),
+):
+    """Update user fields that admins control (timezone, etc.)."""
+    updates = {k: v for k, v in req.model_dump().items() if v is not None}
+    if "timezone" in updates:
+        _validate_timezone(updates["timezone"])
+    if not updates:
+        return {"ok": True}
+    user = auth_service.update_user(user_id, updates)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"ok": True, **updates}
 
 
 @router.patch("/session")

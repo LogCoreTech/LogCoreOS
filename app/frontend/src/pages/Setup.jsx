@@ -7,7 +7,9 @@ const BASE_CATEGORIES = ['God', 'Family', 'Job', 'Personal Growth', 'Hobbies']
 export default function Setup() {
   const [step, setStep] = useState(1)
   const [role, setRole] = useState('')
-  const [timezone, setTimezone] = useState('America/Chicago')
+  const [timezone, setTimezone] = useState(() => {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Chicago' } catch { return 'America/Chicago' }
+  })
   const [categories, setCategories] = useState([...BASE_CATEGORIES])
   const [customCat, setCustomCat] = useState('')
   const [dragIdx, setDragIdx] = useState(null)
@@ -99,17 +101,33 @@ export default function Setup() {
                 <label className="block text-sm font-medium mb-1 text-charcoal-700 dark:text-charcoal-300">
                   Timezone
                 </label>
-                <select
-                  value={timezone}
-                  onChange={e => setTimezone(e.target.value)}
-                  className="input"
-                >
-                  <option value="America/Chicago">Central Time (CT)</option>
-                  <option value="America/New_York">Eastern Time (ET)</option>
-                  <option value="America/Denver">Mountain Time (MT)</option>
-                  <option value="America/Los_Angeles">Pacific Time (PT)</option>
-                  <option value="UTC">UTC</option>
-                </select>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={timezone}
+                    onChange={e => setTimezone(e.target.value)}
+                    placeholder="e.g. America/Chicago"
+                    className="input flex-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try { setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone) } catch {}
+                    }}
+                    className="btn-ghost text-xs px-3 whitespace-nowrap"
+                  >
+                    Detect
+                  </button>
+                </div>
+                <p className="text-xs text-charcoal-400 dark:text-charcoal-500 mt-1">
+                  Auto-detected from your device. Use any{' '}
+                  <a
+                    href="https://en.wikipedia.org/wiki/List_of_tz_database_time_zones"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-orange-500 hover:underline"
+                  >IANA timezone name</a>.
+                </p>
               </div>
               <button onClick={() => setStep(2)} className="btn-primary w-full mt-2">
                 Next →

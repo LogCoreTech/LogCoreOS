@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
-import { priorities as prioritiesApi, auth as authApi } from '../lib/api'
+import { priorities as prioritiesApi, auth as authApi, admin as adminApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useNavigate } from 'react-router-dom'
 import { ALL_MODULES, getShortcuts, saveShortcuts } from '../lib/constants'
-import { admin as adminApi } from '../lib/api'
+
+function detectTz() {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || '' } catch { return '' }
+}
 
 const BASE_CATS = ['God', 'Family', 'Job', 'Personal Growth', 'Hobbies']
 
@@ -25,6 +28,11 @@ export default function Settings() {
   const [loading, setLoading] = useState(true)
   const [ntfyChannel, setNtfyChannel] = useState('')
   const [sessionMinutes, setSessionMinutes] = useState(10080)
+  const [timezone, setTimezone] = useState('')
+  const [tzSaved, setTzSaved] = useState(false)
+  const [autoSyncTz, setAutoSyncTz] = useState(() => localStorage.getItem('lc_auto_tz') === 'true')
+  const [userTimezones, setUserTimezones] = useState({})   // { userId: tz string }
+  const [tzSaving, setTzSaving] = useState(null)
   const [shortcutIds, setShortcutIds] = useState(getShortcuts)
   const [shortcutDragIdx, setShortcutDragIdx] = useState(null)
   const [shortcutSaved, setShortcutSaved] = useState(false)
@@ -45,6 +53,7 @@ export default function Settings() {
       setProfileOrder(p.profile_order || [])
       setNtfyChannel(me.notification_channel || '')
       setSessionMinutes(me.session_minutes || 10080)
+      setTimezone(me.timezone || '')
     }).finally(() => setLoading(false))
   }, [])
 
@@ -52,9 +61,14 @@ export default function Settings() {
     if (user?.role !== 'admin') return
     adminApi.users().then(users => {
       setAllUsers(users)
-      const map = {}
-      users.forEach(u => { map[u.id] = u.disabled_modules || [] })
-      setUserModules(map)
+      const modMap = {}
+      const tzMap = {}
+      users.forEach(u => {
+        modMap[u.id] = u.disabled_modules || []
+        tzMap[u.id] = u.timezone || ''
+      })
+      setUserModules(modMap)
+      setUserTimezones(tzMap)
     }).catch(() => {})
     adminApi.getSettings().then(s => setOpenReg(s.allow_open_registration)).catch(() => {})
   }, [user?.role])
@@ -81,20 +95,40 @@ export default function Settings() {
   }
   function onDragEnd() { setDragIdx(null) }
 
-  function flash() {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+  function flash(setter) {
+    setter(true)
+    setTimeout(() => setter(false), 2000)
+  }
+
+  async function saveTimezone() {
+    try {
+      await authApi.updateMe({ timezone })
+      flash(setTzSaved)
+    } catch (e) {
+      alert(e.message || 'Invalid timezone')
+    }
+  }
+
+  async function saveUserTimezone(userId) {
+    setTzSaving(userId)
+    try {
+      await adminApi.updateUser(userId, { timezone: userTimezones[userId] })
+    } catch (e) {
+      alert(e.message || 'Invalid timezone')
+    } finally {
+      setTzSaving(null)
+    }
   }
 
   async function savePriorities() {
     await prioritiesApi.override(order)
-    flash()
+    flash(setSaved)
   }
 
   async function saveSession() {
     try {
       await authApi.updateSession(sessionMinutes)
-      flash()
+      flash(setSaved)
     } catch (e) {
       console.error('Failed to save session length:', e)
     }
@@ -307,6 +341,51 @@ export default function Settings() {
         </p>
       </div>
 
+      {/* Timezone */}
+      <div className="card p-5">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="font-semibold">Timezone</h2>
+          {tzSaved && <span className="text-green-500 text-sm">Saved ✓</span>}
+        </div>
+        <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-3">
+          Used for due dates, task scoring, and morning digests. Set to your local zone.
+        </p>
+        <div className="flex gap-2 mb-4">
+          <input
+            type="text"
+            value={timezone}
+            onChange={e => setTimezone(e.target.value)}
+            placeholder="e.g. America/Chicago"
+            className="input flex-1"
+          />
+          <button
+            onClick={() => { const tz = detectTz(); if (tz) setTimezone(tz) }}
+            className="btn-ghost text-xs px-3 whitespace-nowrap"
+          >
+            Detect
+          </button>
+          <button onClick={saveTimezone} className="btn-primary px-4">Save</button>
+        </div>
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={autoSyncTz}
+            onChange={e => {
+              setAutoSyncTz(e.target.checked)
+              localStorage.setItem('lc_auto_tz', String(e.target.checked))
+            }}
+            className="accent-orange-500 w-4 h-4 mt-0.5 shrink-0"
+          />
+          <div>
+            <span className="text-sm font-medium">Auto-sync to device location</span>
+            <p className="text-xs text-charcoal-400 dark:text-charcoal-500 mt-0.5">
+              Automatically updates your timezone when you open the app from a different location.
+              Useful for travellers or shared devices.
+            </p>
+          </div>
+        </label>
+      </div>
+
       {/* Bottom Bar Shortcuts */}
       <div className="card p-5">
         <div className="flex items-center justify-between mb-1">
@@ -446,18 +525,33 @@ export default function Settings() {
               </p>
             )}
             {allUsers.filter(u => u.role !== 'admin').map(u => (
-              <div key={u.id}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium">{u.name}</span>
+              <div key={u.id} className="border border-charcoal-100 dark:border-charcoal-800 rounded-lg p-3">
+                <p className="text-sm font-medium mb-3">{u.name}
+                  <span className="text-xs text-charcoal-400 ml-2">{u.email}</span>
+                </p>
+
+                {/* Timezone */}
+                <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-1">Timezone</p>
+                <div className="flex gap-2 mb-3">
+                  <input
+                    type="text"
+                    value={userTimezones[u.id] || ''}
+                    onChange={e => setUserTimezones(prev => ({ ...prev, [u.id]: e.target.value }))}
+                    placeholder="e.g. America/New_York"
+                    className="input flex-1 text-sm"
+                  />
                   <button
-                    onClick={() => saveUserModules(u.id)}
-                    disabled={moduleSaving === u.id}
-                    className="btn-primary text-xs px-3 py-1"
+                    onClick={() => saveUserTimezone(u.id)}
+                    disabled={tzSaving === u.id}
+                    className="btn-primary text-xs px-3 py-1 whitespace-nowrap"
                   >
-                    {moduleSaving === u.id ? '…' : 'Save'}
+                    {tzSaving === u.id ? '…' : 'Set TZ'}
                   </button>
                 </div>
-                <div className="space-y-1">
+
+                {/* Module access */}
+                <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-1">Module access</p>
+                <div className="space-y-1 mb-2">
                   {ALL_MODULES.filter(m => m.id !== 'settings').map(mod => {
                     const disabled = (userModules[u.id] || []).includes(mod.id)
                     return (
@@ -477,6 +571,13 @@ export default function Settings() {
                     )
                   })}
                 </div>
+                <button
+                  onClick={() => saveUserModules(u.id)}
+                  disabled={moduleSaving === u.id}
+                  className="btn-primary text-xs px-3 py-1 w-full"
+                >
+                  {moduleSaving === u.id ? '…' : 'Save Module Access'}
+                </button>
               </div>
             ))}
           </div>
