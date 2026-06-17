@@ -36,12 +36,13 @@ const del    = (path)       => request('DELETE', path)
 export const auth = {
   register: (email, password, name, session_minutes) =>
     post('/auth/register', { email, password, name, session_minutes }),
-  login:   (email, password) => post('/auth/login',   { email, password }),
-  logout:  ()                => post('/auth/logout',  {}),
-  me:      ()                => get('/auth/me'),
-  today:   ()                => get('/auth/today'),
-  status:  ()                => get('/auth/status'),
+  login:         (email, password) => post('/auth/login',   { email, password }),
+  logout:        ()                => post('/auth/logout',  {}),
+  me:            ()                => get('/auth/me'),
+  today:         ()                => get('/auth/today'),
+  status:        ()                => get('/auth/status'),
   updateSession: (session_minutes) => patch('/auth/session', { session_minutes }),
+  updateMe:      (data)            => patch('/auth/me', data),
 }
 
 export const tasks = {
@@ -77,6 +78,7 @@ export const brain = {
 export const admin = {
   users:             ()                          => get('/auth/users'),
   updateModules:     (userId, disabledModules)   => patch(`/auth/users/${userId}/modules`, { disabled_modules: disabledModules }),
+  updateUser:        (userId, data)              => patch(`/auth/users/${userId}`, data),
   getSettings:       ()                          => get('/auth/admin/settings'),
   updateSettings:    (s)                         => patch('/auth/admin/settings', s),
 }

@@ -1,3 +1,4 @@
+import re
 from datetime import date
 from typing import Literal
 
@@ -19,6 +20,7 @@ class TaskCreate(BaseModel):
     type: Literal["todo", "recurring", "goal", "appointment"] = "todo"
     recurrence: Literal["daily", "weekly", "monthly"] | None = None
     due_date: str | None = None
+    due_time: str | None = None  # HH:MM in user's local timezone; stored as UTC when cross-user sharing is added
     notes: str | None = Field(None, max_length=5000)
 
     @field_validator("due_date")
@@ -31,6 +33,17 @@ class TaskCreate(BaseModel):
                 raise ValueError("due_date must be a valid date in YYYY-MM-DD format")
         return v
 
+    @field_validator("due_time")
+    @classmethod
+    def validate_due_time(cls, v: str | None) -> str | None:
+        if v is not None:
+            if not re.match(r"^\d{2}:\d{2}$", v):
+                raise ValueError("due_time must be in HH:MM format")
+            hh, mm = int(v[:2]), int(v[3:])
+            if not (0 <= hh <= 23 and 0 <= mm <= 59):
+                raise ValueError("due_time must be a valid time (00:00–23:59)")
+        return v
+
 
 class TaskUpdate(BaseModel):
     title: str | None = Field(None, max_length=255)
@@ -38,6 +51,7 @@ class TaskUpdate(BaseModel):
     priority: Literal["High", "Medium", "Low"] | None = None
     status: Literal["pending", "done", "skipped"] | None = None
     due_date: str | None = None
+    due_time: str | None = None
     notes: str | None = Field(None, max_length=5000)
 
     @field_validator("due_date")
@@ -48,6 +62,17 @@ class TaskUpdate(BaseModel):
                 date.fromisoformat(v)
             except ValueError:
                 raise ValueError("due_date must be a valid date in YYYY-MM-DD format")
+        return v
+
+    @field_validator("due_time")
+    @classmethod
+    def validate_due_time(cls, v: str | None) -> str | None:
+        if v is not None:
+            if not re.match(r"^\d{2}:\d{2}$", v):
+                raise ValueError("due_time must be in HH:MM format")
+            hh, mm = int(v[:2]), int(v[3:])
+            if not (0 <= hh <= 23 and 0 <= mm <= 59):
+                raise ValueError("due_time must be a valid time (00:00–23:59)")
         return v
 
 

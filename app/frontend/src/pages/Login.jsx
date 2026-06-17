@@ -30,13 +30,13 @@ export default function Login() {
         res = await authApi.login(email, password)
         localStorage.setItem('lc_token', res.token)
         const [me, status] = await Promise.all([authApi.me(), setupApi.status()])
-        login(res.token, me.name, me.role, me.disabled_modules || [])
+        login(res.token, me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC')
         navigate(status.setup_complete ? '/' : '/setup')
       } else {
         res = await authApi.register(email, password, name)
         localStorage.setItem('lc_token', res.token)
         const me = await authApi.me()
-        login(res.token, me.name, me.role, me.disabled_modules || [])
+        login(res.token, me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC')
         navigate('/setup')
       }
     } catch (err) {
