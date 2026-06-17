@@ -52,11 +52,33 @@ def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
 @router.get("/status")
 def registration_status():
     """Public endpoint — lets the login page know if self-registration is available."""
+    # Runtime setting in auth.json takes precedence over the env var
+    runtime = auth_service.get_system_settings()
+    allow = runtime.get("allow_open_registration", settings.allow_open_registration)
+    return {"registration_open": auth_service.user_count() == 0 or allow}
+
+
+class AdminSettingsRequest(BaseModel):
+    allow_open_registration: bool
+
+
+@router.get("/admin/settings")
+def get_admin_settings(current_user: dict = Depends(require_admin)):
+    runtime = auth_service.get_system_settings()
     return {
-        "registration_open": (
-            auth_service.user_count() == 0 or settings.allow_open_registration
+        "allow_open_registration": runtime.get(
+            "allow_open_registration", settings.allow_open_registration
         )
     }
+
+
+@router.patch("/admin/settings")
+def update_admin_settings(
+    req: AdminSettingsRequest,
+    current_user: dict = Depends(require_admin),
+):
+    updated = auth_service.update_system_settings(req.model_dump())
+    return {"allow_open_registration": updated.get("allow_open_registration")}
 
 
 @router.post("/register")

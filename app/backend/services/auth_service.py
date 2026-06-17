@@ -79,6 +79,19 @@ def update_user(user_id: str, updates: dict) -> dict | None:
     return None
 
 
+def get_system_settings() -> dict:
+    """Return the runtime settings block stored in auth.json."""
+    return _load_auth().get("settings", {})
+
+
+def update_system_settings(updates: dict) -> dict:
+    """Merge updates into the runtime settings block and persist."""
+    data = _load_auth()
+    data.setdefault("settings", {}).update(updates)
+    _save_auth(data)
+    return data["settings"]
+
+
 def get_user_timezone(user_name: str) -> str:
     user = get_user_by_name(user_name)
     return (user or {}).get("timezone", "UTC")

@@ -31,6 +31,8 @@ export default function Settings() {
   const [allUsers, setAllUsers] = useState([])
   const [userModules, setUserModules] = useState({})   // { userId: [disabledId, ...] }
   const [moduleSaving, setModuleSaving] = useState(null)
+  const [openReg, setOpenReg] = useState(false)
+  const [openRegSaving, setOpenRegSaving] = useState(false)
 
   useEffect(() => {
     const fetches = [prioritiesApi.get(), authApi.me()]
@@ -50,6 +52,7 @@ export default function Settings() {
       users.forEach(u => { map[u.id] = u.disabled_modules || [] })
       setUserModules(map)
     }).catch(() => {})
+    adminApi.getSettings().then(s => setOpenReg(s.allow_open_registration)).catch(() => {})
   }, [user?.role])
 
   function addCustom() {
@@ -137,6 +140,17 @@ export default function Settings() {
       await adminApi.updateModules(userId, userModules[userId] || [])
     } finally {
       setModuleSaving(null)
+    }
+  }
+
+  async function toggleOpenReg() {
+    const next = !openReg
+    setOpenRegSaving(true)
+    try {
+      await adminApi.updateSettings({ allow_open_registration: next })
+      setOpenReg(next)
+    } finally {
+      setOpenRegSaving(false)
     }
   }
 
@@ -334,13 +348,41 @@ export default function Settings() {
       </div>
 
       {/* Admin — User Access */}
-      {user?.role === 'admin' && allUsers.length > 0 && (
+      {user?.role === 'admin' && (
         <div className="card p-5">
           <h2 className="font-semibold mb-1">User Access</h2>
           <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-4">
             Disable modules for specific users. Admins always have full access.
           </p>
+
+          {/* Open registration toggle */}
+          <div className="flex items-center justify-between py-3 border-b border-charcoal-100 dark:border-charcoal-800 mb-4">
+            <div>
+              <p className="text-sm font-medium">Open Registration</p>
+              <p className="text-xs text-charcoal-500 dark:text-charcoal-400">
+                {openReg ? 'Anyone can create an account.' : 'Only admins can add new users.'}
+              </p>
+            </div>
+            <button
+              onClick={toggleOpenReg}
+              disabled={openRegSaving}
+              className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors duration-200 focus:outline-none ${
+                openReg ? 'bg-orange-500' : 'bg-charcoal-300 dark:bg-charcoal-600'
+              }`}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 mt-0.5 ${
+                  openReg ? 'translate-x-5' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
           <div className="space-y-5">
+            {allUsers.filter(u => u.role !== 'admin').length === 0 && (
+              <p className="text-sm text-charcoal-400 dark:text-charcoal-500">
+                No other users yet.
+              </p>
+            )}
             {allUsers.filter(u => u.role !== 'admin').map(u => (
               <div key={u.id}>
                 <div className="flex items-center justify-between mb-2">

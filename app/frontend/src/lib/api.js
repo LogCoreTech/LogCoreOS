@@ -76,4 +76,6 @@ export const brain = {
 export const admin = {
   users:             ()                          => get('/auth/users'),
   updateModules:     (userId, disabledModules)   => patch(`/auth/users/${userId}/modules`, { disabled_modules: disabledModules }),
+  getSettings:       ()                          => get('/auth/admin/settings'),
+  updateSettings:    (s)                         => patch('/auth/admin/settings', s),
 }
