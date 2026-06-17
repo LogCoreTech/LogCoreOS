@@ -15,6 +15,7 @@ export default function TaskModal({ task, categories: propCategories, onClose, o
     type:       task?.type        || 'todo',
     recurrence: task?.recurrence  || null,
     due_date:   task?.due_date    || '',
+    due_time:   task?.due_time    || '',
     notes:      task?.notes       || '',
   })
   const [loading, setLoading] = useState(false)
@@ -45,9 +46,10 @@ export default function TaskModal({ task, categories: propCategories, onClose, o
     try {
       const payload = {
         ...form,
-        due_date:   form.due_date || null,
+        due_date:   form.due_date   || null,
+        due_time:   (form.due_date && form.due_time) ? form.due_time : null,
         recurrence: form.type === 'recurring' ? (form.recurrence || 'daily') : null,
-        notes:      form.notes || null,
+        notes:      form.notes      || null,
       }
       if (editing) {
         await tasksApi.update(task.id, payload)
@@ -135,17 +137,32 @@ export default function TaskModal({ task, categories: propCategories, onClose, o
             </div>
           )}
 
-          {/* Due date */}
+          {/* Due date + optional time */}
           <div>
             <label className="block text-sm font-medium mb-1">
               Due Date <span className="text-charcoal-400 font-normal">(optional)</span>
             </label>
-            <input
-              type="date"
-              value={form.due_date}
-              onChange={e => set('due_date', e.target.value)}
-              className="input"
-            />
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={form.due_date}
+                onChange={e => {
+                  set('due_date', e.target.value)
+                  if (!e.target.value) set('due_time', '')
+                }}
+                className="input flex-1"
+              />
+              {form.due_date && (
+                <input
+                  type="time"
+                  value={form.due_time}
+                  onChange={e => set('due_time', e.target.value)}
+                  placeholder="--:--"
+                  className="input w-28"
+                  title="Time (optional — for appointments)"
+                />
+              )}
+            </div>
           </div>
 
           {/* Notes */}

@@ -58,8 +58,10 @@ export default function Login() {
         </div>
 
         <div className="card p-6">
-          {/* Tab toggle — only show Create Account when registration is open */}
-          {registrationOpen ? (
+          {/* Tab toggle — skeleton while status loads, tabs when open, sign-in only when closed */}
+          {registrationOpen === null ? (
+            <div className="h-9 bg-charcoal-100 dark:bg-charcoal-700 rounded-lg animate-pulse mb-6" />
+          ) : registrationOpen ? (
             <div className="flex bg-charcoal-100 dark:bg-charcoal-700 rounded-lg p-1 mb-6">
               {['login', 'register'].map(m => (
                 <button
@@ -76,18 +78,16 @@ export default function Login() {
               ))}
             </div>
           ) : (
-            // Registration closed — show sign-in only, with a note
+            // Registration closed — show sign-in only with a note
             <div className="mb-6">
               <div className="bg-charcoal-100 dark:bg-charcoal-700 rounded-lg p-1 mb-3">
                 <div className="py-1.5 rounded-md text-sm font-medium text-center text-charcoal-900 dark:text-gray-100 bg-white dark:bg-charcoal-600 shadow-sm">
                   Sign In
                 </div>
               </div>
-              {registrationOpen === false && (
-                <p className="text-xs text-center text-charcoal-500 dark:text-charcoal-400">
-                  Need an account? Ask an admin to add you.
-                </p>
-              )}
+              <p className="text-xs text-center text-charcoal-500 dark:text-charcoal-400">
+                Need an account? Ask an admin to add you.
+              </p>
             </div>
           )}
 

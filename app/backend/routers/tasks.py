@@ -3,7 +3,7 @@ from datetime import date
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from routers.auth import get_current_user, require_module
 from services import task_service, priority_service
@@ -44,6 +44,12 @@ class TaskCreate(BaseModel):
                 raise ValueError("due_time must be a valid time (00:00–23:59)")
         return v
 
+    @model_validator(mode='after')
+    def due_time_requires_due_date(self):
+        if self.due_time and not self.due_date:
+            raise ValueError("due_time can only be set when due_date is also provided")
+        return self
+
 
 class TaskUpdate(BaseModel):
     title: str | None = Field(None, max_length=255)
@@ -75,6 +81,12 @@ class TaskUpdate(BaseModel):
                 raise ValueError("due_time must be a valid time (00:00–23:59)")
         return v
 
+    @model_validator(mode='after')
+    def due_time_requires_due_date(self):
+        if self.due_time and not self.due_date:
+            raise ValueError("due_time can only be set when due_date is also provided")
+        return self
+
 
 @router.get("")
 def list_tasks(current_user: dict = Depends(_require_tasks)):
@@ -103,7 +115,9 @@ def add_task(req: TaskCreate, current_user: dict = Depends(_require_tasks)):
 
 @router.patch("/{task_id}")
 def update_task(task_id: str, req: TaskUpdate, current_user: dict = Depends(_require_tasks)):
-    updates = {k: v for k, v in req.model_dump().items() if v is not None}
+    # exclude_unset so only fields the client sent are applied;
+    # None values are intentional (clearing due_date, notes, etc.)
+    updates = req.model_dump(exclude_unset=True)
     result = task_service.update_task(current_user["name"], task_id, updates)
     if not result:
         raise HTTPException(status_code=404, detail="Task not found")

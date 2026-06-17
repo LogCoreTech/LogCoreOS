@@ -25,6 +25,15 @@ export function AuthProvider({ children }) {
     setUser(null)
   }
 
+  function updateUserField(key, value) {
+    setUser(prev => {
+      if (!prev) return prev
+      const updated = { ...prev, [key]: value }
+      localStorage.setItem('lc_user', JSON.stringify(updated))
+      return updated
+    })
+  }
+
   // Auto-sync timezone to the device's detected zone if the user has opted in
   useEffect(() => {
     if (!user) return
@@ -62,7 +71,7 @@ export function AuthProvider({ children }) {
   }, [user?.name])
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUserField }}>
       {children}
     </AuthContext.Provider>
   )

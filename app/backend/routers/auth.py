@@ -123,7 +123,13 @@ def register(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     token = auth_service.create_token(user)
-    return {"token": token, "name": user["name"], "role": user["role"]}
+    return {
+        "token": token,
+        "name": user["name"],
+        "role": user["role"],
+        "disabled_modules": user.get("disabled_modules", []),
+        "timezone": user.get("timezone", "UTC"),
+    }
 
 
 @router.post("/login")
@@ -132,7 +138,13 @@ def login(req: LoginRequest, _rl: None = Depends(_login_limit)):
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = auth_service.create_token(user)
-    return {"token": token, "name": user["name"], "role": user["role"]}
+    return {
+        "token": token,
+        "name": user["name"],
+        "role": user["role"],
+        "disabled_modules": user.get("disabled_modules", []),
+        "timezone": user.get("timezone", "UTC"),
+    }
 
 
 @router.post("/logout")

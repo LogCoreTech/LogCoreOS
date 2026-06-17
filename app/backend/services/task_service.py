@@ -32,6 +32,7 @@ def add_task(user_name: str, task_data: dict) -> dict:
         "type": task_data.get("type", "todo"),
         "recurrence": task_data.get("recurrence"),
         "due_date": task_data.get("due_date"),
+        "due_time": task_data.get("due_time"),
         "status": "pending",
         "created_at": datetime.now(tz).isoformat(),
         "completed_at": None,
