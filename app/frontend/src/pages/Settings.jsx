@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { priorities as prioritiesApi, auth as authApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useNavigate } from 'react-router-dom'
+import { ALL_MODULES, getShortcuts, saveShortcuts } from '../lib/constants'
 
 const BASE_CATS = ['God', 'Family', 'Job', 'Personal Growth', 'Hobbies']
 
@@ -23,6 +24,9 @@ export default function Settings() {
   const [loading, setLoading] = useState(true)
   const [ntfyChannel, setNtfyChannel] = useState('')
   const [sessionMinutes, setSessionMinutes] = useState(10080)
+  const [shortcutIds, setShortcutIds] = useState(getShortcuts)
+  const [shortcutDragIdx, setShortcutDragIdx] = useState(null)
+  const [shortcutSaved, setShortcutSaved] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -75,6 +79,32 @@ export default function Settings() {
     } catch (e) {
       console.error('Failed to save session length:', e)
     }
+  }
+
+  function toggleShortcut(id) {
+    if (shortcutIds.includes(id)) {
+      setShortcutIds(shortcutIds.filter(s => s !== id))
+    } else if (shortcutIds.length < 4) {
+      setShortcutIds([...shortcutIds, id])
+    }
+  }
+
+  function onShortcutDragStart(i) { setShortcutDragIdx(i) }
+  function onShortcutDragOver(e, i) {
+    e.preventDefault()
+    if (shortcutDragIdx === null || shortcutDragIdx === i) return
+    const next = [...shortcutIds]
+    const [m] = next.splice(shortcutDragIdx, 1)
+    next.splice(i, 0, m)
+    setShortcutIds(next)
+    setShortcutDragIdx(i)
+  }
+  function onShortcutDragEnd() { setShortcutDragIdx(null) }
+
+  function saveShortcutsHandler() {
+    saveShortcuts(shortcutIds)
+    setShortcutSaved(true)
+    setTimeout(() => setShortcutSaved(false), 2000)
   }
 
   async function handleLogout() {
@@ -202,6 +232,72 @@ export default function Settings() {
         <p className="text-xs text-charcoal-400 mt-2">
           Takes effect on your next sign-in.
         </p>
+      </div>
+
+      {/* Bottom Bar Shortcuts */}
+      <div className="card p-5">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="font-semibold">Bottom Bar Shortcuts</h2>
+          {shortcutSaved && <span className="text-green-500 text-sm">Saved ✓</span>}
+        </div>
+        <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-4">
+          Pin up to 4 modules to the bottom bar. Drag to reorder.
+        </p>
+
+        {/* Pinned shortcuts — draggable */}
+        <ul className="space-y-2 mb-3">
+          {shortcutIds.map((id, i) => {
+            const mod = ALL_MODULES.find(m => m.id === id)
+            if (!mod) return null
+            return (
+              <li
+                key={id}
+                draggable
+                onDragStart={() => onShortcutDragStart(i)}
+                onDragOver={e => onShortcutDragOver(e, i)}
+                onDragEnd={onShortcutDragEnd}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-grab transition-colors ${
+                  shortcutDragIdx === i
+                    ? 'border-orange-500 bg-orange-500/10'
+                    : 'border-charcoal-200 dark:border-charcoal-700 bg-white dark:bg-charcoal-800'
+                }`}
+              >
+                <span className="text-base leading-none">{mod.icon}</span>
+                <span className="flex-1 text-sm">{mod.label}</span>
+                <button
+                  onClick={() => toggleShortcut(id)}
+                  className="text-charcoal-400 hover:text-red-500 text-xs"
+                >✕</button>
+                <span className="text-charcoal-300 dark:text-charcoal-600">⠿</span>
+              </li>
+            )
+          })}
+        </ul>
+
+        {/* Available modules to add */}
+        {shortcutIds.length < 4 && (
+          <div className="mb-4">
+            <p className="text-xs text-charcoal-400 dark:text-charcoal-500 mb-2">
+              Add ({4 - shortcutIds.length} slot{4 - shortcutIds.length !== 1 ? 's' : ''} left):
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {ALL_MODULES.filter(m => !shortcutIds.includes(m.id)).map(mod => (
+                <button
+                  key={mod.id}
+                  onClick={() => toggleShortcut(mod.id)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed border-charcoal-300 dark:border-charcoal-600 text-xs text-charcoal-500 dark:text-charcoal-400 hover:border-orange-500 hover:text-orange-500 transition-colors"
+                >
+                  <span>{mod.icon}</span>
+                  {mod.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <button onClick={saveShortcutsHandler} className="btn-primary w-full">
+          Save Shortcuts
+        </button>
       </div>
 
       {/* Account */}

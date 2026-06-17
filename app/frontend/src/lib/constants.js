@@ -13,3 +13,33 @@ export const DEFAULT_CAT_COLOR =
 export function catColor(cat) {
   return CATEGORY_COLORS[cat] || DEFAULT_CAT_COLOR
 }
+
+// ── Module registry ────────────────────────────────────────────────────────────
+// Add future modules here — they appear in the drawer and Settings automatically.
+export const ALL_MODULES = [
+  { id: 'dashboard', to: '/',         icon: '⊞', label: 'Dashboard' },
+  { id: 'tasks',     to: '/tasks',    icon: '✓', label: 'Tasks'     },
+  { id: 'chat',      to: '/chat',     icon: '◈', label: 'AI Chat'   },
+  { id: 'settings',  to: '/settings', icon: '⚙', label: 'Settings'  },
+]
+
+export const DEFAULT_SHORTCUTS = ['dashboard', 'tasks', 'chat', 'settings']
+
+export function getShortcuts() {
+  try {
+    const raw = localStorage.getItem('lc_shortcuts')
+    if (raw) {
+      const ids = JSON.parse(raw)
+      const knownIds = new Set(ALL_MODULES.map(m => m.id))
+      const valid = ids.filter(id => knownIds.has(id))
+      if (valid.length > 0) return valid.slice(0, 4)
+    }
+  } catch {}
+  return [...DEFAULT_SHORTCUTS]
+}
+
+export function saveShortcuts(ids) {
+  localStorage.setItem('lc_shortcuts', JSON.stringify(ids.slice(0, 4)))
+  window.dispatchEvent(new CustomEvent('lc_shortcuts_changed'))
+}
+
