@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from routers.auth import get_current_user
@@ -24,6 +24,14 @@ def get_priorities(current_user: dict = Depends(get_current_user)):
 
 @router.post("/override")
 def set_override(req: OverrideRequest, current_user: dict = Depends(get_current_user)):
+    # Validate that submitted categories exist in user's profile
+    profile_order = parse_priority_order(current_user["name"])
+    invalid = [c for c in req.order if c not in profile_order]
+    if invalid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown categories: {invalid}. Add them to your profile first.",
+        )
     payload = {"date": date.today().isoformat(), "order": req.order}
     write_json(override_path(current_user["name"]), payload)
     return {"ok": True, "date": payload["date"], "order": req.order}

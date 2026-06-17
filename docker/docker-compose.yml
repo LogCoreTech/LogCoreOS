@@ -13,11 +13,23 @@ services:
     environment:
       BRAIN_PATH: /data/brain
       SECRET_KEY: ${SECRET_KEY}
+      AI_PROVIDER: ${AI_PROVIDER:-anthropic}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       AI_MODEL: ${AI_MODEL:-claude-sonnet-4-6}
       NTFY_URL: http://ntfy:80
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-*}
+      SCHEDULER_TIMEZONE: ${SCHEDULER_TIMEZONE:-America/Chicago}
+      MORNING_DIGEST_HOUR: ${MORNING_DIGEST_HOUR:-6}
+      OVERDUE_CHECK_HOUR: ${OVERDUE_CHECK_HOUR:-19}
+      ALLOW_OPEN_REGISTRATION: ${ALLOW_OPEN_REGISTRATION:-false}
     depends_on:
       - ntfy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   ntfy:
     image: binwiederhier/ntfy

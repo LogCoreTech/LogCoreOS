@@ -21,6 +21,8 @@ class Settings(BaseSettings):
 
     # Scheduler timezone — must be a valid IANA tz string
     scheduler_timezone: str = "America/Chicago"
+    morning_digest_hour: int = 6   # 0–23, in scheduler_timezone
+    overdue_check_hour: int = 19   # 0–23, in scheduler_timezone
 
     # When False (default), only the first user can self-register.
     # Subsequent users must be added by an admin.

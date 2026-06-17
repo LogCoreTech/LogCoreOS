@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from config import settings
 from routers.auth import get_current_user
@@ -50,8 +50,8 @@ def _build_context(user_name: str) -> str:
 
 
 class ChatRequest(BaseModel):
-    message: str
-    history: list[dict] = []
+    message: str = Field(..., min_length=1, max_length=5000)
+    history: list[dict] = Field(default=[], max_length=50)
 
 
 @router.post("")

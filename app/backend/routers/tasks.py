@@ -1,5 +1,8 @@
+from datetime import date
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from routers.auth import get_current_user
 from services import task_service, priority_service
@@ -8,22 +11,42 @@ router = APIRouter()
 
 
 class TaskCreate(BaseModel):
-    title: str
-    category: str = ""
-    priority: str = "Medium"
-    type: str = "todo"
-    recurrence: str | None = None
+    title: str = Field(..., min_length=1, max_length=255)
+    category: str = Field("", max_length=50)
+    priority: Literal["High", "Medium", "Low"] = "Medium"
+    type: Literal["todo", "recurring", "goal", "appointment"] = "todo"
+    recurrence: Literal["daily", "weekly", "monthly"] | None = None
     due_date: str | None = None
-    notes: str | None = None
+    notes: str | None = Field(None, max_length=5000)
+
+    @field_validator("due_date")
+    @classmethod
+    def validate_due_date(cls, v: str | None) -> str | None:
+        if v is not None:
+            try:
+                date.fromisoformat(v)
+            except ValueError:
+                raise ValueError("due_date must be a valid date in YYYY-MM-DD format")
+        return v
 
 
 class TaskUpdate(BaseModel):
-    title: str | None = None
-    category: str | None = None
-    priority: str | None = None
-    status: str | None = None
+    title: str | None = Field(None, max_length=255)
+    category: str | None = Field(None, max_length=50)
+    priority: Literal["High", "Medium", "Low"] | None = None
+    status: Literal["pending", "done", "skipped"] | None = None
     due_date: str | None = None
-    notes: str | None = None
+    notes: str | None = Field(None, max_length=5000)
+
+    @field_validator("due_date")
+    @classmethod
+    def validate_due_date(cls, v: str | None) -> str | None:
+        if v is not None:
+            try:
+                date.fromisoformat(v)
+            except ValueError:
+                raise ValueError("due_date must be a valid date in YYYY-MM-DD format")
+        return v
 
 
 @router.get("")
