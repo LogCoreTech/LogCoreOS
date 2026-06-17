@@ -44,6 +44,12 @@ class SetupRequest(BaseModel):
         return [str(item)[:50] for item in v]
 
 
+@router.get("/status")
+def setup_status(current_user: dict = Depends(get_current_user)):
+    """Returns whether the user's Brain folder has been created."""
+    return {"setup_complete": user_path(current_user["name"]).exists()}
+
+
 @router.post("")
 def setup_user(req: SetupRequest, current_user: dict = Depends(get_current_user)):
     """Create Brain folder structure for a newly registered user."""

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { auth as authApi } from '../lib/api'
+import { auth as authApi, setup as setupApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
 export default function Login() {
@@ -29,9 +29,9 @@ export default function Login() {
       if (mode === 'login') {
         res = await authApi.login(email, password)
         localStorage.setItem('lc_token', res.token)
-        const me = await authApi.me()
+        const [me, status] = await Promise.all([authApi.me(), setupApi.status()])
         login(res.token, me.name, me.role, me.disabled_modules || [])
-        navigate('/')
+        navigate(status.setup_complete ? '/' : '/setup')
       } else {
         res = await authApi.register(email, password, name)
         localStorage.setItem('lc_token', res.token)

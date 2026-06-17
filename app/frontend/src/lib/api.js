@@ -64,7 +64,8 @@ export const chat = {
 }
 
 export const setup = {
-  create: (data) => post('/setup', data),
+  status: ()       => get('/setup/status'),
+  create: (data)   => post('/setup', data),
 }
 
 export const brain = {
