@@ -43,6 +43,8 @@ cd docker
 docker compose up -d
 ```
 
+> **Note:** User accounts and auth data are stored in `brain/_system/auth.json`, which is created automatically on first run inside the brain volume. No manual setup required.
+
 ### 4. Open the app
 Go to `http://localhost:8000` in your browser.
 
@@ -97,8 +99,8 @@ The app sends push notifications via [ntfy](https://ntfy.sh) (self-hosted, free)
 
 1. Install the ntfy app on your phone (Android or iOS)
 2. Add your server: `http://YOUR_SERVER_IP:5680`
-3. Subscribe to your channel: `logcore-{your-name}` (e.g., `logcore-anthony`)
-4. Configure your channel name in the app Settings
+3. Subscribe to your personal channel — find it in **Settings → Notifications** after logging in
+4. Your channel ID is randomly generated at registration for privacy
 
 ---
 

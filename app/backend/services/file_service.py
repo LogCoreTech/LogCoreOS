@@ -1,5 +1,4 @@
 """Generic utilities for reading and writing Brain files (JSON + markdown)."""
-import fcntl
 import json
 import os
 import re

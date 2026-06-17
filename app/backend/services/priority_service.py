@@ -55,10 +55,9 @@ def get_top3(user_name: str) -> list[dict[str, Any]]:
     order = get_priority_order(user_name)
     today_str = today_for_user(user_name).isoformat()
     pending = [t for t in tasks_data.get("tasks", []) if t.get("status") == "pending"]
-    scored = sorted(pending, key=lambda t: score_task(t, order, today_str), reverse=True)
-    for task in scored:
+    for task in pending:
         task["_score"] = score_task(task, order, today_str)
-    return scored[:3]
+    return sorted(pending, key=lambda t: t["_score"], reverse=True)[:3]
 
 
 def get_all_scored(user_name: str) -> list[dict[str, Any]]:

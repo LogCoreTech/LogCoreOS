@@ -16,7 +16,11 @@ from services.file_service import brain_path
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-AUTH_FILE = brain_path().parent / "auth.json"
+def _auth_path() -> Path:
+    """Auth data lives inside brain/_system/ so it's covered by the brain volume mount."""
+    p = brain_path() / "_system" / "auth.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
 
 # In-memory token blacklist — cleared on restart (acceptable for Phase 1)
 _revoked_jtis: set[str] = set()
@@ -27,15 +31,15 @@ _NAME_RE = re.compile(r"^[A-Za-z0-9 '_\-]{1,60}$")
 
 
 def _load_auth() -> dict:
-    if not AUTH_FILE.exists():
+    if not _auth_path().exists():
         return {"users": []}
-    with open(AUTH_FILE) as f:
+    with open(_auth_path()) as f:
         return json.load(f)
 
 
 def _save_auth(data: dict) -> None:
-    AUTH_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(AUTH_FILE, "w") as f:
+    _auth_path().parent.mkdir(parents=True, exist_ok=True)
+    with open(_auth_path(), "w") as f:
         json.dump(data, f, indent=2)
 
 

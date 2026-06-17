@@ -2,6 +2,7 @@
 import re
 import shutil
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
@@ -51,6 +52,12 @@ def setup_user(req: SetupRequest, current_user: dict = Depends(get_current_user)
 
     if dest.exists():
         return {"ok": True, "message": "User folder already exists"}
+
+    # Validate timezone is a real IANA zone before writing anything
+    try:
+        ZoneInfo(req.timezone)
+    except (ZoneInfoNotFoundError, Exception):
+        raise HTTPException(status_code=400, detail=f"Invalid timezone: '{req.timezone}'")
 
     # Sanitize free-text fields before writing to markdown
     safe_role = _sanitize(req.role, "role") if req.role else ""
