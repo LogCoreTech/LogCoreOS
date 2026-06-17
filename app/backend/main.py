@@ -31,6 +31,26 @@ def _startup_checks() -> None:
             "╚══════════════════════════════════════════════════════╝"
         )
 
+    bp = settings.brain_path
+    if not bp.exists():
+        logger.error(
+            "Brain directory '%s' does not exist. "
+            "Check your BRAIN_PATH env var and volume mount — the app will not work correctly.",
+            bp,
+        )
+    else:
+        template = bp / "USERS" / "_template"
+        if not template.exists():
+            logger.error(
+                "Brain template missing at '%s'. "
+                "The setup wizard will fail for new users. Restore from backup or re-clone the repo.",
+                template,
+            )
+        system_files = ["AGENTS.md", "SOUL.md", "USERS.md"]
+        for fname in system_files:
+            if not (bp / fname).exists():
+                logger.warning("Brain system file missing: '%s/%s'.", bp, fname)
+
 
 app = FastAPI(title="LogCore OS", version="0.1.0", lifespan=lifespan)
 
