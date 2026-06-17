@@ -39,8 +39,9 @@ def process_user(user_name: str) -> dict:
             task["status"] = "pending"
             advanced += 1
         elif task.get("status") == "pending" and due < today:
+            # Advance to next occurrence so this branch doesn't trigger every night
             task["streak_count"] = 0
-            task["due_date"] = today
+            task["due_date"] = _next_due(today, recurrence)
             broken += 1
 
     write_json(path, data)

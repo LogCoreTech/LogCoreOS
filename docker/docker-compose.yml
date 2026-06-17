@@ -8,7 +8,6 @@ services:
       - "8000:8000"
     volumes:
       - ../brain:/data/brain
-      - ../auth.json:/data/auth.json
       - ../app/frontend/dist:/app/frontend/dist
     environment:
       BRAIN_PATH: /data/brain
@@ -25,11 +24,11 @@ services:
     depends_on:
       - ntfy
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 15s
 
   ntfy:
     image: binwiederhier/ntfy

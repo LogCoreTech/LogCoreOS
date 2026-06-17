@@ -47,7 +47,7 @@ def job_morning_digest():
             top3 = get_top3(user)
             if not top3:
                 continue
-            date_str = today.strftime("%A, %B %-d")
+            date_str = f"{today.strftime('%A, %B')} {today.day}"
             lines = "\n".join(
                 f"{i+1}. [{t['category']}] {t['title']}" for i, t in enumerate(top3)
             )
