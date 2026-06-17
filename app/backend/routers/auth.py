@@ -38,8 +38,9 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer)
     user = auth_service.get_user_by_id(payload["sub"])
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-    # Attach jti to user dict so logout can revoke it
+    # Attach jti and exp so logout can revoke with persistence
     user["_jti"] = payload.get("jti")
+    user["_exp"] = payload.get("exp")
     return user
 
 
@@ -49,10 +50,21 @@ def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     return current_user
 
 
+def require_module(module_id: str):
+    """Dependency factory — blocks the endpoint if the module is disabled for this user."""
+    def check(current_user: dict = Depends(get_current_user)) -> dict:
+        if module_id in current_user.get("disabled_modules", []):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Module '{module_id}' has been disabled for your account.",
+            )
+        return current_user
+    return check
+
+
 @router.get("/status")
 def registration_status():
     """Public endpoint — lets the login page know if self-registration is available."""
-    # Runtime setting in auth.json takes precedence over the env var
     runtime = auth_service.get_system_settings()
     allow = runtime.get("allow_open_registration", settings.allow_open_registration)
     return {"registration_open": auth_service.user_count() == 0 or allow}
@@ -89,7 +101,11 @@ def register(
 ):
     is_first_user = auth_service.user_count() == 0
 
-    if not is_first_user and not settings.allow_open_registration:
+    # Runtime setting (admin-toggleable via UI) takes precedence over the env var
+    runtime = auth_service.get_system_settings()
+    allow_open = runtime.get("allow_open_registration", settings.allow_open_registration)
+
+    if not is_first_user and not allow_open:
         if not credentials:
             raise HTTPException(status_code=403, detail="Registration is closed. An admin must add new users.")
         payload = auth_service.decode_token(credentials.credentials)
@@ -121,8 +137,9 @@ def login(req: LoginRequest, _rl: None = Depends(_login_limit)):
 @router.post("/logout")
 def logout(current_user: dict = Depends(get_current_user)):
     jti = current_user.get("_jti")
+    exp = current_user.get("_exp")
     if jti:
-        auth_service.revoke_token(jti)
+        auth_service.revoke_token(jti, exp)
     return {"ok": True}
 
 

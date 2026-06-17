@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     # Set to true to allow open registration (dev/testing only).
     allow_open_registration: bool = False
 
+    # Set to true when running behind a trusted reverse proxy (nginx, Caddy).
+    # Allows the rate limiter to read the real client IP from X-Forwarded-For.
+    # Leave false when the app is exposed directly — otherwise clients can spoof IPs.
+    trust_proxy_headers: bool = False
+
     class Config:
         env_file = ".env"
 

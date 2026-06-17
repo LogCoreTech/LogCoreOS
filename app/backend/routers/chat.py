@@ -1,9 +1,10 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from config import settings
-from routers.auth import get_current_user
-from services.ai_provider import chat_completion
+from routers.auth import get_current_user, require_module
 from services.file_service import (
     read_markdown,
     profile_path,
@@ -11,30 +12,31 @@ from services.file_service import (
     read_json,
     user_path,
 )
+from services.ai_provider import chat_completion
+from services.rate_limiter import rate_limit
 
 router = APIRouter()
+
+_require_chat = require_module("chat")
+_chat_limit = rate_limit(20, 60)  # 20 messages per minute per IP
 
 
 def _build_context(user_name: str) -> str:
     """Assemble the user's Brain context for the AI system prompt."""
     parts = []
 
-    # Profile
     pf = profile_path(user_name)
     if pf.exists():
         parts.append(f"# User Profile\n\n{read_markdown(pf)}")
 
-    # Personal Long Term Memory
     ltm = user_path(user_name) / "Long_Term_Memory.md"
     if ltm.exists():
         parts.append(f"# Long-Term Memory\n\n{read_markdown(ltm)}")
 
-    # Personal Short Term Memory
     stm = user_path(user_name) / "Short_Term_Memory.md"
     if stm.exists():
         parts.append(f"# Short-Term Memory\n\n{read_markdown(stm)}")
 
-    # Tasks (pending only, summary)
     tp = tasks_path(user_name)
     if tp.exists():
         tasks = read_json(tp).get("tasks", [])
@@ -49,13 +51,22 @@ def _build_context(user_name: str) -> str:
     return "\n\n---\n\n".join(parts)
 
 
+class HistoryMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(..., max_length=5000)
+
+
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=5000)
-    history: list[dict] = Field(default=[], max_length=50)
+    history: list[HistoryMessage] = Field(default=[], max_length=50)
 
 
 @router.post("")
-async def chat(req: ChatRequest, current_user: dict = Depends(get_current_user)):
+async def chat(
+    req: ChatRequest,
+    current_user: dict = Depends(_require_chat),
+    _rl: None = Depends(_chat_limit),
+):
     if not settings.anthropic_api_key:
         return {"response": "No AI API key configured. Set ANTHROPIC_API_KEY in .env."}
 
@@ -66,6 +77,6 @@ async def chat(req: ChatRequest, current_user: dict = Depends(get_current_user))
         + _build_context(current_user["name"])
     )
 
-    messages = req.history + [{"role": "user", "content": req.message}]
+    messages = [m.model_dump() for m in req.history] + [{"role": "user", "content": req.message}]
     response = chat_completion(system_prompt, messages)
     return {"response": response}
