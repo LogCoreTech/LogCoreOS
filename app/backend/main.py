@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from config import settings
@@ -78,4 +79,14 @@ app.include_router(setup.router,      prefix="/api/setup",      tags=["setup"])
 # Serve React frontend — must come last
 static_dir = Path(__file__).parent.parent / "frontend" / "dist"
 if static_dir.exists():
-    app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="frontend")
+    # Serve static assets (JS/CSS/images) directly
+    app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="assets")
+
+    # Serve any file that exists at the root of dist (icons, manifest, sw.js, etc.)
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_fallback(full_path: str):
+        """SPA catch-all — serve the file if it exists, otherwise index.html for client-side routing."""
+        candidate = static_dir / full_path
+        if candidate.is_file():
+            return FileResponse(str(candidate))
+        return FileResponse(str(static_dir / "index.html"))
