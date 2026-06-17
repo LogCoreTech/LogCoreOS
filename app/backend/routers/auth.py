@@ -49,6 +49,16 @@ def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     return current_user
 
 
+@router.get("/status")
+def registration_status():
+    """Public endpoint — lets the login page know if self-registration is available."""
+    return {
+        "registration_open": (
+            auth_service.user_count() == 0 or settings.allow_open_registration
+        )
+    }
+
+
 @router.post("/register")
 def register(
     req: RegisterRequest,

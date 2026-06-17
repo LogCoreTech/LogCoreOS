@@ -40,6 +40,7 @@ export const auth = {
   logout:  ()                => post('/auth/logout',  {}),
   me:      ()                => get('/auth/me'),
   today:   ()                => get('/auth/today'),
+  status:  ()                => get('/auth/status'),
   updateSession: (session_minutes) => patch('/auth/session', { session_minutes }),
 }
 
