@@ -33,6 +33,10 @@ export default function Settings() {
   const [moduleSaving, setModuleSaving] = useState(null)
   const [openReg, setOpenReg] = useState(false)
   const [openRegSaving, setOpenRegSaving] = useState(false)
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '' })
+  const [addingUser, setAddingUser] = useState(false)
+  const [addUserError, setAddUserError] = useState('')
+  const [addUserSuccess, setAddUserSuccess] = useState('')
 
   useEffect(() => {
     const fetches = [prioritiesApi.get(), authApi.me()]
@@ -140,6 +144,28 @@ export default function Settings() {
       await adminApi.updateModules(userId, userModules[userId] || [])
     } finally {
       setModuleSaving(null)
+    }
+  }
+
+  async function addUser(e) {
+    e.preventDefault()
+    setAddUserError('')
+    setAddUserSuccess('')
+    setAddingUser(true)
+    try {
+      await authApi.register(newUser.email, newUser.password, newUser.name)
+      setAddUserSuccess(`${newUser.name} added. They can now sign in.`)
+      setNewUser({ name: '', email: '', password: '' })
+      // Refresh user list
+      const users = await adminApi.users()
+      setAllUsers(users)
+      const map = {}
+      users.forEach(u => { map[u.id] = u.disabled_modules || [] })
+      setUserModules(map)
+    } catch (err) {
+      setAddUserError(err.message || 'Failed to add user.')
+    } finally {
+      setAddingUser(false)
     }
   }
 
@@ -377,6 +403,42 @@ export default function Settings() {
               />
             </button>
           </div>
+          {/* Add user form */}
+          <form onSubmit={addUser} className="space-y-3 mb-5">
+            <p className="text-sm font-medium">Add User</p>
+            <input
+              type="text"
+              placeholder="Full name"
+              value={newUser.name}
+              onChange={e => setNewUser(u => ({ ...u, name: e.target.value }))}
+              required
+              className="input"
+            />
+            <input
+              type="email"
+              placeholder="Email"
+              value={newUser.email}
+              onChange={e => setNewUser(u => ({ ...u, email: e.target.value }))}
+              required
+              className="input"
+            />
+            <input
+              type="password"
+              placeholder="Password (8+ characters)"
+              value={newUser.password}
+              onChange={e => setNewUser(u => ({ ...u, password: e.target.value }))}
+              required
+              minLength={8}
+              className="input"
+            />
+            {addUserError && <p className="text-red-500 text-xs">{addUserError}</p>}
+            {addUserSuccess && <p className="text-green-500 text-xs">{addUserSuccess}</p>}
+            <button type="submit" disabled={addingUser} className="btn-primary w-full">
+              {addingUser ? 'Adding…' : '+ Add User'}
+            </button>
+          </form>
+
+          {/* Per-user module access */}
           <div className="space-y-5">
             {allUsers.filter(u => u.role !== 'admin').length === 0 && (
               <p className="text-sm text-charcoal-400 dark:text-charcoal-500">
