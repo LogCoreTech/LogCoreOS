@@ -1,28 +1,35 @@
+import { useEffect, useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
-
-const navItems = [
-  { to: '/',        icon: '⊞', label: 'Dashboard' },
-  { to: '/tasks',   icon: '✓', label: 'Tasks'     },
-  { to: '/chat',    icon: '◈', label: 'AI Chat'   },
-  { to: '/settings',icon: '⚙', label: 'Settings'  },
-]
+import { ALL_MODULES, getShortcuts } from '../lib/constants'
 
 export default function Layout() {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const navigate = useNavigate()
+  const [shortcuts, setShortcuts] = useState(getShortcuts)
+  const [showDrawer, setShowDrawer] = useState(false)
 
-  function handleLogout() {
-    logout()
-    navigate('/login')
+  // Re-read shortcuts when Settings saves them
+  useEffect(() => {
+    function refresh() { setShortcuts(getShortcuts()) }
+    window.addEventListener('lc_shortcuts_changed', refresh)
+    return () => window.removeEventListener('lc_shortcuts_changed', refresh)
+  }, [])
+
+  const shortcutModules = shortcuts
+    .map(id => ALL_MODULES.find(m => m.id === id))
+    .filter(Boolean)
+
+  function navTo(to) {
+    navigate(to)
+    setShowDrawer(false)
   }
 
   return (
     <div className="flex h-screen overflow-hidden bg-charcoal-50 dark:bg-charcoal-900">
 
-      {/* Sidebar — desktop */}
+      {/* Sidebar — desktop only, always shows all modules */}
       <aside className="hidden md:flex flex-col w-56 bg-white dark:bg-charcoal-950 border-r border-charcoal-200 dark:border-charcoal-800">
-        {/* Logo */}
         <div className="px-5 py-5 border-b border-charcoal-200 dark:border-charcoal-800">
           <span className="text-orange-500 font-bold text-xl tracking-tight">LogCore</span>
           <span className="text-charcoal-400 dark:text-charcoal-500 text-xs block mt-0.5">
@@ -30,11 +37,10 @@ export default function Layout() {
           </span>
         </div>
 
-        {/* Nav */}
         <nav className="flex-1 p-3 space-y-1">
-          {navItems.map(({ to, icon, label }) => (
+          {ALL_MODULES.map(({ id, to, icon, label }) => (
             <NavLink
-              key={to}
+              key={id}
               to={to}
               end={to === '/'}
               className={({ isActive }) =>
@@ -51,11 +57,13 @@ export default function Layout() {
           ))}
         </nav>
 
-        {/* Logout */}
         <div className="p-3 border-t border-charcoal-200 dark:border-charcoal-800">
-          <button onClick={handleLogout} className="btn-ghost w-full text-left text-sm">
-            Sign out
-          </button>
+          <NavLink
+            to="/settings"
+            className="btn-ghost w-full text-left text-sm block"
+          >
+            ⚙ Settings
+          </NavLink>
         </div>
       </aside>
 
@@ -65,11 +73,11 @@ export default function Layout() {
           <Outlet />
         </main>
 
-        {/* Bottom nav — mobile */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-charcoal-950 border-t border-charcoal-200 dark:border-charcoal-800 flex z-50">
-          {navItems.map(({ to, icon, label }) => (
+        {/* Bottom bar — mobile: pinned shortcuts + More button */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-charcoal-950 border-t border-charcoal-200 dark:border-charcoal-800 flex z-40">
+          {shortcutModules.map(({ id, to, icon, label }) => (
             <NavLink
-              key={to}
+              key={id}
               to={to}
               end={to === '/'}
               className={({ isActive }) =>
@@ -84,8 +92,65 @@ export default function Layout() {
               {label}
             </NavLink>
           ))}
+
+          {/* More button */}
+          <button
+            onClick={() => setShowDrawer(true)}
+            className="flex-1 flex flex-col items-center py-2 text-xs gap-0.5 text-charcoal-500 dark:text-charcoal-400"
+          >
+            <span className="text-lg leading-none">⋯</span>
+            More
+          </button>
         </nav>
       </div>
+
+      {/* Module drawer — slides up from bottom on mobile */}
+      {showDrawer && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 z-50 md:hidden"
+            onClick={() => setShowDrawer(false)}
+          />
+          <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-charcoal-950 z-50 md:hidden rounded-t-2xl shadow-xl">
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <h3 className="font-semibold text-base">All Modules</h3>
+              <button
+                onClick={() => setShowDrawer(false)}
+                className="text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200 text-xl leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Drag handle hint */}
+            <div className="flex justify-center -mt-3 mb-2">
+              <div className="w-10 h-1 rounded-full bg-charcoal-200 dark:bg-charcoal-700" />
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 px-5 pb-4">
+              {ALL_MODULES.map(({ id, to, icon, label }) => (
+                <button
+                  key={id}
+                  onClick={() => navTo(to)}
+                  className="flex flex-col items-center gap-2 p-4 rounded-xl bg-charcoal-50 dark:bg-charcoal-800 hover:bg-orange-50 dark:hover:bg-orange-900/20 active:scale-95 transition-all"
+                >
+                  <span className="text-2xl leading-none">{icon}</span>
+                  <span className="text-xs font-medium text-charcoal-700 dark:text-charcoal-300">{label}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="px-5 pb-6 pt-1 border-t border-charcoal-100 dark:border-charcoal-800">
+              <button
+                onClick={() => navTo('/settings')}
+                className="text-xs text-orange-500 font-medium"
+              >
+                Edit shortcuts →
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
