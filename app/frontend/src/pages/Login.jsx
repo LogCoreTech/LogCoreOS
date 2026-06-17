@@ -1,17 +1,24 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { auth as authApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
 export default function Login() {
-  const [mode, setMode] = useState('login') // 'login' | 'register'
+  const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [registrationOpen, setRegistrationOpen] = useState(null) // null = loading
   const { login } = useAuth()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    authApi.status()
+      .then(s => setRegistrationOpen(s.registration_open))
+      .catch(() => setRegistrationOpen(false))
+  }, [])
 
   async function submit(e) {
     e.preventDefault()
@@ -21,7 +28,6 @@ export default function Login() {
       let res
       if (mode === 'login') {
         res = await authApi.login(email, password)
-        // Set token first so the /me call can authenticate
         localStorage.setItem('lc_token', res.token)
         const me = await authApi.me()
         login(res.token, me.name, me.role, me.disabled_modules || [])
@@ -52,22 +58,38 @@ export default function Login() {
         </div>
 
         <div className="card p-6">
-          {/* Tab toggle */}
-          <div className="flex bg-charcoal-100 dark:bg-charcoal-700 rounded-lg p-1 mb-6">
-            {['login', 'register'].map(m => (
-              <button
-                key={m}
-                onClick={() => setMode(m)}
-                className={`flex-1 py-1.5 rounded-md text-sm font-medium capitalize transition-colors ${
-                  mode === m
-                    ? 'bg-white dark:bg-charcoal-600 text-charcoal-900 dark:text-gray-100 shadow-sm'
-                    : 'text-charcoal-500 dark:text-charcoal-400'
-                }`}
-              >
-                {m === 'login' ? 'Sign In' : 'Create Account'}
-              </button>
-            ))}
-          </div>
+          {/* Tab toggle — only show Create Account when registration is open */}
+          {registrationOpen ? (
+            <div className="flex bg-charcoal-100 dark:bg-charcoal-700 rounded-lg p-1 mb-6">
+              {['login', 'register'].map(m => (
+                <button
+                  key={m}
+                  onClick={() => setMode(m)}
+                  className={`flex-1 py-1.5 rounded-md text-sm font-medium capitalize transition-colors ${
+                    mode === m
+                      ? 'bg-white dark:bg-charcoal-600 text-charcoal-900 dark:text-gray-100 shadow-sm'
+                      : 'text-charcoal-500 dark:text-charcoal-400'
+                  }`}
+                >
+                  {m === 'login' ? 'Sign In' : 'Create Account'}
+                </button>
+              ))}
+            </div>
+          ) : (
+            // Registration closed — show sign-in only, with a note
+            <div className="mb-6">
+              <div className="bg-charcoal-100 dark:bg-charcoal-700 rounded-lg p-1 mb-3">
+                <div className="py-1.5 rounded-md text-sm font-medium text-center text-charcoal-900 dark:text-gray-100 bg-white dark:bg-charcoal-600 shadow-sm">
+                  Sign In
+                </div>
+              </div>
+              {registrationOpen === false && (
+                <p className="text-xs text-center text-charcoal-500 dark:text-charcoal-400">
+                  Need an account? Ask an admin to add you.
+                </p>
+              )}
+            </div>
+          )}
 
           <form onSubmit={submit} className="space-y-4">
             {mode === 'register' && (
@@ -115,9 +137,7 @@ export default function Login() {
               />
             </div>
 
-            {error && (
-              <p className="text-red-500 text-sm">{error}</p>
-            )}
+            {error && <p className="text-red-500 text-sm">{error}</p>}
 
             <button type="submit" disabled={loading} className="btn-primary w-full">
               {loading ? 'Please wait…' : mode === 'login' ? 'Sign In' : 'Create Account'}
