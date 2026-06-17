@@ -165,7 +165,25 @@ Each user receives:
 - Individual AI preferences (defined in their Profile)
 - Individual life priority hierarchy
 
-**Registration model:** The first user to register automatically becomes admin. After that, registration is closed by default — admins add new users by calling the register endpoint with their admin token. This prevents unauthorized access on self-hosted installs. Set `ALLOW_OPEN_REGISTRATION=true` in `.env` for dev or testing environments.
+**Registration model:** The first user to register automatically becomes admin. After that, registration is closed by default — admins add new users directly from the admin panel (Settings → User Access → Add User) or by toggling Open Registration temporarily. This prevents kids or unauthorized users from creating accounts to bypass restrictions.
+
+**Admin module control:** Admins can disable specific modules per user (e.g., restrict a child to Tasks only). Restrictions propagate to active sessions within 30 seconds via polling — no re-login required.
+
+**User contact & notification preferences (future):**
+
+Currently each user record stores an email (login identifier) and an ntfy channel UUID (push notifications). Email is used for login only — not for sending messages. ntfy handles all current notification delivery without requiring a phone number or email address.
+
+When notification automation expands (email digests, SMS alerts, etc.), user records should be extended with a structured `notifications` block rather than adding flat fields:
+
+```json
+"notifications": {
+  "ntfy": "lc-abc123",
+  "email": "user@example.com",
+  "phone": "+15551234567"
+}
+```
+
+Each field is optional — the notification service checks which ones are populated before sending. This avoids breaking changes when new channels are added. Phone number (SMS via Twilio or similar) should only be added when a concrete SMS feature is being built — not speculatively.
 
 Shared spaces and family-level features (shared calendar, chores, family dashboard) are planned for Phase 5.
 
