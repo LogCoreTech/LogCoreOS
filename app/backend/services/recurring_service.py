@@ -1,58 +1,57 @@
 """Nightly recurring task processor — advances due dates and manages streaks."""
-from datetime import date, timedelta
+from datetime import timedelta
 
+from services.auth_service import today_for_user
 from services.file_service import read_json, write_json, tasks_path, brain_path
 
 
 def _next_due(due: str, recurrence: str) -> str:
+    from datetime import date
     d = date.fromisoformat(due)
-    if recurrence == 'daily':
+    if recurrence == "daily":
         return (d + timedelta(days=1)).isoformat()
-    if recurrence == 'weekly':
+    if recurrence == "weekly":
         return (d + timedelta(weeks=1)).isoformat()
-    if recurrence == 'monthly':
+    if recurrence == "monthly":
         month = d.month + 1
         year = d.year + (month > 12)
         month = (month - 1) % 12 + 1
-        day = min(d.day, [31,28+(year%4==0),31,30,31,30,31,31,30,31,30,31][month-1])
+        day = min(d.day, [31, 28 + (year % 4 == 0), 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1])
         return date(year, month, day).isoformat()
     return (d + timedelta(days=1)).isoformat()
 
 
 def process_user(user_name: str) -> dict:
-    today = date.today().isoformat()
+    today = today_for_user(user_name).isoformat()
     path = tasks_path(user_name)
-    data = read_json(path)
+    data = read_json(path, default={"tasks": []})
     advanced = 0
     broken = 0
 
-    for task in data['tasks']:
-        if task.get('type') != 'recurring':
+    for task in data["tasks"]:
+        if task.get("type") != "recurring":
             continue
-        due = task.get('due_date') or today
-        recurrence = task.get('recurrence', 'daily')
+        due = task.get("due_date") or today
+        recurrence = task.get("recurrence", "daily")
 
-        if task.get('status') == 'done' and task.get('last_completed_date') == today:
-            # Completed today — advance to next occurrence
-            task['due_date'] = _next_due(due, recurrence)
-            task['status'] = 'pending'
+        if task.get("status") == "done" and task.get("last_completed_date") == today:
+            task["due_date"] = _next_due(due, recurrence)
+            task["status"] = "pending"
             advanced += 1
-
-        elif task.get('status') == 'pending' and due < today:
-            # Missed — break streak, advance to today
-            task['streak_count'] = 0
-            task['due_date'] = today
+        elif task.get("status") == "pending" and due < today:
+            task["streak_count"] = 0
+            task["due_date"] = today
             broken += 1
 
     write_json(path, data)
-    return {'user': user_name, 'advanced': advanced, 'broken_streaks': broken}
+    return {"user": user_name, "advanced": advanced, "broken_streaks": broken}
 
 
 def process_all_users() -> list[dict]:
-    users_dir = brain_path() / 'USERS'
+    users_dir = brain_path() / "USERS"
     results = []
     for user_dir in users_dir.iterdir():
-        if user_dir.name.startswith('_') or not user_dir.is_dir():
+        if user_dir.name.startswith("_") or not user_dir.is_dir():
             continue
         tp = tasks_path(user_dir.name)
         if tp.exists():

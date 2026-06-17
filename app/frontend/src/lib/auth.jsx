@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState } from 'react'
+import { auth as authApi } from './api'
 
 const AuthContext = createContext(null)
 
@@ -13,7 +14,8 @@ export function AuthProvider({ children }) {
     setUser({ name, role })
   }
 
-  function logout() {
+  async function logout() {
+    try { await authApi.logout() } catch { /* token may already be expired */ }
     localStorage.removeItem('lc_token')
     localStorage.removeItem('lc_user')
     setUser(null)

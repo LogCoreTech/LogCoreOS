@@ -28,15 +28,18 @@ async function request(method, path, body) {
   return data
 }
 
-const get  = (path)        => request('GET',    path)
-const post = (path, body)  => request('POST',   path, body)
-const patch = (path, body) => request('PATCH',  path, body)
-const del  = (path)        => request('DELETE', path)
+const get    = (path)       => request('GET',    path)
+const post   = (path, body) => request('POST',   path, body)
+const patch  = (path, body) => request('PATCH',  path, body)
+const del    = (path)       => request('DELETE', path)
 
 export const auth = {
-  register: (email, password, name) => post('/auth/register', { email, password, name }),
-  login:    (email, password)       => post('/auth/login',    { email, password }),
-  me:       ()                      => get('/auth/me'),
+  register: (email, password, name, session_minutes) =>
+    post('/auth/register', { email, password, name, session_minutes }),
+  login:   (email, password) => post('/auth/login',   { email, password }),
+  logout:  ()                => post('/auth/logout',  {}),
+  me:      ()                => get('/auth/me'),
+  updateSession: (session_minutes) => patch('/auth/session', { session_minutes }),
 }
 
 export const tasks = {

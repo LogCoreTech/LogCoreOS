@@ -1,19 +1,25 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 from config import settings
 from services import auth_service
+from services.rate_limiter import rate_limit
 
 router = APIRouter()
 bearer = HTTPBearer()
 bearer_optional = HTTPBearer(auto_error=False)
 
+# Rate limits: 5 login attempts per 5 min, 3 register per hour
+_login_limit    = rate_limit(5, 300)
+_register_limit = rate_limit(3, 3600)
+
 
 class RegisterRequest(BaseModel):
     email: EmailStr
-    password: str
-    name: str
+    password: str = Field(..., min_length=8)
+    name: str = Field(..., min_length=1, max_length=60)
+    session_minutes: int = Field(default=10080, ge=60, le=129600)  # 1h–90 days
 
 
 class LoginRequest(BaseModel):
@@ -21,25 +27,37 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class SessionRequest(BaseModel):
+    session_minutes: int = Field(..., ge=60, le=129600)
+
+
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer)) -> dict:
     payload = auth_service.decode_token(credentials.credentials)
     if not payload:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
     user = auth_service.get_user_by_id(payload["sub"])
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    # Attach jti to user dict so logout can revoke it
+    user["_jti"] = payload.get("jti")
     return user
+
+
+def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return current_user
 
 
 @router.post("/register")
 def register(
     req: RegisterRequest,
     credentials: HTTPAuthorizationCredentials = Depends(bearer_optional),
+    _rl: None = Depends(_register_limit),
 ):
     is_first_user = auth_service.user_count() == 0
 
     if not is_first_user and not settings.allow_open_registration:
-        # Subsequent users must be created by an authenticated admin
         if not credentials:
             raise HTTPException(status_code=403, detail="Registration is closed. An admin must add new users.")
         payload = auth_service.decode_token(credentials.credentials)
@@ -48,7 +66,11 @@ def register(
 
     role = "admin" if is_first_user else "member"
     try:
-        user = auth_service.create_user(req.email, req.password, req.name, role=role)
+        user = auth_service.create_user(
+            req.email, req.password, req.name,
+            role=role,
+            session_minutes=req.session_minutes,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     token = auth_service.create_token(user)
@@ -56,7 +78,7 @@ def register(
 
 
 @router.post("/login")
-def login(req: LoginRequest):
+def login(req: LoginRequest, _rl: None = Depends(_login_limit)):
     user = auth_service.authenticate(req.email, req.password)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -64,6 +86,28 @@ def login(req: LoginRequest):
     return {"token": token, "name": user["name"], "role": user["role"]}
 
 
+@router.post("/logout")
+def logout(current_user: dict = Depends(get_current_user)):
+    jti = current_user.get("_jti")
+    if jti:
+        auth_service.revoke_token(jti)
+    return {"ok": True}
+
+
 @router.get("/me")
 def me(current_user: dict = Depends(get_current_user)):
-    return {"id": current_user["id"], "name": current_user["name"], "role": current_user["role"]}
+    return {
+        "id": current_user["id"],
+        "name": current_user["name"],
+        "role": current_user["role"],
+        "notification_channel": current_user.get("notification_channel", ""),
+        "session_minutes": current_user.get("session_minutes", 10080),
+        "timezone": current_user.get("timezone", "UTC"),
+    }
+
+
+@router.patch("/session")
+def update_session(req: SessionRequest, current_user: dict = Depends(get_current_user)):
+    """Update session length for the current user."""
+    auth_service.update_user(current_user["id"], {"session_minutes": req.session_minutes})
+    return {"ok": True, "session_minutes": req.session_minutes}

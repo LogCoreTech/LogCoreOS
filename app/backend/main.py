@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -6,14 +7,29 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from config import settings
-from routers import auth, tasks, priorities, chat, setup
+from routers import auth, tasks, priorities, chat, setup, health
 from scheduler import start as start_scheduler
+
+logger = logging.getLogger("logcore")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _startup_checks()
     start_scheduler()
     yield
+
+
+def _startup_checks() -> None:
+    if settings.secret_key == "change-me-in-production":
+        logger.critical(
+            "\n"
+            "╔══════════════════════════════════════════════════════╗\n"
+            "║  SECURITY WARNING: SECRET_KEY is using the default   ║\n"
+            "║  insecure value. Set SECRET_KEY in docker/.env        ║\n"
+            "║  before exposing this server to any network.          ║\n"
+            "╚══════════════════════════════════════════════════════╝"
+        )
 
 
 app = FastAPI(title="LogCore OS", version="0.1.0", lifespan=lifespan)
@@ -32,11 +48,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
+app.include_router(health.router,     prefix="/api/health",     tags=["health"])
+app.include_router(auth.router,       prefix="/api/auth",       tags=["auth"])
+app.include_router(tasks.router,      prefix="/api/tasks",      tags=["tasks"])
 app.include_router(priorities.router, prefix="/api/priorities", tags=["priorities"])
-app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
-app.include_router(setup.router, prefix="/api/setup", tags=["setup"])
+app.include_router(chat.router,       prefix="/api/chat",       tags=["chat"])
+app.include_router(setup.router,      prefix="/api/setup",      tags=["setup"])
 
 # Serve React frontend — must come last
 static_dir = Path(__file__).parent.parent / "frontend" / "dist"
