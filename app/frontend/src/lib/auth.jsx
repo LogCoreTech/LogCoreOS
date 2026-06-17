@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useState, useEffect } from 'react'
 import { auth as authApi } from './api'
 
 const AuthContext = createContext(null)
@@ -20,6 +20,22 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('lc_user')
     setUser(null)
   }
+
+  // Poll /me every 30 seconds so admin permission changes take effect immediately
+  useEffect(() => {
+    if (!user) return
+    const id = setInterval(async () => {
+      try {
+        const me = await authApi.me()
+        const updated = { ...user, disabledModules: me.disabled_modules || [] }
+        localStorage.setItem('lc_user', JSON.stringify(updated))
+        setUser(updated)
+      } catch {
+        // 401 is handled in api.js — it clears storage and redirects to /login
+      }
+    }, 30_000)
+    return () => clearInterval(id)
+  }, [user?.name]) // restart only if the logged-in identity changes
 
   return (
     <AuthContext.Provider value={{ user, login, logout }}>
