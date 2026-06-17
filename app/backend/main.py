@@ -1,6 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -51,6 +52,15 @@ def _startup_checks() -> None:
         for fname in system_files:
             if not (bp / fname).exists():
                 logger.warning("Brain system file missing: '%s/%s'.", bp, fname)
+
+    try:
+        ZoneInfo(settings.scheduler_timezone)
+    except (ZoneInfoNotFoundError, Exception):
+        logger.error(
+            "SCHEDULER_TIMEZONE '%s' is not a valid IANA timezone — "
+            "the scheduler will fail to start. Check your .env file.",
+            settings.scheduler_timezone,
+        )
 
 
 app = FastAPI(title="LogCore OS", version="0.1.0", lifespan=lifespan)

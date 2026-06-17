@@ -70,8 +70,11 @@ def setup_user(req: SetupRequest, current_user: dict = Depends(get_current_user)
     safe_timezone = _sanitize(req.timezone, "timezone")
     safe_categories = [_sanitize(c, "category") for c in req.priority_order + req.custom_categories]
 
-    # Copy template
-    shutil.copytree(str(TEMPLATE_PATH), str(dest))
+    # Copy template — handle race where two simultaneous requests arrive for the same user
+    try:
+        shutil.copytree(str(TEMPLATE_PATH), str(dest))
+    except FileExistsError:
+        return {"ok": True, "message": "User folder already exists"}
 
     # Build profile content
     template_profile = dest / "Profile.md"

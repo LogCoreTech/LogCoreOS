@@ -18,7 +18,7 @@ const SESSION_OPTIONS = [
 ]
 
 export default function Settings() {
-  const { user, logout } = useAuth()
+  const { user, logout, updateUserField } = useAuth()
   const navigate = useNavigate()
   const [order, setOrder] = useState([])
   const [profileOrder, setProfileOrder] = useState([])
@@ -103,6 +103,7 @@ export default function Settings() {
   async function saveTimezone() {
     try {
       await authApi.updateMe({ timezone })
+      updateUserField('timezone', timezone)
       flash(setTzSaved)
     } catch (e) {
       alert(e.message || 'Invalid timezone')
@@ -193,9 +194,14 @@ export default function Settings() {
       // Refresh user list
       const users = await adminApi.users()
       setAllUsers(users)
-      const map = {}
-      users.forEach(u => { map[u.id] = u.disabled_modules || [] })
-      setUserModules(map)
+      const modMap = {}
+      const tzMap = {}
+      users.forEach(u => {
+        modMap[u.id] = u.disabled_modules || []
+        tzMap[u.id] = u.timezone || ''
+      })
+      setUserModules(modMap)
+      setUserTimezones(tzMap)
     } catch (err) {
       setAddUserError(err.message || 'Failed to add user.')
     } finally {
