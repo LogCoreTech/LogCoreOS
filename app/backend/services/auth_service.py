@@ -13,7 +13,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 from config import settings
-from services.file_service import brain_path
+from services.file_service import brain_path, write_json
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 logger = logging.getLogger(__name__)
@@ -25,7 +25,8 @@ def _auth_path() -> Path:
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
 
-# In-memory token blacklist — cleared on restart (acceptable for Phase 1)
+
+# In-memory token blacklist — bootstrapped from disk at startup
 _revoked_jtis: set[str] = set()
 _revoked_lock = threading.Lock()
 
@@ -46,9 +47,27 @@ def _load_auth() -> dict:
 
 
 def _save_auth(data: dict) -> None:
-    _auth_path().parent.mkdir(parents=True, exist_ok=True)
-    with open(_auth_path(), "w") as f:
-        json.dump(data, f, indent=2)
+    """Atomically write auth.json — prevents corruption on crash mid-write."""
+    write_json(_auth_path(), data)
+
+
+def _bootstrap_revoked_jtis() -> None:
+    """Reload persisted revoked JTIs from disk into memory after a process restart."""
+    try:
+        data = _load_auth()
+        revoked = data.get("revoked_jtis", {})
+        now = datetime.now(timezone.utc)
+        for jti, exp_str in revoked.items():
+            try:
+                if datetime.fromisoformat(exp_str) > now:
+                    _revoked_jtis.add(jti)
+            except (ValueError, TypeError):
+                pass
+    except Exception as exc:
+        logger.warning("Could not bootstrap revoked JTIs: %s", exc)
+
+
+_bootstrap_revoked_jtis()
 
 
 def user_count() -> int:
@@ -57,7 +76,7 @@ def user_count() -> int:
 
 def get_user_by_email(email: str) -> dict | None:
     return next(
-        (u for u in _load_auth()["users"] if u["email"].lower() == email.lower()), None
+        (u for u in _load_auth()["users"] if u["email"] == email.lower()), None
     )
 
 
@@ -103,7 +122,11 @@ def today_for_user(user_name: str) -> date:
     try:
         return datetime.now(ZoneInfo(tz_str)).date()
     except (ZoneInfoNotFoundError, Exception):
-        return date.today()
+        logger.warning(
+            "Invalid timezone '%s' for user '%s', falling back to UTC",
+            tz_str, user_name,
+        )
+        return datetime.now(timezone.utc).date()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
@@ -129,13 +152,14 @@ def create_user(
             "spaces, apostrophes, hyphens, and underscores."
         )
 
+    normalized_email = email.lower()
     data = _load_auth()
-    if get_user_by_email(email):
+    if get_user_by_email(normalized_email):
         raise ValueError("Email already registered")
 
     user = {
         "id": str(uuid_module.uuid4()),
-        "email": email,
+        "email": normalized_email,
         "name": name,
         "role": role,
         "hashed_password": hash_password(password),
@@ -180,9 +204,25 @@ def decode_token(token: str) -> dict | None:
         return None
 
 
-def revoke_token(jti: str) -> None:
+def revoke_token(jti: str, exp: int | None = None) -> None:
+    """Revoke a JTI in memory and persist it to disk so it survives restarts."""
     with _revoked_lock:
         _revoked_jtis.add(jti)
+    if exp is not None:
+        try:
+            exp_dt = datetime.fromtimestamp(exp, tz=timezone.utc)
+            data = _load_auth()
+            revoked = data.setdefault("revoked_jtis", {})
+            revoked[jti] = exp_dt.isoformat()
+            # Prune entries whose tokens have already expired — they're harmless anyway
+            now = datetime.now(timezone.utc)
+            data["revoked_jtis"] = {
+                k: v for k, v in revoked.items()
+                if datetime.fromisoformat(v) > now
+            }
+            _save_auth(data)
+        except Exception as exc:
+            logger.warning("Could not persist revoked JTI %s: %s", jti, exc)
 
 
 def is_revoked(jti: str) -> bool:

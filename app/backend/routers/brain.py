@@ -5,7 +5,9 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from routers.auth import get_current_user
+from routers.auth import get_current_user, require_module
+
+_require_brain = require_module("brain")
 from services.file_service import user_path, write_markdown
 
 router = APIRouter()
@@ -54,7 +56,7 @@ def _resolve(name: str, rel_path: str) -> Path:
 
 
 @router.get("/files")
-def list_files(current_user: dict = Depends(get_current_user)):
+def list_files(current_user: dict = Depends(_require_brain)):
     base = user_path(current_user["name"])
     if not base.exists():
         return []
@@ -62,7 +64,7 @@ def list_files(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/files/{file_path:path}")
-def get_file(file_path: str, current_user: dict = Depends(get_current_user)):
+def get_file(file_path: str, current_user: dict = Depends(_require_brain)):
     target = _resolve(current_user["name"], file_path)
     if not target.exists():
         raise HTTPException(status_code=404, detail="File not found")
@@ -77,7 +79,7 @@ class SaveRequest(BaseModel):
 def save_file(
     file_path: str,
     req: SaveRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(_require_brain),
 ):
     target = _resolve(current_user["name"], file_path)
     if not target.exists():

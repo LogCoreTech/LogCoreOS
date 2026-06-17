@@ -4,14 +4,23 @@ from collections import defaultdict
 
 from fastapi import HTTPException, Request
 
+from config import settings
+
 _hits: dict[str, list[float]] = defaultdict(list)
 
 
 def _client_ip(request: Request) -> str:
-    """Return the real client IP, honouring X-Forwarded-For behind a reverse proxy."""
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    """Return the real client IP.
+
+    X-Forwarded-For is only trusted when TRUST_PROXY_HEADERS=true, preventing
+    attackers from spoofing IPs to bypass rate limits when the app is exposed directly.
+    """
+    if settings.trust_proxy_headers:
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            candidate = forwarded.split(",")[0].strip()
+            if candidate:
+                return candidate
     return request.client.host if request.client else "unknown"
 
 

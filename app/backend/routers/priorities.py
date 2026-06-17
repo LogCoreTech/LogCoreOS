@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from routers.auth import get_current_user
+from routers.auth import get_current_user, require_module
+
+_require_tasks = require_module("tasks")
 from services.auth_service import today_for_user
 from services.file_service import parse_priority_order, write_json, override_path
 from services.priority_service import get_priority_order
@@ -14,7 +16,7 @@ class OverrideRequest(BaseModel):
 
 
 @router.get("")
-def get_priorities(current_user: dict = Depends(get_current_user)):
+def get_priorities(current_user: dict = Depends(_require_tasks)):
     return {
         "order": get_priority_order(current_user["name"]),
         "profile_order": parse_priority_order(current_user["name"]),
@@ -22,7 +24,7 @@ def get_priorities(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/override")
-def set_override(req: OverrideRequest, current_user: dict = Depends(get_current_user)):
+def set_override(req: OverrideRequest, current_user: dict = Depends(_require_tasks)):
     # Validate that submitted categories exist in user's profile
     profile_order = parse_priority_order(current_user["name"])
     invalid = [c for c in req.order if c not in profile_order]
