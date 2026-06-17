@@ -16,9 +16,12 @@ export default function Layout() {
     return () => window.removeEventListener('lc_shortcuts_changed', refresh)
   }, [])
 
+  const disabledIds = new Set(user?.disabledModules || [])
+  const visibleModules = ALL_MODULES.filter(m => !disabledIds.has(m.id))
+
   const shortcutModules = shortcuts
     .map(id => ALL_MODULES.find(m => m.id === id))
-    .filter(Boolean)
+    .filter(m => m && !disabledIds.has(m.id))
 
   function navTo(to) {
     navigate(to)
@@ -38,7 +41,7 @@ export default function Layout() {
         </div>
 
         <nav className="flex-1 p-3 space-y-1">
-          {ALL_MODULES.map(({ id, to, icon, label }) => (
+          {visibleModules.map(({ id, to, icon, label }) => (
             <NavLink
               key={id}
               to={to}
@@ -128,7 +131,7 @@ export default function Layout() {
             </div>
 
             <div className="grid grid-cols-3 gap-3 px-5 pb-4">
-              {ALL_MODULES.map(({ id, to, icon, label }) => (
+              {visibleModules.map(({ id, to, icon, label }) => (
                 <button
                   key={id}
                   onClick={() => navTo(to)}

@@ -65,3 +65,14 @@ export const chat = {
 export const setup = {
   create: (data) => post('/setup', data),
 }
+
+export const brain = {
+  list:     ()                    => get('/brain/files'),
+  getFile:  (path)                => get(`/brain/files/${path}`),
+  saveFile: (path, content)       => request('PUT', `/brain/files/${path}`, { content }),
+}
+
+export const admin = {
+  users:             ()                          => get('/auth/users'),
+  updateModules:     (userId, disabledModules)   => patch(`/auth/users/${userId}/modules`, { disabled_modules: disabledModules }),
+}
