@@ -19,14 +19,14 @@ ARCHIVE="$BACKUP_DIR/logcore-backup-$TIMESTAMP.tar.gz"
 
 mkdir -p "$BACKUP_DIR"
 
-# Build list of files to include
-TARGETS=("brain/")
-if [ -f "$REPO_ROOT/auth.json" ]; then
-  TARGETS+=("auth.json")
+# Auth data lives in brain/_system/ — covered by the brain/ backup below
+if [ ! -d "$REPO_ROOT/brain" ]; then
+  echo "ERROR: brain/ directory not found at $REPO_ROOT/brain — nothing to back up."
+  exit 1
 fi
 
-# Create archive
-tar -czf "$ARCHIVE" -C "$REPO_ROOT" "${TARGETS[@]}"
+# Create archive (brain/_system/auth.json is included automatically)
+tar -czf "$ARCHIVE" -C "$REPO_ROOT" brain/
 
 # Verify the archive is valid before rotating old backups
 if ! tar -tzf "$ARCHIVE" > /dev/null 2>&1; then

@@ -6,8 +6,8 @@ brain/USERS/*/
 # ── Personal session memory (generated per deployment) ────────────────────────
 brain/Memory/Daily Notes/
 
-# ── Auth registry (contains hashed passwords) ─────────────────────────────────
-auth.json
+# ── Auth registry (contains hashed passwords — lives in brain/_system/ at runtime)
+brain/_system/
 
 # ── Environment / secrets ─────────────────────────────────────────────────────
 docker/.env

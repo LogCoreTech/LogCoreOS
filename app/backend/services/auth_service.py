@@ -1,5 +1,6 @@
 """User authentication — JWT tokens, password hashing, user registry."""
 import json
+import logging
 import re
 import threading
 import uuid as uuid_module
@@ -15,6 +16,8 @@ from config import settings
 from services.file_service import brain_path
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+logger = logging.getLogger(__name__)
+
 
 def _auth_path() -> Path:
     """Auth data lives inside brain/_system/ so it's covered by the brain volume mount."""
@@ -27,14 +30,19 @@ _revoked_jtis: set[str] = set()
 _revoked_lock = threading.Lock()
 
 # Allowed characters in user names — prevents path traversal
-_NAME_RE = re.compile(r"^[A-Za-z0-9 '_\-]{1,60}$")
+_NAME_RE = re.compile(r"^(?=.*[A-Za-z0-9])[A-Za-z0-9 '_\-]{1,60}$")
 
 
 def _load_auth() -> dict:
-    if not _auth_path().exists():
+    path = _auth_path()
+    if not path.exists():
         return {"users": []}
-    with open(_auth_path()) as f:
-        return json.load(f)
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError) as exc:
+        logger.error("auth.json is corrupt or unreadable: %s", exc)
+        return {"users": []}
 
 
 def _save_auth(data: dict) -> None:
