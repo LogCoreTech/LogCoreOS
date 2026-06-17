@@ -111,3 +111,9 @@ def update_session(req: SessionRequest, current_user: dict = Depends(get_current
     """Update session length for the current user."""
     auth_service.update_user(current_user["id"], {"session_minutes": req.session_minutes})
     return {"ok": True, "session_minutes": req.session_minutes}
+
+
+@router.get("/today")
+def get_today(current_user: dict = Depends(get_current_user)):
+    """Return today's date in the user's local timezone (YYYY-MM-DD)."""
+    return {"today": auth_service.today_for_user(current_user["name"]).isoformat()}

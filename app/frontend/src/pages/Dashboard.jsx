@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { tasks as tasksApi } from '../lib/api'
+import { tasks as tasksApi, auth as authApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import TaskModal from '../components/TaskModal'
 import { catColor } from '../lib/constants'
@@ -21,9 +21,11 @@ export default function Dashboard() {
   async function load() {
     setLoading(true)
     try {
-      const [t3, all] = await Promise.all([tasksApi.top3(), tasksApi.list()])
+      const [t3, all, todayResp] = await Promise.all([
+        tasksApi.top3(), tasksApi.list(), authApi.today(),
+      ])
+      const todayStr = todayResp?.today ?? new Date().toISOString().split('T')[0]
       setTop3(t3)
-      const todayStr = new Date().toISOString().split('T')[0]
       setToday(all.filter(t => t.status === 'pending' && t.due_date === todayStr))
       setStreaks(all.filter(t => t.type === 'recurring' && (t.streak_count || 0) > 0)
         .sort((a, b) => b.streak_count - a.streak_count)

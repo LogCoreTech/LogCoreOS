@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     brain_path: Path = Path("/data/brain")
     secret_key: str = "change-me-in-production"
     algorithm: str = "HS256"
+    # Fallback only — per-user session_minutes (set at registration or in Settings) takes precedence
     access_token_expire_minutes: int = 10080  # 7 days
 
     # AI provider — only "anthropic" is wired up; structure is ready for others

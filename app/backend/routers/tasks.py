@@ -12,7 +12,7 @@ router = APIRouter()
 
 class TaskCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
-    category: str = Field("", max_length=50)
+    category: str = Field(..., min_length=1, max_length=50)
     priority: Literal["High", "Medium", "Low"] = "Medium"
     type: Literal["todo", "recurring", "goal", "appointment"] = "todo"
     recurrence: Literal["daily", "weekly", "monthly"] | None = None

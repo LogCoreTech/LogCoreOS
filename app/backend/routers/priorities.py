@@ -1,9 +1,8 @@
-from datetime import date
-
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from routers.auth import get_current_user
+from services.auth_service import today_for_user
 from services.file_service import parse_priority_order, write_json, override_path
 from services.priority_service import get_priority_order
 
@@ -32,6 +31,6 @@ def set_override(req: OverrideRequest, current_user: dict = Depends(get_current_
             status_code=400,
             detail=f"Unknown categories: {invalid}. Add them to your profile first.",
         )
-    payload = {"date": date.today().isoformat(), "order": req.order}
+    payload = {"date": today_for_user(current_user["name"]).isoformat(), "order": req.order}
     write_json(override_path(current_user["name"]), payload)
     return {"ok": True, "date": payload["date"], "order": req.order}

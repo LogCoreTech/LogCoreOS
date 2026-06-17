@@ -69,8 +69,12 @@ export default function Settings() {
   }
 
   async function saveSession() {
-    await authApi.updateSession(sessionMinutes)
-    flash()
+    try {
+      await authApi.updateSession(sessionMinutes)
+      flash()
+    } catch (e) {
+      console.error('Failed to save session length:', e)
+    }
   }
 
   async function handleLogout() {

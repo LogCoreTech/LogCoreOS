@@ -7,10 +7,18 @@ from fastapi import HTTPException, Request
 _hits: dict[str, list[float]] = defaultdict(list)
 
 
+def _client_ip(request: Request) -> str:
+    """Return the real client IP, honouring X-Forwarded-For behind a reverse proxy."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 def rate_limit(max_calls: int, window_seconds: int):
     """Returns a FastAPI dependency that enforces max_calls per window per IP."""
     def dependency(request: Request) -> None:
-        ip = request.client.host if request.client else "unknown"
+        ip = _client_ip(request)
         key = f"{request.url.path}:{ip}"
         now = time.monotonic()
         recent = [t for t in _hits[key] if now - t < window_seconds]
