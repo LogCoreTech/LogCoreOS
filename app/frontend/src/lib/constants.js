@@ -20,6 +20,7 @@ export const ALL_MODULES = [
   { id: 'dashboard', to: '/',         icon: '⊞', label: 'Dashboard' },
   { id: 'tasks',     to: '/tasks',    icon: '✓', label: 'Tasks'     },
   { id: 'chat',      to: '/chat',     icon: '◈', label: 'AI Chat'   },
+  { id: 'brain',     to: '/brain',    icon: '🧠', label: 'Brain'     },
   { id: 'settings',  to: '/settings', icon: '⚙', label: 'Settings'  },
 ]
 

@@ -21,11 +21,16 @@ export default function Login() {
       let res
       if (mode === 'login') {
         res = await authApi.login(email, password)
-        login(res.token, res.name, res.role)
+        // Set token first so the /me call can authenticate
+        localStorage.setItem('lc_token', res.token)
+        const me = await authApi.me()
+        login(res.token, me.name, me.role, me.disabled_modules || [])
         navigate('/')
       } else {
         res = await authApi.register(email, password, name)
-        login(res.token, res.name, res.role)
+        localStorage.setItem('lc_token', res.token)
+        const me = await authApi.me()
+        login(res.token, me.name, me.role, me.disabled_modules || [])
         navigate('/setup')
       }
     } catch (err) {

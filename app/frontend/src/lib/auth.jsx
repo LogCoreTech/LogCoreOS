@@ -8,10 +8,10 @@ export function AuthProvider({ children }) {
     try { return JSON.parse(localStorage.getItem('lc_user')) } catch { return null }
   })
 
-  function login(token, name, role) {
+  function login(token, name, role, disabledModules = []) {
     localStorage.setItem('lc_token', token)
-    localStorage.setItem('lc_user', JSON.stringify({ name, role }))
-    setUser({ name, role })
+    localStorage.setItem('lc_user', JSON.stringify({ name, role, disabledModules }))
+    setUser({ name, role, disabledModules })
   }
 
   async function logout() {

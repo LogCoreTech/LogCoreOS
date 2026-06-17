@@ -4,6 +4,7 @@ import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import Tasks from './pages/Tasks'
 import Chat from './pages/Chat'
+import Brain from './pages/Brain'
 import Settings from './pages/Settings'
 import Login from './pages/Login'
 import Setup from './pages/Setup'
@@ -25,6 +26,7 @@ export default function App() {
             <Route path="/"         element={<Dashboard />} />
             <Route path="/tasks"    element={<Tasks />} />
             <Route path="/chat"     element={<Chat />} />
+            <Route path="/brain"    element={<Brain />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
         </Routes>

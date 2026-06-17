@@ -3,6 +3,7 @@ import { priorities as prioritiesApi, auth as authApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useNavigate } from 'react-router-dom'
 import { ALL_MODULES, getShortcuts, saveShortcuts } from '../lib/constants'
+import { admin as adminApi } from '../lib/api'
 
 const BASE_CATS = ['God', 'Family', 'Job', 'Personal Growth', 'Hobbies']
 
@@ -27,18 +28,29 @@ export default function Settings() {
   const [shortcutIds, setShortcutIds] = useState(getShortcuts)
   const [shortcutDragIdx, setShortcutDragIdx] = useState(null)
   const [shortcutSaved, setShortcutSaved] = useState(false)
+  const [allUsers, setAllUsers] = useState([])
+  const [userModules, setUserModules] = useState({})   // { userId: [disabledId, ...] }
+  const [moduleSaving, setModuleSaving] = useState(null)
 
   useEffect(() => {
-    Promise.all([
-      prioritiesApi.get(),
-      authApi.me(),
-    ]).then(([p, me]) => {
+    const fetches = [prioritiesApi.get(), authApi.me()]
+    Promise.all(fetches).then(([p, me]) => {
       setOrder(p.order || [])
       setProfileOrder(p.profile_order || [])
       setNtfyChannel(me.notification_channel || '')
       setSessionMinutes(me.session_minutes || 10080)
     }).finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (user?.role !== 'admin') return
+    adminApi.users().then(users => {
+      setAllUsers(users)
+      const map = {}
+      users.forEach(u => { map[u.id] = u.disabled_modules || [] })
+      setUserModules(map)
+    }).catch(() => {})
+  }, [user?.role])
 
   function addCustom() {
     const v = customCat.trim()
@@ -105,6 +117,27 @@ export default function Settings() {
     saveShortcuts(shortcutIds)
     setShortcutSaved(true)
     setTimeout(() => setShortcutSaved(false), 2000)
+  }
+
+  function toggleUserModule(userId, moduleId) {
+    setUserModules(prev => {
+      const cur = prev[userId] || []
+      return {
+        ...prev,
+        [userId]: cur.includes(moduleId)
+          ? cur.filter(id => id !== moduleId)
+          : [...cur, moduleId],
+      }
+    })
+  }
+
+  async function saveUserModules(userId) {
+    setModuleSaving(userId)
+    try {
+      await adminApi.updateModules(userId, userModules[userId] || [])
+    } finally {
+      setModuleSaving(null)
+    }
   }
 
   async function handleLogout() {
@@ -299,6 +332,52 @@ export default function Settings() {
           Save Shortcuts
         </button>
       </div>
+
+      {/* Admin — User Access */}
+      {user?.role === 'admin' && allUsers.length > 0 && (
+        <div className="card p-5">
+          <h2 className="font-semibold mb-1">User Access</h2>
+          <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-4">
+            Disable modules for specific users. Admins always have full access.
+          </p>
+          <div className="space-y-5">
+            {allUsers.filter(u => u.role !== 'admin').map(u => (
+              <div key={u.id}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">{u.name}</span>
+                  <button
+                    onClick={() => saveUserModules(u.id)}
+                    disabled={moduleSaving === u.id}
+                    className="btn-primary text-xs px-3 py-1"
+                  >
+                    {moduleSaving === u.id ? '…' : 'Save'}
+                  </button>
+                </div>
+                <div className="space-y-1">
+                  {ALL_MODULES.filter(m => m.id !== 'settings').map(mod => {
+                    const disabled = (userModules[u.id] || []).includes(mod.id)
+                    return (
+                      <label
+                        key={mod.id}
+                        className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-charcoal-50 dark:hover:bg-charcoal-800 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!disabled}
+                          onChange={() => toggleUserModule(u.id, mod.id)}
+                          className="accent-orange-500 w-4 h-4"
+                        />
+                        <span className="text-sm leading-none">{mod.icon}</span>
+                        <span className="text-sm">{mod.label}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Account */}
       <div className="card p-5">

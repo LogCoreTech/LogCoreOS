@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from config import settings
-from routers import auth, tasks, priorities, chat, setup, health
+from routers import auth, tasks, priorities, chat, setup, health, brain
 from scheduler import start as start_scheduler
 
 logger = logging.getLogger("logcore")
@@ -75,6 +75,7 @@ app.include_router(tasks.router,      prefix="/api/tasks",      tags=["tasks"])
 app.include_router(priorities.router, prefix="/api/priorities", tags=["priorities"])
 app.include_router(chat.router,       prefix="/api/chat",       tags=["chat"])
 app.include_router(setup.router,      prefix="/api/setup",      tags=["setup"])
+app.include_router(brain.router,      prefix="/api/brain",      tags=["brain"])
 
 # Serve React frontend — must come last
 static_dir = Path(__file__).parent.parent / "frontend" / "dist"

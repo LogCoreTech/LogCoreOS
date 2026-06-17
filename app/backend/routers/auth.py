@@ -103,7 +103,38 @@ def me(current_user: dict = Depends(get_current_user)):
         "notification_channel": current_user.get("notification_channel", ""),
         "session_minutes": current_user.get("session_minutes", 10080),
         "timezone": current_user.get("timezone", "UTC"),
+        "disabled_modules": current_user.get("disabled_modules", []),
     }
+
+
+@router.get("/users")
+def list_users(current_user: dict = Depends(require_admin)):
+    """List all users without sensitive fields (admin only)."""
+    data = auth_service._load_auth()
+    safe_fields = {"id", "name", "email", "role", "timezone", "disabled_modules", "created_at"}
+    return [
+        {k: v for k, v in u.items() if k in safe_fields}
+        for u in data["users"]
+    ]
+
+
+class ModuleAccessRequest(BaseModel):
+    disabled_modules: list[str]
+
+
+@router.patch("/users/{user_id}/modules")
+def update_user_modules(
+    user_id: str,
+    req: ModuleAccessRequest,
+    current_user: dict = Depends(require_admin),
+):
+    """Set which modules are disabled for a given user (admin only)."""
+    if user_id == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Admins cannot restrict their own module access")
+    user = auth_service.update_user(user_id, {"disabled_modules": req.disabled_modules})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"ok": True, "disabled_modules": req.disabled_modules}
 
 
 @router.patch("/session")
