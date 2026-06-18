@@ -25,18 +25,16 @@ export default function Login() {
     setError('')
     setLoading(true)
     try {
-      let res
       if (mode === 'login') {
-        res = await authApi.login(email, password)
-        localStorage.setItem('lc_token', res.token)
+        // Cookie is set server-side by the login response — no token handling needed here
+        await authApi.login(email, password)
         const [me, status] = await Promise.all([authApi.me(), setupApi.status()])
-        login(res.token, me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC')
+        login(me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC')
         navigate(status.setup_complete ? '/' : '/setup')
       } else {
-        res = await authApi.register(email, password, name)
-        localStorage.setItem('lc_token', res.token)
+        await authApi.register(email, password, name)
         const me = await authApi.me()
-        login(res.token, me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC')
+        login(me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC')
         navigate('/setup')
       }
     } catch (err) {

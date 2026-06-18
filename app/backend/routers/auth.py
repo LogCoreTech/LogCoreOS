@@ -69,10 +69,10 @@ def _set_auth_cookie(response: Response, token: str, session_minutes: int) -> No
         key="lc_token",
         value=token,
         httponly=True,
+        secure=settings.cookie_secure,
         samesite="strict",
         max_age=session_minutes * 60,
         path="/",
-        # secure=True should be enabled when served over HTTPS
     )
 
 
@@ -160,7 +160,6 @@ def register(
     token = auth_service.create_token(user)
     _set_auth_cookie(response, token, user.get("session_minutes", 10080))
     return {
-        "token": token,
         "name": user["name"],
         "role": user["role"],
         "disabled_modules": user.get("disabled_modules", []),
@@ -176,7 +175,6 @@ def login(req: LoginRequest, response: Response, _rl: None = Depends(_login_limi
     token = auth_service.create_token(user)
     _set_auth_cookie(response, token, user.get("session_minutes", 10080))
     return {
-        "token": token,
         "name": user["name"],
         "role": user["role"],
         "disabled_modules": user.get("disabled_modules", []),

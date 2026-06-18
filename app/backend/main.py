@@ -33,6 +33,12 @@ def _startup_checks() -> None:
             "Set ALLOWED_ORIGINS to your domain in production."
         )
 
+    if not settings.cookie_secure:
+        logger.warning(
+            "COOKIE_SECURE is False — auth cookies will be sent over plain HTTP. "
+            "Only acceptable for local development. Set COOKIE_SECURE=true in production."
+        )
+
     if settings.secret_key == "change-me-in-production":
         logger.critical(
             "\n"
@@ -121,10 +127,13 @@ if static_dir.exists():
     app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="assets")
 
     # Serve any file that exists at the root of dist (icons, manifest, sw.js, etc.)
+    _static_root = static_dir.resolve()
+
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa_fallback(full_path: str):
         """SPA catch-all — serve the file if it exists, otherwise index.html for client-side routing."""
-        candidate = static_dir / full_path
-        if candidate.is_file():
+        candidate = (static_dir / full_path).resolve()
+        # Containment check prevents path traversal outside the dist directory
+        if candidate.is_relative_to(_static_root) and candidate.is_file():
             return FileResponse(str(candidate))
         return FileResponse(str(static_dir / "index.html"))
