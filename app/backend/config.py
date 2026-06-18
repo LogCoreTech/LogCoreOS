@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     # Must be a mailto: or https: URL identifying the push sender
     vapid_subject: str = "logcore@localhost"
 
+    # Set to False only for local HTTP development; always True in production
+    cookie_secure: bool = True
+
     # CORS — comma-separated origins, or "*" for development
     allowed_origins: str = "*"
 

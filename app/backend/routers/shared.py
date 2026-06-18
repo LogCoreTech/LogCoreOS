@@ -7,8 +7,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from routers.auth import get_current_user
+from routers.auth import get_current_user, require_module
 from services import task_service
+
+_require_household = require_module("household")
 from services.file_service import tasks_path, write_json, read_json
 
 router = APIRouter()
@@ -108,13 +110,13 @@ def _validate_task_id(task_id: str) -> str:
 
 
 @router.get("")
-def list_shared(current_user: dict = Depends(get_current_user)):
+def list_shared(current_user: dict = Depends(_require_household)):
     _ensure_household()
     return task_service.list_tasks(_HOUSEHOLD)
 
 
 @router.post("")
-def add_shared(req: SharedTaskCreate, current_user: dict = Depends(get_current_user)):
+def add_shared(req: SharedTaskCreate, current_user: dict = Depends(_require_household)):
     _ensure_household()
     payload = req.model_dump()
     # Store who created it
@@ -123,7 +125,7 @@ def add_shared(req: SharedTaskCreate, current_user: dict = Depends(get_current_u
 
 
 @router.patch("/{task_id}")
-def update_shared(task_id: str, req: SharedTaskUpdate, current_user: dict = Depends(get_current_user)):
+def update_shared(task_id: str, req: SharedTaskUpdate, current_user: dict = Depends(_require_household)):
     _validate_task_id(task_id)
     _ensure_household()
     updates = req.model_dump(exclude_unset=True)
@@ -136,7 +138,7 @@ def update_shared(task_id: str, req: SharedTaskUpdate, current_user: dict = Depe
 
 
 @router.delete("/{task_id}")
-def delete_shared(task_id: str, current_user: dict = Depends(get_current_user)):
+def delete_shared(task_id: str, current_user: dict = Depends(_require_household)):
     _validate_task_id(task_id)
     _ensure_household()
     if not task_service.delete_task(_HOUSEHOLD, task_id):

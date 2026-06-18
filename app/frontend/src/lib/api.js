@@ -1,22 +1,14 @@
 const BASE = '/api/v1'
 
-function token() {
-  return localStorage.getItem('lc_token')
-}
-
 function headers(extra = {}) {
-  const h = { 'Content-Type': 'application/json', ...extra }
-  // Still send Bearer header for backward compat (API clients, existing sessions)
-  const t = token()
-  if (t) h['Authorization'] = `Bearer ${t}`
-  return h
+  return { 'Content-Type': 'application/json', ...extra }
 }
 
 async function request(method, path, body) {
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers: headers(),
-    credentials: 'include',  // send httpOnly cookies automatically
+    credentials: 'include',  // httpOnly cookie sent automatically by browser
     body: body ? JSON.stringify(body) : undefined,
   })
   if (res.status === 401) {
@@ -103,7 +95,7 @@ export const admin = {
 
 export const user = {
   async export() {
-    const res = await fetch(`${BASE}/user/export`, { headers: headers() })
+    const res = await fetch(`${BASE}/user/export`, { headers: headers(), credentials: 'include' })
     if (!res.ok) throw new Error('Export failed')
     const blob = await res.blob()
     const url = URL.createObjectURL(blob)

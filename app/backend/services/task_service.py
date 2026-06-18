@@ -40,6 +40,10 @@ def add_task(user_name: str, task_data: dict) -> dict:
         "streak_count": 0,
         "last_completed_date": None,
     }
+    # Pass through optional attribution fields (e.g. created_by for household tasks)
+    for extra in ("created_by",):
+        if extra in task_data:
+            task[extra] = task_data[extra]
     data["tasks"].append(task)
     write_json(tasks_path(user_name), data)
     return task

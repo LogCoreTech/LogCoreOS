@@ -30,17 +30,14 @@ export function AuthProvider({ children }) {
       .catch(() => {
         // Cookie expired or absent — clear stale localStorage and let the app redirect
         localStorage.removeItem('lc_user')
-        localStorage.removeItem('lc_token')
         setUser(null)
       })
       .finally(() => setSessionChecked(true))
   }, [])
 
-  function login(token, name, role, disabledModules = [], timezone = 'UTC') {
-    // The httpOnly cookie is already set by the server response.
-    // We keep a minimal localStorage entry for the user metadata only.
-    // We still store the token for backward compat with any direct API usage.
-    if (token) localStorage.setItem('lc_token', token)
+  function login(name, role, disabledModules = [], timezone = 'UTC') {
+    // Auth is handled via httpOnly cookie set by the server.
+    // Only cache non-sensitive user metadata in localStorage.
     const u = { name, role, disabledModules, timezone }
     localStorage.setItem('lc_user', JSON.stringify(u))
     setUser(u)
@@ -48,7 +45,6 @@ export function AuthProvider({ children }) {
 
   async function logout() {
     try { await authApi.logout() } catch { /* cookie may already be expired */ }
-    localStorage.removeItem('lc_token')
     localStorage.removeItem('lc_user')
     setUser(null)
   }

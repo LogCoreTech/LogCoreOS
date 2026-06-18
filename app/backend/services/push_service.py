@@ -135,8 +135,9 @@ def _encrypt_payload(subscription: dict, plaintext: bytes) -> bytes:
     auth_secret = _b64ud(subscription["keys"]["auth"])
     ua_pub_raw  = _b64ud(subscription["keys"]["p256dh"])
 
-    # Rebuild receiver's public key from uncompressed point bytes
-    assert ua_pub_raw[0] == 0x04
+    # Rebuild receiver's public key from uncompressed point bytes (65 bytes, 0x04 prefix)
+    if len(ua_pub_raw) != 65 or ua_pub_raw[0] != 0x04:
+        raise ValueError(f"Invalid p256dh: expected 65-byte uncompressed EC point, got {len(ua_pub_raw)} bytes")
     x = int.from_bytes(ua_pub_raw[1:33], "big")
     y = int.from_bytes(ua_pub_raw[33:65], "big")
     ua_public = EllipticCurvePublicNumbers(x, y, SECP256R1()).public_key(default_backend())
