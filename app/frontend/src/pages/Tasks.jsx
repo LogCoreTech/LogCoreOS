@@ -15,6 +15,7 @@ export default function Tasks() {
   const [tempOrder, setTempOrder] = useState([])
   const [dragIdx, setDragIdx] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
 
   async function load() {
     setLoading(true)
@@ -36,8 +37,8 @@ export default function Tasks() {
   }
 
   async function remove(id) {
-    if (!confirm('Delete this task?')) return
     await tasksApi.remove(id)
+    setConfirmDeleteId(null)
     load()
   }
 
@@ -138,7 +139,7 @@ export default function Tasks() {
                     catColor={catColor(task.category)}
                     onDone={() => markDone(task.id)}
                     onEdit={() => { setEditTask(task); setShowModal(true) }}
-                    onDelete={() => remove(task.id)}
+                    onDelete={() => setConfirmDeleteId(task.id)}
                   />
                 ))}
               </div>
@@ -155,13 +156,32 @@ export default function Tasks() {
                     catColor={catColor(task.category)}
                     onDone={() => markDone(task.id)}
                     onEdit={() => { setEditTask(task); setShowModal(true) }}
-                    onDelete={() => remove(task.id)}
+                    onDelete={() => setConfirmDeleteId(task.id)}
                   />
                 ))}
               </div>
             </div>
           )}
         </>
+      )}
+
+      {/* Delete confirmation modal */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="card p-5 w-full max-w-xs">
+            <h2 className="font-semibold mb-1">Delete Task?</h2>
+            <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mb-4">This cannot be undone.</p>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmDeleteId(null)} className="btn-ghost flex-1">Cancel</button>
+              <button
+                onClick={() => remove(confirmDeleteId)}
+                className="flex-1 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Reorder Today modal */}

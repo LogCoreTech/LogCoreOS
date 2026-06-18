@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
@@ -202,6 +204,25 @@ def list_users(current_user: dict = Depends(require_admin)):
         {k: v for k, v in u.items() if k in safe_fields}
         for u in data["users"]
     ]
+
+
+class RoleUpdateRequest(BaseModel):
+    role: Literal["admin", "member"]
+
+
+@router.patch("/users/{user_id}/role")
+def update_user_role(
+    user_id: str,
+    req: RoleUpdateRequest,
+    current_user: dict = Depends(require_admin),
+):
+    """Promote or demote a user's role (admin only)."""
+    if user_id == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot change your own role")
+    user = auth_service.update_user(user_id, {"role": req.role})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"ok": True, "role": req.role}
 
 
 class ModuleAccessRequest(BaseModel):

@@ -1,4 +1,4 @@
-const BASE = '/api'
+const BASE = '/api/v1'
 
 function token() {
   return localStorage.getItem('lc_token')
@@ -46,13 +46,13 @@ export const auth = {
 }
 
 export const tasks = {
-  list:    ()                    => get('/tasks'),
-  top3:    ()                    => get('/tasks/top3'),
-  scored:  ()                    => get('/tasks/scored'),
-  history: ()                    => get('/tasks/history'),
-  add:     (task)                => post('/tasks', task),
-  update:  (id, updates)         => patch(`/tasks/${id}`, updates),
-  remove:  (id)                  => del(`/tasks/${id}`),
+  list:    ()                             => get('/tasks'),
+  top3:    ()                             => get('/tasks/top3'),
+  scored:  ()                             => get('/tasks/scored'),
+  history: (limit = 50, offset = 0)       => get(`/tasks/history?limit=${limit}&offset=${offset}`),
+  add:     (task)                         => post('/tasks', task),
+  update:  (id, updates)                  => patch(`/tasks/${id}`, updates),
+  remove:  (id)                           => del(`/tasks/${id}`),
 }
 
 export const priorities = {
@@ -79,6 +79,21 @@ export const admin = {
   users:             ()                          => get('/auth/users'),
   updateModules:     (userId, disabledModules)   => patch(`/auth/users/${userId}/modules`, { disabled_modules: disabledModules }),
   updateUser:        (userId, data)              => patch(`/auth/users/${userId}`, data),
+  updateRole:        (userId, role)              => patch(`/auth/users/${userId}/role`, { role }),
   getSettings:       ()                          => get('/auth/admin/settings'),
   updateSettings:    (s)                         => patch('/auth/admin/settings', s),
+}
+
+export const user = {
+  async export() {
+    const res = await fetch(`${BASE}/user/export`, { headers: headers() })
+    if (!res.ok) throw new Error('Export failed')
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] || 'brain.zip'
+    a.click()
+    URL.revokeObjectURL(url)
+  },
 }
