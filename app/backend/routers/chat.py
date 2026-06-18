@@ -1,3 +1,4 @@
+import asyncio
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -104,7 +105,7 @@ async def chat(
     )
 
     messages = [m.model_dump() for m in req.history] + [{"role": "user", "content": req.message}]
-    response = chat_completion(system_prompt, messages)
+    response = await asyncio.to_thread(chat_completion, system_prompt, messages)
     return {"response": response}
 
 
@@ -129,7 +130,8 @@ async def save_memory(
         "Do NOT include pleasantries or questions. Only concrete information.\n\n"
         f"Conversation:\n{convo}"
     )
-    summary = chat_completion(
+    summary = await asyncio.to_thread(
+        chat_completion,
         "You are a memory extractor. Output only a markdown bullet list. No preamble.",
         [{"role": "user", "content": extract_prompt}],
     )

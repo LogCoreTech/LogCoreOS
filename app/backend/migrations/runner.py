@@ -4,6 +4,7 @@ Schema migration runner for the LogCore Brain file store.
 Migrations are plain functions registered in MIGRATIONS below.
 Each runs exactly once; completion is tracked in brain/_system/migrations.json.
 """
+import fcntl
 import logging
 from pathlib import Path
 from typing import Callable
@@ -117,6 +118,18 @@ def run_pending(brain: Path | None = None) -> int:
     if brain is None:
         brain = brain_path()
 
+    lock_path = brain / "_system" / "migrations.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(lock_path, "w") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        try:
+            return _run_pending_locked(brain)
+        finally:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
+
+
+def _run_pending_locked(brain: Path) -> int:
     state_path = _state_path(brain)
     state = read_json(state_path, default={"applied": []})
     applied: list[str] = state.get("applied", [])
@@ -135,9 +148,7 @@ def run_pending(brain: Path | None = None) -> int:
             count += 1
             logger.info("Migration completed: %s", name)
         except Exception as exc:
-            logger.error("Migration %s FAILED: %s", name, exc, exc_info=True)
-            # Stop on first failure — don't run subsequent migrations
-            break
+            logger.error("Migration %s FAILED: %s — skipping and continuing", name, exc, exc_info=True)
 
     if count:
         logger.info("Applied %d migration(s).", count)

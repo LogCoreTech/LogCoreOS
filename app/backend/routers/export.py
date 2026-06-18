@@ -20,7 +20,7 @@ def export_brain(current_user: dict = Depends(get_current_user)):
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         if folder.exists():
             for f in folder.rglob("*"):
-                if f.is_file():
+                if f.is_file() and f.name != "push_subscription.json":
                     zf.write(f, f.relative_to(folder))
     buf.seek(0)
     safe_name = current_user["name"].replace(" ", "_")

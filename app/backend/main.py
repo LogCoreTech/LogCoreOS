@@ -95,14 +95,19 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(SecurityHeadersMiddleware)
 
+_wildcard_cors = settings.allowed_origins.strip() == "*"
 _origins = (
-    ["*"]
-    if settings.allowed_origins.strip() == "*"
+    []
+    if _wildcard_cors
     else [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
 )
 
 app.add_middleware(
     CORSMiddleware,
+    # When wildcard is requested, use allow_origin_regex=".*" so the browser
+    # receives a reflected origin instead of "*", which is required when
+    # allow_credentials=True (browsers reject "*" + credentials per CORS spec).
+    allow_origin_regex=".*" if _wildcard_cors else None,
     allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
