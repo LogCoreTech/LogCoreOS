@@ -27,6 +27,12 @@ function AdminOnly({ children }) {
   return children
 }
 
+function ModuleRoute({ moduleId, children }) {
+  const { user } = useAuth()
+  if (user?.disabledModules?.includes(moduleId)) return <Navigate to="/" replace />
+  return children
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -37,12 +43,12 @@ export default function App() {
             <Route path="/setup" element={<Protected><Setup /></Protected>} />
             <Route element={<Protected><Layout /></Protected>}>
               <Route path="/"         element={<Dashboard />} />
-              <Route path="/tasks"    element={<Tasks />} />
-              <Route path="/calendar" element={<Calendar />} />
-              <Route path="/goals"    element={<Goals />} />
-              <Route path="/household" element={<Household />} />
-              <Route path="/chat"     element={<Chat />} />
-              <Route path="/brain"    element={<Brain />} />
+              <Route path="/tasks"     element={<ModuleRoute moduleId="tasks"><Tasks /></ModuleRoute>} />
+              <Route path="/calendar"  element={<ModuleRoute moduleId="calendar"><Calendar /></ModuleRoute>} />
+              <Route path="/goals"     element={<ModuleRoute moduleId="goals"><Goals /></ModuleRoute>} />
+              <Route path="/household" element={<ModuleRoute moduleId="household"><Household /></ModuleRoute>} />
+              <Route path="/chat"      element={<ModuleRoute moduleId="chat"><Chat /></ModuleRoute>} />
+              <Route path="/brain"     element={<ModuleRoute moduleId="brain"><Brain /></ModuleRoute>} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/admin"    element={<AdminOnly><Admin /></AdminOnly>} />
             </Route>
