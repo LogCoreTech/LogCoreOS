@@ -58,8 +58,15 @@ def _hmac(key: bytes, *msgs: bytes) -> bytes:
 
 # ── VAPID key management ───────────────────────────────────────────────────────
 
+_vapid_cache: tuple[EllipticCurvePrivateKey, str] | None = None
+
+
 def _load_or_generate_vapid() -> tuple[EllipticCurvePrivateKey, str]:
-    """Return (private_key, public_key_b64url). Generates and persists on first call."""
+    """Return (private_key, public_key_b64url). Generates and persists on first call. Cached in memory."""
+    global _vapid_cache
+    if _vapid_cache is not None:
+        return _vapid_cache
+
     vpath = _VAPID_PATH()
     data = read_json(vpath)
     if data.get("private_key_pem") and data.get("public_key_b64u"):
@@ -69,7 +76,8 @@ def _load_or_generate_vapid() -> tuple[EllipticCurvePrivateKey, str]:
             password=None,
             backend=default_backend(),
         )
-        return priv, data["public_key_b64u"]
+        _vapid_cache = (priv, data["public_key_b64u"])
+        return _vapid_cache
 
     priv = generate_private_key(SECP256R1(), default_backend())
     pub_bytes = priv.public_key().public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
@@ -77,7 +85,8 @@ def _load_or_generate_vapid() -> tuple[EllipticCurvePrivateKey, str]:
     pem = priv.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()).decode()
     write_json(vpath, {"private_key_pem": pem, "public_key_b64u": pub_b64u})
     logger.info("Generated new VAPID key pair.")
-    return priv, pub_b64u
+    _vapid_cache = (priv, pub_b64u)
+    return _vapid_cache
 
 
 def get_vapid_public_key() -> str:

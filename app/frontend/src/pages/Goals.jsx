@@ -39,11 +39,11 @@ export default function Goals() {
   const filtered = goals.filter(g =>
     filter === 'all'     ? true :
     filter === 'pending' ? g.status === 'pending' :
-    filter === 'done'    ? g.status !== 'pending' : true
+    filter === 'done'    ? g.status === 'done' : true
   )
 
   const total   = goals.length
-  const done    = goals.filter(g => g.status !== 'pending').length
+  const done    = goals.filter(g => g.status === 'done').length
   const pct     = total === 0 ? 0 : Math.round((done / total) * 100)
 
   const grouped = categories.map(cat => ({
@@ -188,7 +188,7 @@ export default function Goals() {
 function GoalCard({ goal, color, onDone, onEdit, onDelete }) {
   const today = new Date().toISOString().split('T')[0]
   const overdue = goal.due_date && goal.due_date < today && goal.status === 'pending'
-  const done = goal.status !== 'pending'
+  const done = goal.status === 'done'
 
   return (
     <div className={`card p-4 flex items-start gap-3 ${overdue ? 'border-red-500/40' : ''}`}>

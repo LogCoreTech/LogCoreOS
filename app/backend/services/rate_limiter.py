@@ -1,12 +1,19 @@
 """Simple in-memory IP-based rate limiter — no external dependency needed."""
 import time
-from collections import defaultdict
 
 from fastapi import HTTPException, Request
 
 from config import settings
 
-_hits: dict[str, list[float]] = defaultdict(list)
+_hits: dict[str, list[float]] = {}
+_sweep_n = 0
+
+
+def _sweep(now: float) -> None:
+    """Remove stale entries to prevent unbounded dict growth."""
+    dead = [k for k, ts in list(_hits.items()) if not ts or now - ts[-1] >= 3600]
+    for k in dead:
+        _hits.pop(k, None)
 
 
 def _client_ip(request: Request) -> str:
@@ -27,10 +34,17 @@ def _client_ip(request: Request) -> str:
 def rate_limit(max_calls: int, window_seconds: int):
     """Returns a FastAPI dependency that enforces max_calls per window per IP."""
     def dependency(request: Request) -> None:
+        global _sweep_n
         ip = _client_ip(request)
         key = f"{request.url.path}:{ip}"
         now = time.monotonic()
-        recent = [t for t in _hits[key] if now - t < window_seconds]
+
+        _sweep_n += 1
+        if _sweep_n >= 5_000:
+            _sweep_n = 0
+            _sweep(now)
+
+        recent = [t for t in _hits.get(key, []) if now - t < window_seconds]
         if len(recent) >= max_calls:
             raise HTTPException(
                 status_code=429,

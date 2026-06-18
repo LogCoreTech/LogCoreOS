@@ -95,7 +95,11 @@ export function AuthProvider({ children }) {
   }, [user?.name])
 
   // Don't render children until the initial session check completes (avoids flash)
-  if (!sessionChecked) return null
+  if (!sessionChecked) return (
+    <div className="min-h-screen flex items-center justify-center bg-charcoal-50 dark:bg-charcoal-900">
+      <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
 
   return (
     <AuthContext.Provider value={{ user, login, logout, updateUserField }}>
