@@ -10,6 +10,7 @@ from services.file_service import brain_path, tasks_path, read_json
 from services.priority_service import get_top3
 from services.recurring_service import process_all_users
 from services.notification_service import send
+from services.push_service import send_push, get_subscription
 
 logger = logging.getLogger("logcore.scheduler")
 scheduler = BackgroundScheduler(timezone=settings.scheduler_timezone)
@@ -51,12 +52,11 @@ def job_morning_digest():
             lines = "\n".join(
                 f"{i+1}. [{t['category']}] {t['title']}" for i, t in enumerate(top3)
             )
-            send(
-                channel=_ntfy_channel(user),
-                title=f"Good morning, {user.split()[0]}! — {date_str}",
-                message=f"Your top 3 today:\n\n{lines}",
-                priority="default",
-            )
+            title   = f"Good morning, {user.split()[0]}! — {date_str}"
+            message = f"Your top 3 today:\n\n{lines}"
+            send(channel=_ntfy_channel(user), title=title, message=message, priority="default")
+            if get_subscription(user):
+                send_push(user, title, message, url="/tasks")
         except Exception:
             logger.exception("morning digest failed for %s", user)
 

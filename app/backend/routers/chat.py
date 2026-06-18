@@ -1,12 +1,14 @@
 from typing import Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
 from config import settings
 from routers.auth import get_current_user, require_module
+from services.auth_service import today_for_user
 from services.file_service import (
     read_markdown,
+    write_markdown,
     profile_path,
     tasks_path,
     read_json,
@@ -101,3 +103,40 @@ async def chat(
     messages = [m.model_dump() for m in req.history] + [{"role": "user", "content": req.message}]
     response = chat_completion(system_prompt, messages)
     return {"response": response}
+
+
+class SaveMemoryRequest(BaseModel):
+    history: list[HistoryMessage] = Field(..., min_length=1, max_length=50)
+    target: Literal["short", "long"] = "short"
+
+
+@router.post("/save-memory")
+async def save_memory(
+    req: SaveMemoryRequest,
+    current_user: dict = Depends(_require_chat),
+    _rl: None = Depends(_chat_limit),
+):
+    if not settings.anthropic_api_key:
+        raise HTTPException(status_code=503, detail="No AI API key configured.")
+
+    convo = "\n".join(f"{m.role.upper()}: {m.content}" for m in req.history)
+    extract_prompt = (
+        "Extract the key facts, decisions, and insights from this conversation that are worth "
+        "remembering long-term. Be concise — bullet points only, max 5 bullets. "
+        "Do NOT include pleasantries or questions. Only concrete information.\n\n"
+        f"Conversation:\n{convo}"
+    )
+    summary = chat_completion(
+        "You are a memory extractor. Output only a markdown bullet list. No preamble.",
+        [{"role": "user", "content": extract_prompt}],
+    )
+
+    fname = "Long_Term_Memory.md" if req.target == "long" else "Short_Term_Memory.md"
+    mem_path = user_path(current_user["name"]) / fname
+    today = today_for_user(current_user["name"]).isoformat()
+
+    existing = mem_path.read_text() if mem_path.exists() else ""
+    updated = existing.rstrip() + f"\n\n## {today}\n\n{summary.strip()}\n"
+    write_markdown(mem_path, updated)
+
+    return {"ok": True, "target": fname, "summary": summary.strip()}

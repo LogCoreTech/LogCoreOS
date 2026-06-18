@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'react'
-import { priorities as prioritiesApi, auth as authApi, user as userApi } from '../lib/api'
+import { priorities as prioritiesApi, auth as authApi, user as userApi, push as pushApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useNavigate } from 'react-router-dom'
 import { getShortcuts, saveShortcuts, ALL_MODULES } from '../lib/constants'
+
+function _urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4)
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw = window.atob(base64)
+  return new Uint8Array([...raw].map(c => c.charCodeAt(0)))
+}
 
 function detectTz() {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone || '' } catch { return '' }
@@ -35,6 +42,9 @@ export default function Settings() {
   const [shortcutDragIdx, setShortcutDragIdx] = useState(null)
   const [shortcutSaved, setShortcutSaved] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [pushStatus, setPushStatus] = useState('unknown') // 'unknown'|'unsupported'|'denied'|'subscribed'|'unsubscribed'
+  const [pushLoading, setPushLoading] = useState(false)
+  const [pushMsg, setPushMsg] = useState('')
 
   useEffect(() => {
     const fetches = [prioritiesApi.get(), authApi.me()]
@@ -45,6 +55,16 @@ export default function Settings() {
       setSessionMinutes(me.session_minutes || 10080)
       setTimezone(me.timezone || '')
     }).finally(() => setLoading(false))
+    // Check push status
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      setPushStatus('unsupported')
+    } else {
+      navigator.serviceWorker.ready.then(reg =>
+        reg.pushManager.getSubscription()
+      ).then(sub => {
+        setPushStatus(sub ? 'subscribed' : 'unsubscribed')
+      }).catch(() => setPushStatus('unsubscribed'))
+    }
   }, [])
 
 
@@ -123,6 +143,56 @@ export default function Settings() {
     saveShortcuts(shortcutIds)
     setShortcutSaved(true)
     setTimeout(() => setShortcutSaved(false), 2000)
+  }
+
+  async function subscribePush() {
+    setPushLoading(true)
+    setPushMsg('')
+    try {
+      const { publicKey } = await pushApi.vapidKey()
+      const reg = await navigator.serviceWorker.ready
+      const permission = await Notification.requestPermission()
+      if (permission !== 'granted') { setPushStatus('denied'); return }
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: _urlBase64ToUint8Array(publicKey),
+      })
+      await pushApi.subscribe(JSON.parse(JSON.stringify(sub)))
+      setPushStatus('subscribed')
+      setPushMsg('Push notifications enabled!')
+    } catch (e) {
+      setPushMsg(e.message || 'Failed to enable push notifications')
+    } finally {
+      setPushLoading(false)
+    }
+  }
+
+  async function unsubscribePush() {
+    setPushLoading(true)
+    try {
+      const reg = await navigator.serviceWorker.ready
+      const sub = await reg.pushManager.getSubscription()
+      if (sub) await sub.unsubscribe()
+      await pushApi.unsubscribe()
+      setPushStatus('unsubscribed')
+      setPushMsg('Push notifications disabled.')
+    } catch (e) {
+      setPushMsg(e.message || 'Failed to disable notifications')
+    } finally {
+      setPushLoading(false)
+    }
+  }
+
+  async function testPush() {
+    setPushLoading(true)
+    try {
+      await pushApi.test()
+      setPushMsg('Test notification sent!')
+    } catch (e) {
+      setPushMsg(e.message || 'Failed to send test')
+    } finally {
+      setPushLoading(false)
+    }
   }
 
   async function handleExport() {
@@ -372,6 +442,43 @@ export default function Settings() {
         <button onClick={saveShortcutsHandler} className="btn-primary w-full">
           Save Shortcuts
         </button>
+      </div>
+
+      {/* Push Notifications */}
+      <div className="card p-5">
+        <h2 className="font-semibold mb-1">Push Notifications</h2>
+        <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-3">
+          Receive morning digests and task reminders directly in your browser or on your device.
+        </p>
+        {pushStatus === 'unsupported' ? (
+          <p className="text-sm text-charcoal-500">Push notifications are not supported in this browser.</p>
+        ) : pushStatus === 'denied' ? (
+          <p className="text-sm text-red-500">Notifications are blocked. Enable them in your browser settings.</p>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className={`w-2 h-2 rounded-full ${pushStatus === 'subscribed' ? 'bg-green-500' : 'bg-charcoal-300'}`} />
+              <span className="text-sm">{pushStatus === 'subscribed' ? 'Subscribed' : 'Not subscribed'}</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {pushStatus !== 'subscribed' ? (
+                <button onClick={subscribePush} disabled={pushLoading} className="btn-primary text-sm disabled:opacity-50">
+                  {pushLoading ? 'Enabling…' : 'Enable Push Notifications'}
+                </button>
+              ) : (
+                <>
+                  <button onClick={testPush} disabled={pushLoading} className="btn-ghost text-sm disabled:opacity-50">
+                    {pushLoading ? '…' : 'Send Test'}
+                  </button>
+                  <button onClick={unsubscribePush} disabled={pushLoading} className="text-sm text-red-500 hover:text-red-600 font-medium disabled:opacity-50">
+                    Disable
+                  </button>
+                </>
+              )}
+            </div>
+            {pushMsg && <p className="text-xs text-charcoal-500">{pushMsg}</p>}
+          </div>
+        )}
       </div>
 
       {/* Account */}

@@ -6,6 +6,7 @@ function token() {
 
 function headers(extra = {}) {
   const h = { 'Content-Type': 'application/json', ...extra }
+  // Still send Bearer header for backward compat (API clients, existing sessions)
   const t = token()
   if (t) h['Authorization'] = `Bearer ${t}`
   return h
@@ -15,6 +16,7 @@ async function request(method, path, body) {
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers: headers(),
+    credentials: 'include',  // send httpOnly cookies automatically
     body: body ? JSON.stringify(body) : undefined,
   })
   if (res.status === 401) {
@@ -61,7 +63,8 @@ export const priorities = {
 }
 
 export const chat = {
-  send: (message, history) => post('/chat', { message, history }),
+  send:       (message, history)          => post('/chat',              { message, history }),
+  saveMemory: (history, target = 'short') => post('/chat/save-memory',  { history, target }),
 }
 
 export const setup = {
@@ -73,6 +76,20 @@ export const brain = {
   list:     ()                    => get('/brain/files'),
   getFile:  (path)                => get(`/brain/files/${path}`),
   saveFile: (path, content)       => request('PUT', `/brain/files/${path}`, { content }),
+}
+
+export const push = {
+  vapidKey:    ()       => get('/push/vapid-key'),
+  subscribe:   (sub)    => post('/push/subscribe', sub),
+  unsubscribe: ()       => request('DELETE', '/push/subscribe'),
+  test:        ()       => post('/push/test', {}),
+}
+
+export const shared = {
+  list:   ()               => get('/shared/tasks'),
+  add:    (task)           => post('/shared/tasks', task),
+  update: (id, updates)    => patch(`/shared/tasks/${id}`, updates),
+  remove: (id)             => del(`/shared/tasks/${id}`),
 }
 
 export const admin = {

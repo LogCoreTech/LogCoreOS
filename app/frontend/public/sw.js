@@ -1,4 +1,4 @@
-const CACHE = 'logcore-v1'
+const CACHE = 'logcore-v2'
 const SHELL = ['/', '/index.html', '/manifest.json']
 
 self.addEventListener('install', e => {
@@ -14,6 +14,35 @@ self.addEventListener('activate', e => {
     ).then(() => self.clients.claim())
   )
 })
+
+// ── Push notifications ──────────────────────────────────────────────────────
+
+self.addEventListener('push', e => {
+  let data = { title: 'LogCore', body: '', url: '/' }
+  try { data = { ...data, ...e.data.json() } } catch {}
+  e.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      data: { url: data.url },
+    })
+  )
+})
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close()
+  const url = e.notification.data?.url || '/'
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(all => {
+      const existing = all.find(c => new URL(c.url).pathname !== '/login')
+      if (existing) { existing.focus(); return existing.navigate(url) }
+      return clients.openWindow(url)
+    })
+  )
+})
+
+// ── Fetch handler ────────────────────────────────────────────────────────────
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url)
