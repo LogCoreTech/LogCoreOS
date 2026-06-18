@@ -188,6 +188,22 @@ All times are in `settings.scheduler_timezone` (IANA string, validated at startu
 
 ---
 
+## Agent Skills
+
+Reusable agent tasks live in `agent/skills/`. Each skill gets its own folder:
+
+```
+agent/skills/<skill-name>/
+├── <skill-name>.md   — AI instructions: what to do, how to interpret output, output format
+└── <script>.sh       — shell scripts for the automatable parts (optional but preferred)
+```
+
+**Rule:** one folder per skill. The `.md` file drives the AI; scripts handle anything a shell can verify faster than a model. An agent runs the scripts first, then uses the output as context for the `.md` instructions.
+
+To add a new skill: create the folder, add the `.md`, add any scripts, register it in `agent/README.md`.
+
+---
+
 ## Known Limitations / Future Work
 
 See `docs/PROJECT_DOCS.md` for the full roadmap. Current known gaps:
