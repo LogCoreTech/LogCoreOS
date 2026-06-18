@@ -6,8 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from routers.auth import get_current_user, require_module
+from services.rate_limiter import rate_limit
 
 _require_brain = require_module("brain")
+_brain_write_limit = rate_limit(20, 60)  # 20 writes per minute
 from services.file_service import user_path, write_markdown
 
 router = APIRouter()
@@ -80,6 +82,7 @@ def save_file(
     file_path: str,
     req: SaveRequest,
     current_user: dict = Depends(_require_brain),
+    _rl: None = Depends(_brain_write_limit),
 ):
     target = _resolve(current_user["name"], file_path)
     if not target.exists():

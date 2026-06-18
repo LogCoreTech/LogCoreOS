@@ -25,14 +25,12 @@ def get_priorities(current_user: dict = Depends(_require_tasks)):
 
 @router.post("/override")
 def set_override(req: OverrideRequest, current_user: dict = Depends(_require_tasks)):
-    # Validate that submitted categories exist in user's profile
     profile_order = parse_priority_order(current_user["name"])
     invalid = [c for c in req.order if c not in profile_order]
     if invalid:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown categories: {invalid}. Add them to your profile first.",
-        )
+        raise HTTPException(status_code=400, detail=f"Unknown categories: {invalid}. Add them to your profile first.")
+    if len(req.order) != len(set(req.order)):
+        raise HTTPException(status_code=400, detail="Duplicate categories in order")
     payload = {"date": today_for_user(current_user["name"]).isoformat(), "order": req.order}
     write_json(override_path(current_user["name"]), payload)
     return {"ok": True, "date": payload["date"], "order": req.order}

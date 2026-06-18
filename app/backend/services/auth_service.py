@@ -201,6 +201,9 @@ def create_token(user: dict) -> str:
 
 def decode_token(token: str) -> dict | None:
     try:
+        header = jwt.get_unverified_header(token)
+        if header.get("alg") != settings.algorithm:
+            return None
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         jti = payload.get("jti")
         if jti and is_revoked(jti):
@@ -234,3 +237,21 @@ def revoke_token(jti: str, exp: int | None = None) -> None:
 def is_revoked(jti: str) -> bool:
     with _revoked_lock:
         return jti in _revoked_jtis
+
+
+def cleanup_revoked_jtis() -> int:
+    """Remove expired JTIs from disk and memory. Returns count removed."""
+    now = datetime.now(timezone.utc)
+    with _auth_lock:
+        data = _load_auth()
+        revoked = data.get("revoked_jtis", {})
+        live = {k: v for k, v in revoked.items() if datetime.fromisoformat(v) > now}
+        removed = len(revoked) - len(live)
+        if removed:
+            data["revoked_jtis"] = live
+            _save_auth(data)
+    if removed:
+        # Sync memory: keep only JTIs still in the live set
+        with _revoked_lock:
+            _revoked_jtis.intersection_update(live.keys())
+    return removed

@@ -5,7 +5,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from config import settings
-from services.auth_service import get_user_by_name, today_for_user
+from services.auth_service import get_user_by_name, today_for_user, cleanup_revoked_jtis
 from services.file_service import brain_path, tasks_path, read_json
 from services.priority_service import get_top3
 from services.recurring_service import process_all_users
@@ -118,11 +118,19 @@ def job_weekly_review():
             logger.exception("weekly review failed for %s", user)
 
 
+def job_cleanup_revoked_jtis():
+    try:
+        cleanup_revoked_jtis()
+    except Exception:
+        logger.exception("revoked JTI cleanup failed")
+
+
 def start():
-    scheduler.add_job(job_recurring_processor, CronTrigger(hour=0,  minute=1),  id="recurring")
-    scheduler.add_job(job_morning_digest,       CronTrigger(hour=settings.morning_digest_hour, minute=0), id="morning")
-    scheduler.add_job(job_overdue_check,        CronTrigger(hour=settings.overdue_check_hour,  minute=0), id="overdue")
-    scheduler.add_job(job_weekly_review,        CronTrigger(day_of_week="sun", hour=settings.overdue_check_hour, minute=0), id="weekly")
+    scheduler.add_job(job_recurring_processor,  CronTrigger(hour=0, minute=1),                                        id="recurring")
+    scheduler.add_job(job_morning_digest,        CronTrigger(hour=settings.morning_digest_hour, minute=0),            id="morning")
+    scheduler.add_job(job_overdue_check,         CronTrigger(hour=settings.overdue_check_hour, minute=0),             id="overdue")
+    scheduler.add_job(job_weekly_review,         CronTrigger(day_of_week="sun", hour=settings.overdue_check_hour, minute=0), id="weekly")
+    scheduler.add_job(job_cleanup_revoked_jtis,  CronTrigger(hour=3, minute=0),                                       id="jti_cleanup")
     scheduler.start()
     logger.info(
         "scheduler started — recurring@00:01, morning@%02d:00, overdue@%02d:00, weekly@Sun %02d:00 (%s)",

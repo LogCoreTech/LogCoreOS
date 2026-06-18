@@ -106,15 +106,15 @@ def setup_user(req: SetupRequest, current_user: dict = Depends(get_current_user)
 
     write_markdown(dest / "Profile.md", profile_content)
 
-    # Replace placeholders in memory files
+    # Replace placeholders in memory files (atomic writes)
     for md_file in [dest / "Long_Term_Memory.md", dest / "Short_Term_Memory.md"]:
         content = md_file.read_text().replace("{Full Name}", name)
-        md_file.write_text(content)
+        write_markdown(md_file, content)
 
     # Save timezone to auth record so scheduler and scoring use user's local date
     auth_service.update_user(current_user["id"], {"timezone": safe_timezone})
 
-    # Register user in USERS.md
+    # Register user in USERS.md (atomic write)
     users_md = brain_path() / "USERS.md"
     users_content = users_md.read_text()
     if name not in users_content:
@@ -122,6 +122,6 @@ def setup_user(req: SetupRequest, current_user: dict = Depends(get_current_user)
             "| — | — | No users yet — run setup wizard |",
             f"| {name} | `USERS/{name}/` | Active |",
         )
-        users_md.write_text(users_content)
+        write_markdown(users_md, users_content)
 
     return {"ok": True, "message": f"Brain folder created for {name}"}
