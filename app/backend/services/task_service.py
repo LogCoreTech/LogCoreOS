@@ -85,5 +85,7 @@ def delete_task(user_name: str, task_id: str) -> bool:
     return True
 
 
-def list_history(user_name: str) -> list[dict]:
-    return read_json(history_path(user_name), default={"tasks": []}).get("tasks", [])
+def list_history(user_name: str, limit: int = 50, offset: int = 0) -> list[dict]:
+    all_tasks = read_json(history_path(user_name), default={"tasks": []}).get("tasks", [])
+    # Return most recent first
+    return list(reversed(all_tasks))[offset:offset + limit]

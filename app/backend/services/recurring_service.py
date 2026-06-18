@@ -1,4 +1,5 @@
 """Nightly recurring task processor — advances due dates and manages streaks."""
+import calendar
 from datetime import timedelta
 
 from services.auth_service import today_for_user
@@ -16,7 +17,7 @@ def _next_due(due: str, recurrence: str) -> str:
         month = d.month + 1
         year = d.year + (month > 12)
         month = (month - 1) % 12 + 1
-        day = min(d.day, [31, 28 + (year % 4 == 0), 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1])
+        day = min(d.day, calendar.monthrange(year, month)[1])
         return date(year, month, day).isoformat()
     return (d + timedelta(days=1)).isoformat()
 

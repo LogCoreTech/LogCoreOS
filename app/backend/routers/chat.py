@@ -21,21 +21,26 @@ _require_chat = require_module("chat")
 _chat_limit = rate_limit(20, 60)  # 20 messages per minute per IP
 
 
+def _safe(content: str) -> str:
+    """Wrap user-controlled content in XML tags to prevent prompt injection."""
+    return f"<brain_data>\n{content}\n</brain_data>"
+
+
 def _build_context(user_name: str) -> str:
     """Assemble the user's Brain context for the AI system prompt."""
     parts = []
 
     pf = profile_path(user_name)
     if pf.exists():
-        parts.append(f"# User Profile\n\n{read_markdown(pf)}")
+        parts.append(f"# User Profile\n\n{_safe(read_markdown(pf))}")
 
     ltm = user_path(user_name) / "Long_Term_Memory.md"
     if ltm.exists():
-        parts.append(f"# Long-Term Memory\n\n{read_markdown(ltm)}")
+        parts.append(f"# Long-Term Memory\n\n{_safe(read_markdown(ltm))}")
 
     stm = user_path(user_name) / "Short_Term_Memory.md"
     if stm.exists():
-        parts.append(f"# Short-Term Memory\n\n{read_markdown(stm)}")
+        parts.append(f"# Short-Term Memory\n\n{_safe(read_markdown(stm))}")
 
     tp = tasks_path(user_name)
     if tp.exists():
@@ -46,7 +51,7 @@ def _build_context(user_name: str) -> str:
             + (f" — due {t['due_date']}" if t.get("due_date") else "")
             for t in pending
         )
-        parts.append(f"# Pending Tasks\n\n{task_lines or '(none)'}")
+        parts.append(f"# Pending Tasks\n\n{_safe(task_lines or '(none)')}")
 
     return "\n\n---\n\n".join(parts)
 

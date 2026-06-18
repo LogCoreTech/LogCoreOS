@@ -30,6 +30,9 @@ def _auth_path() -> Path:
 _revoked_jtis: set[str] = set()
 _revoked_lock = threading.Lock()
 
+# Serialises all read-modify-write operations on auth.json
+_auth_lock = threading.Lock()
+
 # Allowed characters in user names — prevents path traversal
 _NAME_RE = re.compile(r"^(?=.*[A-Za-z0-9])[A-Za-z0-9 '_\-]{1,60}$")
 
@@ -89,12 +92,13 @@ def get_user_by_name(name: str) -> dict | None:
 
 
 def update_user(user_id: str, updates: dict) -> dict | None:
-    data = _load_auth()
-    for u in data["users"]:
-        if u["id"] == user_id:
-            u.update(updates)
-            _save_auth(data)
-            return u
+    with _auth_lock:
+        data = _load_auth()
+        for u in data["users"]:
+            if u["id"] == user_id:
+                u.update(updates)
+                _save_auth(data)
+                return u
     return None
 
 
@@ -105,10 +109,11 @@ def get_system_settings() -> dict:
 
 def update_system_settings(updates: dict) -> dict:
     """Merge updates into the runtime settings block and persist."""
-    data = _load_auth()
-    data.setdefault("settings", {}).update(updates)
-    _save_auth(data)
-    return data["settings"]
+    with _auth_lock:
+        data = _load_auth()
+        data.setdefault("settings", {}).update(updates)
+        _save_auth(data)
+        return data["settings"]
 
 
 def get_user_timezone(user_name: str) -> str:
@@ -153,24 +158,25 @@ def create_user(
         )
 
     normalized_email = email.lower()
-    data = _load_auth()
-    if get_user_by_email(normalized_email):
-        raise ValueError("Email already registered")
+    with _auth_lock:
+        data = _load_auth()
+        if any(u["email"] == normalized_email for u in data["users"]):
+            raise ValueError("Email already registered")
 
-    user = {
-        "id": str(uuid_module.uuid4()),
-        "email": normalized_email,
-        "name": name,
-        "role": role,
-        "hashed_password": hash_password(password),
-        "timezone": timezone,
-        "session_minutes": session_minutes,
-        "notification_channel": f"lc-{uuid_module.uuid4().hex[:12]}",
-        "created_at": datetime.now(ZoneInfo("UTC")).isoformat(),
-    }
+        user = {
+            "id": str(uuid_module.uuid4()),
+            "email": normalized_email,
+            "name": name,
+            "role": role,
+            "hashed_password": hash_password(password),
+            "timezone": timezone,
+            "session_minutes": session_minutes,
+            "notification_channel": f"lc-{uuid_module.uuid4().hex[:12]}",
+            "created_at": datetime.now(ZoneInfo("UTC")).isoformat(),
+        }
 
-    data["users"].append(user)
-    _save_auth(data)
+        data["users"].append(user)
+        _save_auth(data)
     return user
 
 
@@ -211,16 +217,16 @@ def revoke_token(jti: str, exp: int | None = None) -> None:
     if exp is not None:
         try:
             exp_dt = datetime.fromtimestamp(exp, tz=timezone.utc)
-            data = _load_auth()
-            revoked = data.setdefault("revoked_jtis", {})
-            revoked[jti] = exp_dt.isoformat()
-            # Prune entries whose tokens have already expired — they're harmless anyway
-            now = datetime.now(timezone.utc)
-            data["revoked_jtis"] = {
-                k: v for k, v in revoked.items()
-                if datetime.fromisoformat(v) > now
-            }
-            _save_auth(data)
+            with _auth_lock:
+                data = _load_auth()
+                revoked = data.setdefault("revoked_jtis", {})
+                revoked[jti] = exp_dt.isoformat()
+                now = datetime.now(timezone.utc)
+                data["revoked_jtis"] = {
+                    k: v for k, v in revoked.items()
+                    if datetime.fromisoformat(v) > now
+                }
+                _save_auth(data)
         except Exception as exc:
             logger.warning("Could not persist revoked JTI %s: %s", jti, exc)
 

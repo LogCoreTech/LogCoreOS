@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from config import settings
-from routers import auth, tasks, priorities, chat, setup, health, brain
+from routers import auth, tasks, priorities, chat, setup, health, brain, export
 from scheduler import start as start_scheduler
 
 logger = logging.getLogger("logcore")
@@ -79,13 +79,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(health.router,     prefix="/api/health",     tags=["health"])
-app.include_router(auth.router,       prefix="/api/auth",       tags=["auth"])
-app.include_router(tasks.router,      prefix="/api/tasks",      tags=["tasks"])
-app.include_router(priorities.router, prefix="/api/priorities", tags=["priorities"])
-app.include_router(chat.router,       prefix="/api/chat",       tags=["chat"])
-app.include_router(setup.router,      prefix="/api/setup",      tags=["setup"])
-app.include_router(brain.router,      prefix="/api/brain",      tags=["brain"])
+app.include_router(health.router,     prefix="/api/v1/health",     tags=["health"])
+app.include_router(auth.router,       prefix="/api/v1/auth",       tags=["auth"])
+app.include_router(tasks.router,      prefix="/api/v1/tasks",      tags=["tasks"])
+app.include_router(priorities.router, prefix="/api/v1/priorities", tags=["priorities"])
+app.include_router(chat.router,       prefix="/api/v1/chat",       tags=["chat"])
+app.include_router(setup.router,      prefix="/api/v1/setup",      tags=["setup"])
+app.include_router(brain.router,      prefix="/api/v1/brain",      tags=["brain"])
+app.include_router(export.router,     prefix="/api/v1/user",       tags=["export"])
 
 # Serve React frontend — must come last
 static_dir = Path(__file__).parent.parent / "frontend" / "dist"

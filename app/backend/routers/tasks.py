@@ -2,7 +2,7 @@ import re
 from datetime import date
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from routers.auth import get_current_user, require_module
@@ -104,8 +104,12 @@ def all_scored(current_user: dict = Depends(_require_tasks)):
 
 
 @router.get("/history")
-def history(current_user: dict = Depends(_require_tasks)):
-    return task_service.list_history(current_user["name"])
+def history(
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    current_user: dict = Depends(_require_tasks),
+):
+    return task_service.list_history(current_user["name"], limit=limit, offset=offset)
 
 
 @router.post("")
