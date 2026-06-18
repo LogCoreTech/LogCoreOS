@@ -61,19 +61,24 @@ export default function Tasks() {
   }
   function onDragEnd() { setDragIdx(null) }
 
+  const _today = new Date()
+  const _todayStr = `${_today.getFullYear()}-${String(_today.getMonth() + 1).padStart(2, '0')}-${String(_today.getDate()).padStart(2, '0')}`
+
   const filtered = taskList.filter(t =>
     filter === 'all'     ? true :
     filter === 'pending' ? t.status === 'pending' :
     filter === 'done'    ? t.status === 'done' :
-    filter === 'overdue' ? (t.status === 'pending' && t.due_date && t.due_date < new Date().toISOString().split('T')[0]) : true
+    filter === 'overdue' ? (t.status === 'pending' && t.due_date && t.due_date < _todayStr) : true
   )
+
+  const _priIdx = p => { const i = PRIORITY_ORDER.indexOf(p); return i === -1 ? 999 : i }
 
   // Group by priority order, then by priority within group
   const grouped = priorityOrder.map(cat => ({
     cat,
     tasks: filtered
       .filter(t => t.category === cat)
-      .sort((a, b) => PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority))
+      .sort((a, b) => _priIdx(a.priority) - _priIdx(b.priority))
   })).filter(g => g.tasks.length > 0)
 
   // Uncategorized (categories not in priority order)

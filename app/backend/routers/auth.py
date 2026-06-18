@@ -314,8 +314,15 @@ def update_user_by_admin(
     return {"ok": True, **updates}
 
 
+_session_limit = rate_limit(5, 3600)   # 5 session updates per hour
+
+
 @router.patch("/session")
-def update_session(req: SessionRequest, current_user: dict = Depends(get_current_user)):
+def update_session(
+    req: SessionRequest,
+    current_user: dict = Depends(get_current_user),
+    _rl: None = Depends(_session_limit),
+):
     """Update session length for the current user."""
     auth_service.update_user(current_user["id"], {"session_minutes": req.session_minutes})
     return {"ok": True, "session_minutes": req.session_minutes}

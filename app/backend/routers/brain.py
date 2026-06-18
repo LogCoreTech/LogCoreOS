@@ -43,7 +43,7 @@ def _resolve(name: str, rel_path: str) -> Path:
         raise HTTPException(status_code=400, detail="Invalid path")
     if not rel_path.endswith(".md"):
         raise HTTPException(status_code=400, detail="Only .md files are accessible")
-    if not all(re.match(r"^[\w\s\-. ]+$", p) for p in parts):
+    if not all(re.match(r"^[\w \-. ]+$", p) for p in parts):
         raise HTTPException(status_code=400, detail="Invalid characters in path")
     if any(p in _ALLOWED_DIRS_SKIP for p in parts[:-1]):
         raise HTTPException(status_code=403, detail="That folder is managed by another module")
