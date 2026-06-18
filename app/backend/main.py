@@ -3,9 +3,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.middleware.base import BaseHTTPMiddleware
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from config import settings
@@ -23,6 +24,13 @@ async def lifespan(app: FastAPI):
 
 
 def _startup_checks() -> None:
+    if settings.allowed_origins.strip() == "*":
+        logger.warning(
+            "CORS is set to allow all origins ('*'). "
+            "This is only safe for development or LAN use. "
+            "Set ALLOWED_ORIGINS to your domain in production."
+        )
+
     if settings.secret_key == "change-me-in-production":
         logger.critical(
             "\n"
@@ -64,6 +72,20 @@ def _startup_checks() -> None:
 
 
 app = FastAPI(title="LogCore OS", version="0.1.0", lifespan=lifespan)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next) -> Response:
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        if request.url.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 _origins = (
     ["*"]

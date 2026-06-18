@@ -1,7 +1,7 @@
 from typing import Literal
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from config import settings
 from routers.auth import get_current_user, require_module
@@ -22,8 +22,10 @@ _chat_limit = rate_limit(20, 60)  # 20 messages per minute per IP
 
 
 def _safe(content: str) -> str:
-    """Wrap user-controlled content in XML tags to prevent prompt injection."""
-    return f"<brain_data>\n{content}\n</brain_data>"
+    """Wrap user-controlled content in XML tags to prevent prompt injection.
+    Escapes any closing tag sequences so they cannot break out of the envelope."""
+    escaped = content.replace("</brain_data>", "[/brain_data]")
+    return f"<brain_data>\n{escaped}\n</brain_data>"
 
 
 def _build_context(user_name: str) -> str:
@@ -64,6 +66,20 @@ class HistoryMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=5000)
     history: list[HistoryMessage] = Field(default=[], max_length=50)
+
+    @model_validator(mode="after")
+    def validate_history_alternates(self):
+        h = self.history
+        if not h:
+            return self
+        if h[0].role != "user":
+            raise ValueError("History must begin with a user message")
+        for i, msg in enumerate(h):
+            if msg.role != ("user" if i % 2 == 0 else "assistant"):
+                raise ValueError(f"History message {i} has unexpected role '{msg.role}'")
+        if h[-1].role != "assistant":
+            raise ValueError("History must end with an assistant message")
+        return self
 
 
 @router.post("")

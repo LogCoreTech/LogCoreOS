@@ -1,6 +1,7 @@
 import re
 from datetime import date
 from typing import Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -117,10 +118,17 @@ def add_task(req: TaskCreate, current_user: dict = Depends(_require_tasks)):
     return task_service.add_task(current_user["name"], req.model_dump())
 
 
+def _validate_task_id(task_id: str) -> str:
+    try:
+        UUID(task_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid task ID format")
+    return task_id
+
+
 @router.patch("/{task_id}")
 def update_task(task_id: str, req: TaskUpdate, current_user: dict = Depends(_require_tasks)):
-    # exclude_unset so only fields the client sent are applied;
-    # None values are intentional (clearing due_date, notes, etc.)
+    _validate_task_id(task_id)
     updates = req.model_dump(exclude_unset=True)
     result = task_service.update_task(current_user["name"], task_id, updates)
     if not result:
@@ -130,6 +138,7 @@ def update_task(task_id: str, req: TaskUpdate, current_user: dict = Depends(_req
 
 @router.delete("/{task_id}")
 def delete_task(task_id: str, current_user: dict = Depends(_require_tasks)):
+    _validate_task_id(task_id)
     if not task_service.delete_task(current_user["name"], task_id):
         raise HTTPException(status_code=404, detail="Task not found")
     return {"ok": True}

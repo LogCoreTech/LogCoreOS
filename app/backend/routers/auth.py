@@ -2,7 +2,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from config import settings
@@ -13,9 +13,11 @@ router = APIRouter()
 bearer = HTTPBearer()
 bearer_optional = HTTPBearer(auto_error=False)
 
-# Rate limits: 5 login attempts per 5 min, 3 register per hour
-_login_limit    = rate_limit(5, 300)
-_register_limit = rate_limit(3, 3600)
+# Rate limits
+_login_limit    = rate_limit(5, 300)    # 5 login attempts per 5 min
+_register_limit = rate_limit(3, 3600)   # 3 registrations per hour
+_me_limit       = rate_limit(10, 60)    # 10 profile updates per minute
+_admin_limit    = rate_limit(20, 60)    # 20 admin ops per minute
 
 
 class RegisterRequest(BaseModel):
@@ -171,7 +173,7 @@ class MeUpdateRequest(BaseModel):
 
 
 @router.patch("/me")
-def update_me(req: MeUpdateRequest, current_user: dict = Depends(get_current_user)):
+def update_me(req: MeUpdateRequest, current_user: dict = Depends(get_current_user), _rl: None = Depends(_me_limit)):
     """Update the current user's own profile fields (timezone for now)."""
     updates = {k: v for k, v in req.model_dump().items() if v is not None}
     if "timezone" in updates:
@@ -215,6 +217,7 @@ def update_user_role(
     user_id: str,
     req: RoleUpdateRequest,
     current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_admin_limit),
 ):
     """Promote or demote a user's role (admin only)."""
     if user_id == current_user["id"]:
@@ -225,8 +228,19 @@ def update_user_role(
     return {"ok": True, "role": req.role}
 
 
+VALID_MODULE_IDS = {"dashboard", "tasks", "chat", "brain", "settings"}
+
+
 class ModuleAccessRequest(BaseModel):
     disabled_modules: list[str]
+
+    @field_validator("disabled_modules")
+    @classmethod
+    def validate_module_ids(cls, v: list[str]) -> list[str]:
+        invalid = [m for m in v if m not in VALID_MODULE_IDS]
+        if invalid:
+            raise ValueError(f"Unknown module IDs: {invalid}")
+        return v
 
 
 @router.patch("/users/{user_id}/modules")
@@ -234,6 +248,7 @@ def update_user_modules(
     user_id: str,
     req: ModuleAccessRequest,
     current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_admin_limit),
 ):
     """Set which modules are disabled for a given user (admin only)."""
     if user_id == current_user["id"]:

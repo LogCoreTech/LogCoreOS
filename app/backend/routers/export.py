@@ -21,7 +21,7 @@ def export_brain(current_user: dict = Depends(get_current_user)):
         if folder.exists():
             for f in folder.rglob("*"):
                 if f.is_file():
-                    zf.write(f, f.relative_to(folder.parent))
+                    zf.write(f, f.relative_to(folder))
     buf.seek(0)
     safe_name = current_user["name"].replace(" ", "_")
     return StreamingResponse(
