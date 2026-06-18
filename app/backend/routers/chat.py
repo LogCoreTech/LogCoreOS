@@ -20,7 +20,10 @@ from services.rate_limiter import rate_limit
 router = APIRouter()
 
 _require_chat = require_module("chat")
-_chat_limit = rate_limit(20, 60)  # 20 messages per minute per IP
+_chat_limit   = rate_limit(20, 60)  # 20 messages per minute per IP
+_memory_limit = rate_limit(5, 60)   # 5 memory saves per minute per IP
+
+_MEMORY_MAX_BYTES = 100_000  # 100 KB cap per memory file
 
 
 def _safe(content: str) -> str:
@@ -114,7 +117,7 @@ class SaveMemoryRequest(BaseModel):
 async def save_memory(
     req: SaveMemoryRequest,
     current_user: dict = Depends(_require_chat),
-    _rl: None = Depends(_chat_limit),
+    _rl: None = Depends(_memory_limit),
 ):
     if not settings.anthropic_api_key:
         raise HTTPException(status_code=503, detail="No AI API key configured.")
@@ -136,7 +139,12 @@ async def save_memory(
     today = today_for_user(current_user["name"]).isoformat()
 
     existing = mem_path.read_text() if mem_path.exists() else ""
-    updated = existing.rstrip() + f"\n\n## {today}\n\n{summary.strip()}\n"
+    if len(existing.encode()) >= _MEMORY_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="Memory file is full. Clear some entries before saving more.")
+
+    # Escape any brain_data closing tags in AI output to prevent prompt injection via memory
+    safe_summary = summary.strip().replace("</brain_data>", "[/brain_data]")
+    updated = existing.rstrip() + f"\n\n## {today}\n\n{safe_summary}\n"
     write_markdown(mem_path, updated)
 
-    return {"ok": True, "target": fname, "summary": summary.strip()}
+    return {"ok": True, "target": fname, "summary": safe_summary}

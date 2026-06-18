@@ -17,6 +17,7 @@ bearer_optional = HTTPBearer(auto_error=False)
 _login_limit    = rate_limit(5, 300)    # 5 login attempts per 5 min
 _register_limit = rate_limit(3, 3600)   # 3 registrations per hour
 _me_limit       = rate_limit(10, 60)    # 10 profile updates per minute
+_get_me_limit   = rate_limit(30, 60)    # 30 GET /me per minute (polled every 30s)
 _admin_limit    = rate_limit(20, 60)    # 20 admin ops per minute
 
 
@@ -217,7 +218,7 @@ def update_me(req: MeUpdateRequest, current_user: dict = Depends(get_current_use
 
 
 @router.get("/me")
-def me(current_user: dict = Depends(get_current_user)):
+def me(current_user: dict = Depends(get_current_user), _rl: None = Depends(_get_me_limit)):
     return {
         "id": current_user["id"],
         "name": current_user["name"],

@@ -14,12 +14,17 @@ function firstDayOfMonth(year, month) {
   return new Date(year, month, 1).getDay()
 }
 
+function _todayStr() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export default function Calendar() {
   const today = new Date()
   const [year, setYear]     = useState(today.getFullYear())
   const [month, setMonth]   = useState(today.getMonth())
   const [tasks, setTasks]   = useState([])
-  const [selected, setSelected] = useState(null) // 'YYYY-MM-DD'
+  const [selected, setSelected] = useState(_todayStr) // pre-select today
   const [showModal, setShowModal] = useState(false)
   const [editTask, setEditTask] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -46,7 +51,7 @@ export default function Calendar() {
 
   const totalDays  = daysInMonth(year, month)
   const startDay   = firstDayOfMonth(year, month)
-  const todayStr   = today.toISOString().split('T')[0]
+  const todayStr   = _todayStr()
 
   // Index tasks by date
   const byDate = {}
