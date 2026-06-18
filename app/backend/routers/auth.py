@@ -17,7 +17,8 @@ bearer_optional = HTTPBearer(auto_error=False)
 _login_limit    = rate_limit(5, 300)    # 5 login attempts per 5 min
 _register_limit = rate_limit(3, 3600)   # 3 registrations per hour
 _me_limit       = rate_limit(10, 60)    # 10 profile updates per minute
-_get_me_limit   = rate_limit(30, 60)    # 30 GET /me per minute (polled every 30s)
+_get_me_limit   = rate_limit(30, 60)    # 30 GET /me or /today per minute (polled endpoints)
+_status_limit   = rate_limit(20, 60)    # 20 /status checks per minute (public)
 _admin_limit    = rate_limit(20, 60)    # 20 admin ops per minute
 
 
@@ -94,7 +95,7 @@ def require_module(module_id: str):
 
 
 @router.get("/status")
-def registration_status():
+def registration_status(_rl: None = Depends(_status_limit)):
     """Public endpoint — lets the login page know if self-registration is available."""
     runtime = auth_service.get_system_settings()
     allow = runtime.get("allow_open_registration", settings.allow_open_registration)
@@ -329,6 +330,6 @@ def update_session(
 
 
 @router.get("/today")
-def get_today(current_user: dict = Depends(get_current_user)):
+def get_today(current_user: dict = Depends(get_current_user), _rl: None = Depends(_get_me_limit)):
     """Return today's date in the user's local timezone (YYYY-MM-DD)."""
     return {"today": auth_service.today_for_user(current_user["name"]).isoformat()}

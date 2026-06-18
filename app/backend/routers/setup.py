@@ -11,8 +11,11 @@ from config import settings
 from routers.auth import get_current_user
 from services import auth_service
 from services.file_service import brain_path, write_markdown, user_path
+from services.rate_limiter import rate_limit
 
 router = APIRouter()
+
+_setup_limit = rate_limit(10, 60)  # 10 setup checks per minute
 
 TEMPLATE_PATH = brain_path() / "USERS" / "_template"
 
@@ -45,7 +48,7 @@ class SetupRequest(BaseModel):
 
 
 @router.get("/status")
-def setup_status(current_user: dict = Depends(get_current_user)):
+def setup_status(current_user: dict = Depends(get_current_user), _rl: None = Depends(_setup_limit)):
     """Returns whether the user's Brain folder has been created."""
     return {"setup_complete": user_path(current_user["name"]).exists()}
 

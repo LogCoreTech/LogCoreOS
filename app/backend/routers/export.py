@@ -8,12 +8,15 @@ from fastapi.responses import StreamingResponse
 
 from routers.auth import get_current_user
 from services.file_service import user_path
+from services.rate_limiter import rate_limit
 
 router = APIRouter()
 
+_export_limit = rate_limit(2, 3600)  # 2 exports per hour — zip is CPU-intensive
+
 
 @router.get("/export")
-def export_brain(current_user: dict = Depends(get_current_user)):
+def export_brain(current_user: dict = Depends(get_current_user), _rl: None = Depends(_export_limit)):
     """Stream the current user's brain folder as a zip archive."""
     folder: Path = user_path(current_user["name"])
     buf = io.BytesIO()
