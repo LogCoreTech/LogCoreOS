@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     # Notifications
     ntfy_url: str = "http://ntfy:80"
 
+    # Web Push / VAPID
+    # Must be a mailto: or https: URL identifying the push sender
+    vapid_subject: str = "logcore@localhost"
+
     # CORS — comma-separated origins, or "*" for development
     allowed_origins: str = "*"
 

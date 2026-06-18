@@ -1,6 +1,6 @@
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -36,8 +36,17 @@ class SessionRequest(BaseModel):
     session_minutes: int = Field(..., ge=60, le=129600)
 
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer)) -> dict:
-    payload = auth_service.decode_token(credentials.credentials)
+def get_current_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_optional),
+) -> dict:
+    # Accept httpOnly cookie first, then fall back to Authorization header
+    token = request.cookies.get("lc_token")
+    if not token and credentials:
+        token = credentials.credentials
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    payload = auth_service.decode_token(token)
     if not payload:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
     user = auth_service.get_user_by_id(payload["sub"])
@@ -53,6 +62,22 @@ def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     return current_user
+
+
+def _set_auth_cookie(response: Response, token: str, session_minutes: int) -> None:
+    response.set_cookie(
+        key="lc_token",
+        value=token,
+        httponly=True,
+        samesite="strict",
+        max_age=session_minutes * 60,
+        path="/",
+        # secure=True should be enabled when served over HTTPS
+    )
+
+
+def _clear_auth_cookie(response: Response) -> None:
+    response.delete_cookie(key="lc_token", path="/", samesite="strict")
 
 
 def require_module(module_id: str):
@@ -101,6 +126,8 @@ def update_admin_settings(
 @router.post("/register")
 def register(
     req: RegisterRequest,
+    response: Response,
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(bearer_optional),
     _rl: None = Depends(_register_limit),
 ):
@@ -111,9 +138,13 @@ def register(
     allow_open = runtime.get("allow_open_registration", settings.allow_open_registration)
 
     if not is_first_user and not allow_open:
-        if not credentials:
+        # Allow cookie-based admin auth as well
+        admin_token = request.cookies.get("lc_token")
+        if not admin_token and credentials:
+            admin_token = credentials.credentials
+        if not admin_token:
             raise HTTPException(status_code=403, detail="Registration is closed. An admin must add new users.")
-        payload = auth_service.decode_token(credentials.credentials)
+        payload = auth_service.decode_token(admin_token)
         if not payload or payload.get("role") != "admin":
             raise HTTPException(status_code=403, detail="Only admins can register new users.")
 
@@ -127,6 +158,7 @@ def register(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     token = auth_service.create_token(user)
+    _set_auth_cookie(response, token, user.get("session_minutes", 10080))
     return {
         "token": token,
         "name": user["name"],
@@ -137,11 +169,12 @@ def register(
 
 
 @router.post("/login")
-def login(req: LoginRequest, _rl: None = Depends(_login_limit)):
+def login(req: LoginRequest, response: Response, _rl: None = Depends(_login_limit)):
     user = auth_service.authenticate(req.email, req.password)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = auth_service.create_token(user)
+    _set_auth_cookie(response, token, user.get("session_minutes", 10080))
     return {
         "token": token,
         "name": user["name"],
@@ -152,11 +185,12 @@ def login(req: LoginRequest, _rl: None = Depends(_login_limit)):
 
 
 @router.post("/logout")
-def logout(current_user: dict = Depends(get_current_user)):
+def logout(response: Response, current_user: dict = Depends(get_current_user)):
     jti = current_user.get("_jti")
     exp = current_user.get("_exp")
     if jti:
         auth_service.revoke_token(jti, exp)
+    _clear_auth_cookie(response)
     return {"ok": True}
 
 
@@ -228,7 +262,7 @@ def update_user_role(
     return {"ok": True, "role": req.role}
 
 
-VALID_MODULE_IDS = {"dashboard", "tasks", "chat", "brain", "settings"}
+VALID_MODULE_IDS = {"dashboard", "tasks", "calendar", "goals", "household", "chat", "brain", "settings"}
 
 
 class ModuleAccessRequest(BaseModel):

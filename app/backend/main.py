@@ -10,7 +10,8 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from config import settings
-from routers import auth, tasks, priorities, chat, setup, health, brain, export
+from migrations.runner import run_pending as run_migrations
+from routers import auth, tasks, priorities, chat, setup, health, brain, export, shared, push
 from scheduler import start as start_scheduler
 
 logger = logging.getLogger("logcore")
@@ -19,6 +20,7 @@ logger = logging.getLogger("logcore")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _startup_checks()
+    run_migrations()
     start_scheduler()
     yield
 
@@ -109,6 +111,8 @@ app.include_router(chat.router,       prefix="/api/v1/chat",       tags=["chat"]
 app.include_router(setup.router,      prefix="/api/v1/setup",      tags=["setup"])
 app.include_router(brain.router,      prefix="/api/v1/brain",      tags=["brain"])
 app.include_router(export.router,     prefix="/api/v1/user",       tags=["export"])
+app.include_router(shared.router,     prefix="/api/v1/shared/tasks", tags=["shared"])
+app.include_router(push.router,       prefix="/api/v1/push",         tags=["push"])
 
 # Serve React frontend — must come last
 static_dir = Path(__file__).parent.parent / "frontend" / "dist"

@@ -12,12 +12,22 @@ export default function Chat() {
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveTarget, setSaveTarget] = useState('short')
+  const [saveResult, setSaveResult] = useState(null)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Dismiss save result after 4 seconds
+  useEffect(() => {
+    if (!saveResult) return
+    const t = setTimeout(() => setSaveResult(null), 4000)
+    return () => clearTimeout(t)
+  }, [saveResult])
 
   async function send(e) {
     e?.preventDefault()
@@ -31,7 +41,6 @@ export default function Chat() {
     setLoading(true)
 
     try {
-      // Build history for API (exclude the first greeting)
       const history = updated.slice(1, -1).map(m => ({ role: m.role, content: m.content }))
       const res = await chatApi.send(msg, history)
       setMessages([...updated, { role: 'assistant', content: res.response }])
@@ -43,9 +52,63 @@ export default function Chat() {
     }
   }
 
+  async function saveToMemory() {
+    if (saving) return
+    // Build history excluding the greeting
+    const history = messages.slice(1).map(m => ({ role: m.role, content: m.content }))
+    if (history.length === 0) return
+    setSaving(true)
+    setSaveResult(null)
+    try {
+      const res = await chatApi.saveMemory(history, saveTarget)
+      setSaveResult({ ok: true, target: res.target })
+    } catch (err) {
+      setSaveResult({ ok: false, error: err.message })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const hasConversation = messages.length > 1
+
   return (
     <div className="max-w-2xl mx-auto flex flex-col h-[calc(100vh-8rem)] md:h-[calc(100vh-3rem)]">
-      <h1 className="text-2xl font-bold mb-4 shrink-0">AI Chat</h1>
+      <div className="flex items-center justify-between mb-4 shrink-0">
+        <h1 className="text-2xl font-bold">AI Chat</h1>
+        {hasConversation && (
+          <div className="flex items-center gap-2">
+            <select
+              value={saveTarget}
+              onChange={e => setSaveTarget(e.target.value)}
+              className="text-xs border border-charcoal-200 dark:border-charcoal-700 bg-white dark:bg-charcoal-800 rounded-lg px-2 py-1"
+              disabled={saving}
+            >
+              <option value="short">Short-term</option>
+              <option value="long">Long-term</option>
+            </select>
+            <button
+              onClick={saveToMemory}
+              disabled={saving}
+              className="btn-ghost text-xs px-3 py-1.5 disabled:opacity-50"
+              title="Extract key insights from this conversation and save to memory"
+            >
+              {saving ? 'Saving…' : '🧠 Save to Memory'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {saveResult && (
+        <div className={`shrink-0 mb-3 px-3 py-2 rounded-lg text-sm ${
+          saveResult.ok
+            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+            : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+        }`}>
+          {saveResult.ok
+            ? `Saved to ${saveResult.target}`
+            : `Save failed: ${saveResult.error}`}
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-4 pb-4">

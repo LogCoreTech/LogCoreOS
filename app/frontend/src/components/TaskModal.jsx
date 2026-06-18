@@ -5,14 +5,14 @@ const PRIORITIES = ['High', 'Medium', 'Low']
 const TYPES = ['todo', 'recurring', 'goal', 'appointment']
 const RECURRENCES = ['daily', 'weekly', 'monthly']
 
-export default function TaskModal({ task, categories: propCategories, onClose, onSave }) {
+export default function TaskModal({ task, categories: propCategories, defaultType, saveApi, onClose, onSave }) {
   const editing = !!task
   const [categories, setCategories] = useState(propCategories || [])
   const [form, setForm] = useState({
     title:      task?.title       || '',
     category:   task?.category    || '',
     priority:   task?.priority    || 'Medium',
-    type:       task?.type        || 'todo',
+    type:       task?.type        || defaultType || 'todo',
     recurrence: task?.recurrence  || null,
     due_date:   task?.due_date    || '',
     due_time:   task?.due_time    || '',
@@ -51,10 +51,11 @@ export default function TaskModal({ task, categories: propCategories, onClose, o
         recurrence: form.type === 'recurring' ? (form.recurrence || 'daily') : null,
         notes:      form.notes      || null,
       }
+      const api = saveApi || tasksApi
       if (editing) {
-        await tasksApi.update(task.id, payload)
+        await api.update(task.id, payload)
       } else {
-        await tasksApi.add(payload)
+        await api.add(payload)
       }
       onSave()
     } catch (err) {

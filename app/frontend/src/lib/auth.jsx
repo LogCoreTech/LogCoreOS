@@ -8,18 +8,46 @@ function _detectTz() {
 }
 
 export function AuthProvider({ children }) {
+  // Cached user metadata (not the token — that lives in the httpOnly cookie)
   const [user, setUser] = useState(() => {
     try { return JSON.parse(localStorage.getItem('lc_user')) } catch { return null }
   })
+  const [sessionChecked, setSessionChecked] = useState(false)
+
+  // On mount, verify the cookie session is still valid
+  useEffect(() => {
+    authApi.me()
+      .then(me => {
+        const u = {
+          name:            me.name,
+          role:            me.role,
+          disabledModules: me.disabled_modules || [],
+          timezone:        me.timezone || 'UTC',
+        }
+        localStorage.setItem('lc_user', JSON.stringify(u))
+        setUser(u)
+      })
+      .catch(() => {
+        // Cookie expired or absent — clear stale localStorage and let the app redirect
+        localStorage.removeItem('lc_user')
+        localStorage.removeItem('lc_token')
+        setUser(null)
+      })
+      .finally(() => setSessionChecked(true))
+  }, [])
 
   function login(token, name, role, disabledModules = [], timezone = 'UTC') {
-    localStorage.setItem('lc_token', token)
-    localStorage.setItem('lc_user', JSON.stringify({ name, role, disabledModules, timezone }))
-    setUser({ name, role, disabledModules, timezone })
+    // The httpOnly cookie is already set by the server response.
+    // We keep a minimal localStorage entry for the user metadata only.
+    // We still store the token for backward compat with any direct API usage.
+    if (token) localStorage.setItem('lc_token', token)
+    const u = { name, role, disabledModules, timezone }
+    localStorage.setItem('lc_user', JSON.stringify(u))
+    setUser(u)
   }
 
   async function logout() {
-    try { await authApi.logout() } catch { /* token may already be expired */ }
+    try { await authApi.logout() } catch { /* cookie may already be expired */ }
     localStorage.removeItem('lc_token')
     localStorage.removeItem('lc_user')
     setUser(null)
@@ -48,7 +76,7 @@ export function AuthProvider({ children }) {
         })
         .catch(() => {})
     }
-  }, [user?.name]) // runs once per login session
+  }, [user?.name])
 
   // Poll /me every 30 seconds so admin permission changes take effect live
   useEffect(() => {
@@ -64,11 +92,14 @@ export function AuthProvider({ children }) {
         localStorage.setItem('lc_user', JSON.stringify(updated))
         setUser(updated)
       } catch {
-        // 401 is handled in api.js — it clears storage and redirects to /login
+        // 401 handled in api.js — clears storage and redirects to /login
       }
     }, 30_000)
     return () => clearInterval(id)
   }, [user?.name])
+
+  // Don't render children until the initial session check completes (avoids flash)
+  if (!sessionChecked) return null
 
   return (
     <AuthContext.Provider value={{ user, login, logout, updateUserField }}>
