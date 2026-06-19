@@ -9,6 +9,7 @@ export default function Brain() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+  const [openFolders, setOpenFolders] = useState(new Set())
 
   useEffect(() => {
     brainApi.list()
@@ -40,6 +41,14 @@ export default function Brain() {
     } finally {
       setSaving(false)
     }
+  }
+
+  function toggleFolder(name) {
+    setOpenFolders(prev => {
+      const next = new Set(prev)
+      next.has(name) ? next.delete(name) : next.add(name)
+      return next
+    })
   }
 
   // ── Editor view ──
@@ -75,6 +84,15 @@ export default function Brain() {
     )
   }
 
+  // Build grouped structure
+  const rootFiles = files.filter(f => !f.path.includes('/'))
+  const folderMap = {}
+  files.filter(f => f.path.includes('/')).forEach(f => {
+    const folder = f.path.split('/')[0]
+    if (!folderMap[folder]) folderMap[folder] = []
+    folderMap[folder].push(f)
+  })
+
   // ── File list view ──
   return (
     <div className="max-w-2xl mx-auto space-y-4">
@@ -97,29 +115,55 @@ export default function Brain() {
           <p>No brain files found. Complete the setup wizard first.</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {files.map(f => {
-            const label = f.name.replace('.md', '')
-            const subpath = f.path.includes('/') ? f.path : null
-            return (
+        <div className="space-y-1">
+          {rootFiles.map(f => (
+            <FileRow key={f.path} f={f} onOpen={openFile} />
+          ))}
+
+          {Object.entries(folderMap).map(([folder, items]) => (
+            <div key={folder}>
               <button
-                key={f.path}
-                onClick={() => openFile(f.path)}
-                className="card p-4 w-full text-left flex items-center gap-3 hover:border-orange-500/50 active:scale-[0.99] transition-all"
+                onClick={() => toggleFolder(folder)}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium text-charcoal-600 dark:text-charcoal-300 hover:bg-charcoal-100 dark:hover:bg-charcoal-800 transition-colors"
               >
-                <span className="text-xl leading-none shrink-0">📄</span>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm">{label}</p>
-                  {subpath && (
-                    <p className="text-xs text-charcoal-400 dark:text-charcoal-500 truncate">{f.path}</p>
-                  )}
-                </div>
-                <span className="text-charcoal-300 dark:text-charcoal-600 shrink-0">›</span>
+                <span className="text-xs text-charcoal-400 w-3 shrink-0">
+                  {openFolders.has(folder) ? '▼' : '▶'}
+                </span>
+                <span className="text-base leading-none">📁</span>
+                <span className="flex-1">{folder}</span>
+                <span className="text-xs text-charcoal-400">{items.length}</span>
               </button>
-            )
-          })}
+              {openFolders.has(folder) && (
+                <div className="ml-4 space-y-1 mt-1">
+                  {items.map(f => (
+                    <FileRow key={f.path} f={f} onOpen={openFile} sub />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
+  )
+}
+
+function FileRow({ f, onOpen, sub }) {
+  const label = f.name.replace('.md', '')
+  const subpath = sub ? f.path.split('/').slice(1).join('/').replace(/\.md$/, '') : null
+  return (
+    <button
+      onClick={() => onOpen(f.path)}
+      className="card p-4 w-full text-left flex items-center gap-3 hover:border-orange-500/50 active:scale-[0.99] transition-all"
+    >
+      <span className="text-xl leading-none shrink-0">📄</span>
+      <div className="flex-1 min-w-0">
+        <p className="font-medium text-sm">{label}</p>
+        {subpath && subpath !== label && (
+          <p className="text-xs text-charcoal-400 dark:text-charcoal-500 truncate">{subpath}</p>
+        )}
+      </div>
+      <span className="text-charcoal-300 dark:text-charcoal-600 shrink-0">›</span>
+    </button>
   )
 }
