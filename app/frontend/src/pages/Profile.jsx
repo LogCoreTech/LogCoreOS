@@ -316,8 +316,8 @@ export default function Profile() {
         {saveBtn('finances')}
       </Accordion>
 
-      {/* Goals & Values */}
-      <Accordion title="Goals & Values">
+      {/* Values & Principles */}
+      <Accordion title="Values & Principles">
         <Field label="Life Mission">
           <textarea value={data.life_mission || ''} onChange={e => set('life_mission', e.target.value)} rows={2} placeholder="To glorify God through…" className="input" />
         </Field>

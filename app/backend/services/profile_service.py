@@ -140,7 +140,7 @@ def generate_profile_md(user_name: str, data: dict) -> str:
         ("core_values", "Core values"), ("key_constraints", "Key constraints"),
     ] if data.get(k)]
     if gv:
-        lines.append("## Goals & Values")
+        lines.append("## Values & Principles")
         lines.extend(f"- {lbl}: {v}" for lbl, v in gv)
         lines.append("")
 
