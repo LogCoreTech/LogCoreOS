@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -39,14 +39,23 @@ def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     return current_user
 
 
+_ADMIN_SETTINGS_PATH = brain_path() / "admin_settings.json"
+
+
+def _get_admin_settings() -> dict:
+    return read_json(_ADMIN_SETTINGS_PATH, default={"allow_registration": settings.allow_open_registration})
+
+
 @router.post("/register")
 def register(req: RegisterRequest):
+    if not _get_admin_settings().get("allow_registration", False):
+        raise HTTPException(status_code=403, detail="Registration is closed")
     try:
         user = auth_service.create_user(req.email, req.password, req.name)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     token = auth_service.create_token(user)
-    return {"token": token, "name": user["name"], "role": user["role"]}
+    return {"token": token, "id": user["id"], "name": user["name"], "role": user["role"]}
 
 
 @router.post("/login")
@@ -55,7 +64,7 @@ def login(req: LoginRequest):
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = auth_service.create_token(user)
-    return {"token": token, "name": user["name"], "role": user["role"]}
+    return {"token": token, "id": user["id"], "name": user["name"], "role": user["role"]}
 
 
 @router.get("/me")
@@ -119,3 +128,64 @@ def update_ai_settings(
         "ai_api_key_set": key_set,
         "ai_base_url": stored.get("ai_base_url", ""),
     }
+
+
+# ---------------------------------------------------------------------------
+# Admin — user management
+# ---------------------------------------------------------------------------
+
+class UpdateRoleRequest(BaseModel):
+    role: Literal["admin", "member", "guest"]
+
+
+@router.get("/admin/users")
+def list_users(current_user: dict = Depends(require_admin)):
+    return {"users": auth_service.list_users()}
+
+
+@router.patch("/admin/users/{user_id}")
+def update_user_role(
+    user_id: str,
+    req: UpdateRoleRequest,
+    current_user: dict = Depends(require_admin),
+):
+    if user_id == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot change your own role")
+    try:
+        return auth_service.update_user_role(user_id, req.role)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/admin/users/{user_id}", status_code=204)
+def delete_user(user_id: str, current_user: dict = Depends(require_admin)):
+    if user_id == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    try:
+        auth_service.delete_user(user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Admin — registration settings
+# ---------------------------------------------------------------------------
+
+class RegistrationSettingsRequest(BaseModel):
+    allow_registration: bool
+
+
+@router.get("/admin/settings")
+def get_admin_settings(current_user: dict = Depends(require_admin)):
+    return _get_admin_settings()
+
+
+@router.patch("/admin/settings")
+def update_admin_settings(
+    req: RegistrationSettingsRequest,
+    current_user: dict = Depends(require_admin),
+):
+    stored = _get_admin_settings()
+    stored["allow_registration"] = req.allow_registration
+    write_json(_ADMIN_SETTINGS_PATH, stored)
+    return stored

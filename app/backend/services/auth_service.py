@@ -64,6 +64,32 @@ def create_user(email: str, password: str, name: str, role: str = "member") -> d
     return user
 
 
+_SAFE_FIELDS = {"id", "email", "name", "role", "created_at"}
+
+
+def list_users() -> list[dict]:
+    return [{k: v for k, v in u.items() if k in _SAFE_FIELDS} for u in _load_auth()["users"]]
+
+
+def update_user_role(user_id: str, role: str) -> dict:
+    data = _load_auth()
+    for user in data["users"]:
+        if user["id"] == user_id:
+            user["role"] = role
+            _save_auth(data)
+            return {k: v for k, v in user.items() if k in _SAFE_FIELDS}
+    raise ValueError("User not found")
+
+
+def delete_user(user_id: str) -> None:
+    data = _load_auth()
+    original = len(data["users"])
+    data["users"] = [u for u in data["users"] if u["id"] != user_id]
+    if len(data["users"]) == original:
+        raise ValueError("User not found")
+    _save_auth(data)
+
+
 def authenticate(email: str, password: str) -> dict | None:
     user = get_user_by_email(email)
     if not user or not verify_password(password, user["hashed_password"]):
