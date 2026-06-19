@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { profile as profileApi } from '../lib/api'
 import { useNavigate } from 'react-router-dom'
+import GoalsSection from './Goals'
 
 const DEFAULT_PRIORITY_ORDER = ['God', 'Family', 'Job', 'Personal Growth', 'Hobbies']
 const BASE_CATS = ['God', 'Family', 'Job', 'Personal Growth', 'Hobbies']
@@ -415,6 +416,11 @@ export default function Profile() {
           placeholder="I work early mornings, prefer direct advice, am building a business on the side…"
         />
         {saveBtn('notes')}
+      </Accordion>
+
+      {/* Goals */}
+      <Accordion title="Goals">
+        <GoalsSection />
       </Accordion>
     </div>
   )
