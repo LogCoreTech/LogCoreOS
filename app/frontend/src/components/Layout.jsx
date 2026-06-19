@@ -3,6 +3,8 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { ALL_MODULES, getShortcuts } from '../lib/constants'
 
+const ADMIN_NAV = { to: '/admin', icon: '⬡', label: 'Admin' }
+
 export default function Layout() {
   const { user } = useAuth()
   const navigate = useNavigate()

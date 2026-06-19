@@ -27,14 +27,14 @@ export default function Login() {
     try {
       if (mode === 'login') {
         // Cookie is set server-side by the login response — no token handling needed here
-        await authApi.login(email, password)
+        const res = await authApi.login(email, password)
         const [me, status] = await Promise.all([authApi.me(), setupApi.status()])
-        login(me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC')
+        login(me.id, me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC')
         navigate(status.setup_complete ? '/' : '/setup')
       } else {
-        await authApi.register(email, password, name)
+        const res = await authApi.register(email, password, name)
         const me = await authApi.me()
-        login(me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC')
+        login(me.id, me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC')
         navigate('/setup')
       }
     } catch (err) {

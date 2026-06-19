@@ -9,10 +9,12 @@ class Settings(BaseSettings):
     # Fallback only — per-user session_minutes (set at registration or in Settings) takes precedence
     access_token_expire_minutes: int = 10080  # 7 days
 
-    # AI provider — only "anthropic" is wired up; structure is ready for others
+    # AI provider — "anthropic" or "openai" (covers any OpenAI-compatible endpoint)
     ai_provider: str = "anthropic"
     anthropic_api_key: str = ""
     ai_model: str = "claude-sonnet-4-6"
+    ai_api_key: str = ""    # generic key for OpenAI-compatible providers
+    ai_base_url: str = ""   # custom endpoint; empty = provider default
 
     # Notifications
     ntfy_url: str = "http://ntfy:80"

@@ -12,11 +12,11 @@ async function request(method, path, body) {
     body: body ? JSON.stringify(body) : undefined,
   })
   if (res.status === 401) {
-    localStorage.removeItem('lc_token')
     localStorage.removeItem('lc_user')
     window.location.href = '/login'
     return
   }
+  if (res.status === 204) return null
   const data = await res.json()
   if (!res.ok) throw new Error(data.detail || 'Request failed')
   return data
@@ -32,6 +32,7 @@ export const auth = {
     post('/auth/register', { email, password, name, session_minutes }),
   login:         (email, password) => post('/auth/login',   { email, password }),
   logout:        ()                => post('/auth/logout',  {}),
+  token:         (email, password) => post('/auth/token',   { email, password }),
   me:            ()                => get('/auth/me'),
   today:         ()                => get('/auth/today'),
   status:        ()                => get('/auth/status'),
@@ -57,6 +58,26 @@ export const priorities = {
 export const chat = {
   send:       (message, history)          => post('/chat',              { message, history }),
   saveMemory: (history, target = 'short') => post('/chat/save-memory',  { history, target }),
+  runs:       ()                          => get('/chat/runs'),
+  getRun:     (id)                        => get(`/chat/runs/${id}`),
+}
+
+export const admin = {
+  // User management
+  users:             ()                          => get('/auth/users'),
+  listUsers:         ()                          => get('/auth/admin/users'),
+  createUser:        (u)                         => post('/auth/admin/users', u),
+  updateUserRole:    (id, role)                  => patch(`/auth/admin/users/${id}`, { role }),
+  deleteUser:        (id)                        => del(`/auth/admin/users/${id}`),
+  updateModules:     (userId, disabledModules)   => patch(`/auth/users/${userId}/modules`, { disabled_modules: disabledModules }),
+  updateUser:        (userId, data)              => patch(`/auth/users/${userId}`, data),
+  updateRole:        (userId, role)              => patch(`/auth/users/${userId}/role`, { role }),
+  // Registration settings
+  getSettings:       ()                          => get('/auth/admin/settings'),
+  updateSettings:    (s)                         => patch('/auth/admin/settings', s),
+  // AI provider settings
+  getAiSettings:     ()                          => get('/auth/admin/ai-settings'),
+  updateAiSettings:  (s)                         => patch('/auth/admin/ai-settings', s),
 }
 
 export const setup = {
@@ -82,15 +103,6 @@ export const shared = {
   add:    (task)           => post('/shared/tasks', task),
   update: (id, updates)    => patch(`/shared/tasks/${id}`, updates),
   remove: (id)             => del(`/shared/tasks/${id}`),
-}
-
-export const admin = {
-  users:             ()                          => get('/auth/users'),
-  updateModules:     (userId, disabledModules)   => patch(`/auth/users/${userId}/modules`, { disabled_modules: disabledModules }),
-  updateUser:        (userId, data)              => patch(`/auth/users/${userId}`, data),
-  updateRole:        (userId, role)              => patch(`/auth/users/${userId}/role`, { role }),
-  getSettings:       ()                          => get('/auth/admin/settings'),
-  updateSettings:    (s)                         => patch('/auth/admin/settings', s),
 }
 
 export const user = {

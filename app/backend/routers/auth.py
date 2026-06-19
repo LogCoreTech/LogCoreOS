@@ -7,11 +7,13 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from config import settings
 from services import auth_service
+from services.file_service import brain_path, read_json, write_json
 from services.rate_limiter import rate_limit
 
 router = APIRouter()
-bearer = HTTPBearer()
 bearer_optional = HTTPBearer(auto_error=False)
+
+_COOKIE = "lc_token"
 
 # Rate limits
 _login_limit    = rate_limit(5, 300)    # 5 login attempts per 5 min
@@ -38,12 +40,28 @@ class SessionRequest(BaseModel):
     session_minutes: int = Field(..., ge=60, le=129600)
 
 
+def _set_auth_cookie(response: Response, token: str, session_minutes: int) -> None:
+    response.set_cookie(
+        key=_COOKIE,
+        value=token,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="lax",
+        max_age=session_minutes * 60,
+        path="/",
+    )
+
+
+def _clear_auth_cookie(response: Response) -> None:
+    response.delete_cookie(key=_COOKIE, path="/", samesite="lax")
+
+
 def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(bearer_optional),
 ) -> dict:
     # Accept httpOnly cookie first, then fall back to Authorization header
-    token = request.cookies.get("lc_token")
+    token = request.cookies.get(_COOKIE)
     if not token and credentials:
         token = credentials.credentials
     if not token:
@@ -66,22 +84,6 @@ def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     return current_user
 
 
-def _set_auth_cookie(response: Response, token: str, session_minutes: int) -> None:
-    response.set_cookie(
-        key="lc_token",
-        value=token,
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite="strict",
-        max_age=session_minutes * 60,
-        path="/",
-    )
-
-
-def _clear_auth_cookie(response: Response) -> None:
-    response.delete_cookie(key="lc_token", path="/", samesite="strict")
-
-
 def require_module(module_id: str):
     """Dependency factory — blocks the endpoint if the module is disabled for this user."""
     def check(current_user: dict = Depends(get_current_user)) -> dict:
@@ -102,29 +104,6 @@ def registration_status(_rl: None = Depends(_status_limit)):
     return {"registration_open": auth_service.user_count() == 0 or allow}
 
 
-class AdminSettingsRequest(BaseModel):
-    allow_open_registration: bool
-
-
-@router.get("/admin/settings")
-def get_admin_settings(current_user: dict = Depends(require_admin)):
-    runtime = auth_service.get_system_settings()
-    return {
-        "allow_open_registration": runtime.get(
-            "allow_open_registration", settings.allow_open_registration
-        )
-    }
-
-
-@router.patch("/admin/settings")
-def update_admin_settings(
-    req: AdminSettingsRequest,
-    current_user: dict = Depends(require_admin),
-):
-    updated = auth_service.update_system_settings(req.model_dump())
-    return {"allow_open_registration": updated.get("allow_open_registration")}
-
-
 @router.post("/register")
 def register(
     req: RegisterRequest,
@@ -141,7 +120,7 @@ def register(
 
     if not is_first_user and not allow_open:
         # Allow cookie-based admin auth as well
-        admin_token = request.cookies.get("lc_token")
+        admin_token = request.cookies.get(_COOKIE)
         if not admin_token and credentials:
             admin_token = credentials.credentials
         if not admin_token:
@@ -162,6 +141,7 @@ def register(
     token = auth_service.create_token(user)
     _set_auth_cookie(response, token, user.get("session_minutes", 10080))
     return {
+        "id": user["id"],
         "name": user["name"],
         "role": user["role"],
         "disabled_modules": user.get("disabled_modules", []),
@@ -177,6 +157,7 @@ def login(req: LoginRequest, response: Response, _rl: None = Depends(_login_limi
     token = auth_service.create_token(user)
     _set_auth_cookie(response, token, user.get("session_minutes", 10080))
     return {
+        "id": user["id"],
         "name": user["name"],
         "role": user["role"],
         "disabled_modules": user.get("disabled_modules", []),
@@ -192,6 +173,16 @@ def logout(response: Response, current_user: dict = Depends(get_current_user)):
         auth_service.revoke_token(jti, exp)
     _clear_auth_cookie(response)
     return {"ok": True}
+
+
+@router.post("/token")
+def get_token(req: LoginRequest):
+    """Return a plain Bearer token for CLI / programmatic clients.
+    Browser sessions should use /login (sets HttpOnly cookie instead)."""
+    user = auth_service.authenticate(req.email, req.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    return {"token": auth_service.create_token(user)}
 
 
 def _validate_timezone(tz: str) -> str:
@@ -232,7 +223,7 @@ def me(current_user: dict = Depends(get_current_user), _rl: None = Depends(_get_
 
 
 @router.get("/users")
-def list_users(current_user: dict = Depends(require_admin)):
+def list_users_legacy(current_user: dict = Depends(require_admin)):
     """List all users without sensitive fields (admin only)."""
     data = auth_service._load_auth()
     safe_fields = {"id", "name", "email", "role", "timezone", "disabled_modules", "created_at"}
@@ -247,7 +238,7 @@ class RoleUpdateRequest(BaseModel):
 
 
 @router.patch("/users/{user_id}/role")
-def update_user_role(
+def update_user_role_legacy(
     user_id: str,
     req: RoleUpdateRequest,
     current_user: dict = Depends(require_admin),
@@ -333,3 +324,141 @@ def update_session(
 def get_today(current_user: dict = Depends(get_current_user), _rl: None = Depends(_get_me_limit)):
     """Return today's date in the user's local timezone (YYYY-MM-DD)."""
     return {"today": auth_service.today_for_user(current_user["name"]).isoformat()}
+
+
+# ---------------------------------------------------------------------------
+# Admin — AI provider settings
+# ---------------------------------------------------------------------------
+
+_AI_SETTINGS_PATH = brain_path() / "ai_settings.json"
+
+
+class AiSettingsRequest(BaseModel):
+    ai_provider: Literal["anthropic", "openai"]
+    ai_api_key: str = ""
+    ai_base_url: str = ""
+    ai_model: str = ""
+
+
+@router.get("/admin/ai-settings")
+def get_ai_settings(current_user: dict = Depends(require_admin)):
+    stored = read_json(_AI_SETTINGS_PATH, default={})
+    provider = stored.get("ai_provider", settings.ai_provider)
+    model = stored.get("ai_model", settings.ai_model)
+    base_url = stored.get("ai_base_url", "")
+    # Key is "set" if present in file or in env (for Anthropic)
+    key_set = bool(
+        stored.get("ai_api_key")
+        or (provider == "anthropic" and settings.anthropic_api_key)
+    )
+    return {
+        "ai_provider": provider,
+        "ai_model": model,
+        "ai_api_key_set": key_set,
+        "ai_base_url": base_url,
+    }
+
+
+@router.patch("/admin/ai-settings")
+def update_ai_settings(
+    req: AiSettingsRequest,
+    current_user: dict = Depends(require_admin),
+):
+    stored = read_json(_AI_SETTINGS_PATH, default={})
+    stored["ai_provider"] = req.ai_provider
+    stored["ai_base_url"] = req.ai_base_url
+    if req.ai_model:
+        stored["ai_model"] = req.ai_model
+    if req.ai_api_key:
+        stored["ai_api_key"] = req.ai_api_key
+    write_json(_AI_SETTINGS_PATH, stored)
+    key_set = bool(
+        stored.get("ai_api_key")
+        or (req.ai_provider == "anthropic" and settings.anthropic_api_key)
+    )
+    return {
+        "ai_provider": stored["ai_provider"],
+        "ai_model": stored.get("ai_model", settings.ai_model),
+        "ai_api_key_set": key_set,
+        "ai_base_url": stored.get("ai_base_url", ""),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Admin — user management
+# ---------------------------------------------------------------------------
+
+class CreateUserRequest(BaseModel):
+    email: EmailStr
+    password: str
+    name: str
+    role: Literal["admin", "member", "guest"] = "member"
+
+
+class UpdateRoleRequest(BaseModel):
+    role: Literal["admin", "member", "guest"]
+
+
+@router.post("/admin/users", status_code=201)
+def admin_create_user(req: CreateUserRequest, current_user: dict = Depends(require_admin)):
+    try:
+        user = auth_service.create_user(req.email, req.password, req.name, role=req.role)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {k: v for k, v in user.items() if k in {"id", "email", "name", "role", "created_at"}}
+
+
+@router.get("/admin/users")
+def admin_list_users(current_user: dict = Depends(require_admin)):
+    return {"users": auth_service.list_users()}
+
+
+@router.patch("/admin/users/{user_id}")
+def admin_update_user_role(
+    user_id: str,
+    req: UpdateRoleRequest,
+    current_user: dict = Depends(require_admin),
+):
+    if user_id == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot change your own role")
+    try:
+        return auth_service.update_user_role(user_id, req.role)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/admin/users/{user_id}", status_code=204)
+def admin_delete_user(user_id: str, current_user: dict = Depends(require_admin)):
+    if user_id == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    try:
+        auth_service.delete_user(user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Admin — registration settings
+# ---------------------------------------------------------------------------
+
+class AdminSettingsRequest(BaseModel):
+    allow_open_registration: bool
+
+
+@router.get("/admin/settings")
+def get_admin_settings(current_user: dict = Depends(require_admin)):
+    runtime = auth_service.get_system_settings()
+    return {
+        "allow_open_registration": runtime.get(
+            "allow_open_registration", settings.allow_open_registration
+        )
+    }
+
+
+@router.patch("/admin/settings")
+def update_admin_settings(
+    req: AdminSettingsRequest,
+    current_user: dict = Depends(require_admin),
+):
+    updated = auth_service.update_system_settings(req.model_dump())
+    return {"allow_open_registration": updated.get("allow_open_registration")}

@@ -19,6 +19,7 @@ export function AuthProvider({ children }) {
     authApi.me()
       .then(me => {
         const u = {
+          id:              me.id,
           name:            me.name,
           role:            me.role,
           disabledModules: me.disabled_modules || [],
@@ -35,10 +36,10 @@ export function AuthProvider({ children }) {
       .finally(() => setSessionChecked(true))
   }, [])
 
-  function login(name, role, disabledModules = [], timezone = 'UTC') {
+  function login(id, name, role, disabledModules = [], timezone = 'UTC') {
     // Auth is handled via httpOnly cookie set by the server.
     // Only cache non-sensitive user metadata in localStorage.
-    const u = { name, role, disabledModules, timezone }
+    const u = { id, name, role, disabledModules, timezone }
     localStorage.setItem('lc_user', JSON.stringify(u))
     setUser(u)
   }
