@@ -14,7 +14,8 @@ from services.file_service import (
     read_json,
     user_path,
 )
-from services.ai_provider import chat_completion
+from services.ai_provider import chat_completion, is_ai_configured
+from services.agent_service import run_agent
 from services.rate_limiter import rate_limit
 
 router = APIRouter()
@@ -93,19 +94,39 @@ async def chat(
     current_user: dict = Depends(_require_chat),
     _rl: None = Depends(_chat_limit),
 ):
-    if not settings.anthropic_api_key:
-        return {"response": "No AI API key configured. Set ANTHROPIC_API_KEY in .env."}
+    if not is_ai_configured():
+        return {
+            "response": "AI is not configured. Ask your admin to set up an AI provider in the Admin panel.",
+            "steps": [],
+            "mode": "error",
+        }
+
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    user_tz = current_user.get("timezone", "UTC")
+    try:
+        now_local = datetime.now(ZoneInfo(user_tz))
+    except Exception:
+        now_local = datetime.now(ZoneInfo("UTC"))
+    today_str = now_local.strftime("%A, %B %d, %Y (%Y-%m-%d)")
 
     system_prompt = (
-        "You are the AI layer of LogCore Brain — a personal life operating system. "
+        f"You are the AI layer of LogCore Brain — a personal life operating system. "
+        f"Today is {today_str}. "
         "You know this user personally from the context below. Be direct and concise. "
-        "Help them manage their life priorities and tasks.\n\n"
+        "Help them manage their life priorities and tasks. "
+        "When the user asks you to take an action (add a task, update a note, etc.), use the appropriate tool.\n\n"
         + _build_context(current_user["name"])
     )
 
-    messages = [m.model_dump() for m in req.history] + [{"role": "user", "content": req.message}]
-    response = await chat_completion(system_prompt, messages)
-    return {"response": response}
+    history = [m.model_dump() for m in req.history]
+    result = await run_agent(current_user, req.message, history, system_prompt)
+
+    return {
+        "response": result["final_answer"],
+        "steps": result["steps"],
+        "mode": result["status"],
+    }
 
 
 class SaveMemoryRequest(BaseModel):
@@ -119,8 +140,8 @@ async def save_memory(
     current_user: dict = Depends(_require_chat),
     _rl: None = Depends(_memory_limit),
 ):
-    if not settings.anthropic_api_key:
-        raise HTTPException(status_code=503, detail="No AI API key configured.")
+    if not is_ai_configured():
+        raise HTTPException(status_code=503, detail="AI not configured.")
 
     convo = "\n".join(f"{m.role.upper()}: {m.content}" for m in req.history)
     extract_prompt = (
@@ -148,3 +169,21 @@ async def save_memory(
     write_markdown(mem_path, updated)
 
     return {"ok": True, "target": fname, "summary": safe_summary}
+
+
+@router.get("/runs")
+def list_runs(current_user: dict = Depends(get_current_user)):
+    """Return recent agent runs for the current user (tool-using runs only)."""
+    path = user_path(current_user["name"]) / "agent" / "runs.json"
+    data = read_json(path, default={"runs": []})
+    return data["runs"]
+
+
+@router.get("/runs/{run_id}")
+def get_run(run_id: str, current_user: dict = Depends(get_current_user)):
+    path = user_path(current_user["name"]) / "agent" / "runs.json"
+    data = read_json(path, default={"runs": []})
+    for run in data["runs"]:
+        if run["id"] == run_id:
+            return run
+    raise HTTPException(status_code=404, detail="Run not found")

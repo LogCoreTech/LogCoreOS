@@ -100,6 +100,29 @@ def write_markdown(path: Path, content: str) -> None:
             raise
 
 
+def resolve_user_md_path(user_name: str, rel_path: str) -> Path:
+    """Resolve rel_path inside user's brain folder; raise ValueError on unsafe input.
+
+    Enforces: .md extension only, no path traversal, safe characters.
+    Does NOT check if the file exists — callers handle that.
+    """
+    parts = rel_path.split("/")
+    if any(p in ("", ".", "..") for p in parts):
+        raise ValueError(f"Invalid path: {rel_path!r}")
+    if not rel_path.endswith(".md"):
+        raise ValueError("Only .md files are accessible")
+    if not all(re.match(r"^[\w \-. ]+$", p) for p in parts):
+        raise ValueError(f"Invalid characters in path: {rel_path!r}")
+
+    base = user_path(user_name).resolve()
+    target = (user_path(user_name) / rel_path).resolve()
+    try:
+        target.relative_to(base)
+    except ValueError:
+        raise ValueError(f"Access denied: {rel_path!r}")
+    return target
+
+
 def parse_priority_order(user_name: str) -> list[str]:
     """Extract ordered priority categories from Profile.md."""
     profile = read_markdown(profile_path(user_name))

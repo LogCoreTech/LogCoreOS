@@ -2,12 +2,78 @@ import { useState, useRef, useEffect } from 'react'
 import { chat as chatApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
+function StepTrace({ steps }) {
+  const [expanded, setExpanded] = useState({})
+
+  if (!steps || steps.length === 0) return null
+
+  const toolSteps = steps.filter(s => s.type === 'tool_call' || s.type === 'thought')
+
+  return (
+    <div className="mt-2 text-xs">
+      <button
+        onClick={() => setExpanded(p => ({ ...p, _open: !p._open }))}
+        className="flex items-center gap-1 text-charcoal-400 dark:text-charcoal-500 hover:text-orange-500 transition-colors mb-1"
+      >
+        <span>{expanded._open ? '▾' : '▸'}</span>
+        <span>{toolSteps.filter(s => s.type === 'tool_call').length} action{toolSteps.filter(s => s.type === 'tool_call').length !== 1 ? 's' : ''} taken</span>
+      </button>
+
+      {expanded._open && (
+        <div className="space-y-1.5 pl-3 border-l-2 border-charcoal-200 dark:border-charcoal-700">
+          {toolSteps.map((s, i) => {
+            if (s.type === 'thought') {
+              return (
+                <div key={i} className="bg-charcoal-50 dark:bg-charcoal-800 rounded px-2 py-1 italic text-charcoal-500 dark:text-charcoal-400">
+                  ◎ {s.content}
+                </div>
+              )
+            }
+
+            const hasError = typeof s.output === 'object' && s.output?.error
+            const isOpen = expanded[i]
+
+            return (
+              <div
+                key={i}
+                className={`rounded border ${hasError ? 'border-red-300 dark:border-red-800' : 'border-charcoal-200 dark:border-charcoal-700'}`}
+              >
+                <button
+                  onClick={() => setExpanded(p => ({ ...p, [i]: !p[i] }))}
+                  className="w-full flex items-center gap-2 px-2 py-1 text-left hover:bg-charcoal-50 dark:hover:bg-charcoal-800 rounded"
+                >
+                  <span className="font-mono text-orange-500">{s.tool}</span>
+                  {hasError && <span className="text-red-500 ml-auto">error</span>}
+                  <span className="ml-auto text-charcoal-400">{isOpen ? '▾' : '▸'}</span>
+                </button>
+                {isOpen && (
+                  <div className="px-2 pb-2 space-y-1">
+                    <div className="font-medium text-charcoal-400 dark:text-charcoal-500 mt-1">Input</div>
+                    <pre className="bg-charcoal-50 dark:bg-charcoal-900 rounded p-1.5 overflow-x-auto text-xs">
+                      {JSON.stringify(s.input, null, 2)}
+                    </pre>
+                    <div className="font-medium text-charcoal-400 dark:text-charcoal-500">Output</div>
+                    <pre className={`rounded p-1.5 overflow-x-auto text-xs ${hasError ? 'bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300' : 'bg-charcoal-50 dark:bg-charcoal-900'}`}>
+                      {JSON.stringify(s.output, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Chat() {
   const { user } = useAuth()
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: `Hi ${user?.name?.split(' ')[0] || 'there'}! I know your priorities and tasks. What's on your mind?`
+      content: `Hi ${user?.name?.split(' ')[0] || 'there'}! I know your priorities and tasks. What's on your mind?`,
+      steps: [],
     }
   ])
   const [input, setInput] = useState('')
@@ -34,7 +100,7 @@ export default function Chat() {
     const msg = input.trim()
     if (!msg || loading) return
 
-    const userMsg = { role: 'user', content: msg }
+    const userMsg = { role: 'user', content: msg, steps: [] }
     const updated = [...messages, userMsg]
     setMessages(updated)
     setInput('')
@@ -43,9 +109,13 @@ export default function Chat() {
     try {
       const history = updated.slice(1, -1).map(m => ({ role: m.role, content: m.content }))
       const res = await chatApi.send(msg, history)
-      setMessages([...updated, { role: 'assistant', content: res.response }])
+      setMessages([...updated, {
+        role: 'assistant',
+        content: res.response,
+        steps: res.steps || [],
+      }])
     } catch (err) {
-      setMessages([...updated, { role: 'assistant', content: `Error: ${err.message}` }])
+      setMessages([...updated, { role: 'assistant', content: `Error: ${err.message}`, steps: [] }])
     } finally {
       setLoading(false)
       inputRef.current?.focus()
@@ -119,14 +189,17 @@ export default function Chat() {
                 L
               </div>
             )}
-            <div
-              className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-sm whitespace-pre-wrap ${
-                m.role === 'user'
-                  ? 'bg-orange-500 text-white rounded-br-sm'
-                  : 'card rounded-bl-sm text-charcoal-900 dark:text-gray-100'
-              }`}
-            >
-              {m.content}
+            <div className="max-w-[85%]">
+              <div
+                className={`px-4 py-2.5 rounded-2xl text-sm whitespace-pre-wrap ${
+                  m.role === 'user'
+                    ? 'bg-orange-500 text-white rounded-br-sm'
+                    : 'card rounded-bl-sm text-charcoal-900 dark:text-gray-100'
+                }`}
+              >
+                {m.content}
+              </div>
+              {m.role === 'assistant' && <StepTrace steps={m.steps} />}
             </div>
           </div>
         ))}
