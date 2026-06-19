@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { tasks as tasksApi } from '../lib/api'
+import { calendar as calendarApi, tasks as tasksApi } from '../lib/api'
 import { catColor } from '../lib/constants'
 import TaskModal from '../components/TaskModal'
 
@@ -32,7 +32,7 @@ export default function Calendar() {
   async function load() {
     setLoading(true)
     try {
-      setTasks(await tasksApi.list())
+      setTasks(await calendarApi.tasks())
     } finally {
       setLoading(false)
     }

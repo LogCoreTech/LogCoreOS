@@ -318,13 +318,13 @@ Done:
 - Backup script (`docker/backup.sh`)
 - React PWA (installable on phone and desktop)
 - Docker Compose deployment
+- Notes module (markdown notes editor, stored in Brain/Notes/)
+- Journal module (daily entries stored in Brain/Journal/YYYY-MM-DD.md, with agent tools)
+- Calendar backend (module guard enforcement, independent of tasks module)
 
 Still to build:
 
-- Notes
-- Journal
-- Projects
-- Basic calendar
+- Projects (deferred to Phase 2 planning)
 
 ---
 

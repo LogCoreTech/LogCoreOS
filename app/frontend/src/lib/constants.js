@@ -22,6 +22,8 @@ export const ALL_MODULES = [
   { id: 'calendar',  to: '/calendar', icon: '📅', label: 'Calendar'  },
   { id: 'goals',     to: '/goals',    icon: '🎯', label: 'Goals'     },
   { id: 'household', to: '/household',icon: '🏠', label: 'Household' },
+  { id: 'notes',     to: '/notes',    icon: '📝', label: 'Notes'     },
+  { id: 'journal',   to: '/journal',  icon: '📖', label: 'Journal'   },
   { id: 'chat',      to: '/chat',     icon: '◈', label: 'AI Chat'   },
   { id: 'brain',     to: '/brain',    icon: '🧠', label: 'Brain'     },
   { id: 'settings',  to: '/settings', icon: '⚙', label: 'Settings'  },
