@@ -5,10 +5,9 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from routers.auth import get_current_user, require_module
+from routers.auth import get_current_user
 from services.rate_limiter import rate_limit
 
-_require_brain = require_module("brain")
 _brain_write_limit = rate_limit(20, 60)  # 20 writes per minute
 from services.file_service import user_path, write_markdown
 
@@ -58,7 +57,7 @@ def _resolve(name: str, rel_path: str) -> Path:
 
 
 @router.get("/files")
-def list_files(current_user: dict = Depends(_require_brain)):
+def list_files(current_user: dict = Depends(get_current_user)):
     base = user_path(current_user["name"])
     if not base.exists():
         return []
@@ -66,7 +65,7 @@ def list_files(current_user: dict = Depends(_require_brain)):
 
 
 @router.get("/files/{file_path:path}")
-def get_file(file_path: str, current_user: dict = Depends(_require_brain)):
+def get_file(file_path: str, current_user: dict = Depends(get_current_user)):
     target = _resolve(current_user["name"], file_path)
     if not target.exists():
         raise HTTPException(status_code=404, detail="File not found")
@@ -81,7 +80,7 @@ class SaveRequest(BaseModel):
 def save_file(
     file_path: str,
     req: SaveRequest,
-    current_user: dict = Depends(_require_brain),
+    current_user: dict = Depends(get_current_user),
     _rl: None = Depends(_brain_write_limit),
 ):
     target = _resolve(current_user["name"], file_path)

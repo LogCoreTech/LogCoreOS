@@ -3,6 +3,7 @@ import { priorities as prioritiesApi, auth as authApi, user as userApi, push as 
 import { useAuth } from '../lib/auth'
 import { useNavigate } from 'react-router-dom'
 import { getShortcuts, saveShortcuts, ALL_MODULES } from '../lib/constants'
+import GoalsSection from './Goals'
 
 function _urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4)
@@ -279,6 +280,26 @@ export default function Settings() {
             </button>
           </>
         )}
+      </div>
+
+      {/* Goals */}
+      <div className="card p-5">
+        <h2 className="font-semibold mb-1">Goals</h2>
+        <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-4">
+          Long-term goals tracked from your task list.
+        </p>
+        <GoalsSection />
+      </div>
+
+      {/* Brain Editor */}
+      <div className="card p-5">
+        <h2 className="font-semibold mb-1">Brain Editor</h2>
+        <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-3">
+          View and edit your Brain files directly — memory, profile, notes, and more.
+        </p>
+        <button onClick={() => navigate('/brain')} className="btn-primary">
+          Open Brain Editor
+        </button>
       </div>
 
       {/* Notifications */}
