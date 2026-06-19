@@ -3,6 +3,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from routers import auth, tasks, priorities, chat, setup
@@ -34,4 +35,10 @@ app.include_router(setup.router, prefix="/api/setup", tags=["setup"])
 # Serve React frontend — must come last
 static_dir = Path(__file__).parent.parent / "frontend" / "dist"
 if static_dir.exists():
-    app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="frontend")
+    # Static assets (JS, CSS, images) served directly
+    app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="assets")
+
+    # SPA catch-all — all non-API paths return index.html so React Router handles routing
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        return FileResponse(static_dir / "index.html")
