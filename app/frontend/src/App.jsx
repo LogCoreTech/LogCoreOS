@@ -5,12 +5,20 @@ import Dashboard from './pages/Dashboard'
 import Tasks from './pages/Tasks'
 import Chat from './pages/Chat'
 import Settings from './pages/Settings'
+import Admin from './pages/Admin'
 import Login from './pages/Login'
 import Setup from './pages/Setup'
 
 function Protected({ children }) {
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" replace />
+  return children
+}
+
+function AdminOnly({ children }) {
+  const { user } = useAuth()
+  if (!user) return <Navigate to="/login" replace />
+  if (user.role !== 'admin') return <Navigate to="/" replace />
   return children
 }
 
@@ -26,6 +34,7 @@ export default function App() {
             <Route path="/tasks"    element={<Tasks />} />
             <Route path="/chat"     element={<Chat />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/admin"    element={<AdminOnly><Admin /></AdminOnly>} />
           </Route>
         </Routes>
       </BrowserRouter>
