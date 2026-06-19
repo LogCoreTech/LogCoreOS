@@ -53,13 +53,18 @@ function initials(name) {
 // ---------------------------------------------------------------------------
 // Users card
 // ---------------------------------------------------------------------------
+const BLANK_NEW_USER = { email: '', name: '', password: '', role: 'member' }
+
 function UsersCard({ currentUserId }) {
-  const [users, setUsers]       = useState([])
-  const [loading, setLoading]   = useState(true)
-  const [pendingRole, setPendingRole] = useState({}) // { [id]: role }
-  const [saving, setSaving]     = useState(null)     // user_id being saved
-  const [deleting, setDeleting] = useState(null)     // user_id being deleted
-  const [msg, setMsg]           = useState(null)     // { ok, text }
+  const [users, setUsers]           = useState([])
+  const [loading, setLoading]       = useState(true)
+  const [pendingRole, setPendingRole] = useState({})
+  const [saving, setSaving]         = useState(null)
+  const [deleting, setDeleting]     = useState(null)
+  const [msg, setMsg]               = useState(null)
+  const [showCreate, setShowCreate] = useState(false)
+  const [newUser, setNewUser]       = useState(BLANK_NEW_USER)
+  const [creating, setCreating]     = useState(false)
 
   function flash(ok, text) {
     setMsg({ ok, text })
@@ -103,10 +108,101 @@ function UsersCard({ currentUserId }) {
     }
   }
 
+  async function submitCreate(e) {
+    e.preventDefault()
+    setCreating(true)
+    try {
+      const created = await adminApi.createUser(newUser)
+      setUsers(us => [...us, created])
+      setNewUser(BLANK_NEW_USER)
+      setShowCreate(false)
+      flash(true, `${created.name} created.`)
+    } catch (err) {
+      flash(false, err.message || 'Failed to create user')
+    } finally {
+      setCreating(false)
+    }
+  }
+
   return (
     <div className="card p-5">
-      <h2 className="font-semibold mb-4">Users</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-semibold">Users</h2>
+        <button
+          onClick={() => setShowCreate(o => !o)}
+          className="btn-primary text-sm py-1 px-3"
+        >
+          {showCreate ? 'Cancel' : '+ Add User'}
+        </button>
+      </div>
 
+      {/* Create user form */}
+      {showCreate && (
+        <form
+          onSubmit={submitCreate}
+          className="mb-4 p-4 rounded-lg border border-orange-200 dark:border-orange-900/40 bg-orange-50 dark:bg-orange-900/10 space-y-3"
+        >
+          <p className="text-sm font-medium text-orange-700 dark:text-orange-400">New user</p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium mb-1">Full name</label>
+              <input
+                type="text"
+                required
+                value={newUser.name}
+                onChange={e => setNewUser(u => ({ ...u, name: e.target.value }))}
+                placeholder="Jane Smith"
+                className="input text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">Role</label>
+              <select
+                value={newUser.role}
+                onChange={e => setNewUser(u => ({ ...u, role: e.target.value }))}
+                className="input text-sm"
+              >
+                <option value="member">member</option>
+                <option value="admin">admin</option>
+                <option value="guest">guest</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium mb-1">Email</label>
+            <input
+              type="email"
+              required
+              value={newUser.email}
+              onChange={e => setNewUser(u => ({ ...u, email: e.target.value }))}
+              placeholder="jane@example.com"
+              className="input text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium mb-1">Password</label>
+            <input
+              type="password"
+              required
+              minLength={8}
+              value={newUser.password}
+              onChange={e => setNewUser(u => ({ ...u, password: e.target.value }))}
+              placeholder="Min 8 characters"
+              className="input text-sm"
+              autoComplete="new-password"
+            />
+          </div>
+
+          <button type="submit" disabled={creating} className="btn-primary w-full text-sm">
+            {creating ? 'Creating…' : 'Create User'}
+          </button>
+        </form>
+      )}
+
+      {/* User list */}
       {loading ? (
         <p className="text-sm text-charcoal-400">Loading…</p>
       ) : (
@@ -121,18 +217,14 @@ function UsersCard({ currentUserId }) {
                 key={user.id}
                 className="flex items-center gap-3 p-3 rounded-lg border border-charcoal-100 dark:border-charcoal-800"
               >
-                {/* Avatar */}
                 <div className="w-9 h-9 rounded-full bg-orange-500 text-white flex items-center justify-center text-sm font-semibold shrink-0">
                   {initials(user.name)}
                 </div>
 
-                {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-sm truncate">{user.name}</span>
-                    {isSelf && (
-                      <span className="text-xs text-charcoal-400">(you)</span>
-                    )}
+                    {isSelf && <span className="text-xs text-charcoal-400">(you)</span>}
                     <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${ROLE_COLORS[user.role]}`}>
                       {user.role}
                     </span>
@@ -140,7 +232,6 @@ function UsersCard({ currentUserId }) {
                   <div className="text-xs text-charcoal-400 truncate">{user.email}</div>
                 </div>
 
-                {/* Role selector */}
                 <select
                   value={roleValue}
                   disabled={isSelf}
@@ -152,7 +243,6 @@ function UsersCard({ currentUserId }) {
                   <option value="guest">guest</option>
                 </select>
 
-                {/* Save role */}
                 <button
                   onClick={() => saveRole(user)}
                   disabled={!dirty || isSelf || saving === user.id}
@@ -161,7 +251,6 @@ function UsersCard({ currentUserId }) {
                   {saving === user.id ? '…' : 'Save'}
                 </button>
 
-                {/* Delete */}
                 <button
                   onClick={() => confirmDelete(user)}
                   disabled={isSelf || deleting === user.id}
