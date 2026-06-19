@@ -1,86 +1,152 @@
-"""CRUD for Notes/*.md files in the user's Brain."""
+"""CRUD for Notes/ files and folders in the user's Brain."""
 import re
+import shutil
 from datetime import datetime
 from pathlib import Path
 
 from services.file_service import user_path, read_markdown, write_markdown
 
-_NOTE_RE = re.compile(r'^[\w \-. ]+$')
-_MAX_NAME = 100
+_SEGMENT_RE = re.compile(r'^[\w \-. ]+$')
 _MAX_CONTENT_BYTES = 512_000
 
 
-def _validate_name(name: str) -> None:
-    if not name or len(name) > _MAX_NAME or not _NOTE_RE.match(name):
-        raise ValueError(
-            "Note name must be 1–100 characters: letters, digits, spaces, hyphens, dots, underscores"
-        )
+def _validate_path(path: str) -> None:
+    parts = path.split("/")
+    if not parts or any(p in ("", ".", "..") for p in parts):
+        raise ValueError("Invalid path")
+    if not all(_SEGMENT_RE.match(p) for p in parts):
+        raise ValueError("Path contains invalid characters (use letters, digits, spaces, hyphens, dots, underscores)")
 
 
-def _note_path(user_name: str, name: str) -> Path:
-    return user_path(user_name) / "Notes" / f"{name}.md"
+def _notes_root(user_name: str) -> Path:
+    return user_path(user_name) / "Notes"
+
+
+def _note_path(user_name: str, path: str) -> Path:
+    return _notes_root(user_name) / f"{path}.md"
+
+
+def _folder_path(user_name: str, path: str) -> Path:
+    return _notes_root(user_name) / path
 
 
 def list_notes(user_name: str) -> list[dict]:
-    folder = user_path(user_name) / "Notes"
-    if not folder.exists():
+    """Return a flat list of all notes and folders (recursive) for tree-building."""
+    root = _notes_root(user_name)
+    if not root.exists():
         return []
-    notes = []
-    for p in sorted(folder.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
-        if p.is_file() and p.suffix == ".md":
-            notes.append({
-                "name": p.stem,
-                "modified_at": datetime.fromtimestamp(p.stat().st_mtime).isoformat(),
-            })
-    return notes
+    items: list[dict] = []
+
+    def _walk(dir_path: Path, rel: str) -> None:
+        try:
+            entries = sorted(dir_path.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))
+        except PermissionError:
+            return
+        for p in entries:
+            p_rel = f"{rel}/{p.name}" if rel else p.name
+            if p.is_dir():
+                items.append({"type": "folder", "path": p_rel, "name": p.name})
+                _walk(p, p_rel)
+            elif p.is_file() and p.suffix == ".md":
+                note_rel = f"{rel}/{p.stem}" if rel else p.stem
+                items.append({
+                    "type": "note",
+                    "path": note_rel,
+                    "name": p.stem,
+                    "modified_at": datetime.fromtimestamp(p.stat().st_mtime).isoformat(),
+                })
+
+    _walk(root, "")
+    return items
 
 
-def get_note(user_name: str, name: str) -> dict | None:
-    _validate_name(name)
-    path = _note_path(user_name, name)
-    if not path.exists():
+def get_note(user_name: str, path: str) -> dict | None:
+    _validate_path(path)
+    p = _note_path(user_name, path)
+    if not p.exists():
         return None
     return {
-        "name": name,
-        "content": read_markdown(path),
-        "modified_at": datetime.fromtimestamp(path.stat().st_mtime).isoformat(),
+        "path": path,
+        "name": Path(path).name,
+        "content": read_markdown(p),
+        "modified_at": datetime.fromtimestamp(p.stat().st_mtime).isoformat(),
     }
 
 
-def create_note(user_name: str, name: str, content: str = "") -> dict:
-    _validate_name(name)
-    path = _note_path(user_name, name)
-    if path.exists():
-        raise ValueError(f"A note named {name!r} already exists")
+def create_note(user_name: str, path: str, content: str = "") -> dict:
+    _validate_path(path)
     if len(content.encode()) > _MAX_CONTENT_BYTES:
-        raise ValueError("Note content exceeds 500 KB limit")
-    write_markdown(path, content)
+        raise ValueError("Content exceeds 500 KB limit")
+    p = _note_path(user_name, path)
+    if p.exists():
+        raise ValueError(f"A note already exists at {path!r}")
+    write_markdown(p, content)  # write_markdown creates parent dirs
     return {
-        "name": name,
+        "path": path,
+        "name": Path(path).name,
         "content": content,
-        "modified_at": datetime.fromtimestamp(path.stat().st_mtime).isoformat(),
+        "modified_at": datetime.fromtimestamp(p.stat().st_mtime).isoformat(),
     }
 
 
-def update_note(user_name: str, name: str, content: str) -> dict | None:
-    _validate_name(name)
-    path = _note_path(user_name, name)
-    if not path.exists():
+def update_note(user_name: str, path: str, content: str) -> dict | None:
+    _validate_path(path)
+    if len(content.encode()) > _MAX_CONTENT_BYTES:
+        raise ValueError("Content exceeds 500 KB limit")
+    p = _note_path(user_name, path)
+    if not p.exists():
         return None
-    if len(content.encode()) > _MAX_CONTENT_BYTES:
-        raise ValueError("Note content exceeds 500 KB limit")
-    write_markdown(path, content)
+    write_markdown(p, content)
     return {
-        "name": name,
+        "path": path,
+        "name": Path(path).name,
         "content": content,
-        "modified_at": datetime.fromtimestamp(path.stat().st_mtime).isoformat(),
+        "modified_at": datetime.fromtimestamp(p.stat().st_mtime).isoformat(),
     }
 
 
-def delete_note(user_name: str, name: str) -> bool:
-    _validate_name(name)
-    path = _note_path(user_name, name)
-    if not path.exists():
+def delete_note(user_name: str, path: str) -> bool:
+    _validate_path(path)
+    p = _note_path(user_name, path)
+    if not p.exists():
         return False
-    path.unlink()
+    p.unlink()
     return True
+
+
+def create_folder(user_name: str, path: str) -> dict:
+    _validate_path(path)
+    p = _folder_path(user_name, path)
+    if p.exists():
+        raise ValueError(f"A folder already exists at {path!r}")
+    p.mkdir(parents=True)
+    return {"type": "folder", "path": path, "name": Path(path).name}
+
+
+def delete_folder(user_name: str, path: str) -> bool:
+    _validate_path(path)
+    p = _folder_path(user_name, path)
+    if not p.exists() or not p.is_dir():
+        return False
+    shutil.rmtree(p)
+    return True
+
+
+def move_item(user_name: str, from_path: str, to_path: str, item_type: str) -> dict:
+    """Rename or move a note or folder."""
+    _validate_path(from_path)
+    _validate_path(to_path)
+    root = _notes_root(user_name)
+    if item_type == "note":
+        src = root / f"{from_path}.md"
+        dst = root / f"{to_path}.md"
+    else:
+        src = root / from_path
+        dst = root / to_path
+    if not src.exists():
+        raise ValueError(f"Source not found: {from_path!r}")
+    if dst.exists():
+        raise ValueError(f"Destination already exists: {to_path!r}")
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    src.rename(dst)
+    return {"from_path": from_path, "to_path": to_path, "type": item_type}

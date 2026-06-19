@@ -107,12 +107,19 @@ export const shared = {
   remove: (id)             => del(`/shared/tasks/${id}`),
 }
 
+function encodePath(path) {
+  return path.split('/').map(encodeURIComponent).join('/')
+}
+
 export const notes = {
-  list:   ()                       => get('/notes'),
-  get:    (name)                   => get(`/notes/${encodeURIComponent(name)}`),
-  create: (name, content = '')     => post('/notes', { name, content }),
-  update: (name, content)          => request('PUT', `/notes/${encodeURIComponent(name)}`, { content }),
-  remove: (name)                   => del(`/notes/${encodeURIComponent(name)}`),
+  list:         ()                            => get('/notes'),
+  get:          (path)                        => get(`/notes/file/${encodePath(path)}`),
+  create:       (path, content = '')          => post('/notes/file', { path, content }),
+  update:       (path, content)               => request('PUT', `/notes/file/${encodePath(path)}`, { content }),
+  remove:       (path)                        => del(`/notes/file/${encodePath(path)}`),
+  createFolder: (path)                        => post('/notes/folder', { path }),
+  removeFolder: (path)                        => del(`/notes/folder/${encodePath(path)}`),
+  move:         (from_path, to_path, type)    => post('/notes/move', { from_path, to_path, type }),
 }
 
 export const journal = {
