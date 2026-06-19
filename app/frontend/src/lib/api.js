@@ -1,28 +1,18 @@
 const BASE = '/api'
 
-function token() {
-  return localStorage.getItem('lc_token')
-}
-
-function headers(extra = {}) {
-  const h = { 'Content-Type': 'application/json', ...extra }
-  const t = token()
-  if (t) h['Authorization'] = `Bearer ${t}`
-  return h
-}
-
 async function request(method, path, body) {
   const res = await fetch(`${BASE}${path}`, {
     method,
-    headers: headers(),
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
   })
   if (res.status === 401) {
-    localStorage.removeItem('lc_token')
     localStorage.removeItem('lc_user')
     window.location.href = '/login'
     return
   }
+  if (res.status === 204) return null
   const data = await res.json()
   if (!res.ok) throw new Error(data.detail || 'Request failed')
   return data
@@ -36,6 +26,7 @@ const del  = (path)        => request('DELETE', path)
 export const auth = {
   register: (email, password, name) => post('/auth/register', { email, password, name }),
   login:    (email, password)       => post('/auth/login',    { email, password }),
+  logout:   ()                      => post('/auth/logout'),
   me:       ()                      => get('/auth/me'),
 }
 
