@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from config import settings
 from migrations.runner import run_pending as run_migrations
-from routers import auth, tasks, priorities, chat, setup, health, brain, export, shared, push, notes, journal, calendar
+from routers import auth, tasks, priorities, chat, setup, health, brain, export, shared, push, notes, journal, calendar, profile
 from scheduler import start as start_scheduler
 
 logger = logging.getLogger("logcore")
@@ -127,6 +127,7 @@ app.include_router(push.router,       prefix="/api/v1/push",         tags=["push
 app.include_router(notes.router,      prefix="/api/v1/notes",        tags=["notes"])
 app.include_router(journal.router,    prefix="/api/v1/journal",      tags=["journal"])
 app.include_router(calendar.router,   prefix="/api/v1/calendar",     tags=["calendar"])
+app.include_router(profile.router,    prefix="/api/v1/profile",      tags=["profile"])
 
 # Serve React frontend — must come last
 static_dir = Path(__file__).parent.parent / "frontend" / "dist"

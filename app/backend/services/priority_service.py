@@ -3,23 +3,8 @@ from datetime import timedelta
 from typing import Any
 
 from services.auth_service import today_for_user
-from services.file_service import (
-    parse_priority_order,
-    read_json,
-    tasks_path,
-    override_path,
-)
-
-
-def get_priority_order(user_name: str) -> list[str]:
-    """Return active priority order: daily override if today, else profile order."""
-    today = today_for_user(user_name).isoformat()
-    op = override_path(user_name)
-    if op.exists():
-        override = read_json(op)
-        if override.get("date") == today:
-            return override.get("order", [])
-    return parse_priority_order(user_name)
+from services.file_service import read_json, tasks_path
+from services.profile_service import get_priority_order
 
 
 def score_task(task: dict, category_order: list[str], today_str: str) -> int:

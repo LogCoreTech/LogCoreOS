@@ -14,6 +14,7 @@ import Notes from './pages/Notes'
 import Journal from './pages/Journal'
 import Login from './pages/Login'
 import Setup from './pages/Setup'
+import Profile from './pages/Profile'
 
 function Protected({ children }) {
   const { user } = useAuth()
@@ -51,6 +52,7 @@ export default function App() {
               <Route path="/journal"   element={<ModuleRoute moduleId="journal"><Journal /></ModuleRoute>} />
               <Route path="/chat"      element={<ModuleRoute moduleId="chat"><Chat /></ModuleRoute>} />
               <Route path="/brain"     element={<Brain />} />
+              <Route path="/profile"   element={<Profile />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/admin"    element={<AdminOnly><Admin /></AdminOnly>} />
             </Route>
