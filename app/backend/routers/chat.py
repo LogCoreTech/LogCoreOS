@@ -1,39 +1,48 @@
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from datetime import date
+from typing import Literal
 
-from config import settings
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field, model_validator
+
 from routers.auth import get_current_user
 from services.file_service import (
     read_markdown,
+    write_markdown,
     profile_path,
     tasks_path,
     read_json,
     user_path,
 )
+from services.ai_provider import chat_completion, is_ai_configured
+from services.agent_service import run_agent
 
 router = APIRouter()
+
+_MEMORY_MAX_BYTES = 100_000  # 100 KB per memory file
+
+
+def _safe(content: str) -> str:
+    """Wrap user-controlled content to prevent prompt injection."""
+    escaped = content.replace("</brain_data>", "[/brain_data]")
+    return f"<brain_data>\n{escaped}\n</brain_data>"
 
 
 def _build_context(user_name: str) -> str:
     """Assemble the user's Brain context for the AI system prompt."""
     parts = []
 
-    # Profile
     pf = profile_path(user_name)
     if pf.exists():
-        parts.append(f"# User Profile\n\n{read_markdown(pf)}")
+        parts.append(f"# User Profile\n\n{_safe(read_markdown(pf))}")
 
-    # Personal Long Term Memory
     ltm = user_path(user_name) / "Long_Term_Memory.md"
     if ltm.exists():
-        parts.append(f"# Long-Term Memory\n\n{read_markdown(ltm)}")
+        parts.append(f"# Long-Term Memory\n\n{_safe(read_markdown(ltm))}")
 
-    # Personal Short Term Memory
     stm = user_path(user_name) / "Short_Term_Memory.md"
     if stm.exists():
-        parts.append(f"# Short-Term Memory\n\n{read_markdown(stm)}")
+        parts.append(f"# Short-Term Memory\n\n{_safe(read_markdown(stm))}")
 
-    # Tasks (pending only, summary)
     tp = tasks_path(user_name)
     if tp.exists():
         tasks = read_json(tp).get("tasks", [])
@@ -43,38 +52,122 @@ def _build_context(user_name: str) -> str:
             + (f" — due {t['due_date']}" if t.get("due_date") else "")
             for t in pending
         )
-        parts.append(f"# Pending Tasks\n\n{task_lines or '(none)'}")
+        parts.append(f"# Pending Tasks\n\n{_safe(task_lines or '(none)')}")
 
     return "\n\n---\n\n".join(parts)
 
 
+class HistoryMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(..., max_length=5000)
+
+
 class ChatRequest(BaseModel):
-    message: str
-    history: list[dict] = []
+    message: str = Field(..., min_length=1, max_length=5000)
+    history: list[HistoryMessage] = Field(default=[], max_length=50)
+
+    @model_validator(mode="after")
+    def validate_history_alternates(self):
+        h = self.history
+        if not h:
+            return self
+        if h[0].role != "user":
+            raise ValueError("History must begin with a user message")
+        for i, msg in enumerate(h):
+            if msg.role != ("user" if i % 2 == 0 else "assistant"):
+                raise ValueError(f"History message {i} has unexpected role '{msg.role}'")
+        if h[-1].role != "assistant":
+            raise ValueError("History must end with an assistant message")
+        return self
 
 
 @router.post("")
-async def chat(req: ChatRequest, current_user: dict = Depends(get_current_user)):
-    if not settings.anthropic_api_key:
-        return {"response": "No AI API key configured. Set ANTHROPIC_API_KEY in .env."}
+async def chat(
+    req: ChatRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    if not is_ai_configured():
+        return {
+            "response": "AI is not configured. Ask your admin to set up an AI provider in the Admin panel.",
+            "steps": [],
+            "mode": "error",
+        }
 
-    import anthropic
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    from datetime import datetime
+    today_str = datetime.now().strftime("%A, %B %d, %Y (%Y-%m-%d)")
 
     system_prompt = (
-        "You are the AI layer of LogCore Brain — a personal life operating system. "
+        f"You are the AI layer of LogCore Brain — a personal life operating system. "
+        f"Today is {today_str}. "
         "You know this user personally from the context below. Be direct and concise. "
-        "Help them manage their life priorities and tasks.\n\n"
+        "Help them manage their life priorities and tasks. "
+        "When the user asks you to take an action (add a task, update a note, etc.), use the appropriate tool.\n\n"
         + _build_context(current_user["name"])
     )
 
-    messages = req.history + [{"role": "user", "content": req.message}]
+    history = [m.model_dump() for m in req.history]
+    result = await run_agent(current_user, req.message, history, system_prompt)
 
-    response = client.messages.create(
-        model=settings.ai_model,
-        max_tokens=1024,
-        system=system_prompt,
-        messages=messages,
+    return {
+        "response": result["final_answer"],
+        "steps": result["steps"],
+        "mode": result["status"],
+    }
+
+
+class SaveMemoryRequest(BaseModel):
+    history: list[HistoryMessage] = Field(..., min_length=1, max_length=50)
+    target: Literal["short", "long"] = "short"
+
+
+@router.post("/save-memory")
+async def save_memory(
+    req: SaveMemoryRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    if not is_ai_configured():
+        raise HTTPException(status_code=503, detail="AI not configured.")
+
+    convo = "\n".join(f"{m.role.upper()}: {m.content}" for m in req.history)
+    extract_prompt = (
+        "Extract the key facts, decisions, and insights from this conversation that are worth "
+        "remembering long-term. Be concise — bullet points only, max 5 bullets. "
+        "Do NOT include pleasantries or questions. Only concrete information.\n\n"
+        f"Conversation:\n{convo}"
+    )
+    summary = await chat_completion(
+        "You are a memory extractor. Output only a markdown bullet list. No preamble.",
+        [{"role": "user", "content": extract_prompt}],
     )
 
-    return {"response": response.content[0].text}
+    fname = "Long_Term_Memory.md" if req.target == "long" else "Short_Term_Memory.md"
+    mem_path = user_path(current_user["name"]) / fname
+    today = date.today().isoformat()
+
+    existing = mem_path.read_text() if mem_path.exists() else ""
+    if len(existing.encode()) >= _MEMORY_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="Memory file is full.")
+
+    safe_summary = summary.strip().replace("</brain_data>", "[/brain_data]")
+    updated = existing.rstrip() + f"\n\n## {today}\n\n{safe_summary}\n"
+    write_markdown(mem_path, updated)
+
+    return {"ok": True, "target": fname, "summary": safe_summary}
+
+
+@router.get("/runs")
+def list_runs(current_user: dict = Depends(get_current_user)):
+    """Return recent agent runs for the current user (tool-using runs only)."""
+    path = user_path(current_user["name"]) / "agent" / "runs.json"
+    data = read_json(path, default={"runs": []})
+    return data["runs"]
+
+
+@router.get("/runs/{run_id}")
+def get_run(run_id: str, current_user: dict = Depends(get_current_user)):
+    path = user_path(current_user["name"]) / "agent" / "runs.json"
+    data = read_json(path, default={"runs": []})
+    for run in data["runs"]:
+        if run["id"] == run_id:
+            return run
+    raise HTTPException(status_code=404, detail="Run not found")

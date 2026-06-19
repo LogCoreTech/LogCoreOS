@@ -55,7 +55,15 @@ export const priorities = {
 }
 
 export const chat = {
-  send: (message, history) => post('/chat', { message, history }),
+  send:       (message, history) => post('/chat', { message, history }),
+  saveMemory: (history, target = 'short') => post('/chat/save-memory', { history, target }),
+  runs:       ()                 => get('/chat/runs'),
+  getRun:     (id)               => get(`/chat/runs/${id}`),
+}
+
+export const admin = {
+  getAiSettings:    ()  => get('/auth/admin/ai-settings'),
+  updateAiSettings: (s) => patch('/auth/admin/ai-settings', s),
 }
 
 export const setup = {

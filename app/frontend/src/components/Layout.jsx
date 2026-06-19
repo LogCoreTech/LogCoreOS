@@ -1,17 +1,19 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 
-const navItems = [
+const NAV_ITEMS = [
   { to: '/',        icon: '⊞', label: 'Dashboard' },
   { to: '/tasks',   icon: '✓', label: 'Tasks'     },
   { to: '/chat',    icon: '◈', label: 'AI Chat'   },
   { to: '/settings',icon: '⚙', label: 'Settings'  },
 ]
 
+const ADMIN_NAV = { to: '/admin', icon: '⬡', label: 'Admin' }
+
 export default function Layout() {
   const { user, logout } = useAuth()
+  const navItems = user?.role === 'admin' ? [...NAV_ITEMS, ADMIN_NAV] : NAV_ITEMS
   const navigate = useNavigate()
-
   function handleLogout() {
     logout()
     navigate('/login')
