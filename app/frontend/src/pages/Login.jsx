@@ -21,11 +21,11 @@ export default function Login() {
       let res
       if (mode === 'login') {
         res = await authApi.login(email, password)
-        login(res.token, res.id, res.name, res.role)
+        login(res.id, res.name, res.role)
         navigate('/')
       } else {
         res = await authApi.register(email, password, name)
-        login(res.token, res.id, res.name, res.role)
+        login(res.id, res.name, res.role)
         navigate('/setup')
       }
     } catch (err) {

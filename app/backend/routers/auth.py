@@ -1,6 +1,6 @@
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr
 
@@ -9,7 +9,11 @@ from services import auth_service
 from services.file_service import brain_path, read_json, write_json
 
 router = APIRouter()
-bearer = HTTPBearer()
+
+# auto_error=False so the dependency returns None instead of 401 when the
+# Authorization header is absent — lets us check the cookie first.
+_bearer = HTTPBearer(auto_error=False)
+_COOKIE = "lc_token"
 
 
 class RegisterRequest(BaseModel):
@@ -23,8 +27,29 @@ class LoginRequest(BaseModel):
     password: str
 
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer)) -> dict:
-    payload = auth_service.decode_token(credentials.credentials)
+def _set_auth_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=_COOKIE,
+        value=token,
+        httponly=True,
+        samesite="lax",
+        secure=settings.cookie_secure,
+        max_age=settings.access_token_expire_minutes * 60,
+        path="/",
+    )
+
+
+def get_current_user(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+) -> dict:
+    # Cookie takes priority; Bearer header is the fallback for CLI / API clients.
+    token = request.cookies.get(_COOKIE)
+    if not token and credentials:
+        token = credentials.credentials
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    payload = auth_service.decode_token(token)
     if not payload:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     user = auth_service.get_user_by_id(payload["sub"])
@@ -47,24 +72,29 @@ def _get_admin_settings() -> dict:
 
 
 @router.post("/register")
-def register(req: RegisterRequest):
+def register(req: RegisterRequest, response: Response):
     if not _get_admin_settings().get("allow_registration", False):
         raise HTTPException(status_code=403, detail="Registration is closed")
     try:
         user = auth_service.create_user(req.email, req.password, req.name)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    token = auth_service.create_token(user)
-    return {"token": token, "id": user["id"], "name": user["name"], "role": user["role"]}
+    _set_auth_cookie(response, auth_service.create_token(user))
+    return {"id": user["id"], "name": user["name"], "role": user["role"]}
 
 
 @router.post("/login")
-def login(req: LoginRequest):
+def login(req: LoginRequest, response: Response):
     user = auth_service.authenticate(req.email, req.password)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    token = auth_service.create_token(user)
-    return {"token": token, "id": user["id"], "name": user["name"], "role": user["role"]}
+    _set_auth_cookie(response, auth_service.create_token(user))
+    return {"id": user["id"], "name": user["name"], "role": user["role"]}
+
+
+@router.post("/logout", status_code=204)
+def logout(response: Response):
+    response.delete_cookie(key=_COOKIE, path="/")
 
 
 @router.get("/me")
