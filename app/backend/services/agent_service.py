@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from services import task_service, priority_service
+from services import task_service, priority_service, journal_service
 from services.ai_provider import agent_completion
 from services.file_service import (
     user_path,
@@ -129,6 +129,29 @@ _USER_TOOLS: list[dict] = [
             "required": ["path"],
         },
     },
+    {
+        "name": "read_journal_entry",
+        "description": "Read the user's journal entry for a specific date.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "date": {"type": "string", "description": "Date in YYYY-MM-DD format"},
+            },
+            "required": ["date"],
+        },
+    },
+    {
+        "name": "write_journal_entry",
+        "description": "Create or update the user's journal entry for a specific date.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "date":    {"type": "string", "description": "Date in YYYY-MM-DD format"},
+                "content": {"type": "string", "description": "Full markdown content of the entry"},
+            },
+            "required": ["date", "content"],
+        },
+    },
 ]
 
 _ADMIN_TOOLS: list[dict] = [
@@ -230,6 +253,15 @@ def _execute_tool(name: str, inputs: dict, user: dict) -> Any:
                     return {"error": f"File already exists: {inputs['path']!r}. Use write_brain_file to edit it."}
                 write_markdown(path, inputs.get("content", ""))
                 return {"ok": True, "created": inputs["path"]}
+
+            case "read_journal_entry":
+                entry = journal_service.get_entry(user["name"], inputs["date"])
+                if entry is None:
+                    return {"date": inputs["date"], "content": "", "exists": False}
+                return {**entry, "exists": True}
+
+            case "write_journal_entry":
+                return journal_service.upsert_entry(user["name"], inputs["date"], inputs["content"])
 
             case "list_users":
                 if user.get("role") != "admin":

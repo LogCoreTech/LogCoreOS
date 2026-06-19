@@ -11,6 +11,8 @@ import Admin from './pages/Admin'
 import Calendar from './pages/Calendar'
 import Goals from './pages/Goals'
 import Household from './pages/Household'
+import Notes from './pages/Notes'
+import Journal from './pages/Journal'
 import Login from './pages/Login'
 import Setup from './pages/Setup'
 
@@ -47,6 +49,8 @@ export default function App() {
               <Route path="/calendar"  element={<ModuleRoute moduleId="calendar"><Calendar /></ModuleRoute>} />
               <Route path="/goals"     element={<ModuleRoute moduleId="goals"><Goals /></ModuleRoute>} />
               <Route path="/household" element={<ModuleRoute moduleId="household"><Household /></ModuleRoute>} />
+              <Route path="/notes"     element={<ModuleRoute moduleId="notes"><Notes /></ModuleRoute>} />
+              <Route path="/journal"   element={<ModuleRoute moduleId="journal"><Journal /></ModuleRoute>} />
               <Route path="/chat"      element={<ModuleRoute moduleId="chat"><Chat /></ModuleRoute>} />
               <Route path="/brain"     element={<ModuleRoute moduleId="brain"><Brain /></ModuleRoute>} />
               <Route path="/settings" element={<Settings />} />

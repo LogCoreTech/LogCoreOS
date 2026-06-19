@@ -105,6 +105,25 @@ export const shared = {
   remove: (id)             => del(`/shared/tasks/${id}`),
 }
 
+export const notes = {
+  list:   ()                       => get('/notes'),
+  get:    (name)                   => get(`/notes/${encodeURIComponent(name)}`),
+  create: (name, content = '')     => post('/notes', { name, content }),
+  update: (name, content)          => request('PUT', `/notes/${encodeURIComponent(name)}`, { content }),
+  remove: (name)                   => del(`/notes/${encodeURIComponent(name)}`),
+}
+
+export const journal = {
+  list:   ()                => get('/journal'),
+  get:    (date)            => get(`/journal/${date}`),
+  upsert: (date, content)   => request('PUT', `/journal/${date}`, { content }),
+  remove: (date)            => del(`/journal/${date}`),
+}
+
+export const calendar = {
+  tasks: () => get('/calendar/tasks'),
+}
+
 export const user = {
   async export() {
     const res = await fetch(`${BASE}/user/export`, { headers: headers(), credentials: 'include' })
