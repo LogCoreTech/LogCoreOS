@@ -3,7 +3,7 @@ import { tasks as tasksApi, priorities as prioritiesApi } from '../lib/api'
 import TaskModal from '../components/TaskModal'
 import { catColor } from '../lib/constants'
 
-export default function Goals() {
+export default function GoalsSection() {
   const [goals, setGoals] = useState([])
   const [categories, setCategories] = useState([])
   const [filter, setFilter] = useState('pending')
@@ -42,9 +42,9 @@ export default function Goals() {
     filter === 'done'    ? g.status === 'done' : true
   )
 
-  const total   = goals.length
-  const done    = goals.filter(g => g.status === 'done').length
-  const pct     = total === 0 ? 0 : Math.round((done / total) * 100)
+  const total = goals.length
+  const done  = goals.filter(g => g.status === 'done').length
+  const pct   = total === 0 ? 0 : Math.round((done / total) * 100)
 
   const grouped = categories.map(cat => ({
     cat,
@@ -55,12 +55,11 @@ export default function Goals() {
   const other = filtered.filter(g => !knownCats.has(g.category))
 
   return (
-    <div className="max-w-2xl mx-auto space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Goals</h1>
+    <div className="space-y-4">
+      <div className="flex justify-end">
         <button
           onClick={() => { setEditTask(null); setShowModal(true) }}
-          className="btn-primary"
+          className="btn-primary text-sm"
         >
           + Add Goal
         </button>
@@ -68,12 +67,12 @@ export default function Goals() {
 
       {/* Progress summary */}
       {total > 0 && (
-        <div className="card p-4">
+        <div className="bg-charcoal-50 dark:bg-charcoal-800 rounded-lg p-3">
           <div className="flex items-center justify-between text-sm mb-2">
             <span className="font-medium">{done} of {total} complete</span>
             <span className="text-orange-500 font-semibold">{pct}%</span>
           </div>
-          <div className="h-2 bg-charcoal-100 dark:bg-charcoal-700 rounded-full overflow-hidden">
+          <div className="h-2 bg-charcoal-200 dark:bg-charcoal-700 rounded-full overflow-hidden">
             <div
               className="h-full bg-orange-500 rounded-full transition-all duration-500"
               style={{ width: `${pct}%` }}
@@ -100,26 +99,26 @@ export default function Goals() {
       </div>
 
       {loading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map(i => <div key={i} className="h-20 card animate-pulse" />)}
+        <div className="space-y-2">
+          {[1, 2, 3].map(i => <div key={i} className="h-16 bg-charcoal-100 dark:bg-charcoal-800 rounded-lg animate-pulse" />)}
         </div>
       ) : grouped.length === 0 && other.length === 0 ? (
-        <div className="card p-8 text-center text-charcoal-500 dark:text-charcoal-400">
-          <p className="text-4xl mb-2">🎯</p>
-          <p className="font-medium mb-1">
+        <div className="py-8 text-center text-charcoal-500 dark:text-charcoal-400">
+          <p className="text-3xl mb-2">🎯</p>
+          <p className="font-medium text-sm">
             {goals.length === 0 ? 'No goals yet' : 'Nothing here'}
           </p>
           {goals.length === 0 && (
-            <p className="text-sm">Set a goal to start tracking your progress.</p>
+            <p className="text-xs mt-1">Set a goal to start tracking your progress.</p>
           )}
         </div>
       ) : (
-        <>
+        <div className="space-y-4">
           {grouped.map(({ cat, items }) => (
             <div key={cat}>
-              <h2 className="text-xs font-semibold uppercase tracking-widest text-charcoal-500 dark:text-charcoal-400 mb-2">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-charcoal-500 dark:text-charcoal-400 mb-2">
                 {cat}
-              </h2>
+              </h3>
               <div className="space-y-2">
                 {items.map(goal => (
                   <GoalCard
@@ -136,7 +135,7 @@ export default function Goals() {
           ))}
           {other.length > 0 && (
             <div>
-              <h2 className="text-xs font-semibold uppercase tracking-widest text-charcoal-500 mb-2">Other</h2>
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-charcoal-500 mb-2">Other</h3>
               <div className="space-y-2">
                 {other.map(goal => (
                   <GoalCard
@@ -151,7 +150,7 @@ export default function Goals() {
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
 
       {confirmDeleteId && (
