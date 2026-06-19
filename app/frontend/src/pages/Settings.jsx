@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { priorities as prioritiesApi, auth as authApi, user as userApi, push as pushApi } from '../lib/api'
+import { auth as authApi, user as userApi, push as pushApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useNavigate } from 'react-router-dom'
 import { getShortcuts, saveShortcuts, ALL_MODULES } from '../lib/constants'
@@ -16,8 +16,6 @@ function detectTz() {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone || '' } catch { return '' }
 }
 
-const BASE_CATS = ['God', 'Family', 'Job', 'Personal Growth', 'Hobbies']
-
 const SESSION_OPTIONS = [
   { label: '1 day',   value: 1440   },
   { label: '7 days',  value: 10080  },
@@ -28,10 +26,6 @@ const SESSION_OPTIONS = [
 export default function Settings() {
   const { user, logout, updateUserField } = useAuth()
   const navigate = useNavigate()
-  const [order, setOrder] = useState([])
-  const [profileOrder, setProfileOrder] = useState([])
-  const [customCat, setCustomCat] = useState('')
-  const [dragIdx, setDragIdx] = useState(null)
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
   const [ntfyChannel, setNtfyChannel] = useState('')
@@ -43,20 +37,16 @@ export default function Settings() {
   const [shortcutDragIdx, setShortcutDragIdx] = useState(null)
   const [shortcutSaved, setShortcutSaved] = useState(false)
   const [exporting, setExporting] = useState(false)
-  const [pushStatus, setPushStatus] = useState('unknown') // 'unknown'|'unsupported'|'denied'|'subscribed'|'unsubscribed'
+  const [pushStatus, setPushStatus] = useState('unknown')
   const [pushLoading, setPushLoading] = useState(false)
   const [pushMsg, setPushMsg] = useState('')
 
   useEffect(() => {
-    const fetches = [prioritiesApi.get(), authApi.me()]
-    Promise.all(fetches).then(([p, me]) => {
-      setOrder(p.order || [])
-      setProfileOrder(p.profile_order || [])
+    authApi.me().then(me => {
       setNtfyChannel(me.notification_channel || '')
       setSessionMinutes(me.session_minutes || 10080)
       setTimezone(me.timezone || '')
     }).finally(() => setLoading(false))
-    // Check push status
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       setPushStatus('unsupported')
     } else {
@@ -67,29 +57,6 @@ export default function Settings() {
       }).catch(() => setPushStatus('unsubscribed'))
     }
   }, [])
-
-
-  function addCustom() {
-    const v = customCat.trim()
-    if (v && !order.includes(v)) { setOrder([...order, v]); setCustomCat('') }
-  }
-
-  function removeCustom(cat) {
-    if (BASE_CATS.includes(cat)) return
-    setOrder(order.filter(c => c !== cat))
-  }
-
-  function onDragStart(i) { setDragIdx(i) }
-  function onDragOver(e, i) {
-    e.preventDefault()
-    if (dragIdx === null || dragIdx === i) return
-    const next = [...order]
-    const [m] = next.splice(dragIdx, 1)
-    next.splice(i, 0, m)
-    setOrder(next)
-    setDragIdx(i)
-  }
-  function onDragEnd() { setDragIdx(null) }
 
   function flash(setter) {
     setter(true)
@@ -104,11 +71,6 @@ export default function Settings() {
     } catch (e) {
       alert(e.message || 'Invalid timezone')
     }
-  }
-
-  async function savePriorities() {
-    await prioritiesApi.override(order)
-    flash(setSaved)
   }
 
   async function saveSession() {
@@ -218,68 +180,13 @@ export default function Settings() {
 
       {/* Profile */}
       <div className="card p-5">
-        <h2 className="font-semibold mb-3">Profile</h2>
-        <div className="text-sm space-y-1 text-charcoal-700 dark:text-charcoal-300">
-          <p><span className="text-charcoal-500">Name:</span> {user?.name}</p>
-          <p><span className="text-charcoal-500">Role:</span> {user?.role}</p>
-        </div>
-      </div>
-
-      {/* Priority order */}
-      <div className="card p-5">
-        <div className="flex items-center justify-between mb-1">
-          <h2 className="font-semibold">Life Priority Order</h2>
-          {saved && <span className="text-green-500 text-sm">Saved ✓</span>}
-        </div>
-        <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-4">
-          This sets today's priority override. Your profile default is: {profileOrder.join(' → ')}
+        <h2 className="font-semibold mb-1">Profile</h2>
+        <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-3">
+          {user?.name} · {user?.role}
         </p>
-
-        {loading ? (
-          <div className="space-y-2">{[1,2,3].map(i=><div key={i} className="h-10 bg-charcoal-100 dark:bg-charcoal-700 rounded animate-pulse"/>)}</div>
-        ) : (
-          <>
-            <ul className="space-y-2 mb-4">
-              {order.map((cat, i) => (
-                <li
-                  key={cat}
-                  draggable
-                  onDragStart={() => onDragStart(i)}
-                  onDragOver={e => onDragOver(e, i)}
-                  onDragEnd={onDragEnd}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-grab transition-colors ${
-                    dragIdx === i
-                      ? 'border-orange-500 bg-orange-500/10'
-                      : 'border-charcoal-200 dark:border-charcoal-700 bg-white dark:bg-charcoal-800'
-                  }`}
-                >
-                  <span className="text-charcoal-400 text-xs w-4">{i+1}</span>
-                  <span className="flex-1 text-sm">{cat}</span>
-                  {!BASE_CATS.includes(cat) && (
-                    <button onClick={() => removeCustom(cat)} className="text-charcoal-400 hover:text-red-500 text-xs">✕</button>
-                  )}
-                  <span className="text-charcoal-300 dark:text-charcoal-600">⠿</span>
-                </li>
-              ))}
-            </ul>
-
-            <div className="flex gap-2 mb-3">
-              <input
-                type="text"
-                value={customCat}
-                onChange={e => setCustomCat(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addCustom()}
-                placeholder="Add category…"
-                className="input"
-              />
-              <button onClick={addCustom} className="btn-primary px-3">+</button>
-            </div>
-
-            <button onClick={savePriorities} className="btn-primary w-full">
-              Apply Today's Order
-            </button>
-          </>
-        )}
+        <button onClick={() => navigate('/profile')} className="btn-primary text-sm">
+          Edit Full Profile →
+        </button>
       </div>
 
       {/* Goals */}
@@ -409,7 +316,6 @@ export default function Settings() {
           Pin up to 4 modules to the bottom bar. Drag to reorder.
         </p>
 
-        {/* Pinned shortcuts — draggable */}
         <ul className="space-y-2 mb-3">
           {shortcutIds.map((id, i) => {
             const mod = ALL_MODULES.find(m => m.id === id)
@@ -439,7 +345,6 @@ export default function Settings() {
           })}
         </ul>
 
-        {/* Available modules to add */}
         {shortcutIds.length < 4 && (
           <div className="mb-4">
             <p className="text-xs text-charcoal-400 dark:text-charcoal-500 mb-2">
