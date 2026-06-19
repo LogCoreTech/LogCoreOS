@@ -8,6 +8,8 @@ TOKEN="${3:-${LOGCORE_TOKEN:-}}"
 
 if [[ -z "$TOKEN" ]]; then
   echo "Error: TOKEN argument or LOGCORE_TOKEN env var required" >&2
+  echo "  Get one with: curl -s -X POST \$BASE/auth/token -H 'Content-Type: application/json' \\" >&2
+  echo "                  -d '{\"email\":\"you@example.com\",\"password\":\"...\"}' | jq -r '.token'" >&2
   exit 1
 fi
 

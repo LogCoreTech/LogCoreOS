@@ -97,6 +97,16 @@ def logout(response: Response):
     response.delete_cookie(key=_COOKIE, path="/")
 
 
+@router.post("/token")
+def get_token(req: LoginRequest):
+    """Return a plain Bearer token for CLI / programmatic clients.
+    Browser sessions should use /login (sets HttpOnly cookie instead)."""
+    user = auth_service.authenticate(req.email, req.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    return {"token": auth_service.create_token(user)}
+
+
 @router.get("/me")
 def me(current_user: dict = Depends(get_current_user)):
     return {"id": current_user["id"], "name": current_user["name"], "role": current_user["role"]}
