@@ -65,6 +65,7 @@ export const admin = {
   getAiSettings:        ()          => get('/auth/admin/ai-settings'),
   updateAiSettings:     (s)         => patch('/auth/admin/ai-settings', s),
   listUsers:            ()          => get('/auth/admin/users'),
+  createUser:           (u)         => post('/auth/admin/users', u),
   updateUserRole:       (id, role)  => patch(`/auth/admin/users/${id}`, { role }),
   deleteUser:           (id)        => del(`/auth/admin/users/${id}`),
   getSettings:          ()          => get('/auth/admin/settings'),

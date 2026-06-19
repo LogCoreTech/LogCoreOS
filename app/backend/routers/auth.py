@@ -134,8 +134,24 @@ def update_ai_settings(
 # Admin — user management
 # ---------------------------------------------------------------------------
 
+class CreateUserRequest(BaseModel):
+    email: EmailStr
+    password: str
+    name: str
+    role: Literal["admin", "member", "guest"] = "member"
+
+
 class UpdateRoleRequest(BaseModel):
     role: Literal["admin", "member", "guest"]
+
+
+@router.post("/admin/users", status_code=201)
+def admin_create_user(req: CreateUserRequest, current_user: dict = Depends(require_admin)):
+    try:
+        user = auth_service.create_user(req.email, req.password, req.name, role=req.role)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {k: v for k, v in user.items() if k in {"id", "email", "name", "role", "created_at"}}
 
 
 @router.get("/admin/users")
