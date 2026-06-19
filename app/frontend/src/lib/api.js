@@ -13,7 +13,9 @@ async function request(method, path, body) {
   })
   if (res.status === 401) {
     localStorage.removeItem('lc_user')
-    window.location.href = '/login'
+    if (!window.location.pathname.startsWith('/login')) {
+      window.location.href = '/login'
+    }
     return
   }
   if (res.status === 204) return null
