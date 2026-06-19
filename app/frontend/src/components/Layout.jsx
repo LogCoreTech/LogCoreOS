@@ -167,21 +167,23 @@ export default function Layout() {
               ))}
             </div>
 
-            <div className="px-5 pb-6 pt-1 border-t border-charcoal-100 dark:border-charcoal-800 flex gap-4">
-              <button
-                onClick={() => navTo('/settings')}
-                className="text-xs text-orange-500 font-medium"
-              >
-                Edit shortcuts →
-              </button>
+            <div className="p-3 border-t border-charcoal-200 dark:border-charcoal-800 space-y-1">
               {user?.role === 'admin' && (
                 <button
                   onClick={() => navTo('/admin')}
-                  className="text-xs text-charcoal-500 dark:text-charcoal-400 font-medium"
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-charcoal-600 dark:text-charcoal-400 hover:bg-charcoal-100 dark:hover:bg-charcoal-800 transition-colors"
                 >
-                  🛡 Admin
+                  <span className="text-base">🛡</span>
+                  Admin
                 </button>
               )}
+              <button
+                onClick={() => navTo('/settings')}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-charcoal-600 dark:text-charcoal-400 hover:bg-charcoal-100 dark:hover:bg-charcoal-800 transition-colors"
+              >
+                <span className="text-base">⚙</span>
+                Settings
+              </button>
             </div>
           </div>
         </>

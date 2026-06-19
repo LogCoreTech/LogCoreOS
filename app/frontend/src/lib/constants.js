@@ -24,10 +24,9 @@ export const ALL_MODULES = [
   { id: 'notes',     to: '/notes',    icon: '📝', label: 'Notes'     },
   { id: 'journal',   to: '/journal',  icon: '📖', label: 'Journal'   },
   { id: 'chat',      to: '/chat',     icon: '◈', label: 'AI Chat'   },
-  { id: 'settings',  to: '/settings', icon: '⚙', label: 'Settings'  },
 ]
 
-export const DEFAULT_SHORTCUTS = ['dashboard', 'tasks', 'chat', 'settings']
+export const DEFAULT_SHORTCUTS = ['dashboard', 'tasks', 'chat']
 
 export function getShortcuts() {
   try {
