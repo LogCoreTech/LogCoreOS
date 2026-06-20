@@ -151,6 +151,8 @@ def register(
         "accent_color":     user.get("accent_color"),
         "dark_mode":        user.get("dark_mode", "system"),
         "background":       user.get("background"),
+        "density":          user.get("density", "comfortable"),
+        "corner_style":     user.get("corner_style", "rounded"),
     }
 
 
@@ -170,6 +172,8 @@ def login(req: LoginRequest, response: Response, _rl: None = Depends(_login_limi
         "accent_color":     user.get("accent_color"),
         "dark_mode":        user.get("dark_mode", "system"),
         "background":       user.get("background"),
+        "density":          user.get("density", "comfortable"),
+        "corner_style":     user.get("corner_style", "rounded"),
     }
 
 
@@ -204,6 +208,8 @@ def _validate_timezone(tz: str) -> str:
 _ACCENT_COLOR_RE = re.compile(r'^#[0-9a-fA-F]{6}$')
 _VALID_DARK_MODES = frozenset({"system", "light", "dark"})
 _VALID_GRADIENT_IDS = frozenset({"none", "midnight", "sunset", "forest", "ocean", "aurora", "dusk"})
+_VALID_DENSITIES = frozenset({"comfortable", "compact"})
+_VALID_CORNER_STYLES = frozenset({"rounded", "sharp"})
 _ALLOWED_BG_TYPES: dict[str, str] = {
     "image/jpeg": "jpg",
     "image/png":  "png",
@@ -223,6 +229,18 @@ def _validate_dark_mode(mode: str) -> str:
     if mode not in _VALID_DARK_MODES:
         raise HTTPException(status_code=400, detail="dark_mode must be one of: system, light, dark")
     return mode
+
+
+def _validate_density(val: str) -> str:
+    if val not in _VALID_DENSITIES:
+        raise HTTPException(status_code=400, detail="density must be 'comfortable' or 'compact'")
+    return val
+
+
+def _validate_corner_style(val: str) -> str:
+    if val not in _VALID_CORNER_STYLES:
+        raise HTTPException(status_code=400, detail="corner_style must be 'rounded' or 'sharp'")
+    return val
 
 
 def _validate_background(val: str) -> str:
@@ -247,6 +265,8 @@ class MeUpdateRequest(BaseModel):
     accent_color: str | None = Field(None, max_length=7)
     dark_mode:    str | None = Field(None, max_length=10)
     background:   str | None = Field(None, max_length=30)
+    density:      str | None = Field(None, max_length=15)
+    corner_style: str | None = Field(None, max_length=10)
 
 
 @router.patch("/me")
@@ -261,6 +281,10 @@ def update_me(req: MeUpdateRequest, current_user: dict = Depends(get_current_use
         _validate_dark_mode(updates["dark_mode"])
     if "background" in updates:
         _validate_background(updates["background"])
+    if "density" in updates:
+        _validate_density(updates["density"])
+    if "corner_style" in updates:
+        _validate_corner_style(updates["corner_style"])
     if not updates:
         return {"ok": True}
     auth_service.update_user(current_user["id"], updates)
@@ -280,6 +304,8 @@ def me(current_user: dict = Depends(get_current_user), _rl: None = Depends(_get_
         "accent_color":         current_user.get("accent_color"),
         "dark_mode":            current_user.get("dark_mode", "system"),
         "background":           current_user.get("background"),
+        "density":              current_user.get("density", "comfortable"),
+        "corner_style":         current_user.get("corner_style", "rounded"),
     }
 
 
