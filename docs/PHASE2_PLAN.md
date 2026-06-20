@@ -11,6 +11,8 @@ Allow the AI agent to write back to Brain files during a chat session — tasks,
 
 New agent tools: `list_notes`, `create_note`, `update_note`, `delete_note`, `get_profile`, `update_profile`, `append_memory`. System prompt updated to clarify goals = tasks[type=goal], calendar = tasks[type=appointment].
 
+**Extended (same item):** Added `rewrite_memory`, `get_task_history`, `search_brain`, `move_note`, `create_note_folder`, `create_tasks`, `send_notification`, `update_timezone`, `complete_shared_task` (user + assigned member), `update_shared_task` (admin), `delete_shared_task` (admin), `read_system_file` (admin), `update_system_file` (admin). Total: 29 user tools + 7 admin tools.
+
 ---
 
 ## Item 2: Long-Term Memory Writes from the App
