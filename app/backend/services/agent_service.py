@@ -4,7 +4,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from services import task_service, priority_service, journal_service
+from services import task_service, priority_service, journal_service, notes_service
+from services import profile_service
 from services.ai_provider import agent_completion
 from services.file_service import (
     user_path,
@@ -152,6 +153,90 @@ _USER_TOOLS: list[dict] = [
             "required": ["date", "content"],
         },
     },
+    {
+        "name": "list_notes",
+        "description": "List all notes and folders in the user's Notes brain folder.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "create_note",
+        "description": "Create a new note. Path is relative to Notes/ without the .md extension, e.g. 'Work/Meeting Notes' or 'Ideas'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path":    {"type": "string", "description": "Relative note path, e.g. 'Work/Meeting Notes'"},
+                "content": {"type": "string", "description": "Initial markdown content (defaults to empty)"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "update_note",
+        "description": "Overwrite an existing note's content. Use list_notes or read_brain_file first if you need to see what's there.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path":    {"type": "string", "description": "Relative note path, e.g. 'Work/Meeting Notes'"},
+                "content": {"type": "string", "description": "New full markdown content"},
+            },
+            "required": ["path", "content"],
+        },
+    },
+    {
+        "name": "delete_note",
+        "description": "Permanently delete a note by path.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Relative note path, e.g. 'Work/Meeting Notes'"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "get_profile",
+        "description": (
+            "Read the user's full profile. Fields include: occupation, city, state, country, pronouns, "
+            "wake_weekday, wake_weekend, bedtime, work_hours, height, weight, blood_type, diet, exercise, "
+            "conditions, medications, employer, industry, education, years_experience, skills, "
+            "marital_status, partner, children (list of {name, age}), pets, income_range, savings_goal, "
+            "budget_style, life_mission, big_goal, core_values, key_constraints, communication_style, "
+            "tone, response_language, topics_to_emphasize, topics_to_avoid, notes, "
+            "priority_order (list of category strings)."
+        ),
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "update_profile",
+        "description": (
+            "Update one or more profile fields. Pass only the fields you want to change — existing fields "
+            "are preserved. Automatically regenerates Profile.md. "
+            "Goals and completable items belong in tasks (type='goal'), not here. "
+            "This is for biographical/aspirational context: life mission, values, health, family, work, AI preferences."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "fields": {
+                    "type": "object",
+                    "description": "Dict of profile fields to update, e.g. {\"big_goal\": \"Run a marathon\", \"occupation\": \"Engineer\"}",
+                },
+            },
+            "required": ["fields"],
+        },
+    },
+    {
+        "name": "append_memory",
+        "description": "Append a dated note to the user's Short-Term or Long-Term Memory file. Use short for recent context; long for stable facts worth keeping indefinitely.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "content": {"type": "string", "description": "Markdown text to append"},
+                "target":  {"type": "string", "enum": ["short", "long"], "description": "Which memory file to append to (default: short)"},
+            },
+            "required": ["content"],
+        },
+    },
 ]
 
 _ADMIN_TOOLS: list[dict] = [
@@ -262,6 +347,42 @@ def _execute_tool(name: str, inputs: dict, user: dict) -> Any:
 
             case "write_journal_entry":
                 return journal_service.upsert_entry(user["name"], inputs["date"], inputs["content"])
+
+            case "list_notes":
+                return notes_service.list_notes(user["name"])
+
+            case "create_note":
+                return notes_service.create_note(user["name"], inputs["path"], inputs.get("content", ""))
+
+            case "update_note":
+                result = notes_service.update_note(user["name"], inputs["path"], inputs["content"])
+                if result is None:
+                    return {"error": f"Note not found: {inputs['path']!r}. Use create_note to make a new one."}
+                return result
+
+            case "delete_note":
+                ok = notes_service.delete_note(user["name"], inputs["path"])
+                return {"deleted": ok}
+
+            case "get_profile":
+                return profile_service.load_profile(user["name"])
+
+            case "update_profile":
+                current = profile_service.load_profile(user["name"])
+                current.update(inputs.get("fields", {}))
+                return profile_service.save_profile(user["name"], current)
+
+            case "append_memory":
+                from datetime import date
+                target = inputs.get("target", "short")
+                fname = "Long_Term_Memory.md" if target == "long" else "Short_Term_Memory.md"
+                mem_path = user_path(user["name"]) / fname
+                today = date.today().isoformat()
+                existing = mem_path.read_text() if mem_path.exists() else ""
+                safe_content = inputs["content"].replace("</brain_data>", "[/brain_data]")
+                updated = existing.rstrip() + f"\n\n## {today}\n\n{safe_content}\n"
+                write_markdown(mem_path, updated)
+                return {"ok": True, "target": fname}
 
             case "list_users":
                 if user.get("role") != "admin":

@@ -7,7 +7,9 @@ Five items to build, worked through systematically.
 ## Item 1: File Modification from Chat
 Allow the AI agent to write back to Brain files during a chat session — tasks, notes, journal entries, goals, profile details, calendar events — when the user asks it to.
 
-**Status:** Not started
+**Status:** Complete
+
+New agent tools: `list_notes`, `create_note`, `update_note`, `delete_note`, `get_profile`, `update_profile`, `append_memory`. System prompt updated to clarify goals = tasks[type=goal], calendar = tasks[type=appointment].
 
 ---
 
