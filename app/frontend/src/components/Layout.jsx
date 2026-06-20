@@ -44,7 +44,7 @@ export default function Layout() {
       <aside className={`hidden md:flex flex-col bg-white dark:bg-charcoal-950 border-r border-charcoal-200 dark:border-charcoal-800 transition-all duration-200 ${collapsed ? 'w-14' : 'w-56'}`}>
         <div className={`border-b border-charcoal-200 dark:border-charcoal-800 ${collapsed ? 'px-0 py-4 flex justify-center' : 'px-5 py-5'}`}>
           {collapsed ? (
-            <span className="text-orange-500 font-bold text-xl">L</span>
+            <span className="text-orange-500 font-bold text-xl">LC</span>
           ) : (
             <>
               <span className="text-orange-500 font-bold text-xl tracking-tight">LogCore</span>
