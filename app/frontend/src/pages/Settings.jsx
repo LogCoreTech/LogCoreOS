@@ -331,8 +331,8 @@ export default function Settings() {
         </label>
       </div>
 
-      {/* Bottom Bar Shortcuts */}
-      <div className="card p-5">
+      {/* Bottom Bar Shortcuts — mobile only */}
+      <div className="card p-5 md:hidden">
         <div className="flex items-center justify-between mb-1">
           <h2 className="font-semibold">Bottom Bar Shortcuts</h2>
           {shortcutSaved && <span className="text-green-500 text-sm">Saved ✓</span>}
