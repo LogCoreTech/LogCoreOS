@@ -21,6 +21,21 @@ MAX_STEPS = 10
 _RUNS_CAP = 50
 _BRAIN_SKIP = {"Tasks"}
 
+# Tools available in research mode — read-only access only
+_RESEARCH_TOOLS = {
+    "list_tasks", "get_top3_tasks", "get_scored_tasks",
+    "list_brain_files", "read_brain_file",
+    "get_profile",
+    "read_journal_entry", "list_journal_entries",
+    "list_notes",
+    "get_task_history",
+    "search_brain",
+    "get_week_snapshot",
+    "search_web",
+    # admin read-only
+    "list_users", "list_shared_tasks", "read_system_file",
+}
+
 # ---------------------------------------------------------------------------
 # Tool definitions (Anthropic input_schema format — translated for OpenAI by ai_provider)
 # ---------------------------------------------------------------------------
@@ -442,6 +457,21 @@ _USER_TOOLS: list[dict] = [
             "required": ["name", "prompt", "hour"],
         },
     },
+    {
+        "name": "search_web",
+        "description": (
+            "Search the internet for current information, news, or any topic not in the user's Brain. "
+            "Returns titles, URLs, and content snippets. Available in research mode."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query":       {"type": "string",  "description": "Search query"},
+                "max_results": {"type": "integer", "description": "Max results (default 5, max 10)"},
+            },
+            "required": ["query"],
+        },
+    },
 ]
 
 _ADMIN_TOOLS: list[dict] = [
@@ -854,6 +884,12 @@ def _execute_tool(name: str, inputs: dict, user: dict) -> Any:
                         pass
                 return new_s
 
+            case "search_web":
+                from services.web_search_service import search as _web_search
+                q = inputs["query"]
+                n = int(inputs.get("max_results", 5))
+                return _web_search(q, n)
+
             case _:
                 return {"error": f"Unknown tool: {name!r}"}
 
@@ -867,7 +903,7 @@ def _execute_tool(name: str, inputs: dict, user: dict) -> Any:
 # Agent loop
 # ---------------------------------------------------------------------------
 
-async def run_agent(user: dict, goal: str, history: list[dict], system: str, auto_mode: bool = False) -> dict:
+async def run_agent(user: dict, goal: str, history: list[dict], system: str, mode: str = "plan") -> dict:
     """Run the agent loop and return a run record."""
     run_id = str(uuid.uuid4())
     started_at = datetime.now(timezone.utc).isoformat()
@@ -878,7 +914,13 @@ async def run_agent(user: dict, goal: str, history: list[dict], system: str, aut
     last_text = ""
 
     messages = list(history) + [{"role": "user", "content": goal}]
-    active_tools = [t for t in _get_tools(user) if not (auto_mode and t["name"] == "propose_plan")]
+    all_tools = _get_tools(user)
+    if mode == "auto":
+        active_tools = [t for t in all_tools if t["name"] != "propose_plan"]
+    elif mode == "research":
+        active_tools = [t for t in all_tools if t["name"] in _RESEARCH_TOOLS]
+    else:  # plan (default)
+        active_tools = all_tools
 
     for step_num in range(MAX_STEPS):
         response = await agent_completion(system, messages, active_tools)

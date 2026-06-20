@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     ai_api_key: str = ""    # generic key for OpenAI-compatible providers
     ai_base_url: str = ""   # custom endpoint; empty = provider default
 
+    # Web Search — Tavily (https://tavily.com — free tier: 1 000 searches/month)
+    # Required for Research mode web search. Leave empty to disable.
+    tavily_api_key: str = ""
+
     # Notifications
     ntfy_url: str = "http://ntfy:80"
 
