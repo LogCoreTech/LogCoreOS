@@ -3,6 +3,30 @@ import { useNavigate } from 'react-router-dom'
 import { chat as chatApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
+function ProposalCard({ step, onConfirm, onCancel }) {
+  const { summary, actions } = step.output || {}
+  return (
+    <div className="mt-3 border border-orange-300 dark:border-orange-700 rounded-xl p-4 bg-orange-50 dark:bg-orange-950/30">
+      <p className="text-xs font-semibold text-orange-600 dark:text-orange-400 mb-1 uppercase tracking-wide">Proposed plan</p>
+      <p className="text-sm text-charcoal-800 dark:text-charcoal-100 mb-3">{summary}</p>
+      {actions?.length > 0 && (
+        <ul className="text-xs text-charcoal-600 dark:text-charcoal-300 space-y-1 mb-4">
+          {actions.map((a, i) => (
+            <li key={i} className="flex gap-2">
+              <span className="text-orange-400 shrink-0">·</span>
+              <span>{a}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex gap-2">
+        <button onClick={onConfirm} className="btn-primary text-xs px-3 py-1.5">Confirm</button>
+        <button onClick={onCancel} className="btn-ghost text-xs px-3 py-1.5">Cancel</button>
+      </div>
+    </div>
+  )
+}
+
 function StepTrace({ steps }) {
   const [expanded, setExpanded] = useState({})
 
@@ -97,15 +121,15 @@ export default function Chat() {
     return () => clearTimeout(t)
   }, [saveResult])
 
-  async function send(e) {
+  async function send(e, overrideMsg) {
     e?.preventDefault()
-    const msg = input.trim()
+    const msg = overrideMsg ?? input.trim()
     if (!msg || loading) return
 
     const userMsg = { role: 'user', content: msg, steps: [] }
     const updated = [...messages, userMsg]
     setMessages(updated)
-    setInput('')
+    if (!overrideMsg) setInput('')
     setLoading(true)
 
     try {
@@ -201,7 +225,22 @@ export default function Chat() {
               >
                 {m.content}
               </div>
-              {m.role === 'assistant' && <StepTrace steps={m.steps} />}
+              {m.role === 'assistant' && (() => {
+                const proposalStep = m.steps?.find(s => s.type === 'tool_call' && s.tool === 'propose_plan')
+                const isLastMsg = i === messages.length - 1
+                return (
+                  <>
+                    <StepTrace steps={m.steps} />
+                    {proposalStep && isLastMsg && !loading && (
+                      <ProposalCard
+                        step={proposalStep}
+                        onConfirm={() => send(null, 'Yes, go ahead.')}
+                        onCancel={() => send(null, "Cancel that, don't make any changes.")}
+                      />
+                    )}
+                  </>
+                )
+              })()}
             </div>
           </div>
         ))}

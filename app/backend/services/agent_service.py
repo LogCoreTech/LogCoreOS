@@ -1,7 +1,7 @@
 """Agent loop — wraps tool-enabled AI completions over user data."""
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any
 
 from services import task_service, priority_service, journal_service, notes_service
@@ -357,6 +357,44 @@ _USER_TOOLS: list[dict] = [
             "required": ["task_id"],
         },
     },
+    {
+        "name": "propose_plan",
+        "description": (
+            "Present a plan to the user for approval BEFORE taking any write actions "
+            "(creating, updating, or deleting tasks, notes, files, or memory). "
+            "Call this first. Do not call other write tools in the same turn — wait for the user to confirm."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "summary": {"type": "string", "description": "Plain-English summary of what you're about to do"},
+                "actions": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Specific steps you plan to take, e.g. ['Create task: Call dentist (Health, High priority)', 'Set due date to 2024-01-15']",
+                },
+            },
+            "required": ["summary", "actions"],
+        },
+    },
+    {
+        "name": "get_week_snapshot",
+        "description": "Get a full overview of the current week — tasks due this week, overdue tasks, and tasks completed this week. Use at the start of any planning or review session.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "list_journal_entries",
+        "description": "List journal entries with their full content, optionally filtered by date range. Useful for progress summaries and reflection.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "since": {"type": "string", "description": "Only return entries on or after this date (YYYY-MM-DD)"},
+                "until": {"type": "string", "description": "Only return entries on or before this date (YYYY-MM-DD)"},
+                "limit": {"type": "integer", "description": "Max entries to return (default 7)"},
+            },
+            "required": [],
+        },
+    },
 ]
 
 _ADMIN_TOOLS: list[dict] = [
@@ -628,6 +666,45 @@ def _execute_tool(name: str, inputs: dict, user: dict) -> Any:
                     return {"error": "User not found"}
                 auth_service.update_user(u["id"], {"timezone": inputs["timezone"]})
                 return {"ok": True, "timezone": inputs["timezone"]}
+
+            case "propose_plan":
+                return {
+                    "status": "proposed",
+                    "summary": inputs["summary"],
+                    "actions": inputs.get("actions", []),
+                }
+
+            case "get_week_snapshot":
+                today = auth_service.today_for_user(user["name"])
+                week_start = today - timedelta(days=today.weekday())
+                week_end = week_start + timedelta(days=6)
+                ws, we, ts = week_start.isoformat(), week_end.isoformat(), today.isoformat()
+                all_tasks = task_service.list_tasks(user["name"])
+                completed = task_service.list_history(user["name"], limit=50)
+                return {
+                    "week_start": ws,
+                    "week_end": we,
+                    "due_this_week": [t for t in all_tasks if ws <= (t.get("due_date") or "") <= we],
+                    "overdue": [t for t in all_tasks if t.get("due_date") and t["due_date"] < ts],
+                    "no_date": [t for t in all_tasks if not t.get("due_date")],
+                    "completed_this_week": [t for t in completed if ws <= (t.get("completed_at") or "")[:10] <= we],
+                }
+
+            case "list_journal_entries":
+                since = inputs.get("since")
+                until = inputs.get("until")
+                limit = int(inputs.get("limit", 7))
+                entries = journal_service.list_entries(user["name"])
+                if since:
+                    entries = [e for e in entries if e["date"] >= since]
+                if until:
+                    entries = [e for e in entries if e["date"] <= until]
+                result = []
+                for e in entries[:limit]:
+                    full = journal_service.get_entry(user["name"], e["date"])
+                    if full:
+                        result.append({"date": e["date"], "content": full.get("content", "")})
+                return result
 
             case "complete_shared_task":
                 task = task_service.get_task("_household", inputs["task_id"])

@@ -116,12 +116,21 @@ async def chat(
         "You know this user personally from the context below. Be direct and concise. "
         "Help them manage their life priorities and tasks. "
         "When the user asks you to take an action, use the appropriate tool.\n\n"
+        "IMPORTANT — before creating, updating, or deleting anything, always call propose_plan "
+        "with a plain-English summary and list of specific actions. Do not call any other write "
+        "tools in the same turn as propose_plan — wait for the user to confirm first. "
+        "Read-only tools (list_tasks, get_profile, search_brain, etc.) do not need propose_plan.\n\n"
         "Tool guidance:\n"
         "- Goals the user wants to complete (lose weight, learn Spanish) → tasks with type='goal'\n"
         "- Calendar appointments/events → tasks with type='appointment', due_date, and optionally due_time\n"
         "- Notes → use list_notes, create_note, update_note, delete_note\n"
         "- Profile details (occupation, health, family, life mission, values, AI preferences) → get_profile then update_profile\n"
         "- Save something to memory → append_memory (short for recent context, long for stable facts)\n\n"
+        "Planning guidance:\n"
+        "- 'Plan my week' → call get_week_snapshot, reason about priorities and gaps, call propose_plan listing tasks to create, then create_tasks on confirmation\n"
+        "- 'Break [goal] into tasks' → reason about 3–7 concrete subtasks, call propose_plan, then create_tasks on confirmation\n"
+        "- 'Organize tasks by project/category' → call list_tasks, group by category and summarize — read-only, no propose_plan needed\n"
+        "- 'Summarize my progress' → call get_task_history with since_date + list_journal_entries — read-only, no propose_plan needed\n\n"
         + _build_context(current_user["name"])
     )
 
