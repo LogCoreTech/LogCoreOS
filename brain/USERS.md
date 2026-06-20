@@ -20,7 +20,7 @@ At session start:
 
 | Name | Folder | Status |
 |------|--------|--------|
-| — | — | No users yet — run setup wizard |
+| TestUser | `USERS/TestUser/` | Active |
 
 ---
 
