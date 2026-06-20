@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { chat as chatApi } from '../lib/api'
+import { chat as chatApi, suggestions as sugApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
 function ProposalCard({ step, onConfirm, onCancel }) {
@@ -114,6 +114,24 @@ export default function Chat() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Inject unread chat-delivery notifications as AI messages on mount
+  useEffect(() => {
+    sugApi.chatNotifications().then(notifs => {
+      if (!notifs) return
+      const unread = notifs.filter(n => !n.read && n.delivery === 'chat')
+      if (unread.length === 0) return
+      const injected = unread.map(n => ({
+        role: 'assistant',
+        content: `**${n.title}**\n\n${n.body}`,
+        steps: [],
+        _proactive: true,
+      }))
+      setMessages(prev => [prev[0], ...injected, ...prev.slice(1)])
+      unread.forEach(n => sugApi.markRead(n.id).catch(() => {}))
+    }).catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Dismiss save result after 4 seconds
   useEffect(() => {
@@ -230,6 +248,9 @@ export default function Chat() {
               </div>
             )}
             <div className="max-w-[85%]">
+              {m._proactive && (
+                <p className="text-[10px] text-orange-400 font-semibold mb-1 ml-1 uppercase tracking-wide">Proactive</p>
+              )}
               <div
                 className={`px-4 py-2.5 rounded-2xl text-sm whitespace-pre-wrap ${
                   m.role === 'user'

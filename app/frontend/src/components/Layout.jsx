@@ -1,9 +1,116 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { ALL_MODULES, getShortcuts } from '../lib/constants'
+import { suggestions as sugApi } from '../lib/api'
 
 const ADMIN_NAV = { to: '/admin', icon: '⬡', label: 'Admin' }
+
+function NotifBell() {
+  const [notifs, setNotifs] = useState([])
+  const [open, setOpen] = useState(false)
+  const panelRef = useRef(null)
+
+  function load() {
+    sugApi.notifications().then(list => setNotifs(list || [])).catch(() => {})
+  }
+
+  useEffect(() => {
+    load()
+    const t = setInterval(load, 60000)
+    return () => clearInterval(t)
+  }, [])
+
+  // Close panel when clicking outside
+  useEffect(() => {
+    if (!open) return
+    function handler(e) {
+      if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const unread = notifs.filter(n => !n.read).length
+
+  function markRead(id) {
+    sugApi.markRead(id).catch(() => {})
+    setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
+  }
+
+  function clearAll() {
+    sugApi.clearAll().catch(() => {})
+    setNotifs(prev => prev.map(n => ({ ...n, read: true })))
+    setOpen(false)
+  }
+
+  function fmt(iso) {
+    try {
+      const d = new Date(iso)
+      const now = new Date()
+      const diff = Math.floor((now - d) / 60000)
+      if (diff < 1) return 'just now'
+      if (diff < 60) return `${diff}m ago`
+      if (diff < 1440) return `${Math.floor(diff / 60)}h ago`
+      return d.toLocaleDateString()
+    } catch { return '' }
+  }
+
+  return (
+    <div className="relative" ref={panelRef}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="relative p-1.5 rounded-lg text-charcoal-500 dark:text-charcoal-400 hover:text-orange-500 hover:bg-charcoal-100 dark:hover:bg-charcoal-800 transition-colors"
+        title="Notifications"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        </svg>
+        {unread > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
+            {unread > 9 ? '9+' : unread}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-80 max-h-[420px] bg-white dark:bg-charcoal-900 border border-charcoal-200 dark:border-charcoal-700 rounded-2xl shadow-xl z-50 flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-charcoal-200 dark:border-charcoal-700">
+            <span className="text-sm font-semibold">Notifications</span>
+            {notifs.some(n => !n.read) && (
+              <button onClick={clearAll} className="text-xs text-charcoal-400 hover:text-orange-500 transition-colors">
+                Mark all read
+              </button>
+            )}
+          </div>
+          <div className="overflow-y-auto flex-1">
+            {notifs.length === 0 ? (
+              <p className="text-xs text-charcoal-400 dark:text-charcoal-500 text-center py-6">No notifications yet</p>
+            ) : (
+              notifs.map(n => (
+                <div
+                  key={n.id}
+                  onClick={() => markRead(n.id)}
+                  className={`px-4 py-3 border-b border-charcoal-100 dark:border-charcoal-800 last:border-0 cursor-pointer hover:bg-charcoal-50 dark:hover:bg-charcoal-800 transition-colors ${n.read ? 'opacity-60' : ''}`}
+                >
+                  <div className="flex items-start gap-2">
+                    {!n.read && <div className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-1.5 shrink-0" />}
+                    <div className={!n.read ? '' : 'pl-3.5'}>
+                      <p className="text-xs font-semibold text-charcoal-800 dark:text-charcoal-100">{n.title}</p>
+                      <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mt-0.5 line-clamp-2">{n.body}</p>
+                      <p className="text-[10px] text-charcoal-400 dark:text-charcoal-500 mt-1">{fmt(n.created_at)}</p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function Layout() {
   const { user } = useAuth()
@@ -35,11 +142,14 @@ export default function Layout() {
 
       {/* Sidebar — desktop only, always shows all modules */}
       <aside className="hidden md:flex flex-col w-56 bg-white dark:bg-charcoal-950 border-r border-charcoal-200 dark:border-charcoal-800">
-        <div className="px-5 py-5 border-b border-charcoal-200 dark:border-charcoal-800">
-          <span className="text-orange-500 font-bold text-xl tracking-tight">LogCore</span>
-          <span className="text-charcoal-400 dark:text-charcoal-500 text-xs block mt-0.5">
-            {user?.name}
-          </span>
+        <div className="px-5 py-5 border-b border-charcoal-200 dark:border-charcoal-800 flex items-start justify-between">
+          <div>
+            <span className="text-orange-500 font-bold text-xl tracking-tight">LogCore</span>
+            <span className="text-charcoal-400 dark:text-charcoal-500 text-xs block mt-0.5">
+              {user?.name}
+            </span>
+          </div>
+          <NotifBell />
         </div>
 
         <nav className="flex-1 p-3 space-y-1">
