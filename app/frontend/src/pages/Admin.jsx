@@ -599,6 +599,74 @@ function AiProviderCard() {
 }
 
 // ---------------------------------------------------------------------------
+// Web Search card
+// ---------------------------------------------------------------------------
+function WebSearchCard() {
+  const [keySet, setKeySet]   = useState(false)
+  const [key, setKey]         = useState('')
+  const [saving, setSaving]   = useState(false)
+  const [msg, setMsg]         = useState(null)
+
+  useEffect(() => {
+    adminApi.getSearchSettings().then(s => setKeySet(s.tavily_key_set || false)).catch(() => {})
+  }, [])
+
+  async function save(e) {
+    e.preventDefault()
+    setSaving(true)
+    setMsg(null)
+    try {
+      const res = await adminApi.updateSearchSettings({ tavily_api_key: key })
+      setKeySet(res.tavily_key_set || false)
+      setKey('')
+      setMsg({ ok: true, text: 'Saved.' })
+    } catch (err) {
+      setMsg({ ok: false, text: err.message || 'Save failed.' })
+    } finally {
+      setSaving(false)
+      setTimeout(() => setMsg(null), 4000)
+    }
+  }
+
+  return (
+    <div className="card p-5">
+      <h2 className="font-semibold mb-1">Web Search</h2>
+      <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-4">
+        Enables web search in AI Research mode. Get a free Tavily API key at{' '}
+        <span className="font-mono">tavily.com</span> (1 000 searches/month free).
+      </p>
+
+      <div className="flex items-center gap-2 mb-4">
+        <div className={`w-2 h-2 rounded-full ${keySet ? 'bg-green-500' : 'bg-charcoal-300'}`} />
+        <span className="text-sm">{keySet ? 'API key configured' : 'No API key set'}</span>
+      </div>
+
+      <form onSubmit={save} className="space-y-3">
+        <div>
+          <label className="block text-sm font-medium mb-1">Tavily API Key</label>
+          <input
+            type="password"
+            value={key}
+            onChange={e => setKey(e.target.value)}
+            placeholder={keySet ? '••••••••  (leave blank to keep current)' : 'tvly-…'}
+            className="input"
+            autoComplete="new-password"
+          />
+        </div>
+        {msg && (
+          <p className={`text-sm ${msg.ok ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+            {msg.text}
+          </p>
+        )}
+        <button type="submit" disabled={saving || !key} className="btn-primary w-full disabled:opacity-50">
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </form>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 export default function Admin() {
@@ -610,6 +678,7 @@ export default function Admin() {
       <UsersCard currentUserId={user?.id || ''} />
       <RegistrationCard />
       <AiProviderCard />
+      <WebSearchCard />
     </div>
   )
 }

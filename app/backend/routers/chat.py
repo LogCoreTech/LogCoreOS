@@ -72,7 +72,7 @@ class HistoryMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=5000)
     history: list[HistoryMessage] = Field(default=[], max_length=50)
-    auto_mode: bool = False
+    mode: Literal["plan", "auto", "research"] = "plan"
 
     @model_validator(mode="after")
     def validate_history_alternates(self):
@@ -111,18 +111,23 @@ async def chat(
         now_local = datetime.now(ZoneInfo("UTC"))
     today_str = now_local.strftime("%A, %B %d, %Y (%Y-%m-%d)")
 
-    system_prompt = (
-        f"You are the AI layer of LogCore Brain — a personal life operating system. "
-        f"Today is {today_str}. "
-        "You know this user personally from the context below. Be direct and concise. "
-        "Help them manage their life priorities and tasks. "
-        "When the user asks you to take an action, use the appropriate tool.\n\n"
-        + ("" if req.auto_mode else
-           "IMPORTANT — before creating, updating, or deleting anything, always call propose_plan "
-           "with a plain-English summary and list of specific actions. Do not call any other write "
-           "tools in the same turn as propose_plan — wait for the user to confirm first. "
-           "Read-only tools (list_tasks, get_profile, search_brain, etc.) do not need propose_plan.\n\n"
+    mode_block = ""
+    if req.mode == "plan":
+        mode_block = (
+            "IMPORTANT — before creating, updating, or deleting anything, always call propose_plan "
+            "with a plain-English summary and list of specific actions. Do not call any other write "
+            "tools in the same turn as propose_plan — wait for the user to confirm first. "
+            "Read-only tools (list_tasks, get_profile, search_brain, etc.) do not need propose_plan.\n\n"
         )
+    elif req.mode == "research":
+        mode_block = (
+            "You are in RESEARCH MODE. Your role is to gather, analyze, and synthesize information "
+            "from the user's personal Brain data and the web. You have READ-ONLY access — do NOT "
+            "propose or attempt any modifications. Use search_brain for personal data and search_web "
+            "for external research. Deliver comprehensive, well-organized findings.\n\n"
+        )
+
+    tool_guidance = (
         "Tool guidance:\n"
         "- Goals the user wants to complete (lose weight, learn Spanish) → tasks with type='goal'\n"
         "- Calendar appointments/events → tasks with type='appointment', due_date, and optionally due_time\n"
@@ -134,11 +139,21 @@ async def chat(
         "- 'Break [goal] into tasks' → reason about 3–7 concrete subtasks, call propose_plan, then create_tasks on confirmation\n"
         "- 'Organize tasks by project/category' → call list_tasks, group by category and summarize — read-only, no propose_plan needed\n"
         "- 'Summarize my progress' → call get_task_history with since_date + list_journal_entries — read-only, no propose_plan needed\n\n"
+    ) if req.mode != "research" else ""
+
+    system_prompt = (
+        f"You are the AI layer of LogCore Brain — a personal life operating system. "
+        f"Today is {today_str}. "
+        "You know this user personally from the context below. Be direct and concise. "
+        "Help them manage their life priorities and tasks. "
+        "When the user asks you to take an action, use the appropriate tool.\n\n"
+        + mode_block
+        + tool_guidance
         + _build_context(current_user["name"])
     )
 
     history = [m.model_dump() for m in req.history]
-    result = await run_agent(current_user, req.message, history, system_prompt, auto_mode=req.auto_mode)
+    result = await run_agent(current_user, req.message, history, system_prompt, mode=req.mode)
 
     return {
         "response": result["final_answer"],
