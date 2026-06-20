@@ -6,9 +6,9 @@ export default {
     extend: {
       colors: {
         orange: {
-          400: '#fb923c',
-          500: '#f97316',
-          600: '#ea580c',
+          400: 'rgb(var(--accent-400) / <alpha-value>)',
+          500: 'rgb(var(--accent-500) / <alpha-value>)',
+          600: 'rgb(var(--accent-600) / <alpha-value>)',
         },
         charcoal: {
           50:  '#f5f5f5',

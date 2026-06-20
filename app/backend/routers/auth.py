@@ -1,13 +1,15 @@
+import re
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
+from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from config import settings
 from services import auth_service
-from services.file_service import brain_path, read_json, write_json
+from services.file_service import brain_path, read_json, user_path, write_json
 from services.rate_limiter import rate_limit
 
 router = APIRouter()
@@ -141,11 +143,14 @@ def register(
     token = auth_service.create_token(user)
     _set_auth_cookie(response, token, user.get("session_minutes", 10080))
     return {
-        "id": user["id"],
-        "name": user["name"],
-        "role": user["role"],
+        "id":               user["id"],
+        "name":             user["name"],
+        "role":             user["role"],
         "disabled_modules": user.get("disabled_modules", []),
-        "timezone": user.get("timezone", "UTC"),
+        "timezone":         user.get("timezone", "UTC"),
+        "accent_color":     user.get("accent_color"),
+        "dark_mode":        user.get("dark_mode", "system"),
+        "background":       user.get("background"),
     }
 
 
@@ -157,11 +162,14 @@ def login(req: LoginRequest, response: Response, _rl: None = Depends(_login_limi
     token = auth_service.create_token(user)
     _set_auth_cookie(response, token, user.get("session_minutes", 10080))
     return {
-        "id": user["id"],
-        "name": user["name"],
-        "role": user["role"],
+        "id":               user["id"],
+        "name":             user["name"],
+        "role":             user["role"],
         "disabled_modules": user.get("disabled_modules", []),
-        "timezone": user.get("timezone", "UTC"),
+        "timezone":         user.get("timezone", "UTC"),
+        "accent_color":     user.get("accent_color"),
+        "dark_mode":        user.get("dark_mode", "system"),
+        "background":       user.get("background"),
     }
 
 
@@ -193,16 +201,66 @@ def _validate_timezone(tz: str) -> str:
     return tz
 
 
+_ACCENT_COLOR_RE = re.compile(r'^#[0-9a-fA-F]{6}$')
+_VALID_DARK_MODES = frozenset({"system", "light", "dark"})
+_VALID_GRADIENT_IDS = frozenset({"none", "midnight", "sunset", "forest", "ocean", "aurora", "dusk"})
+_ALLOWED_BG_TYPES: dict[str, str] = {
+    "image/jpeg": "jpg",
+    "image/png":  "png",
+    "image/webp": "webp",
+    "image/avif": "avif",
+}
+_BG_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
+
+
+def _validate_accent_color(color: str) -> str:
+    if not _ACCENT_COLOR_RE.match(color):
+        raise HTTPException(status_code=400, detail="accent_color must be a 6-digit hex color like #f97316")
+    return color
+
+
+def _validate_dark_mode(mode: str) -> str:
+    if mode not in _VALID_DARK_MODES:
+        raise HTTPException(status_code=400, detail="dark_mode must be one of: system, light, dark")
+    return mode
+
+
+def _validate_background(val: str) -> str:
+    if val in ("none", "uploaded"):
+        return val
+    if val.startswith("gradient:") and val[len("gradient:"):] in _VALID_GRADIENT_IDS:
+        return val
+    raise HTTPException(status_code=400, detail="background must be 'none', 'uploaded', or 'gradient:<preset>'")
+
+
+def _find_user_background(user_name: str):
+    user_dir = user_path(user_name)
+    for ext in _ALLOWED_BG_TYPES.values():
+        p = user_dir / f"background.{ext}"
+        if p.exists():
+            return p
+    return None
+
+
 class MeUpdateRequest(BaseModel):
-    timezone: str | None = Field(None, max_length=50)
+    timezone:     str | None = Field(None, max_length=50)
+    accent_color: str | None = Field(None, max_length=7)
+    dark_mode:    str | None = Field(None, max_length=10)
+    background:   str | None = Field(None, max_length=30)
 
 
 @router.patch("/me")
 def update_me(req: MeUpdateRequest, current_user: dict = Depends(get_current_user), _rl: None = Depends(_me_limit)):
-    """Update the current user's own profile fields (timezone for now)."""
+    """Update the current user's own profile fields."""
     updates = {k: v for k, v in req.model_dump().items() if v is not None}
     if "timezone" in updates:
         _validate_timezone(updates["timezone"])
+    if "accent_color" in updates:
+        _validate_accent_color(updates["accent_color"])
+    if "dark_mode" in updates:
+        _validate_dark_mode(updates["dark_mode"])
+    if "background" in updates:
+        _validate_background(updates["background"])
     if not updates:
         return {"ok": True}
     auth_service.update_user(current_user["id"], updates)
@@ -212,14 +270,55 @@ def update_me(req: MeUpdateRequest, current_user: dict = Depends(get_current_use
 @router.get("/me")
 def me(current_user: dict = Depends(get_current_user), _rl: None = Depends(_get_me_limit)):
     return {
-        "id": current_user["id"],
-        "name": current_user["name"],
-        "role": current_user["role"],
+        "id":                   current_user["id"],
+        "name":                 current_user["name"],
+        "role":                 current_user["role"],
         "notification_channel": current_user.get("notification_channel", ""),
-        "session_minutes": current_user.get("session_minutes", 10080),
-        "timezone": current_user.get("timezone", "UTC"),
-        "disabled_modules": current_user.get("disabled_modules", []),
+        "session_minutes":      current_user.get("session_minutes", 10080),
+        "timezone":             current_user.get("timezone", "UTC"),
+        "disabled_modules":     current_user.get("disabled_modules", []),
+        "accent_color":         current_user.get("accent_color"),
+        "dark_mode":            current_user.get("dark_mode", "system"),
+        "background":           current_user.get("background"),
     }
+
+
+@router.post("/me/background")
+async def upload_background(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+    _rl: None = Depends(_me_limit),
+):
+    ext = _ALLOWED_BG_TYPES.get(file.content_type or "")
+    if not ext:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG, WebP, or AVIF images are allowed")
+    data = await file.read()
+    if len(data) > _BG_MAX_BYTES:
+        raise HTTPException(status_code=400, detail="Image must be under 5 MB")
+    user_dir = user_path(current_user["name"])
+    for old_ext in _ALLOWED_BG_TYPES.values():
+        (user_dir / f"background.{old_ext}").unlink(missing_ok=True)
+    (user_dir / f"background.{ext}").write_bytes(data)
+    auth_service.update_user(current_user["id"], {"background": "uploaded"})
+    return {"ok": True}
+
+
+@router.get("/me/background")
+def get_background(current_user: dict = Depends(get_current_user)):
+    bg = _find_user_background(current_user["name"])
+    if not bg:
+        raise HTTPException(status_code=404, detail="No background image uploaded")
+    _ext_to_mime = {v: k for k, v in _ALLOWED_BG_TYPES.items()}
+    mime = _ext_to_mime.get(bg.suffix.lstrip("."), "application/octet-stream")
+    return FileResponse(str(bg), media_type=mime)
+
+
+@router.delete("/me/background", status_code=204)
+def delete_background(current_user: dict = Depends(get_current_user), _rl: None = Depends(_me_limit)):
+    user_dir = user_path(current_user["name"])
+    for old_ext in _ALLOWED_BG_TYPES.values():
+        (user_dir / f"background.{old_ext}").unlink(missing_ok=True)
+    auth_service.update_user(current_user["id"], {"background": None})
 
 
 @router.get("/users")
