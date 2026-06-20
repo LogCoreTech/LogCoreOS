@@ -107,6 +107,7 @@ export default function Chat() {
   const [saving, setSaving] = useState(false)
   const [saveTarget, setSaveTarget] = useState('short')
   const [saveResult, setSaveResult] = useState(null)
+  const [autoMode, setAutoMode] = useState(false)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
 
@@ -134,7 +135,7 @@ export default function Chat() {
 
     try {
       const history = updated.slice(1, -1).map(m => ({ role: m.role, content: m.content }))
-      const res = await chatApi.send(msg, history)
+      const res = await chatApi.send(msg, history, autoMode)
       setMessages([...updated, {
         role: 'assistant',
         content: res.response,
@@ -171,6 +172,18 @@ export default function Chat() {
     <div className="max-w-2xl mx-auto flex flex-col h-[calc(100vh-8rem)] md:h-[calc(100vh-3rem)]">
       <div className="flex items-center justify-between mb-4 shrink-0">
         <h1 className="text-2xl font-bold">AI Chat</h1>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setAutoMode(m => !m)}
+            className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+              autoMode
+                ? 'bg-orange-500 border-orange-500 text-white'
+                : 'border-charcoal-200 dark:border-charcoal-700 text-charcoal-500 dark:text-charcoal-400 hover:border-orange-400 hover:text-orange-500'
+            }`}
+            title={autoMode ? 'Auto mode on — AI executes without asking' : 'Auto mode off — AI proposes before acting'}
+          >
+            {autoMode ? '⚡ Auto' : '⚡ Auto'}
+          </button>
         {hasConversation && (
           <div className="flex items-center gap-2">
             <select
@@ -192,6 +205,7 @@ export default function Chat() {
             </button>
           </div>
         )}
+        </div>
       </div>
 
       {saveResult && (
