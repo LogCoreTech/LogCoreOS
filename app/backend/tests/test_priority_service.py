@@ -4,7 +4,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from services.priority_service import score_task
+import pytest
+
+from services.file_service import write_json, tasks_path, user_path
+from services.priority_service import score_task, get_top3, get_all_scored
+from services import auth_service
 
 
 ORDER = ["God", "Family", "Job", "Personal Growth", "Hobbies"]
@@ -57,3 +61,83 @@ def test_unknown_category_gets_zero_score():
 def test_medium_priority_weight():
     # cat_weight=5, pri_weight=2 → 10
     assert score_task(_task("God", "Medium"), ORDER, "2024-06-01") == 10
+
+
+# ---------------------------------------------------------------------------
+# get_top3 / get_all_scored (integration — requires filesystem + auth)
+# ---------------------------------------------------------------------------
+
+PRIORITY_USER = "PriorityUser"
+
+
+def _seed_tasks(brain, tasks: list[dict]) -> None:
+    user_dir = brain / "USERS" / PRIORITY_USER
+    tasks_dir = user_dir / "Tasks"
+    tasks_dir.mkdir(parents=True, exist_ok=True)
+    from services.profile_service import save_profile
+    save_profile(PRIORITY_USER, {"priority_order": ORDER})
+    rows = [
+        {
+            "id": str(i),
+            "title": t.get("title", f"Task {i}"),
+            "category": t.get("category", "God"),
+            "priority": t.get("priority", "High"),
+            "status": t.get("status", "pending"),
+            "type": "todo",
+            "due_date": t.get("due_date"),
+            "created_at": "2024-06-01T00:00:00",
+        }
+        for i, t in enumerate(tasks)
+    ]
+    write_json(tasks_path(PRIORITY_USER), {"tasks": rows})
+
+
+@pytest.fixture()
+def priority_brain(brain):
+    auth_service.create_user("priority@example.com", "pw", PRIORITY_USER)
+    return brain
+
+
+def test_get_top3_returns_at_most_three(priority_brain):
+    _seed_tasks(priority_brain, [{"title": f"T{i}"} for i in range(5)])
+    assert len(get_top3(PRIORITY_USER)) <= 3
+
+
+def test_get_top3_returns_fewer_when_fewer_tasks(priority_brain):
+    _seed_tasks(priority_brain, [{"title": "Only"}])
+    assert len(get_top3(PRIORITY_USER)) == 1
+
+
+def test_get_top3_attaches_score(priority_brain):
+    _seed_tasks(priority_brain, [{"title": "T"}])
+    top = get_top3(PRIORITY_USER)
+    assert "_score" in top[0]
+
+
+def test_get_top3_excludes_done_tasks(priority_brain):
+    _seed_tasks(priority_brain, [
+        {"title": "done", "status": "done"},
+        {"title": "pending", "status": "pending"},
+    ])
+    top = get_top3(PRIORITY_USER)
+    assert all(t.get("status", "pending") == "pending" for t in top)
+
+
+def test_get_all_scored_sorted_descending(priority_brain):
+    _seed_tasks(priority_brain, [
+        {"title": "Low", "category": "Hobbies", "priority": "Low"},
+        {"title": "High", "category": "God", "priority": "High"},
+        {"title": "Mid", "category": "Job", "priority": "Medium"},
+    ])
+    scored = get_all_scored(PRIORITY_USER)
+    scores = [t["_score"] for t in scored]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_get_all_scored_only_pending(priority_brain):
+    _seed_tasks(priority_brain, [
+        {"title": "done", "status": "done"},
+        {"title": "pending", "status": "pending"},
+    ])
+    scored = get_all_scored(PRIORITY_USER)
+    assert all(t.get("status", "pending") == "pending" for t in scored)
