@@ -42,6 +42,10 @@ def override_path(user_name: str) -> Path:
     return user_path(user_name) / "Tasks" / "daily_override.json"
 
 
+def events_path(user_name: str) -> Path:
+    return user_path(user_name) / "Calendar" / "events.json"
+
+
 def profile_path(user_name: str) -> Path:
     return user_path(user_name) / "Profile.md"
 

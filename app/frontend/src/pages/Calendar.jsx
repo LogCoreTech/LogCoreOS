@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { calendar as calendarApi, tasks as tasksApi } from '../lib/api'
 import { catColor } from '../lib/constants'
 import TaskModal from '../components/TaskModal'
+import EventModal, { EVENT_COLORS } from '../components/EventModal'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
@@ -24,15 +25,20 @@ export default function Calendar() {
   const [year, setYear]     = useState(today.getFullYear())
   const [month, setMonth]   = useState(today.getMonth())
   const [tasks, setTasks]   = useState([])
-  const [selected, setSelected] = useState(_todayStr) // pre-select today
-  const [showModal, setShowModal] = useState(false)
-  const [editTask, setEditTask] = useState(null)
+  const [events, setEvents] = useState([])
+  const [selected, setSelected] = useState(_todayStr)
+  const [showModal, setShowModal]           = useState(false)
+  const [editTask, setEditTask]             = useState(null)
+  const [showEventModal, setShowEventModal] = useState(false)
+  const [editEvent, setEditEvent]           = useState(null)
   const [loading, setLoading] = useState(true)
 
   async function load() {
     setLoading(true)
     try {
-      setTasks(await calendarApi.tasks())
+      const [t, e] = await Promise.all([calendarApi.tasks(), calendarApi.events()])
+      setTasks(t)
+      setEvents(e)
     } finally {
       setLoading(false)
     }
@@ -53,7 +59,7 @@ export default function Calendar() {
   const startDay   = firstDayOfMonth(year, month)
   const todayStr   = _todayStr()
 
-  // Index tasks by date
+  // Index tasks by due_date
   const byDate = {}
   tasks.forEach(t => {
     if (t.due_date) {
@@ -62,6 +68,17 @@ export default function Calendar() {
     }
   })
 
+  // Index events by start_date (for grid dots — O(n))
+  const eventsByDate = {}
+  events.forEach(ev => {
+    if (!eventsByDate[ev.start_date]) eventsByDate[ev.start_date] = []
+    eventsByDate[ev.start_date].push(ev)
+  })
+
+  // For selected-day panel: range-check so multi-day events appear correctly
+  const selectedEvents = selected
+    ? events.filter(ev => ev.start_date <= selected && selected <= (ev.end_date || ev.start_date))
+    : []
   const selectedTasks = selected ? (byDate[selected] || []) : []
 
   const cells = []
@@ -79,7 +96,20 @@ export default function Calendar() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Calendar</h1>
-        <button onClick={() => { setEditTask(null); setShowModal(true) }} className="btn-primary">+ Add Task</button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setEditEvent(null); setShowEventModal(true) }}
+            className="btn-primary"
+          >
+            + Event
+          </button>
+          <button
+            onClick={() => { setEditTask(null); setShowModal(true) }}
+            className="btn-ghost"
+          >
+            + Task
+          </button>
+        </div>
       </div>
 
       {/* Month nav */}
@@ -110,11 +140,10 @@ export default function Calendar() {
           {cells.map((day, i) => {
             if (!day) return <div key={`e${i}`} />
             const ds = dateStr(day)
-            const dayTasks = byDate[ds] || []
-            const isToday = ds === todayStr
+            const dayTasks  = byDate[ds] || []
+            const dayEvents = eventsByDate[ds] || []
+            const isToday    = ds === todayStr
             const isSelected = ds === selected
-            const hasPending = dayTasks.some(t => t.status === 'pending')
-            const allDone = dayTasks.length > 0 && dayTasks.every(t => t.status !== 'pending')
 
             return (
               <button
@@ -129,8 +158,27 @@ export default function Calendar() {
                 }`}
               >
                 <span className="text-sm leading-none">{day}</span>
+
+                {/* Event color dots */}
+                {dayEvents.length > 0 && (
+                  <div className="flex gap-0.5 mt-0.5 flex-wrap justify-center px-1">
+                    {dayEvents.slice(0, 3).map((ev, idx) => (
+                      <span
+                        key={idx}
+                        className="w-1.5 h-1.5 rounded-full shrink-0"
+                        style={{
+                          backgroundColor: isSelected
+                            ? 'rgba(255,255,255,0.7)'
+                            : (EVENT_COLORS[ev.color] || '#3b82f6'),
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* Task dots */}
                 {dayTasks.length > 0 && (
-                  <div className="flex gap-0.5 mt-1 flex-wrap justify-center px-1">
+                  <div className="flex gap-0.5 mt-0.5 flex-wrap justify-center px-1">
                     {dayTasks.slice(0, 3).map((t, idx) => (
                       <span
                         key={idx}
@@ -156,24 +204,63 @@ export default function Calendar() {
         </div>
       </div>
 
-      {/* Selected day task list */}
+      {/* Selected day panel */}
       {selected && (
         <div className="card p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-sm">
               {new Date(selected + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
             </h2>
-            <button
-              onClick={() => { setEditTask(null); setShowModal(true) }}
-              className="text-xs text-orange-500 font-medium hover:underline"
-            >
-              + Add
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setEditEvent(null); setShowEventModal(true) }}
+                className="text-xs font-medium hover:underline"
+                style={{ color: '#3b82f6' }}
+              >
+                + Event
+              </button>
+              <button
+                onClick={() => { setEditTask(null); setShowModal(true) }}
+                className="text-xs text-orange-500 font-medium hover:underline"
+              >
+                + Task
+              </button>
+            </div>
           </div>
-          {selectedTasks.length === 0 ? (
-            <p className="text-sm text-charcoal-400 dark:text-charcoal-500">No tasks due this day.</p>
-          ) : (
+
+          {selectedEvents.length === 0 && selectedTasks.length === 0 && (
+            <p className="text-sm text-charcoal-400 dark:text-charcoal-500">Nothing scheduled this day.</p>
+          )}
+
+          {/* Events */}
+          {selectedEvents.length > 0 && (
+            <div className="space-y-1.5 mb-3">
+              <p className="text-xs font-medium text-charcoal-400 dark:text-charcoal-500 uppercase tracking-wide">Events</p>
+              {selectedEvents.map(ev => (
+                <div
+                  key={ev.id}
+                  className="flex items-center gap-3 py-1 cursor-pointer hover:bg-charcoal-50 dark:hover:bg-charcoal-800 rounded-lg px-2 -mx-2"
+                  onClick={() => { setEditEvent(ev); setShowEventModal(true) }}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: EVENT_COLORS[ev.color] || '#3b82f6' }}
+                  />
+                  <span className="flex-1 text-sm">{ev.title}</span>
+                  {!ev.all_day && ev.start_time && (
+                    <span className="text-xs text-charcoal-400">{ev.start_time}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Tasks */}
+          {selectedTasks.length > 0 && (
             <div className="space-y-2">
+              {selectedEvents.length > 0 && (
+                <p className="text-xs font-medium text-charcoal-400 dark:text-charcoal-500 uppercase tracking-wide">Tasks</p>
+              )}
               {selectedTasks.map(task => (
                 <div
                   key={task.id}
@@ -195,7 +282,7 @@ export default function Calendar() {
         </div>
       )}
 
-      {/* Upcoming tasks summary */}
+      {/* This month summary (when no day selected) */}
       {!selected && !loading && (
         <div className="card p-4">
           <h2 className="font-semibold text-sm mb-3 text-charcoal-500 dark:text-charcoal-400 uppercase tracking-wide">
@@ -205,25 +292,36 @@ export default function Calendar() {
             const mm = String(month + 1).padStart(2, '0')
             const prefix = `${year}-${mm}-`
             const monthTasks = tasks.filter(t => t.due_date?.startsWith(prefix) && t.status === 'pending')
-            if (monthTasks.length === 0) return (
-              <p className="text-sm text-charcoal-400 dark:text-charcoal-500">No upcoming tasks this month.</p>
+            const monthEvents = events.filter(ev => ev.start_date?.startsWith(prefix))
+            if (monthTasks.length === 0 && monthEvents.length === 0) return (
+              <p className="text-sm text-charcoal-400 dark:text-charcoal-500">Nothing scheduled this month.</p>
             )
+            const combined = [
+              ...monthEvents.map(ev => ({ _type: 'event', date: ev.start_date, ev })),
+              ...monthTasks.map(t  => ({ _type: 'task',  date: t.due_date,    t  })),
+            ].sort((a, b) => a.date.localeCompare(b.date))
             return (
               <div className="space-y-1.5">
-                {monthTasks
-                  .sort((a, b) => a.due_date.localeCompare(b.due_date))
-                  .slice(0, 8)
-                  .map(task => (
-                    <div key={task.id} className="flex items-center gap-2 text-sm">
-                      <span className="text-xs text-charcoal-400 w-5 shrink-0">
-                        {task.due_date.slice(8)}
-                      </span>
-                      <span className={`badge text-xs ${catColor(task.category)}`}>{task.category}</span>
-                      <span className="flex-1 truncate">{task.title}</span>
-                      {task.due_time && <span className="text-xs text-charcoal-400 shrink-0">{task.due_time}</span>}
+                {combined.slice(0, 10).map((item, idx) => (
+                  item._type === 'event' ? (
+                    <div key={`ev-${item.ev.id}`} className="flex items-center gap-2 text-sm">
+                      <span className="text-xs text-charcoal-400 w-5 shrink-0">{item.date.slice(8)}</span>
+                      <span className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: EVENT_COLORS[item.ev.color] || '#3b82f6' }} />
+                      <span className="flex-1 truncate">{item.ev.title}</span>
+                      {!item.ev.all_day && item.ev.start_time && (
+                        <span className="text-xs text-charcoal-400 shrink-0">{item.ev.start_time}</span>
+                      )}
                     </div>
-                  ))
-                }
+                  ) : (
+                    <div key={`t-${item.t.id}`} className="flex items-center gap-2 text-sm">
+                      <span className="text-xs text-charcoal-400 w-5 shrink-0">{item.date.slice(8)}</span>
+                      <span className={`badge text-xs ${catColor(item.t.category)}`}>{item.t.category}</span>
+                      <span className="flex-1 truncate">{item.t.title}</span>
+                      {item.t.due_time && <span className="text-xs text-charcoal-400 shrink-0">{item.t.due_time}</span>}
+                    </div>
+                  )
+                ))}
               </div>
             )
           })()}
@@ -235,6 +333,15 @@ export default function Calendar() {
           task={editTask}
           onClose={() => { setShowModal(false); setEditTask(null) }}
           onSave={() => { setShowModal(false); setEditTask(null); load() }}
+        />
+      )}
+
+      {showEventModal && (
+        <EventModal
+          event={editEvent}
+          defaultDate={selected || undefined}
+          onClose={() => { setShowEventModal(false); setEditEvent(null) }}
+          onSave={() => { setShowEventModal(false); setEditEvent(null); load() }}
         />
       )}
     </div>
