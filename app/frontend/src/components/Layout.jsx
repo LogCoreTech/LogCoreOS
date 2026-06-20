@@ -31,7 +31,7 @@ export default function Layout() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-charcoal-50 dark:bg-charcoal-900">
+    <div className="flex h-screen overflow-hidden">
 
       {/* Sidebar — desktop only, always shows all modules */}
       <aside className="hidden md:flex flex-col w-56 bg-white dark:bg-charcoal-950 border-r border-charcoal-200 dark:border-charcoal-800">
