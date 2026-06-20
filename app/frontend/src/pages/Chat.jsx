@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { chat as chatApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
@@ -69,6 +70,7 @@ function StepTrace({ steps }) {
 
 export default function Chat() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
@@ -216,6 +218,24 @@ export default function Chat() {
           </div>
         )}
         <div ref={bottomRef} />
+      </div>
+
+      {/* Memory shortcuts */}
+      <div className="flex gap-2 shrink-0 pt-2 pb-1">
+        <button
+          type="button"
+          onClick={() => navigate('/brain?file=Short_Term_Memory.md', { state: { from: '/chat' } })}
+          className="btn-ghost text-xs px-2 py-1"
+        >
+          Short-term memory
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate('/brain?file=Long_Term_Memory.md', { state: { from: '/chat' } })}
+          className="btn-ghost text-xs px-2 py-1"
+        >
+          Long-term memory
+        </button>
       </div>
 
       {/* Input */}
