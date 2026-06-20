@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams, useLocation, useNavigate } from 'react-router-dom'
 import { brain as brainApi } from '../lib/api'
 
 export default function Brain() {
@@ -10,6 +11,9 @@ export default function Brain() {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
   const [openFolders, setOpenFolders] = useState(new Set())
+  const [searchParams] = useSearchParams()
+  const location = useLocation()
+  const navigate = useNavigate()
 
   useEffect(() => {
     brainApi.list()
@@ -17,6 +21,11 @@ export default function Brain() {
       .catch(() => setError('Could not load files.'))
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    const file = searchParams.get('file')
+    if (file) openFile(file)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function openFile(path) {
     setError('')
@@ -53,14 +62,15 @@ export default function Brain() {
 
   // ── Editor view ──
   if (selected) {
+    const fromChat = location.state?.from === '/chat'
     return (
       <div className="max-w-2xl mx-auto flex flex-col h-[calc(100vh-6rem)]">
         <div className="flex items-center gap-3 mb-3">
           <button
-            onClick={() => { setSelected(null); setError('') }}
+            onClick={() => fromChat ? navigate('/chat') : (setSelected(null), setError(''))}
             className="btn-ghost text-sm shrink-0"
           >
-            ← Files
+            {fromChat ? '← Chat' : '← Files'}
           </button>
           <span className="text-sm font-medium text-charcoal-600 dark:text-charcoal-300 truncate flex-1">
             {selected.path.split('/').pop().replace('.md', '')}
