@@ -62,7 +62,7 @@ export const profile = {
 }
 
 export const chat = {
-  send:       (message, history)          => post('/chat',              { message, history }),
+  send:       (message, history, autoMode = false) => post('/chat', { message, history, auto_mode: autoMode }),
   saveMemory: (history, target = 'short') => post('/chat/save-memory',  { history, target }),
   runs:       ()                          => get('/chat/runs'),
   getRun:     (id)                        => get(`/chat/runs/${id}`),

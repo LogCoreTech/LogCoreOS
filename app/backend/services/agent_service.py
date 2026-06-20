@@ -787,7 +787,7 @@ def _execute_tool(name: str, inputs: dict, user: dict) -> Any:
 # Agent loop
 # ---------------------------------------------------------------------------
 
-async def run_agent(user: dict, goal: str, history: list[dict], system: str) -> dict:
+async def run_agent(user: dict, goal: str, history: list[dict], system: str, auto_mode: bool = False) -> dict:
     """Run the agent loop and return a run record."""
     run_id = str(uuid.uuid4())
     started_at = datetime.now(timezone.utc).isoformat()
@@ -798,7 +798,7 @@ async def run_agent(user: dict, goal: str, history: list[dict], system: str) -> 
     last_text = ""
 
     messages = list(history) + [{"role": "user", "content": goal}]
-    active_tools = _get_tools(user)
+    active_tools = [t for t in _get_tools(user) if not (auto_mode and t["name"] == "propose_plan")]
 
     for step_num in range(MAX_STEPS):
         response = await agent_completion(system, messages, active_tools)

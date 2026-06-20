@@ -72,6 +72,7 @@ class HistoryMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=5000)
     history: list[HistoryMessage] = Field(default=[], max_length=50)
+    auto_mode: bool = False
 
     @model_validator(mode="after")
     def validate_history_alternates(self):
@@ -116,10 +117,12 @@ async def chat(
         "You know this user personally from the context below. Be direct and concise. "
         "Help them manage their life priorities and tasks. "
         "When the user asks you to take an action, use the appropriate tool.\n\n"
-        "IMPORTANT — before creating, updating, or deleting anything, always call propose_plan "
-        "with a plain-English summary and list of specific actions. Do not call any other write "
-        "tools in the same turn as propose_plan — wait for the user to confirm first. "
-        "Read-only tools (list_tasks, get_profile, search_brain, etc.) do not need propose_plan.\n\n"
+        + ("" if req.auto_mode else
+           "IMPORTANT — before creating, updating, or deleting anything, always call propose_plan "
+           "with a plain-English summary and list of specific actions. Do not call any other write "
+           "tools in the same turn as propose_plan — wait for the user to confirm first. "
+           "Read-only tools (list_tasks, get_profile, search_brain, etc.) do not need propose_plan.\n\n"
+        )
         "Tool guidance:\n"
         "- Goals the user wants to complete (lose weight, learn Spanish) → tasks with type='goal'\n"
         "- Calendar appointments/events → tasks with type='appointment', due_date, and optionally due_time\n"
@@ -135,7 +138,7 @@ async def chat(
     )
 
     history = [m.model_dump() for m in req.history]
-    result = await run_agent(current_user, req.message, history, system_prompt)
+    result = await run_agent(current_user, req.message, history, system_prompt, auto_mode=req.auto_mode)
 
     return {
         "response": result["final_answer"],
