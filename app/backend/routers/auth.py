@@ -384,6 +384,30 @@ def update_ai_settings(
     }
 
 
+class SearchSettingsRequest(BaseModel):
+    tavily_api_key: str = ""
+
+
+@router.get("/admin/search-settings")
+def get_search_settings(current_user: dict = Depends(require_admin)):
+    stored = read_json(_AI_SETTINGS_PATH, default={})
+    key_set = bool(stored.get("tavily_api_key") or settings.tavily_api_key)
+    return {"tavily_key_set": key_set}
+
+
+@router.patch("/admin/search-settings")
+def update_search_settings(
+    req: SearchSettingsRequest,
+    current_user: dict = Depends(require_admin),
+):
+    stored = read_json(_AI_SETTINGS_PATH, default={})
+    if req.tavily_api_key:
+        stored["tavily_api_key"] = req.tavily_api_key
+    write_json(_AI_SETTINGS_PATH, stored)
+    key_set = bool(stored.get("tavily_api_key") or settings.tavily_api_key)
+    return {"tavily_key_set": key_set}
+
+
 # ---------------------------------------------------------------------------
 # Admin — user management
 # ---------------------------------------------------------------------------

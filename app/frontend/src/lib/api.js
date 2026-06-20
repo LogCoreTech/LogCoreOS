@@ -62,7 +62,7 @@ export const profile = {
 }
 
 export const chat = {
-  send:       (message, history, autoMode = false) => post('/chat', { message, history, auto_mode: autoMode }),
+  send:       (message, history, mode = 'plan') => post('/chat', { message, history, mode }),
   saveMemory: (history, target = 'short') => post('/chat/save-memory',  { history, target }),
   runs:       ()                          => get('/chat/runs'),
   getRun:     (id)                        => get(`/chat/runs/${id}`),
@@ -82,8 +82,11 @@ export const admin = {
   getSettings:       ()                          => get('/auth/admin/settings'),
   updateSettings:    (s)                         => patch('/auth/admin/settings', s),
   // AI provider settings
-  getAiSettings:     ()                          => get('/auth/admin/ai-settings'),
-  updateAiSettings:  (s)                         => patch('/auth/admin/ai-settings', s),
+  getAiSettings:         ()    => get('/auth/admin/ai-settings'),
+  updateAiSettings:      (s)   => patch('/auth/admin/ai-settings', s),
+  // Web search settings
+  getSearchSettings:     ()    => get('/auth/admin/search-settings'),
+  updateSearchSettings:  (s)   => patch('/auth/admin/search-settings', s),
 }
 
 export const setup = {

@@ -107,7 +107,7 @@ export default function Chat() {
   const [saving, setSaving] = useState(false)
   const [saveTarget, setSaveTarget] = useState('short')
   const [saveResult, setSaveResult] = useState(null)
-  const [autoMode, setAutoMode] = useState(false)
+  const [chatMode, setChatMode] = useState('plan')
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
 
@@ -153,7 +153,7 @@ export default function Chat() {
 
     try {
       const history = updated.slice(1, -1).map(m => ({ role: m.role, content: m.content }))
-      const res = await chatApi.send(msg, history, autoMode)
+      const res = await chatApi.send(msg, history, chatMode)
       setMessages([...updated, {
         role: 'assistant',
         content: res.response,
@@ -191,17 +191,29 @@ export default function Chat() {
       <div className="flex items-center justify-between mb-4 shrink-0">
         <h1 className="text-2xl font-bold">AI Chat</h1>
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setAutoMode(m => !m)}
-            className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
-              autoMode
-                ? 'bg-orange-500 border-orange-500 text-white'
-                : 'border-charcoal-200 dark:border-charcoal-700 text-charcoal-500 dark:text-charcoal-400 hover:border-orange-400 hover:text-orange-500'
-            }`}
-            title={autoMode ? 'Auto mode on — AI executes without asking' : 'Auto mode off — AI proposes before acting'}
-          >
-            {autoMode ? '⚡ Auto' : '⚡ Auto'}
-          </button>
+          {/* Mode selector pill */}
+          <div className="flex rounded-lg border border-charcoal-200 dark:border-charcoal-700 overflow-hidden">
+            {[
+              { id: 'plan',     label: 'Plan',       title: 'Plan mode — AI proposes before acting' },
+              { id: 'auto',     label: '⚡ Auto',    title: 'Auto mode — AI executes without asking' },
+              { id: 'research', label: '🔍 Research', title: 'Research mode — read-only analysis and web search' },
+            ].map((m, i) => (
+              <button
+                key={m.id}
+                onClick={() => setChatMode(m.id)}
+                title={m.title}
+                className={`text-xs px-3 py-1.5 transition-colors ${
+                  i > 0 ? 'border-l border-charcoal-200 dark:border-charcoal-700' : ''
+                } ${
+                  chatMode === m.id
+                    ? 'bg-orange-500 text-white'
+                    : 'text-charcoal-500 dark:text-charcoal-400 hover:text-orange-500 hover:bg-charcoal-50 dark:hover:bg-charcoal-800'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
         {hasConversation && (
           <div className="flex items-center gap-2">
             <select
