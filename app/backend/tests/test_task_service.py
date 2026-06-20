@@ -98,3 +98,44 @@ def test_history_most_recent_first(user_brain):
     # Most recent (t2) should appear before t1
     ids = [t["id"] for t in history]
     assert ids.index(t2["id"]) < ids.index(t1["id"])
+
+
+def test_update_nonexistent_task_returns_none(user_brain):
+    assert task_service.update_task(USER, "no-such-id", {"notes": "hi"}) is None
+
+
+def test_add_task_with_due_date(user_brain):
+    task = task_service.add_task(USER, {**_make_task(), "due_date": "2025-12-31"})
+    assert task["due_date"] == "2025-12-31"
+
+
+def test_add_task_with_notes(user_brain):
+    task = task_service.add_task(USER, {**_make_task(), "notes": "important context"})
+    assert task["notes"] == "important context"
+
+
+def test_recurring_task_done_stays_in_active_list(user_brain):
+    task = task_service.add_task(USER, {**_make_task("Daily"), "type": "recurring", "recurrence": "daily"})
+    task_service.update_task(USER, task["id"], {"status": "done"})
+    active_ids = [t["id"] for t in task_service.list_tasks(USER)]
+    assert task["id"] in active_ids
+
+
+def test_recurring_task_done_not_moved_to_history(user_brain):
+    task = task_service.add_task(USER, {**_make_task("Daily"), "type": "recurring", "recurrence": "daily"})
+    task_service.update_task(USER, task["id"], {"status": "done"})
+    history_ids = [t["id"] for t in task_service.list_history(USER)]
+    assert task["id"] not in history_ids
+
+
+def test_recurring_task_increments_streak(user_brain):
+    task = task_service.add_task(USER, {**_make_task("Streak"), "type": "recurring", "recurrence": "daily"})
+    updated = task_service.update_task(USER, task["id"], {"status": "done"})
+    assert updated["streak_count"] == 1
+
+
+def test_skipped_task_stays_in_active_list(user_brain):
+    task = task_service.add_task(USER, _make_task())
+    task_service.update_task(USER, task["id"], {"status": "skipped"})
+    active_ids = [t["id"] for t in task_service.list_tasks(USER)]
+    assert task["id"] in active_ids
