@@ -561,6 +561,11 @@ _ADMIN_TOOLS: list[dict] = [
             "required": ["filename", "content"],
         },
     },
+    {
+        "name": "run_tests",
+        "description": "Run the backend test suite (pytest) and return the output. Admin only. Use to check that the codebase is healthy after making changes.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
 ]
 
 
@@ -883,6 +888,25 @@ def _execute_tool(name: str, inputs: dict, user: dict) -> Any:
                     except Exception:
                         pass
                 return new_s
+
+            case "run_tests":
+                if user.get("role") != "admin":
+                    return {"error": "Admin access required"}
+                import subprocess
+                from pathlib import Path as _Path
+                backend_dir = _Path(__file__).parent.parent
+                result = subprocess.run(
+                    ["python3", "-m", "pytest", "tests/", "-v", "--tb=short"],
+                    capture_output=True,
+                    text=True,
+                    cwd=backend_dir,
+                    timeout=120,
+                )
+                output = result.stdout + (result.stderr if result.returncode != 0 else "")
+                return {
+                    "passed": result.returncode == 0,
+                    "output": output.strip(),
+                }
 
             case "search_web":
                 from services.web_search_service import search as _web_search
