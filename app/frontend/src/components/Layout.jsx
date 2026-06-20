@@ -206,7 +206,13 @@ export default function Layout() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-24 md:pb-6">
+        {/* Mobile-only top bar with brand + bell */}
+        <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white dark:bg-charcoal-950 border-b border-charcoal-200 dark:border-charcoal-800 shrink-0">
+          <span className="text-orange-500 font-bold text-xl tracking-tight">LogCore</span>
+          <NotifBell />
+        </header>
+
+        <main className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 pb-24 md:pb-6">
           <Outlet />
         </main>
 
