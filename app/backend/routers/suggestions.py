@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from routers.auth import get_current_user, require_module
@@ -73,7 +73,7 @@ def delete_custom_suggestion(
 
 @router.get("/notifications")
 def get_notifications(
-    limit: int = 20,
+    limit: int = Query(20, ge=1, le=200),
     delivery: str | None = None,
     current_user: dict = Depends(get_current_user),
 ):

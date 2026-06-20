@@ -1,5 +1,7 @@
-from pydantic_settings import BaseSettings
 from pathlib import Path
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -35,8 +37,8 @@ class Settings(BaseSettings):
 
     # Scheduler timezone — must be a valid IANA tz string
     scheduler_timezone: str = "America/Chicago"
-    morning_digest_hour: int = 6   # 0–23, in scheduler_timezone
-    overdue_check_hour: int = 19   # 0–23, in scheduler_timezone
+    morning_digest_hour: int = Field(6, ge=0, le=23)   # 0–23, in scheduler_timezone
+    overdue_check_hour: int = Field(19, ge=0, le=23)   # 0–23, in scheduler_timezone
 
     # When False (default), only the first user can self-register.
     # Subsequent users must be added by an admin.
@@ -48,8 +50,7 @@ class Settings(BaseSettings):
     # Leave false when the app is exposed directly — otherwise clients can spoof IPs.
     trust_proxy_headers: bool = False
 
-    class Config:
-        env_file = ".env"
+    model_config = SettingsConfigDict(env_file=".env")
 
 
 settings = Settings()
