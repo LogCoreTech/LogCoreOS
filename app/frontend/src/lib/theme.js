@@ -82,6 +82,15 @@ export const BACKGROUND_PRESETS = [
   { id: 'dusk',     label: 'Dusk',     css: 'linear-gradient(135deg, #1e1b4b, #4c1d95, #831843)' },
 ]
 
+export function applyDensity(mode) {
+  document.documentElement.classList.toggle('compact', mode === 'compact')
+}
+
+export function applyCornerStyle(style) {
+  const radius = style === 'sharp' ? '0.375rem' : '0.75rem'
+  document.documentElement.style.setProperty('--card-radius', radius)
+}
+
 export function applyBackground(value) {
   const el = document.documentElement
   if (!value || value === 'none') {

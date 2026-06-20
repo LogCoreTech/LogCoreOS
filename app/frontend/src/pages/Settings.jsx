@@ -3,7 +3,7 @@ import { auth as authApi, user as userApi, push as pushApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useNavigate } from 'react-router-dom'
 import { getShortcuts, saveShortcuts, ALL_MODULES } from '../lib/constants'
-import { applyAccentColor, applyDarkMode, applyBackground, getSystemDarkPreference, BACKGROUND_PRESETS } from '../lib/theme'
+import { applyAccentColor, applyDarkMode, applyBackground, applyDensity, applyCornerStyle, getSystemDarkPreference, BACKGROUND_PRESETS } from '../lib/theme'
 
 function _urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4)
@@ -39,10 +39,12 @@ export default function Settings() {
   const [autoSyncTz, setAutoSyncTz] = useState(() => localStorage.getItem('lc_auto_tz') === 'true')
 
   // Appearance state
-  const [accentColor, setAccentColor]       = useState(() => user?.accentColor || DEFAULT_ACCENT)
-  const [hexInput, setHexInput]             = useState(() => user?.accentColor || DEFAULT_ACCENT)
-  const [darkMode, setDarkMode]             = useState(() => user?.darkMode    || 'system')
-  const [background, setBackground]         = useState(() => user?.background  || null)
+  const [accentColor, setAccentColor]       = useState(() => user?.accentColor  || DEFAULT_ACCENT)
+  const [hexInput, setHexInput]             = useState(() => user?.accentColor  || DEFAULT_ACCENT)
+  const [darkMode, setDarkMode]             = useState(() => user?.darkMode     || 'system')
+  const [background, setBackground]         = useState(() => user?.background   || null)
+  const [density, setDensity]               = useState(() => user?.density      || 'comfortable')
+  const [cornerStyle, setCornerStyle]       = useState(() => user?.cornerStyle  || 'rounded')
   const [appearanceSaved, setAppearanceSaved] = useState(false)
   const [bgUploading, setBgUploading]       = useState(false)
   const [bgError, setBgError]               = useState('')
@@ -102,12 +104,14 @@ export default function Settings() {
   }
 
   async function saveAppearance() {
-    const updates = { accent_color: accentColor, dark_mode: darkMode }
+    const updates = { accent_color: accentColor, dark_mode: darkMode, density, corner_style: cornerStyle }
     if (background !== 'uploaded') updates.background = background || 'none'
     try {
       await authApi.updateMe(updates)
       updateUserField('accentColor', accentColor)
       updateUserField('darkMode', darkMode)
+      updateUserField('density', density)
+      updateUserField('cornerStyle', cornerStyle)
       if (background !== 'uploaded') updateUserField('background', background || null)
       flash(setAppearanceSaved)
     } catch (e) {
@@ -375,6 +379,50 @@ export default function Settings() {
             )}
           </div>
           {bgError && <p className="text-xs text-red-500 mt-1">{bgError}</p>}
+        </div>
+
+        {/* Density */}
+        <div>
+          <p className="text-xs font-medium text-charcoal-500 dark:text-charcoal-400 mb-2">Density</p>
+          <div className="flex rounded-lg border border-charcoal-200 dark:border-charcoal-700 overflow-hidden">
+            {['comfortable', 'compact'].map(opt => (
+              <button
+                key={opt}
+                onClick={() => { setDensity(opt); applyDensity(opt) }}
+                className={`flex-1 py-1.5 text-sm font-medium capitalize transition-colors ${
+                  density === opt
+                    ? 'bg-orange-500 text-white'
+                    : 'text-charcoal-600 dark:text-charcoal-300 hover:bg-charcoal-100 dark:hover:bg-charcoal-700'
+                }`}
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Corners */}
+        <div>
+          <p className="text-xs font-medium text-charcoal-500 dark:text-charcoal-400 mb-2">Corners</p>
+          <div className="flex gap-3">
+            {[
+              { id: 'rounded', label: 'Rounded', cls: 'rounded-xl' },
+              { id: 'sharp',   label: 'Sharp',   cls: 'rounded-md'  },
+            ].map(({ id, label, cls }) => (
+              <button
+                key={id}
+                onClick={() => { setCornerStyle(id); applyCornerStyle(id) }}
+                className={`flex-1 flex flex-col items-center gap-2 py-3 border-2 transition-colors ${
+                  cornerStyle === id
+                    ? 'border-orange-500'
+                    : 'border-charcoal-200 dark:border-charcoal-700 hover:border-orange-400'
+                } ${cls}`}
+              >
+                <div className={`w-8 h-5 bg-charcoal-300 dark:bg-charcoal-600 ${cls}`} />
+                <span className="text-xs font-medium text-charcoal-600 dark:text-charcoal-300">{label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         <button onClick={saveAppearance} className="btn-primary w-full">
