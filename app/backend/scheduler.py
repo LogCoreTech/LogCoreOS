@@ -1,16 +1,14 @@
-"""APScheduler background jobs — recurring processor, digests, overdue alerts."""
+"""APScheduler background jobs — recurring processor, digests, overdue alerts, custom suggestions."""
 import logging
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
 from config import settings
 from services.auth_service import get_user_by_name, today_for_user, cleanup_revoked_jtis
 from services.file_service import brain_path, tasks_path, read_json
-from services.priority_service import get_top3
 from services.recurring_service import process_all_users
-from services.notification_service import send
-from services.push_service import send_push, get_subscription
 
 logger = logging.getLogger("logcore.scheduler")
 scheduler = BackgroundScheduler(timezone=settings.scheduler_timezone)
@@ -25,14 +23,6 @@ def _all_users() -> list[str]:
     ]
 
 
-def _ntfy_channel(user_name: str) -> str:
-    """Use the per-user random channel from auth.json; fall back to name-based if missing."""
-    user = get_user_by_name(user_name)
-    if user and user.get("notification_channel"):
-        return user["notification_channel"]
-    return f"logcore-{user_name.lower().replace(' ', '-')}"
-
-
 def job_recurring_processor():
     try:
         results = process_all_users()
@@ -42,80 +32,59 @@ def job_recurring_processor():
 
 
 def job_morning_digest():
+    from services.suggestions_service import get_config, run_suggestion_sync
     for user in _all_users():
         try:
-            today = today_for_user(user)
-            top3 = get_top3(user)
-            if not top3:
+            cfg = get_config(user)
+            if not cfg["daily_digest"].get("enabled", True):
                 continue
-            date_str = f"{today.strftime('%A, %B')} {today.day}"
-            lines = "\n".join(
-                f"{i+1}. [{t['category']}] {t['title']}" for i, t in enumerate(top3)
-            )
-            title   = f"Good morning, {user.split()[0]}! — {date_str}"
-            message = f"Your top 3 today:\n\n{lines}"
-            send(channel=_ntfy_channel(user), title=title, message=message, priority="default")
-            if get_subscription(user):
-                send_push(user, title, message, url="/tasks")
+            run_suggestion_sync(user, "daily_digest")
         except Exception:
             logger.exception("morning digest failed for %s", user)
 
 
 def job_overdue_check():
+    from services.suggestions_service import get_config, run_suggestion_sync
     for user in _all_users():
         try:
-            today = today_for_user(user).isoformat()
-            data = read_json(tasks_path(user), default={"tasks": []})
-            overdue = [
-                t for t in data.get("tasks", [])
-                if t.get("status") == "pending"
-                and t.get("due_date")
-                and t["due_date"] < today
-            ]
-            if not overdue:
+            cfg = get_config(user)
+            if not cfg["overdue_alert"].get("enabled", True):
                 continue
-            lines = "\n".join(
-                f"• [{t['category']}] {t['title']} (due {t['due_date']})"
-                for t in overdue
-            )
-            send(
-                channel=_ntfy_channel(user),
-                title=f"{len(overdue)} overdue task{'s' if len(overdue) > 1 else ''}",
-                message=lines,
-                priority="high",
-            )
+            run_suggestion_sync(user, "overdue_alert")
         except Exception:
             logger.exception("overdue check failed for %s", user)
 
 
 def job_weekly_review():
+    from services.suggestions_service import get_config, run_suggestion_sync
     for user in _all_users():
         try:
-            from datetime import timedelta
-            week_ago = (today_for_user(user) - timedelta(days=7)).isoformat()
-            from services.file_service import history_path
-            history_file = history_path(user)
-            if not history_file.exists():
+            cfg = get_config(user)
+            if not cfg["weekly_review"].get("enabled", True):
                 continue
-            history = read_json(history_file, default={"tasks": []}).get("tasks", [])
-            this_week = [t for t in history if (t.get("completed_at") or "") >= week_ago]
-            if not this_week:
-                continue
-            by_cat: dict[str, int] = {}
-            for t in this_week:
-                by_cat[t["category"]] = by_cat.get(t["category"], 0) + 1
-            lines = "\n".join(
-                f"• {cat}: {count} task{'s' if count > 1 else ''}"
-                for cat, count in sorted(by_cat.items(), key=lambda x: -x[1])
-            )
-            send(
-                channel=_ntfy_channel(user),
-                title=f"Weekly review — {len(this_week)} tasks completed",
-                message=f"Great week, {user.split()[0]}!\n\n{lines}",
-                priority="default",
-            )
+            run_suggestion_sync(user, "weekly_review")
         except Exception:
             logger.exception("weekly review failed for %s", user)
+
+
+def job_goal_drift():
+    from services.suggestions_service import get_config, run_suggestion_sync
+    for user in _all_users():
+        try:
+            cfg = get_config(user)
+            if not cfg["goal_drift"].get("enabled", True):
+                continue
+            run_suggestion_sync(user, "goal_drift")
+        except Exception:
+            logger.exception("goal drift check failed for %s", user)
+
+
+def job_custom_suggestion(user_name: str, suggestion: dict):
+    from services.suggestions_service import run_suggestion_sync
+    try:
+        run_suggestion_sync(user_name, suggestion["id"])
+    except Exception:
+        logger.exception("custom suggestion %s failed for %s", suggestion.get("id"), user_name)
 
 
 def job_cleanup_revoked_jtis():
@@ -125,15 +94,80 @@ def job_cleanup_revoked_jtis():
         logger.exception("revoked JTI cleanup failed")
 
 
+def _custom_job_id(user_name: str, suggestion_id: str) -> str:
+    return f"custom__{user_name}__{suggestion_id}"
+
+
+def _trigger_for_custom(suggestion: dict):
+    """Build an APScheduler trigger from a custom suggestion's schedule fields."""
+    hour = suggestion.get("hour", 9)
+    schedule = suggestion.get("schedule", "daily")
+    if schedule == "interval":
+        days = suggestion.get("interval_days") or 1
+        from datetime import datetime, timedelta
+        import math
+        now = datetime.now()
+        # Start at the next occurrence of 'hour' today or tomorrow
+        start = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+        if start <= now:
+            start += timedelta(days=1)
+        return IntervalTrigger(days=days, start_date=start)
+    if schedule == "weekly":
+        dow = suggestion.get("day_of_week", "mon")
+        return CronTrigger(day_of_week=dow, hour=hour, minute=0)
+    # default: daily
+    return CronTrigger(hour=hour, minute=0)
+
+
+def add_custom_job(user_name: str, suggestion: dict) -> None:
+    """Register a custom suggestion as a live APScheduler job."""
+    job_id = _custom_job_id(user_name, suggestion["id"])
+    if scheduler.get_job(job_id):
+        scheduler.remove_job(job_id)
+    trigger = _trigger_for_custom(suggestion)
+    scheduler.add_job(
+        job_custom_suggestion,
+        trigger,
+        args=[user_name, suggestion],
+        id=job_id,
+        replace_existing=True,
+    )
+    logger.info("registered custom job %s for %s", job_id, user_name)
+
+
+def remove_custom_job(user_name: str, suggestion_id: str) -> None:
+    """Unregister a custom suggestion job if it exists."""
+    job_id = _custom_job_id(user_name, suggestion_id)
+    job = scheduler.get_job(job_id)
+    if job:
+        scheduler.remove_job(job_id)
+        logger.info("removed custom job %s", job_id)
+
+
+def _load_custom_jobs() -> None:
+    """On startup, register all existing custom suggestions across all users."""
+    from services.suggestions_service import get_config
+    for user in _all_users():
+        try:
+            cfg = get_config(user)
+            for s in cfg.get("custom", []):
+                if s.get("enabled", True):
+                    add_custom_job(user, s)
+        except Exception:
+            logger.exception("failed to load custom jobs for %s", user)
+
+
 def start():
-    scheduler.add_job(job_recurring_processor,  CronTrigger(hour=0, minute=1),                                        id="recurring")
-    scheduler.add_job(job_morning_digest,        CronTrigger(hour=settings.morning_digest_hour, minute=0),            id="morning")
-    scheduler.add_job(job_overdue_check,         CronTrigger(hour=settings.overdue_check_hour, minute=0),             id="overdue")
+    scheduler.add_job(job_recurring_processor,  CronTrigger(hour=0, minute=1),                                              id="recurring")
+    scheduler.add_job(job_morning_digest,        CronTrigger(hour=settings.morning_digest_hour, minute=0),                  id="morning")
+    scheduler.add_job(job_overdue_check,         CronTrigger(hour=settings.overdue_check_hour, minute=0),                   id="overdue")
     scheduler.add_job(job_weekly_review,         CronTrigger(day_of_week="sun", hour=settings.overdue_check_hour, minute=0), id="weekly")
-    scheduler.add_job(job_cleanup_revoked_jtis,  CronTrigger(hour=3, minute=0),                                       id="jti_cleanup")
+    scheduler.add_job(job_goal_drift,            CronTrigger(hour=settings.overdue_check_hour, minute=30),                  id="goal_drift")
+    scheduler.add_job(job_cleanup_revoked_jtis,  CronTrigger(hour=3, minute=0),                                             id="jti_cleanup")
     scheduler.start()
+    _load_custom_jobs()
     logger.info(
-        "scheduler started — recurring@00:01, morning@%02d:00, overdue@%02d:00, weekly@Sun %02d:00 (%s)",
+        "scheduler started — recurring@00:01, morning@%02d:00, overdue@%02d:00, weekly@Sun %02d:00, goal_drift@%02d:30 (%s)",
         settings.morning_digest_hour, settings.overdue_check_hour, settings.overdue_check_hour,
-        settings.scheduler_timezone,
+        settings.overdue_check_hour, settings.scheduler_timezone,
     )

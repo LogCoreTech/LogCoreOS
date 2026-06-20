@@ -395,6 +395,53 @@ _USER_TOOLS: list[dict] = [
             "required": [],
         },
     },
+    {
+        "name": "run_suggestion",
+        "description": "Immediately trigger a proactive suggestion by ID. Built-in IDs: 'daily_digest', 'overdue_alert', 'weekly_review', 'goal_drift'. Custom suggestions use their UUID.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "suggestion_id": {"type": "string", "description": "Built-in name or custom UUID of the suggestion to run"},
+            },
+            "required": ["suggestion_id"],
+        },
+    },
+    {
+        "name": "update_suggestion",
+        "description": "Enable/disable a suggestion or change its delivery settings. Built-in IDs: 'daily_digest', 'overdue_alert', 'weekly_review', 'goal_drift'. Custom suggestions use their UUID.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "suggestion_id":  {"type": "string", "description": "Built-in name or custom UUID"},
+                "enabled":        {"type": "boolean", "description": "Enable or disable this suggestion"},
+                "delivery":       {"type": "array", "items": {"type": "string", "enum": ["push", "in_app", "chat"]}, "description": "Delivery channels"},
+                "hour":           {"type": "integer", "description": "Hour to fire (0-23, null = system default for built-ins)"},
+                "days_threshold": {"type": "integer", "description": "Days without progress before goal_drift fires (goal_drift only)"},
+            },
+            "required": ["suggestion_id"],
+        },
+    },
+    {
+        "name": "create_suggestion",
+        "description": (
+            "Create a new recurring AI-powered suggestion. The AI will run your prompt on schedule and deliver the result. "
+            "Schedule modes: 'daily' (every day at hour), 'interval' (every N days at hour, requires interval_days), "
+            "'weekly' (specific weekday at hour, requires day_of_week like 'mon'–'sun')."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name":          {"type": "string", "description": "Short display name, e.g. 'Evening wind-down'"},
+                "prompt":        {"type": "string", "description": "Prompt sent to the AI when this suggestion fires"},
+                "hour":          {"type": "integer", "description": "Hour to fire (0-23)"},
+                "delivery":      {"type": "array", "items": {"type": "string", "enum": ["push", "in_app", "chat"]}, "description": "Delivery channels (default: ['in_app'])"},
+                "schedule":      {"type": "string", "enum": ["daily", "interval", "weekly"], "description": "Schedule type (default: 'daily')"},
+                "interval_days": {"type": "integer", "description": "Required when schedule='interval': fire every N days"},
+                "day_of_week":   {"type": "string", "description": "Required when schedule='weekly': 'mon', 'tue', 'wed', 'thu', 'fri', 'sat', or 'sun'"},
+            },
+            "required": ["name", "prompt", "hour"],
+        },
+    },
 ]
 
 _ADMIN_TOOLS: list[dict] = [
@@ -773,6 +820,39 @@ def _execute_tool(name: str, inputs: dict, user: dict) -> Any:
                 safe_content = inputs["content"].replace("</brain_data>", "[/brain_data]")
                 write_markdown(brain_path() / fname, safe_content)
                 return {"ok": True, "updated": fname}
+
+            case "run_suggestion":
+                # This tool executor is called synchronously inside the agent loop.
+                # For custom suggestions (which need async AI calls), we use a thread pool to run asyncio.
+                from services import suggestions_service as sug_svc
+                import concurrent.futures
+                sid = inputs["suggestion_id"]
+                cfg = sug_svc.get_config(user["name"])
+                is_custom = any(c["id"] == sid for c in cfg.get("custom", []))
+                if is_custom:
+                    with concurrent.futures.ThreadPoolExecutor() as pool:
+                        fut = pool.submit(sug_svc.run_suggestion_sync, user["name"], sid)
+                        return fut.result(timeout=60)
+                return sug_svc.run_suggestion_sync(user["name"], sid)
+
+            case "update_suggestion":
+                from services import suggestions_service as sug_svc
+                sid = inputs["suggestion_id"]
+                updates = {k: v for k, v in inputs.items() if k != "suggestion_id"}
+                if not updates:
+                    return {"error": "No fields to update"}
+                return sug_svc.update_config(user["name"], sid, updates)
+
+            case "create_suggestion":
+                from services import suggestions_service as sug_svc
+                import scheduler as sched_mod  # noqa: PLC0415
+                new_s = sug_svc.create_custom(user["name"], inputs)
+                if new_s.get("enabled", True):
+                    try:
+                        sched_mod.add_custom_job(user["name"], new_s)
+                    except Exception:
+                        pass
+                return new_s
 
             case _:
                 return {"error": f"Unknown tool: {name!r}"}

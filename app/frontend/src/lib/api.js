@@ -137,6 +137,17 @@ export const calendar = {
   tasks: () => get('/calendar/tasks'),
 }
 
+export const suggestions = {
+  list:              ()    => get('/suggestions'),
+  update:            (id, data) => request('PUT', `/suggestions/${id}`, data),
+  run:               (id)  => post(`/suggestions/${id}/run`, {}),
+  deleteCustom:      (id)  => del(`/suggestions/custom/${id}`),
+  notifications:     ()    => get('/suggestions/notifications'),
+  chatNotifications: ()    => get('/suggestions/notifications?delivery=chat'),
+  markRead:          (id)  => post(`/suggestions/notifications/${id}/read`, {}),
+  clearAll:          ()    => request('DELETE', '/suggestions/notifications'),
+}
+
 export const user = {
   async export() {
     const res = await fetch(`${BASE}/user/export`, { headers: headers(), credentials: 'include' })
