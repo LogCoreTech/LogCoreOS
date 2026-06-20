@@ -5,10 +5,11 @@ from datetime import datetime, timezone
 from typing import Any
 
 from services import task_service, priority_service, journal_service, notes_service
-from services import profile_service
+from services import profile_service, push_service, auth_service
 from services.ai_provider import agent_completion
 from services.file_service import (
     user_path,
+    brain_path,
     read_json,
     write_json,
     read_markdown,
@@ -237,6 +238,125 @@ _USER_TOOLS: list[dict] = [
             "required": ["content"],
         },
     },
+    {
+        "name": "rewrite_memory",
+        "description": "Overwrite a memory file entirely with new condensed content. Use this to clean up or compress memory — not for adding new entries (use append_memory for that).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "content": {"type": "string", "description": "Full new markdown content for the memory file"},
+                "target":  {"type": "string", "enum": ["short", "long"], "description": "Which memory file to rewrite (default: short)"},
+            },
+            "required": ["content"],
+        },
+    },
+    {
+        "name": "get_task_history",
+        "description": "Get the user's completed tasks. Useful for weekly reviews, reflection, and tracking progress.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "limit":      {"type": "integer", "description": "Max number of tasks to return (default 20)"},
+                "since_date": {"type": "string", "description": "Only return tasks completed on or after this date (YYYY-MM-DD)"},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "search_brain",
+        "description": "Search across all the user's Brain markdown files (notes, journal, memory, profile) for a keyword or phrase.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Case-insensitive search term"},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "move_note",
+        "description": "Move or rename a note. Paths are relative to Notes/ without .md extension.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "from_path": {"type": "string", "description": "Current note path, e.g. 'Ideas'"},
+                "to_path":   {"type": "string", "description": "New note path, e.g. 'Brainstorms/Ideas'"},
+            },
+            "required": ["from_path", "to_path"],
+        },
+    },
+    {
+        "name": "create_note_folder",
+        "description": "Create a folder inside the user's Notes directory.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Folder path relative to Notes/, e.g. 'Projects' or 'Projects/Work'"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "create_tasks",
+        "description": "Create multiple tasks at once. Useful for planning sessions. Each task uses the same schema as add_task.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "tasks": {
+                    "type": "array",
+                    "description": "List of task objects to create",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "title":      {"type": "string"},
+                            "category":   {"type": "string"},
+                            "priority":   {"type": "string", "enum": ["High", "Medium", "Low"]},
+                            "type":       {"type": "string", "enum": ["todo", "recurring", "goal", "appointment"]},
+                            "due_date":   {"type": "string"},
+                            "due_time":   {"type": "string"},
+                            "notes":      {"type": "string"},
+                        },
+                        "required": ["title", "category"],
+                    },
+                },
+            },
+            "required": ["tasks"],
+        },
+    },
+    {
+        "name": "send_notification",
+        "description": "Send a push notification to the user via their configured ntfy channel.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Notification title"},
+                "body":  {"type": "string", "description": "Notification body text"},
+            },
+            "required": ["title", "body"],
+        },
+    },
+    {
+        "name": "update_timezone",
+        "description": "Update the user's timezone. Use an IANA timezone string, e.g. 'America/New_York', 'Europe/London', 'Asia/Tokyo'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "timezone": {"type": "string", "description": "IANA timezone string"},
+            },
+            "required": ["timezone"],
+        },
+    },
+    {
+        "name": "complete_shared_task",
+        "description": "Mark a shared household task as done. Only works if you are the assigned member or an admin.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "ID of the shared task to mark complete"},
+            },
+            "required": ["task_id"],
+        },
+    },
 ]
 
 _ADMIN_TOOLS: list[dict] = [
@@ -256,14 +376,74 @@ _ADMIN_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "title":      {"type": "string"},
-                "category":   {"type": "string"},
-                "priority":   {"type": "string", "enum": ["High", "Medium", "Low"]},
-                "due_date":   {"type": "string"},
-                "notes":      {"type": "string"},
-                "created_by": {"type": "string", "description": "Name of the assigning user"},
+                "title":       {"type": "string"},
+                "category":    {"type": "string"},
+                "priority":    {"type": "string", "enum": ["High", "Medium", "Low"]},
+                "due_date":    {"type": "string"},
+                "notes":       {"type": "string"},
+                "assigned_to": {"type": "string", "description": "Username of the member responsible for this task"},
             },
             "required": ["title", "category"],
+        },
+    },
+    {
+        "name": "update_shared_task",
+        "description": "Update a shared household task (admin only). Members can only check tasks off via complete_shared_task.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "task_id":     {"type": "string", "description": "Task ID to update"},
+                "title":       {"type": "string"},
+                "category":    {"type": "string"},
+                "priority":    {"type": "string", "enum": ["High", "Medium", "Low"]},
+                "due_date":    {"type": "string"},
+                "due_time":    {"type": "string"},
+                "notes":       {"type": "string"},
+                "assigned_to": {"type": "string", "description": "Reassign to a different member"},
+            },
+            "required": ["task_id"],
+        },
+    },
+    {
+        "name": "delete_shared_task",
+        "description": "Delete a shared household task (admin only).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "Task ID to delete"},
+            },
+            "required": ["task_id"],
+        },
+    },
+    {
+        "name": "read_system_file",
+        "description": "Read a system-level Brain file that applies to all users (admin only). Use update_profile for personal AI preferences instead.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "filename": {
+                    "type": "string",
+                    "enum": ["SOUL.md", "AGENTS.md", "USERS.md", "MEMORY_MAP.md"],
+                    "description": "System Brain file to read",
+                },
+            },
+            "required": ["filename"],
+        },
+    },
+    {
+        "name": "update_system_file",
+        "description": "Overwrite a system-level Brain file (admin only). Changes affect all users. Use with care.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "filename": {
+                    "type": "string",
+                    "enum": ["SOUL.md", "AGENTS.md", "USERS.md", "MEMORY_MAP.md"],
+                    "description": "System Brain file to update",
+                },
+                "content": {"type": "string", "description": "Full new markdown content"},
+            },
+            "required": ["filename", "content"],
         },
     },
 ]
@@ -384,6 +564,83 @@ def _execute_tool(name: str, inputs: dict, user: dict) -> Any:
                 write_markdown(mem_path, updated)
                 return {"ok": True, "target": fname}
 
+            case "rewrite_memory":
+                target = inputs.get("target", "short")
+                fname = "Long_Term_Memory.md" if target == "long" else "Short_Term_Memory.md"
+                mem_path = user_path(user["name"]) / fname
+                safe_content = inputs["content"].replace("</brain_data>", "[/brain_data]")
+                write_markdown(mem_path, safe_content)
+                return {"ok": True, "target": fname}
+
+            case "get_task_history":
+                limit = int(inputs.get("limit", 20))
+                since = inputs.get("since_date")
+                history = task_service.list_history(user["name"], limit=limit)
+                if since:
+                    history = [t for t in history if (t.get("completed_at") or "") >= since]
+                return history
+
+            case "search_brain":
+                query = inputs["query"].lower()
+                base = user_path(user["name"])
+                results = []
+                for p in sorted(base.rglob("*.md")):
+                    rel = p.relative_to(base)
+                    if any(part in _BRAIN_SKIP for part in rel.parts):
+                        continue
+                    try:
+                        text = p.read_text()
+                    except OSError:
+                        continue
+                    idx = text.lower().find(query)
+                    if idx == -1:
+                        continue
+                    start = max(0, idx - 100)
+                    end = min(len(text), idx + 200)
+                    snippet = text[start:end].strip()
+                    results.append({"path": str(rel), "snippet": snippet})
+                return results
+
+            case "move_note":
+                return notes_service.move_item(user["name"], inputs["from_path"], inputs["to_path"], "note")
+
+            case "create_note_folder":
+                return notes_service.create_folder(user["name"], inputs["path"])
+
+            case "create_tasks":
+                created = []
+                for t in inputs.get("tasks", []):
+                    created.append(task_service.add_task(user["name"], t))
+                return created
+
+            case "send_notification":
+                sent = push_service.send_push(user["name"], inputs["title"], inputs["body"])
+                return {"sent": sent}
+
+            case "update_timezone":
+                from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+                try:
+                    ZoneInfo(inputs["timezone"])
+                except (ZoneInfoNotFoundError, KeyError):
+                    return {"error": f"Invalid timezone: {inputs['timezone']!r}"}
+                u = auth_service.get_user_by_name(user["name"])
+                if not u:
+                    return {"error": "User not found"}
+                auth_service.update_user(u["id"], {"timezone": inputs["timezone"]})
+                return {"ok": True, "timezone": inputs["timezone"]}
+
+            case "complete_shared_task":
+                task = task_service.get_task("_household", inputs["task_id"])
+                if task is None:
+                    return {"error": f"Shared task {inputs['task_id']!r} not found"}
+                if user.get("role") != "admin" and task.get("assigned_to") != user["name"]:
+                    return {"error": "Not authorized — you can only complete tasks assigned to you"}
+                result = task_service.update_task("_household", inputs["task_id"], {
+                    "status": "done",
+                    "completed_by": user["name"],
+                })
+                return result or {"error": "Update failed"}
+
             case "list_users":
                 if user.get("role") != "admin":
                     return {"error": "Admin access required"}
@@ -400,6 +657,45 @@ def _execute_tool(name: str, inputs: dict, user: dict) -> Any:
                 if user.get("role") != "admin":
                     return {"error": "Admin access required"}
                 return task_service.add_task("_household", inputs)
+
+            case "update_shared_task":
+                if user.get("role") != "admin":
+                    return {"error": "Admin access required"}
+                task_id = inputs["task_id"]
+                updates = {k: v for k, v in inputs.items() if k != "task_id"}
+                result = task_service.update_task("_household", task_id, updates)
+                if result is None:
+                    return {"error": f"Shared task {task_id!r} not found"}
+                return result
+
+            case "delete_shared_task":
+                if user.get("role") != "admin":
+                    return {"error": "Admin access required"}
+                ok = task_service.delete_task("_household", inputs["task_id"])
+                return {"deleted": ok}
+
+            case "read_system_file":
+                if user.get("role") != "admin":
+                    return {"error": "Admin access required"}
+                _ALLOWED_SYSTEM = {"SOUL.md", "AGENTS.md", "USERS.md", "MEMORY_MAP.md"}
+                fname = inputs["filename"]
+                if fname not in _ALLOWED_SYSTEM:
+                    return {"error": f"Not an allowed system file: {fname!r}"}
+                p = brain_path() / fname
+                if not p.exists():
+                    return {"error": f"{fname} not found"}
+                return read_markdown(p)
+
+            case "update_system_file":
+                if user.get("role") != "admin":
+                    return {"error": "Admin access required"}
+                _ALLOWED_SYSTEM = {"SOUL.md", "AGENTS.md", "USERS.md", "MEMORY_MAP.md"}
+                fname = inputs["filename"]
+                if fname not in _ALLOWED_SYSTEM:
+                    return {"error": f"Not an allowed system file: {fname!r}"}
+                safe_content = inputs["content"].replace("</brain_data>", "[/brain_data]")
+                write_markdown(brain_path() / fname, safe_content)
+                return {"ok": True, "updated": fname}
 
             case _:
                 return {"error": f"Unknown tool: {name!r}"}
