@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { auth as authApi } from './api'
+import { applyAccentColor, applyDarkMode, applyBackground, getSystemDarkPreference } from './theme'
 
 const AuthContext = createContext(null)
 
@@ -24,9 +25,15 @@ export function AuthProvider({ children }) {
           role:            me.role,
           disabledModules: me.disabled_modules || [],
           timezone:        me.timezone || 'UTC',
+          accentColor:     me.accent_color || null,
+          darkMode:        me.dark_mode    || 'system',
+          background:      me.background   || null,
         }
         localStorage.setItem('lc_user', JSON.stringify(u))
         setUser(u)
+        applyAccentColor(u.accentColor)
+        applyDarkMode(u.darkMode, getSystemDarkPreference())
+        applyBackground(u.background)
       })
       .catch(() => {
         // Cookie expired or absent — clear stale localStorage and let the app redirect
@@ -36,12 +43,15 @@ export function AuthProvider({ children }) {
       .finally(() => setSessionChecked(true))
   }, [])
 
-  function login(id, name, role, disabledModules = [], timezone = 'UTC') {
+  function login(id, name, role, disabledModules = [], timezone = 'UTC', accentColor = null, darkMode = 'system', background = null) {
     // Auth is handled via httpOnly cookie set by the server.
     // Only cache non-sensitive user metadata in localStorage.
-    const u = { id, name, role, disabledModules, timezone }
+    const u = { id, name, role, disabledModules, timezone, accentColor, darkMode, background }
     localStorage.setItem('lc_user', JSON.stringify(u))
     setUser(u)
+    applyAccentColor(accentColor)
+    applyDarkMode(darkMode, getSystemDarkPreference())
+    applyBackground(background)
   }
 
   async function logout() {
@@ -84,10 +94,16 @@ export function AuthProvider({ children }) {
         const updated = {
           ...user,
           disabledModules: me.disabled_modules || [],
-          timezone: me.timezone || user.timezone,
+          timezone:        me.timezone     || user.timezone,
+          accentColor:     me.accent_color || null,
+          darkMode:        me.dark_mode    || 'system',
+          background:      me.background   || null,
         }
         localStorage.setItem('lc_user', JSON.stringify(updated))
         setUser(updated)
+        applyAccentColor(updated.accentColor)
+        applyDarkMode(updated.darkMode, getSystemDarkPreference())
+        applyBackground(updated.background)
       } catch {
         // 401 handled in api.js — clears storage and redirects to /login
       }
