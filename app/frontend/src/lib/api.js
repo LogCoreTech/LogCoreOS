@@ -108,10 +108,14 @@ export const push = {
 }
 
 export const shared = {
-  list:   ()               => get('/shared/tasks'),
-  add:    (task)           => post('/shared/tasks', task),
-  update: (id, updates)    => patch(`/shared/tasks/${id}`, updates),
-  remove: (id)             => del(`/shared/tasks/${id}`),
+  list:               ()           => get('/shared/tasks'),
+  add:                (task)       => post('/shared/tasks', task),
+  update:             (id, upd)    => patch(`/shared/tasks/${id}`, upd),
+  remove:             (id)         => del(`/shared/tasks/${id}`),
+  sharedEvents:       ()           => get('/shared/events'),
+  addSharedEvent:     (body)       => post('/shared/events', body),
+  updateSharedEvent:  (id, body)   => patch(`/shared/events/${id}`, body),
+  removeSharedEvent:  (id)         => del(`/shared/events/${id}`),
 }
 
 function encodePath(path) {
@@ -137,7 +141,12 @@ export const journal = {
 }
 
 export const calendar = {
-  tasks: () => get('/calendar/tasks'),
+  tasks:       ()           => get('/calendar/tasks'),
+  events:      ()           => get('/calendar/events'),
+  addEvent:    (body)       => post('/calendar/events', body),
+  getEvent:    (id)         => get(`/calendar/events/${id}`),
+  updateEvent: (id, body)   => patch(`/calendar/events/${id}`, body),
+  removeEvent: (id)         => del(`/calendar/events/${id}`),
 }
 
 export const suggestions = {
