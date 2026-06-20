@@ -128,7 +128,7 @@ Implemented in both the AI layer (`skills/life-priorities/`) and the App backend
 
 The App currently provides:
 
-**Active (Phase 1):**
+**Phase 1 (complete):**
 
 - User authentication (JWT, bcrypt, role-based: admin / member / guest)
 - Task management (create, complete, skip, recurring, streaks, history)
@@ -139,16 +139,25 @@ The App currently provides:
 - Background scheduler (nightly recurring processor, morning digest, overdue alerts, weekly review)
 - React PWA (installable on phone and desktop)
 - Docker Compose deployment
+- Notes module (markdown notes editor, stored in Brain/Notes/)
+- Journal module (daily entries stored in Brain/Journal/YYYY-MM-DD.md, with agent tools)
+- Calendar backend (module guard enforcement, independent of tasks module)
 
-**Planned:**
+**Phase 2 (complete):**
 
-- Notes
-- Journal
-- Projects
-- Calendar
+- Long-term memory writes from chat (append_memory / rewrite_memory tools)
+- Planning mode with propose-before-execute AI behaviour
+- Proactive suggestions engine with notification inbox
+- File modification from chat (read/write/list Brain files via agent tools)
+- Research mode with Tavily web search integration
+
+**Planned (future phases):**
+
+- Projects (deferred from Phase 1; roadmapped for Phase 3+)
+- Calendar UI (backend guards in place; UI not yet built)
 - Health tracking
 - Home automation
-- Research tools
+- External integrations (Google Calendar, Apple Health, etc.)
 
 ---
 
@@ -299,7 +308,7 @@ Done:
 
 ---
 
-## Phase 1: Core MVP 🔄 In Progress
+## Phase 1: Core MVP ✅ Complete
 
 **Goal:** A usable personal life operating system.
 
@@ -322,23 +331,23 @@ Done:
 - Journal module (daily entries stored in Brain/Journal/YYYY-MM-DD.md, with agent tools)
 - Calendar backend (module guard enforcement, independent of tasks module)
 
-Still to build:
+Deferred:
 
-- Projects (deferred to Phase 2 planning)
+- Projects (backlogged; roadmapped for Phase 3+)
 
 ---
 
-## Phase 2: AI Operating Layer
+## Phase 2: AI Operating Layer ✅ Complete
 
-Expand the agent with:
+Shipped:
 
-- Long-term memory writes from the App (not just CLI)
-- Planning abilities
-- Proactive suggestions
-- File modification from chat
-- Research assistance
+- Long-term memory writes from the App (`append_memory` / `rewrite_memory` agent tools)
+- Planning mode — agent proposes a plan and awaits confirmation before executing
+- Proactive suggestions engine — AI monitors context and surfaces suggestions; notification inbox in the UI
+- File modification from chat — agent can read, list, and write Brain files via tool use
+- Research mode — Tavily web search integration; agent can search the web during chat sessions
 
-Create a natural language command interface. Examples:
+Natural language command interface active. Examples that work now:
 
 - "Plan my week."
 - "Summarize my progress this month."
