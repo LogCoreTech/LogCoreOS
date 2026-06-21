@@ -104,8 +104,7 @@ export default function Chat() {
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [saveResult, setSaveResult] = useState(null)
+  const [continuedFromFile, setContinuedFromFile] = useState(null) // { filename, title }
   const [chatMode, setChatMode] = useState('plan')
   const [showModeDrawer, setShowModeDrawer] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
@@ -148,12 +147,29 @@ export default function Chat() {
     return () => document.removeEventListener('mousedown', handler)
   }, [showModeDrawer])
 
-  // Dismiss save result after 4 seconds
+  // Auto-save after each AI response
   useEffect(() => {
-    if (!saveResult) return
-    const t = setTimeout(() => setSaveResult(null), 4000)
+    if (loading) return
+    if (messages.length <= 1) return
+    const t = setTimeout(async () => {
+      const history = messages.slice(1).map(m => ({ role: m.role, content: m.content }))
+      const firstUser = history.find(m => m.role === 'user')
+      const autoTitle = firstUser
+        ? firstUser.content.slice(0, 60) + (firstUser.content.length > 60 ? '…' : '')
+        : 'Chat'
+      try {
+        const res = await chatApi.saveChat(
+          history,
+          continuedFromFile?.title || autoTitle,
+          continuedFromFile?.filename || ''
+        )
+        if (!continuedFromFile) {
+          setContinuedFromFile({ filename: res.filename, title: res.title })
+        }
+      } catch { /* silent — auto-save failures don't interrupt the user */ }
+    }, 1500)
     return () => clearTimeout(t)
-  }, [saveResult])
+  }, [messages, loading])
 
   async function send(e, overrideMsg) {
     e?.preventDefault()
@@ -182,20 +198,44 @@ export default function Chat() {
     }
   }
 
-  async function saveChat() {
-    if (saving) return
-    const history = messages.slice(1).map(m => ({ role: m.role, content: m.content }))
-    if (history.length === 0) return
-    setSaving(true)
-    setSaveResult(null)
-    try {
-      const res = await chatApi.saveChat(history)
-      setSaveResult({ ok: true, filename: res.filename })
-    } catch (err) {
-      setSaveResult({ ok: false, error: err.message })
-    } finally {
-      setSaving(false)
+  function newChat() {
+    setMessages([{
+      role: 'assistant',
+      content: `Hi ${user?.name?.split(' ')[0] || 'there'}! I know your priorities and tasks. What's on your mind?`,
+      steps: [],
+    }])
+    setContinuedFromFile(null)
+    setInput('')
+  }
+
+  function parseSavedChat(content) {
+    const parsed = []
+    for (const line of content.split('\n')) {
+      if (line.startsWith('**You**:')) {
+        parsed.push({ role: 'user', content: line.slice(8).trim(), steps: [] })
+      } else if (line.startsWith('**AI**:')) {
+        parsed.push({ role: 'assistant', content: line.slice(7).trim(), steps: [] })
+      }
     }
+    return parsed
+  }
+
+  function continueChat(content, filename, title) {
+    const parsed = parseSavedChat(content)
+    if (parsed.length === 0) return
+    setMessages([messages[0], ...parsed])
+    setContinuedFromFile({ filename, title })
+    setShowHistory(false)
+    setSelectedChat(null)
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+  }
+
+  async function deleteSavedChat(chat, e) {
+    e.stopPropagation()
+    try {
+      await chatApi.deleteSaved(chat.filename)
+      setSavedChats(prev => prev.filter(c => c.filename !== chat.filename))
+    } catch { /* ignore */ }
   }
 
   async function openHistory() {
@@ -213,8 +253,8 @@ export default function Chat() {
     setHistoryLoading(true)
     try {
       const file = await brainApi.getFile(chat.path)
-      setSelectedChat({ filename: chat.filename, content: file.content })
-    } catch { setSelectedChat({ filename: chat.filename, content: 'Failed to load chat.' }) }
+      setSelectedChat({ filename: chat.filename, title: chat.title, content: file.content })
+    } catch { setSelectedChat({ filename: chat.filename, title: chat.title, content: 'Failed to load chat.' }) }
     finally { setHistoryLoading(false) }
   }
 
@@ -237,36 +277,22 @@ export default function Chat() {
         <h1 className="text-2xl font-bold">AI Chat</h1>
         <div className="flex items-center gap-2">
           <button
+            onClick={newChat}
+            className="btn-ghost text-xs px-3 py-1.5"
+            title="Start a new conversation"
+          >
+            + New Chat
+          </button>
+          <button
             onClick={openHistory}
             className="btn-ghost text-xs px-3 py-1.5"
             title="Browse saved chats"
           >
             🗂 Chats
           </button>
-          {hasConversation && (
-            <button
-              onClick={saveChat}
-              disabled={saving}
-              className="btn-ghost text-xs px-3 py-1.5 disabled:opacity-50"
-              title="Save this conversation to your Chats folder"
-            >
-              {saving ? 'Saving…' : '💾 Save Chat'}
-            </button>
-          )}
         </div>
       </div>
 
-      {saveResult && (
-        <div className={`shrink-0 mb-3 px-3 py-2 rounded-lg text-sm ${
-          saveResult.ok
-            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-            : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
-        }`}>
-          {saveResult.ok
-            ? `Chat saved to Chats/${saveResult.filename}`
-            : `Save failed: ${saveResult.error}`}
-        </div>
-      )}
 
       {/* Messages */}
       <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pb-4">
@@ -432,7 +458,15 @@ export default function Chat() {
                 </div>
               ) : selectedChat ? (
                 <div className="p-4 space-y-3">
-                  <p className="text-xs text-charcoal-400 dark:text-charcoal-500 font-mono">{selectedChat.filename}</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-charcoal-400 dark:text-charcoal-500 font-mono">{selectedChat.filename}</p>
+                    <button
+                      onClick={() => continueChat(selectedChat.content, selectedChat.filename, selectedChat.title)}
+                      className="btn-primary text-xs px-3 py-1.5"
+                    >
+                      Continue →
+                    </button>
+                  </div>
                   {selectedChat.content.split('\n').filter(l => l.trim()).map((line, i) => {
                     if (line.startsWith('# ')) return (
                       <p key={i} className="text-sm font-semibold text-charcoal-700 dark:text-charcoal-200">{line.slice(2)}</p>
@@ -455,13 +489,27 @@ export default function Chat() {
               ) : (
                 <div className="divide-y divide-charcoal-100 dark:divide-charcoal-800">
                   {savedChats.map(chat => (
-                    <button
+                    <div
                       key={chat.filename}
-                      onClick={() => openSavedChat(chat)}
-                      className="w-full text-left px-4 py-3 hover:bg-charcoal-50 dark:hover:bg-charcoal-800 transition-colors"
+                      className="flex items-center gap-2 px-4 py-3 hover:bg-charcoal-50 dark:hover:bg-charcoal-800 transition-colors group"
                     >
-                      <p className="text-sm font-medium text-charcoal-800 dark:text-charcoal-100">{fmtFilename(chat.filename)}</p>
-                    </button>
+                      <button
+                        onClick={() => openSavedChat(chat)}
+                        className="flex-1 text-left min-w-0"
+                      >
+                        <p className="text-sm font-medium text-charcoal-800 dark:text-charcoal-100 truncate">{chat.title || fmtFilename(chat.filename)}</p>
+                        <p className="text-xs text-charcoal-400 dark:text-charcoal-500 mt-0.5">{fmtFilename(chat.filename)}</p>
+                      </button>
+                      <button
+                        onClick={e => deleteSavedChat(chat, e)}
+                        className="shrink-0 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-charcoal-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+                        title="Delete chat"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                        </svg>
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}

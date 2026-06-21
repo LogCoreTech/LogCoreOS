@@ -122,6 +122,7 @@ Key files per user:
 - `Tasks/tasks.json` — active tasks
 - `Tasks/tasks_history.json` — completed tasks
 - `Tasks/daily_override.json` — today's category priority override
+- `Chats/YYYY-MM-DD_HH-MM-SS.md` — auto-saved chat archives (see Chat System section)
 
 System files (not user-specific):
 - `brain/_system/auth.json` — user accounts, JWT revocations, runtime settings
@@ -150,6 +151,41 @@ All routes are under `/api/v1/`. The frontend base is `const BASE = '/api/v1'` i
 
 ### Runtime Hosting Config
 `services/hosting_service.py` reads `brain/hosting.json` at every request to determine `cookie_secure`, `trust_proxy_headers`, and `domain_url`. This means the Admin → Hosting panel takes effect immediately without a container restart. The env vars are the default values; `hosting.json` overrides them at runtime.
+
+### Chat System
+
+The AI chat feature (`routers/chat.py`) includes an automatic chat archive system.
+
+**Chat archive storage:** `brain/USERS/{name}/Chats/YYYY-MM-DD_HH-MM-SS.md`
+
+File format:
+```markdown
+# Chat Title
+*June 21, 2026 at 02:30 PM*
+
+**You**: user message
+
+**AI**: AI response
+```
+
+**Auto-save behavior (frontend):**
+- Every chat is automatically saved 1.5 s after the AI responds (debounced `useEffect` on `messages` + `loading`).
+- The first user message (truncated to 60 chars) becomes the auto-generated title.
+- `continuedFromFile` state `{ filename, title }` tracks the current archive file so that continued edits overwrite the same file instead of creating duplicates.
+- Calling `newChat()` resets messages and clears `continuedFromFile`, so the next conversation starts a fresh file.
+
+**API endpoints:**
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/chat/save` | Create or overwrite a chat archive. Body: `{ history, name?, filename? }`. If `filename` is set, overwrites that file (path-traversal checked). Returns `{ filename, title }`. |
+| `GET` | `/api/v1/chat/saved` | List all `.md` files in the user's Chats folder, newest first. Returns `[{ filename, path, title }]`. Reads only the first line of each file for efficiency. |
+| `DELETE` | `/api/v1/chat/saved/{filename}` | Delete a saved chat. Path-traversal checked. |
+
+**Rate limit:** `_save_limit = rate_limit(30, 60)` (30 saves/minute/IP — high to support auto-save).
+
+**Continue a chat (frontend):** `parseSavedChat(content)` splits the Markdown into `{ role, content }` messages, loads them into state, and sets `continuedFromFile` so subsequent saves overwrite the original file.
+
+**End-goal (future work):** Evolve into a ChatGPT/Claude-style Projects system — custom context per project, per-project chat archives, optional agent usage within projects. See `docs/BACKLOG.md`.
 
 ---
 
@@ -358,6 +394,18 @@ nvm is a version manager — installing nvm does not install Node.js. You must r
 **Runtime hosting config vs env vars:**
 `cookie_secure` and `trust_proxy_headers` can be set in `docker/.env` (static defaults) or overridden at runtime by the Admin → Hosting panel (written to `brain/hosting.json`). The runtime value always wins. Use `hosting_service.effective_cookie_secure()` and `hosting_service.effective_trust_proxy_headers()` — never read `settings.*` directly in code that serves requests.
 
+**Mobile viewport height — use `100dvh` not `100vh`:**
+`100vh` on mobile browsers includes the browser chrome (address bar, navigation) that may appear or disappear while scrolling. This causes the app shell to be taller than the visible area and makes fixed elements overlap. Always use `h-[100dvh]` on the root container, not `h-screen` / `h-[100vh]`.
+
+**Flex scroll containment — always add `min-h-0` to flex children that scroll:**
+When a flex column child should have an internal scrollable area, the child must have `min-h-0` in addition to `overflow-y-auto`. Without it, the browser defaults `min-height: auto`, which lets the child grow to its full content size and overflow its parent instead of scrolling. This pattern is required on the messages list in `Chat.jsx` and on any other scrollable flex child. Never remove `min-h-0` from those elements.
+
+**PWA standalone mode — `Cache-Control: no-cache` on `index.html`, NOT `no-store`:**
+`no-store` prevents the browser from storing `index.html` at all, which breaks iOS's ability to detect that the page was previously saved to the home screen. The SPA catch-all in `main.py` must send `Cache-Control: no-cache` so the browser revalidates on every load but retains a cached copy for offline / standalone mode detection.
+
+**httpOnly cookie timing on mobile login:**
+After `POST /auth/login` the session cookie is set by the server. On mobile browsers there is a timing gap before the cookie is available for subsequent requests. Never fire parallel requests immediately after login (e.g., `Promise.all([authApi.me(), setupApi.status()])`). Instead, use the login response directly (it returns the same user object as `/me`) and then make follow-up calls sequentially.
+
 ---
 
 ## Known Limitations / Future Work
@@ -370,3 +418,4 @@ See `docs/PROJECT_DOCS.md` for the full roadmap. Current known gaps:
 - **No email verification** — user emails are trusted as-is
 - **Brain files are not end-to-end encrypted** — the server can read all user data
 - **AI provider abstraction** — `services/ai_provider.py` has the abstraction layer; only Anthropic is wired (Phase 6 adds more providers)
+- **Projects system (planned)** — evolve chat into a ChatGPT/Claude-style Projects feature: named projects with custom context injected into the AI prompt, per-project chat archives, and optional agent usage within each project. Chat archives (`brain/USERS/{name}/Chats/`) are the foundation — the Chats folder will eventually move under a project subfolder structure.
