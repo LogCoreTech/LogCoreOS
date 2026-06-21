@@ -145,7 +145,7 @@ export default function Layout() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-[100dvh] overflow-hidden">
 
       {/* Sidebar — desktop only */}
       <aside className={`hidden md:flex flex-col bg-white dark:bg-charcoal-950 border-r border-charcoal-200 dark:border-charcoal-800 transition-all duration-200 ${collapsed ? 'w-14' : 'w-56'}`}>
@@ -236,12 +236,12 @@ export default function Layout() {
           <NotifBell />
         </header>
 
-        <main className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 pb-24 md:pb-6">
+        <main className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 flex flex-col">
           <Outlet />
         </main>
 
         {/* Bottom bar — mobile: pinned shortcuts + More button */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-charcoal-950 border-t border-charcoal-200 dark:border-charcoal-800 flex z-40">
+        <nav className="md:hidden shrink-0 bg-white dark:bg-charcoal-950 border-t border-charcoal-200 dark:border-charcoal-800 flex z-40 pb-[env(safe-area-inset-bottom)]">
           {shortcutModules.map(({ id, to, icon, label }) => (
             <NavLink
               key={id}

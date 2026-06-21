@@ -166,5 +166,5 @@ if static_dir.exists():
         # Containment check prevents path traversal outside the dist directory
         if candidate.is_relative_to(_static_root) and candidate.is_file():
             return FileResponse(str(candidate))
-        # No-store so browsers always fetch the latest index.html after a rebuild
-        return FileResponse(str(static_dir / "index.html"), headers={"Cache-Control": "no-store"})
+        # no-cache: always revalidate before serving, but allow storage (needed for iOS PWA)
+        return FileResponse(str(static_dir / "index.html"), headers={"Cache-Control": "no-cache"})
