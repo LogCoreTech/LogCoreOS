@@ -670,17 +670,22 @@ function WebSearchCard() {
 // Hosting card
 // ---------------------------------------------------------------------------
 function HostingCard() {
-  const [form, setForm]       = useState({ mode: 'local', domain_url: '' })
-  const [saving, setSaving]   = useState(false)
-  const [msg, setMsg]         = useState(null)
+  const [form, setForm]         = useState({ mode: 'local', domain_url: '', tunnel_token: '' })
+  const [tokenSaved, setTokenSaved] = useState(false)
+  const [saving, setSaving]     = useState(false)
+  const [applying, setApplying] = useState(false)
+  const [msg, setMsg]           = useState(null)
 
   useEffect(() => {
     adminApi.getHostingSettings().then(s => {
-      const isHttps = s.cookie_secure === true || s.trust_proxy_headers === true
-      setForm({
-        mode: isHttps ? 'https' : 'local',
-        domain_url: s.domain_url || '',
-      })
+      let mode = 'local'
+      if (s.proxy_type === 'cloudflare' || s.proxy_type === 'nginx') {
+        mode = s.proxy_type
+      } else if (s.cookie_secure || s.trust_proxy_headers) {
+        mode = 'cloudflare'
+      }
+      setForm({ mode, domain_url: s.domain_url || '', tunnel_token: '' })
+      setTokenSaved(s.tunnel_token_set || false)
     }).catch(() => {})
   }, [])
 
@@ -688,13 +693,18 @@ function HostingCard() {
     e.preventDefault()
     setSaving(true)
     setMsg(null)
-    const isHttps = form.mode === 'https'
+    const isHttps = form.mode !== 'local'
+    const payload = {
+      proxy_type: form.mode === 'local' ? '' : form.mode,
+      cookie_secure: isHttps,
+      trust_proxy_headers: isHttps,
+      domain_url: isHttps ? form.domain_url.trim() : '',
+    }
+    if (form.tunnel_token) payload.tunnel_token = form.tunnel_token
     try {
-      await adminApi.updateHostingSettings({
-        cookie_secure: isHttps,
-        trust_proxy_headers: isHttps,
-        domain_url: isHttps ? form.domain_url.trim() : '',
-      })
+      const updated = await adminApi.updateHostingSettings(payload)
+      setTokenSaved(updated.tunnel_token_set || false)
+      setForm(f => ({ ...f, tunnel_token: '' }))
       setMsg({ ok: true, text: 'Saved.' })
     } catch (err) {
       setMsg({ ok: false, text: err.message || 'Save failed.' })
@@ -704,26 +714,51 @@ function HostingCard() {
     }
   }
 
-  const isHttps = form.mode === 'https'
+  async function applyTunnel() {
+    setApplying(true)
+    setMsg(null)
+    try {
+      await adminApi.applyHostingSettings()
+      setMsg({ ok: true, text: 'Tunnel restarted. Your domain should be live in a few seconds.' })
+    } catch (err) {
+      setMsg({ ok: false, text: err.message || 'Restart failed. Check container logs.' })
+    } finally {
+      setApplying(false)
+      setTimeout(() => setMsg(null), 8000)
+    }
+  }
+
+  const isHttps = form.mode !== 'local'
+  const needsDomain = isHttps && !form.domain_url.trim()
+
+  const nginxConfig = form.domain_url
+    ? `server {
+    listen 443 ssl;
+    server_name ${new URL(form.domain_url).hostname};
+
+    location / {
+        proxy_pass http://localhost:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}`
+    : ''
 
   return (
     <div className="card p-5">
       <h2 className="font-semibold mb-1">Hosting</h2>
       <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-4">
-        Configure how this app is accessed. Changes take effect immediately — no restart needed.
+        Configure how this app is accessed. Changes take effect immediately.
       </p>
 
       <form onSubmit={save} className="space-y-4">
+        {/* Mode selector */}
         <div className="space-y-2">
           <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="radio"
-              name="mode"
-              value="local"
-              checked={form.mode === 'local'}
-              onChange={() => setForm(f => ({ ...f, mode: 'local', domain_url: '' }))}
-              className="accent-orange-500"
-            />
+            <input type="radio" name="mode" value="local" checked={form.mode === 'local'}
+              onChange={() => setForm(f => ({ ...f, mode: 'local', domain_url: '', tunnel_token: '' }))}
+              className="accent-orange-500" />
             <span className="text-sm">
               <span className="font-medium">Local only</span>
               <span className="text-charcoal-500 dark:text-charcoal-400"> — http://localhost:8000</span>
@@ -731,18 +766,21 @@ function HostingCard() {
           </label>
 
           <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="radio"
-              name="mode"
-              value="https"
-              checked={form.mode === 'https'}
-              onChange={() => setForm(f => ({ ...f, mode: 'https' }))}
-              className="accent-orange-500"
-            />
-            <span className="text-sm font-medium">HTTPS via Tunnel or Reverse Proxy</span>
+            <input type="radio" name="mode" value="cloudflare" checked={form.mode === 'cloudflare'}
+              onChange={() => setForm(f => ({ ...f, mode: 'cloudflare' }))}
+              className="accent-orange-500" />
+            <span className="text-sm font-medium">Cloudflare Tunnel</span>
+          </label>
+
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input type="radio" name="mode" value="nginx" checked={form.mode === 'nginx'}
+              onChange={() => setForm(f => ({ ...f, mode: 'nginx' }))}
+              className="accent-orange-500" />
+            <span className="text-sm font-medium">nginx / Caddy / Reverse Proxy</span>
           </label>
         </div>
 
+        {/* Domain URL — shown for both HTTPS modes */}
         {isHttps && (
           <div>
             <label className="block text-sm font-medium mb-1">Domain URL</label>
@@ -752,11 +790,49 @@ function HostingCard() {
               onChange={e => setForm(f => ({ ...f, domain_url: e.target.value }))}
               placeholder="https://logcore.yourdomain.com"
               className="input"
-              required={isHttps}
+              required
+            />
+            {form.mode === 'cloudflare' && (
+              <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mt-1">
+                Set this as the public hostname in Cloudflare Zero Trust → Networks → Tunnels → your tunnel → Configure.
+              </p>
+            )}
+            {form.mode === 'nginx' && (
+              <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mt-1">
+                Your reverse proxy must forward to <span className="font-mono">http://localhost:8000</span>.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Cloudflare: tunnel token */}
+        {form.mode === 'cloudflare' && (
+          <div>
+            <label className="block text-sm font-medium mb-1">Tunnel Token</label>
+            <input
+              type="password"
+              value={form.tunnel_token}
+              onChange={e => setForm(f => ({ ...f, tunnel_token: e.target.value }))}
+              placeholder={tokenSaved ? '••••••••••••• (saved — paste to replace)' : 'Paste token from Cloudflare dashboard'}
+              className="input font-mono"
             />
             <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mt-1">
-              The full URL you use to access this app. Your tunnel or proxy must forward to{' '}
-              <span className="font-mono">localhost:8000</span>.
+              Find your token in Cloudflare Zero Trust → Networks → Tunnels → your tunnel → Configure.
+            </p>
+          </div>
+        )}
+
+        {/* nginx: generated config */}
+        {form.mode === 'nginx' && nginxConfig && (
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium">nginx Config</label>
+              <button type="button" onClick={() => navigator.clipboard.writeText(nginxConfig)}
+                className="text-xs text-orange-500 hover:underline">Copy</button>
+            </div>
+            <pre className="bg-charcoal-900 text-charcoal-100 text-xs rounded p-3 overflow-x-auto whitespace-pre">{nginxConfig}</pre>
+            <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mt-1">
+              Paste into your nginx config, then run <span className="font-mono">nginx -t && systemctl reload nginx</span>.
             </p>
           </div>
         )}
@@ -767,23 +843,31 @@ function HostingCard() {
           </p>
         )}
 
-        <button
-          type="submit"
-          disabled={saving || (isHttps && !form.domain_url.trim())}
-          className="btn-primary w-full disabled:opacity-50"
-        >
+        <button type="submit" disabled={saving || needsDomain} className="btn-primary w-full disabled:opacity-50">
           {saving ? 'Saving…' : 'Save Hosting Settings'}
         </button>
 
-        {isHttps && form.domain_url && (
+        {/* Cloudflare: apply button (only shown after token is saved) */}
+        {form.mode === 'cloudflare' && tokenSaved && (
+          <button
+            type="button"
+            onClick={applyTunnel}
+            disabled={applying}
+            className="btn-ghost w-full border border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white disabled:opacity-50"
+          >
+            {applying ? 'Restarting tunnel…' : 'Apply & Restart Tunnel'}
+          </button>
+        )}
+
+        {isHttps && form.domain_url && !needsDomain && (
           <p className="text-xs text-charcoal-500 dark:text-charcoal-400 flex items-start gap-1">
             <span>✓</span>
             <span>
-              App accessible at{' '}
+              App will be accessible at{' '}
               <a href={form.domain_url} target="_blank" rel="noopener noreferrer" className="text-orange-500 underline">
                 {form.domain_url}
               </a>
-              . Make sure your tunnel passes the <span className="font-mono">X-Forwarded-For</span> header.
+              . Make sure your tunnel or proxy passes the <span className="font-mono">X-Forwarded-For</span> header.
             </span>
           </p>
         )}

@@ -90,6 +90,7 @@ export const admin = {
   // Hosting / tunnel settings
   getHostingSettings:    ()    => get('/auth/admin/hosting-settings'),
   updateHostingSettings: (s)   => patch('/auth/admin/hosting-settings', s),
+  applyHostingSettings:  ()    => post('/auth/admin/hosting-settings/apply', {}),
 }
 
 export const setup = {
