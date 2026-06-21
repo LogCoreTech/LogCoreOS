@@ -12,11 +12,14 @@ async function request(method, path, body) {
     body: body ? JSON.stringify(body) : undefined,
   })
   if (res.status === 401) {
-    localStorage.removeItem('lc_user')
     if (!window.location.pathname.startsWith('/login')) {
+      localStorage.removeItem('lc_user')
       window.location.href = '/login'
+      throw new Error('Session expired. Please sign in again.')
     }
-    return
+    // On the login page surface the real server error (e.g. "Invalid email or password")
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.detail || 'Invalid credentials')
   }
   if (res.status === 204) return null
   const data = await res.json()
@@ -36,7 +39,7 @@ async function requestFile(method, path, file) {
   if (res.status === 401) {
     localStorage.removeItem('lc_user')
     if (!window.location.pathname.startsWith('/login')) window.location.href = '/login'
-    return
+    throw new Error('Session expired. Please sign in again.')
   }
   if (res.status === 204) return null
   const data = await res.json()
