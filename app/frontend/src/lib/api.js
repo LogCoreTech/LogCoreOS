@@ -84,6 +84,8 @@ export const profile = {
 export const chat = {
   send:       (message, history, mode = 'plan') => post('/chat', { message, history, mode }),
   saveMemory: (history, target = 'short') => post('/chat/save-memory',  { history, target }),
+  saveChat:   (history)                   => post('/chat/save', { history }),
+  listSaved:  ()                          => get('/chat/saved'),
   runs:       ()                          => get('/chat/runs'),
   getRun:     (id)                        => get(`/chat/runs/${id}`),
 }

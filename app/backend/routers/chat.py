@@ -204,6 +204,49 @@ async def save_memory(
     return {"ok": True, "target": fname, "summary": safe_summary}
 
 
+class ChatSaveRequest(BaseModel):
+    history: list[HistoryMessage] = Field(..., min_length=1, max_length=50)
+
+
+@router.post("/save")
+async def save_chat(
+    req: ChatSaveRequest,
+    current_user: dict = Depends(_require_chat),
+    _rl: None = Depends(_memory_limit),
+):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    user_tz = current_user.get("timezone", "UTC")
+    try:
+        now = datetime.now(ZoneInfo(user_tz))
+    except Exception:
+        now = datetime.now(ZoneInfo("UTC"))
+
+    timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
+    date_label = now.strftime("%B %d, %Y at %I:%M %p")
+
+    chats_dir = user_path(current_user["name"]) / "Chats"
+    chats_dir.mkdir(parents=True, exist_ok=True)
+
+    lines = [f"# Chat — {date_label}\n"]
+    for msg in req.history:
+        label = "**You**" if msg.role == "user" else "**AI**"
+        lines.append(f"{label}: {msg.content}\n")
+
+    write_markdown(chats_dir / f"{timestamp}.md", "\n".join(lines))
+    return {"ok": True, "filename": f"{timestamp}.md"}
+
+
+@router.get("/saved")
+def list_saved_chats(current_user: dict = Depends(_require_chat)):
+    chats_dir = user_path(current_user["name"]) / "Chats"
+    if not chats_dir.exists():
+        return []
+    files = sorted(chats_dir.glob("*.md"), reverse=True)
+    return [{"filename": f.name, "path": f"Chats/{f.name}"} for f in files]
+
+
 @router.get("/runs")
 def list_runs(current_user: dict = Depends(get_current_user)):
     """Return recent agent runs for the current user (tool-using runs only)."""

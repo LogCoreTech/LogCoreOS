@@ -1,9 +1,9 @@
-const CACHE = 'logcore-v2'
-const SHELL = ['/', '/index.html', '/manifest.json']
+const CACHE = 'logcore-v4'
+const STATIC = ['/manifest.json', '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())
+    caches.open(CACHE).then(c => c.addAll(STATIC)).then(() => self.skipWaiting())
   )
 })
 
@@ -57,15 +57,26 @@ self.addEventListener('fetch', e => {
     return
   }
 
-  // Cache-first for app shell
+  // Network-first for HTML — always get the latest app shell, fall back to cache offline
+  const isHtml = url.pathname === '/' || url.pathname === '/index.html' || !url.pathname.split('/').pop().includes('.')
+  if (isHtml) {
+    e.respondWith(
+      fetch(e.request)
+        .then(res => {
+          if (res.ok) caches.open(CACHE).then(c => c.put(e.request, res.clone()))
+          return res
+        })
+        .catch(() => caches.match(e.request))
+    )
+    return
+  }
+
+  // Cache-first for static assets (JS/CSS are content-hashed, icons/manifest are pre-cached)
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached
       return fetch(e.request).then(res => {
-        if (res.ok) {
-          const clone = res.clone()
-          caches.open(CACHE).then(c => c.put(e.request, clone))
-        }
+        if (res.ok) caches.open(CACHE).then(c => c.put(e.request, res.clone()))
         return res
       })
     })

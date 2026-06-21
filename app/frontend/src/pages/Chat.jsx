@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { chat as chatApi, suggestions as sugApi } from '../lib/api'
+import { chat as chatApi, suggestions as sugApi, brain as brainApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
 function ProposalCard({ step, onConfirm, onCancel }) {
@@ -105,11 +105,16 @@ export default function Chat() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [saveTarget, setSaveTarget] = useState('short')
   const [saveResult, setSaveResult] = useState(null)
   const [chatMode, setChatMode] = useState('plan')
+  const [showModeDrawer, setShowModeDrawer] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
+  const [savedChats, setSavedChats] = useState([])
+  const [selectedChat, setSelectedChat] = useState(null) // { filename, content }
+  const [historyLoading, setHistoryLoading] = useState(false)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
+  const modeRef = useRef(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -132,6 +137,16 @@ export default function Chat() {
     }).catch(() => {})
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Close mode drawer when clicking outside
+  useEffect(() => {
+    if (!showModeDrawer) return
+    function handler(e) {
+      if (modeRef.current && !modeRef.current.contains(e.target)) setShowModeDrawer(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showModeDrawer])
 
   // Dismiss save result after 4 seconds
   useEffect(() => {
@@ -167,16 +182,15 @@ export default function Chat() {
     }
   }
 
-  async function saveToMemory() {
+  async function saveChat() {
     if (saving) return
-    // Build history excluding the greeting
     const history = messages.slice(1).map(m => ({ role: m.role, content: m.content }))
     if (history.length === 0) return
     setSaving(true)
     setSaveResult(null)
     try {
-      const res = await chatApi.saveMemory(history, saveTarget)
-      setSaveResult({ ok: true, target: res.target })
+      const res = await chatApi.saveChat(history)
+      setSaveResult({ ok: true, filename: res.filename })
     } catch (err) {
       setSaveResult({ ok: false, error: err.message })
     } finally {
@@ -184,57 +198,61 @@ export default function Chat() {
     }
   }
 
+  async function openHistory() {
+    setShowHistory(true)
+    setSelectedChat(null)
+    setHistoryLoading(true)
+    try {
+      const list = await chatApi.listSaved()
+      setSavedChats(list || [])
+    } catch { setSavedChats([]) }
+    finally { setHistoryLoading(false) }
+  }
+
+  async function openSavedChat(chat) {
+    setHistoryLoading(true)
+    try {
+      const file = await brainApi.getFile(chat.path)
+      setSelectedChat({ filename: chat.filename, content: file.content })
+    } catch { setSelectedChat({ filename: chat.filename, content: 'Failed to load chat.' }) }
+    finally { setHistoryLoading(false) }
+  }
+
+  function fmtFilename(filename) {
+    // "2026-06-21_14-30-00.md" → "Jun 21, 2026 · 2:30 PM"
+    try {
+      const [datePart, timePart] = filename.replace('.md', '').split('_')
+      const [y, mo, d] = datePart.split('-')
+      const [h, m] = timePart.split('-')
+      const dt = new Date(+y, +mo - 1, +d, +h, +m)
+      return dt.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+    } catch { return filename }
+  }
+
   const hasConversation = messages.length > 1
 
   return (
-    <div className="max-w-2xl mx-auto flex flex-col h-[calc(100vh-8rem)] md:h-[calc(100vh-3rem)]">
+    <div className="max-w-2xl mx-auto w-full flex flex-col flex-1 min-h-0">
       <div className="flex items-center justify-between mb-4 shrink-0">
         <h1 className="text-2xl font-bold">AI Chat</h1>
-        <div className="flex items-center gap-3">
-          {/* Mode selector pill */}
-          <div className="flex rounded-lg border border-charcoal-200 dark:border-charcoal-700 overflow-hidden">
-            {[
-              { id: 'plan',     label: 'Plan',       title: 'Plan mode — AI proposes before acting' },
-              { id: 'auto',     label: '⚡ Auto',    title: 'Auto mode — AI executes without asking' },
-              { id: 'research', label: '🔍 Research', title: 'Research mode — read-only analysis and web search' },
-            ].map((m, i) => (
-              <button
-                key={m.id}
-                onClick={() => setChatMode(m.id)}
-                title={m.title}
-                className={`text-xs px-3 py-1.5 transition-colors ${
-                  i > 0 ? 'border-l border-charcoal-200 dark:border-charcoal-700' : ''
-                } ${
-                  chatMode === m.id
-                    ? 'bg-orange-500 text-white'
-                    : 'text-charcoal-500 dark:text-charcoal-400 hover:text-orange-500 hover:bg-charcoal-50 dark:hover:bg-charcoal-800'
-                }`}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
-        {hasConversation && (
-          <div className="flex items-center gap-2">
-            <select
-              value={saveTarget}
-              onChange={e => setSaveTarget(e.target.value)}
-              className="text-xs border border-charcoal-200 dark:border-charcoal-700 bg-white dark:bg-charcoal-800 rounded-lg px-2 py-1"
-              disabled={saving}
-            >
-              <option value="short">Short-term</option>
-              <option value="long">Long-term</option>
-            </select>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={openHistory}
+            className="btn-ghost text-xs px-3 py-1.5"
+            title="Browse saved chats"
+          >
+            🗂 Chats
+          </button>
+          {hasConversation && (
             <button
-              onClick={saveToMemory}
+              onClick={saveChat}
               disabled={saving}
               className="btn-ghost text-xs px-3 py-1.5 disabled:opacity-50"
-              title="Extract key insights from this conversation and save to memory"
+              title="Save this conversation to your Chats folder"
             >
-              {saving ? 'Saving…' : '🧠 Save to Memory'}
+              {saving ? 'Saving…' : '💾 Save Chat'}
             </button>
-          </div>
-        )}
+          )}
         </div>
       </div>
 
@@ -245,13 +263,13 @@ export default function Chat() {
             : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
         }`}>
           {saveResult.ok
-            ? `Saved to ${saveResult.target}`
+            ? `Chat saved to Chats/${saveResult.filename}`
             : `Save failed: ${saveResult.error}`}
         </div>
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto space-y-4 pb-4">
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pb-4">
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             {m.role === 'assistant' && (
@@ -306,8 +324,44 @@ export default function Chat() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Memory shortcuts */}
-      <div className="flex gap-2 shrink-0 pt-2 pb-1">
+      {/* Memory shortcuts + mode selector */}
+      <div className="flex items-center gap-2 shrink-0 pt-2 pb-1">
+        {/* Mode drawer */}
+        <div className="relative" ref={modeRef}>
+          <button
+            type="button"
+            onClick={() => setShowModeDrawer(o => !o)}
+            className="btn-ghost text-xs px-2 py-1 flex items-center gap-1"
+            title="Switch chat mode"
+          >
+            <span>{chatMode === 'plan' ? 'Plan Mode' : chatMode === 'auto' ? '⚡ Auto Mode' : '🔍 Research Mode'}</span>
+            <span className="text-[10px] opacity-60">▾</span>
+          </button>
+          {showModeDrawer && (
+            <div className="absolute bottom-full mb-1 left-0 bg-white dark:bg-charcoal-900 border border-charcoal-200 dark:border-charcoal-700 rounded-xl shadow-lg z-50 overflow-hidden min-w-[150px]">
+              {[
+                { id: 'plan',     label: 'Plan',        title: 'AI proposes before acting' },
+                { id: 'auto',     label: '⚡ Auto',     title: 'AI executes without asking' },
+                { id: 'research', label: '🔍 Research',  title: 'Read-only analysis and web search' },
+              ].map(m => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => { setChatMode(m.id); setShowModeDrawer(false) }}
+                  title={m.title}
+                  className={`w-full text-left text-xs px-3 py-2 transition-colors ${
+                    chatMode === m.id
+                      ? 'bg-orange-500 text-white'
+                      : 'text-charcoal-600 dark:text-charcoal-300 hover:bg-charcoal-50 dark:hover:bg-charcoal-800'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <button
           type="button"
           onClick={() => navigate('/brain?file=Short_Term_Memory.md', { state: { from: '/chat' } })}
@@ -343,6 +397,79 @@ export default function Chat() {
           →
         </button>
       </form>
+
+      {/* Saved chats drawer */}
+      {showHistory && (
+        <div className="fixed inset-0 z-50 flex">
+          <div className="flex-1 bg-black/40" onClick={() => { setShowHistory(false); setSelectedChat(null) }} />
+          <div className="w-80 md:w-96 h-full bg-white dark:bg-charcoal-900 border-l border-charcoal-200 dark:border-charcoal-700 flex flex-col shadow-xl">
+
+            {/* Drawer header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-charcoal-200 dark:border-charcoal-700 shrink-0">
+              {selectedChat ? (
+                <button
+                  onClick={() => setSelectedChat(null)}
+                  className="flex items-center gap-1 text-sm font-medium text-charcoal-500 hover:text-orange-500 transition-colors"
+                >
+                  ← Back
+                </button>
+              ) : (
+                <h3 className="text-sm font-semibold">Saved Chats</h3>
+              )}
+              <button
+                onClick={() => { setShowHistory(false); setSelectedChat(null) }}
+                className="text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200 text-lg leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Drawer body */}
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              {historyLoading ? (
+                <div className="flex items-center justify-center h-24">
+                  <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : selectedChat ? (
+                <div className="p-4 space-y-3">
+                  <p className="text-xs text-charcoal-400 dark:text-charcoal-500 font-mono">{selectedChat.filename}</p>
+                  {selectedChat.content.split('\n').filter(l => l.trim()).map((line, i) => {
+                    if (line.startsWith('# ')) return (
+                      <p key={i} className="text-sm font-semibold text-charcoal-700 dark:text-charcoal-200">{line.slice(2)}</p>
+                    )
+                    if (line.startsWith('**You**:')) return (
+                      <div key={i} className="flex justify-end">
+                        <div className="bg-orange-500 text-white text-sm px-3 py-2 rounded-2xl rounded-br-sm max-w-[85%]">{line.slice(8).trim()}</div>
+                      </div>
+                    )
+                    if (line.startsWith('**AI**:')) return (
+                      <div key={i} className="flex justify-start">
+                        <div className="card text-sm px-3 py-2 rounded-2xl rounded-bl-sm max-w-[85%] text-charcoal-800 dark:text-charcoal-100">{line.slice(7).trim()}</div>
+                      </div>
+                    )
+                    return null
+                  })}
+                </div>
+              ) : savedChats.length === 0 ? (
+                <p className="text-sm text-charcoal-400 dark:text-charcoal-500 text-center py-10">No saved chats yet.</p>
+              ) : (
+                <div className="divide-y divide-charcoal-100 dark:divide-charcoal-800">
+                  {savedChats.map(chat => (
+                    <button
+                      key={chat.filename}
+                      onClick={() => openSavedChat(chat)}
+                      className="w-full text-left px-4 py-3 hover:bg-charcoal-50 dark:hover:bg-charcoal-800 transition-colors"
+                    >
+                      <p className="text-sm font-medium text-charcoal-800 dark:text-charcoal-100">{fmtFilename(chat.filename)}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   )
 }
