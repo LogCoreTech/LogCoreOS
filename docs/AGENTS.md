@@ -65,13 +65,14 @@ LogCoreOS/
 │           ├── lib/
 │           │   ├── api.js         → ALL API calls go here — never fetch() directly in components
 │           │   ├── auth.jsx       → useAuth() hook + AuthProvider
-│           │   └── constants.js   → ALL_MODULES registry (must match backend require_module IDs)
+│           │   ├── constants.js   → ALL_MODULES registry (must match backend require_module IDs)
+│           │   └── theme.js       → CSS variable theme engine (accent color, dark mode, background, density, corners)
 │           ├── pages/
 │           │   ├── Home.jsx       → dashboard (top3 tasks, priority override)
 │           │   ├── Tasks.jsx      → task management
 │           │   ├── Chat.jsx       → AI chat interface
 │           │   ├── Admin.jsx      → admin panel (users, AI settings, web search, hosting)
-│           │   ├── Settings.jsx   → user settings (timezone, session, notifications)
+│           │   ├── Settings.jsx   → user settings (appearance, timezone, session, notifications, shortcuts)
 │           │   ├── Notes.jsx      → notes module
 │           │   ├── Journal.jsx    → journal module
 │           │   ├── Calendar.jsx   → calendar UI (backend complete; UI in progress)
@@ -209,7 +210,7 @@ bash launch.sh --reconfigure # reset docker/.env
 All API calls go through `lib/api.js`. The `request()` function handles 401 by clearing localStorage and redirecting to `/login`. Add new endpoints to the appropriate export object in `api.js`; never `fetch()` directly in components.
 
 ### Auth State
-`useAuth()` returns `{ user, login, logout, updateUserField }`. `user` has `{ name, role, disabledModules, timezone }`. Use `updateUserField(key, value)` for immediate optimistic updates after a successful PATCH /me.
+`useAuth()` returns `{ user, login, logout, updateUserField }`. `user` has `{ name, role, disabledModules, timezone, accentColor, darkMode, background, density, cornerStyle }`. Use `updateUserField(key, value)` for immediate optimistic updates after a successful PATCH /me.
 
 ### Admin-Only Pages
 The `/admin` route is wrapped in `<AdminOnly>` which redirects non-admins to `/`. Admin UI lives in `pages/Admin.jsx`. The admin section was intentionally removed from `pages/Settings.jsx`.
@@ -217,10 +218,28 @@ The `/admin` route is wrapped in `<AdminOnly>` which redirects non-admins to `/`
 ### Styling
 Tailwind classes only. Custom classes (`btn-primary`, `btn-ghost`, `input`, `card`, `badge`) are defined in `src/index.css`. Design system:
 - `charcoal-*` for neutral grays
-- `orange-500` as the brand accent
-- Dark mode via `dark:` prefix (class-based, not system preference)
-- No inline `style={}` unless strictly necessary
-- No `console.log` in committed code
+- `orange-500` / `orange-400` / `orange-600` as the brand accent — **these are CSS variable-backed**, not hardcoded orange. Tailwind's orange shades are remapped in `tailwind.config.js` to `rgb(var(--accent-500) / <alpha-value>)` so every existing `text-orange-500`, `bg-orange-500/10`, etc. automatically responds to the user's chosen accent color without any component edits.
+- Dark mode via `dark:` prefix (class-based). The `dark` class is applied to `<html>` by `applyDarkMode()` in `lib/theme.js`. Supports `system`, `light`, `dark` modes.
+- No inline `style={}` unless strictly necessary (exception: background preset tiles use `style={{ background: preset.css }}`).
+- No `console.log` in committed code.
+
+### Theme System (`lib/theme.js`)
+All runtime theming is handled by `applyAccentColor()`, `applyDarkMode()`, `applyBackground()`, `applyDensity()`, and `applyCornerStyle()`. These write CSS variables to `:root` / `<html>`.
+
+**FOUC prevention:** `main.jsx` runs a synchronous IIFE before `ReactDOM.createRoot` that reads `localStorage.lc_user` and applies all CSS variables so the correct theme is set before React renders. Do not move theme initialization into a `useEffect` — it will cause a flash.
+
+**CSS variables used:**
+| Variable | Controls |
+|----------|---------|
+| `--accent-400/500/600` | RGB triplets for all `orange-*` Tailwind classes |
+| `--bg-image` | `background-image` on `body` (gradient preset or `url(...)` for uploads) |
+| `--card-radius` | `border-radius` on `.card`, `.btn-primary`, `.btn-ghost`, `.input` |
+
+**Background image storage:** Uploaded backgrounds are stored at `brain/USERS/{name}/background.{ext}` (JPEG/PNG/WebP/AVIF, max 5 MB). Served auth-gated at `GET /api/v1/auth/me/background`. Old files are deleted before a new upload replaces them.
+
+**Density:** Adding class `compact` to `<html>` triggers `html.compact` CSS overrides in `index.css` that tighten padding and font sizes globally.
+
+**Sidebar collapse:** Persisted to `localStorage.lc_sidebar` only (no backend). `w-14` collapsed / `w-56` expanded with `transition-all duration-200`. Collapsed header shows "LC"; expanded shows "LogCore" + username + NotifBell.
 
 ### Code Style (Python)
 - PEP 8. No line longer than 100 chars.

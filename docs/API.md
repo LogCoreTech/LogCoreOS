@@ -32,11 +32,16 @@ Create an account. Requires admin token when registration is closed (except for 
 **Response**
 ```json
 {
-  "token": "<jwt>",
+  "id": "uuid",
   "name": "Alice",
   "role": "member",
   "disabled_modules": [],
-  "timezone": "UTC"
+  "timezone": "UTC",
+  "accent_color": null,
+  "dark_mode": "system",
+  "background": null,
+  "density": "comfortable",
+  "corner_style": "rounded"
 }
 ```
 
@@ -65,16 +70,59 @@ Returns current user's profile.
   "notification_channel": "lc-abc123",
   "session_minutes": 10080,
   "timezone": "America/Chicago",
-  "disabled_modules": []
+  "disabled_modules": [],
+  "accent_color": "#f97316",
+  "dark_mode": "system",
+  "background": "gradient:midnight",
+  "density": "comfortable",
+  "corner_style": "rounded"
 }
 ```
 
 ### `PATCH /auth/me`
-Update own profile (timezone).
+Update own profile. All fields optional.
 
-**Body** `{ "timezone": "America/New_York" }`
+**Body**
+```json
+{
+  "timezone": "America/New_York",
+  "accent_color": "#3b82f6",
+  "dark_mode": "dark",
+  "background": "gradient:sunset",
+  "density": "compact",
+  "corner_style": "sharp"
+}
+```
 
-**Response** `{ "ok": true, "timezone": "America/New_York" }`
+Valid values:
+- `dark_mode`: `"system"` | `"light"` | `"dark"`
+- `background`: `"none"` | `"uploaded"` | `"gradient:<id>"` where id ∈ `{none, midnight, sunset, forest, ocean, aurora, dusk}`
+- `density`: `"comfortable"` | `"compact"`
+- `corner_style`: `"rounded"` | `"sharp"`
+- `accent_color`: any 6-digit hex like `#f97316`
+
+**Response** `{ "ok": true, ...updated_fields }`
+
+### `POST /auth/me/background`
+Upload a custom background image. Max 5 MB. Accepted types: JPEG, PNG, WebP, AVIF.
+
+**Body** — `multipart/form-data` with field `file`.
+
+Sets `background` to `"uploaded"` on the user record. File stored at `brain/USERS/{name}/background.{ext}`.
+
+**Response** `{ "ok": true }`
+
+### `GET /auth/me/background`
+Serve the user's uploaded background image. Returns the image file directly.
+
+**Response** — image bytes with the appropriate `Content-Type`.
+
+**Error** `404` if no image has been uploaded.
+
+### `DELETE /auth/me/background`
+Remove the uploaded background image and clear the `background` field.
+
+**Response** `204 No Content`
 
 ### `PATCH /auth/session`
 Update own session length.

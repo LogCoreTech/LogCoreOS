@@ -142,6 +142,9 @@ The App currently provides:
 - Notes module (markdown notes editor, stored in Brain/Notes/)
 - Journal module (daily entries stored in Brain/Journal/YYYY-MM-DD.md, with agent tools)
 - Calendar backend (module guard enforcement, events CRUD with household pool and color picker)
+- Per-user appearance theming: accent color (8 presets + any hex), dark/light/system mode, background (7 gradient presets + custom image upload), density (comfortable/compact), corner radius (rounded/sharp) — all persisted in `auth.json` and applied via CSS variables with FOUC prevention
+- Collapsible sidebar (desktop) with collapse state persisted to `localStorage`
+- Frosted card blur, left-border active nav highlight, CSS variable-driven corner radii
 
 **Phase 2 (complete):**
 
@@ -334,6 +337,10 @@ Done:
 - Notes module (markdown notes editor, stored in Brain/Notes/)
 - Journal module (daily entries stored in Brain/Journal/YYYY-MM-DD.md, with agent tools)
 - Calendar backend (module guard enforcement, events CRUD with household pool and color picker)
+- Per-user appearance theming (accent color, dark/light/system mode, background gradients + custom image, density, corner style)
+- Collapsible desktop sidebar, frosted card blur, left-border active nav, CSS variable-driven design tokens
+- Admin hosting panel (cookie_secure, trust_proxy_headers, domain URL, Cloudflare Tunnel token + apply)
+- launch.sh one-command startup script
 
 Deferred:
 
