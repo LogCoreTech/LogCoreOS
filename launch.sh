@@ -49,6 +49,42 @@ log_info()  { echo "    $1"; }
 log_warn()  { echo "    WARNING: $1"; }
 die()       { echo "    ERROR: $1"; exit 1; }
 
+# ── Docker group ──────────────────────────────────────────────────────────────
+
+ensure_docker_group() {
+  # Fast path: Docker socket is already accessible.
+  if docker info &>/dev/null 2>&1; then
+    return 0
+  fi
+
+  local user
+  user="$(id -un)"
+
+  # User is listed in the docker group in /etc/group but the current session
+  # was opened before they were added — re-exec via 'sg docker' to activate
+  # the group without requiring a full logout/login.
+  if getent group docker 2>/dev/null | grep -qw "$user" && ! id -Gn | grep -qw docker; then
+    log_info "Docker group membership isn't active in this session."
+    log_info "Re-launching via 'sg docker' (no logout needed)..."
+    if [[ $# -eq 0 ]]; then
+      exec sg docker -c "bash \"$SCRIPT_DIR/launch.sh\""
+    else
+      local args
+      args="$(printf '%q ' "$@")"
+      exec sg docker -c "bash \"$SCRIPT_DIR/launch.sh\" $args"
+    fi
+  fi
+
+  # User isn't in the docker group at all.
+  if ! getent group docker 2>/dev/null | grep -qw "$user"; then
+    die "Cannot connect to Docker. '$user' is not in the docker group.
+    Fix it with:
+      sudo usermod -aG docker $user
+    Then either log out and back in, or run:
+      newgrp docker"
+  fi
+}
+
 # ── Prerequisites ─────────────────────────────────────────────────────────────
 
 check_prerequisites() {
@@ -58,6 +94,12 @@ check_prerequisites() {
     die "Docker is not installed.
     Install it from: https://docs.docker.com/engine/install/
     Then re-run this script."
+  fi
+
+  if ! docker info &>/dev/null 2>&1; then
+    die "Docker is installed but the daemon isn't running.
+    Start it:  sudo systemctl start docker
+    Status:    sudo systemctl status docker"
   fi
 
   if ! docker compose version &>/dev/null 2>&1; then
@@ -244,6 +286,7 @@ print_success() {
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 main() {
+  ensure_docker_group "$@"
   parse_flags "$@"
 
   echo ""
