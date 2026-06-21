@@ -16,7 +16,7 @@ async function request(method, path, body) {
     if (!window.location.pathname.startsWith('/login')) {
       window.location.href = '/login'
     }
-    return
+    throw new Error('Session expired. Please sign in again.')
   }
   if (res.status === 204) return null
   const data = await res.json()
@@ -36,7 +36,7 @@ async function requestFile(method, path, file) {
   if (res.status === 401) {
     localStorage.removeItem('lc_user')
     if (!window.location.pathname.startsWith('/login')) window.location.href = '/login'
-    return
+    throw new Error('Session expired. Please sign in again.')
   }
   if (res.status === 204) return null
   const data = await res.json()

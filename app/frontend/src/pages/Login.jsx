@@ -26,15 +26,16 @@ export default function Login() {
     setLoading(true)
     try {
       if (mode === 'login') {
-        // Cookie is set server-side by the login response — no token handling needed here
+        // Cookie is set server-side by the login response — no token handling needed here.
+        // The login endpoint returns full user data; use it directly to avoid a redundant
+        // /me round-trip that can fail on mobile before the cookie is fully available.
         const res = await authApi.login(email, password)
-        const [me, status] = await Promise.all([authApi.me(), setupApi.status()])
-        login(me.id, me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC', me.accent_color || null, me.dark_mode || 'system', me.background || null, me.density || 'comfortable', me.corner_style || 'rounded')
+        const status = await setupApi.status()
+        login(res.id, res.name, res.role, res.disabled_modules || [], res.timezone || 'UTC', res.accent_color || null, res.dark_mode || 'system', res.background || null, res.density || 'comfortable', res.corner_style || 'rounded')
         navigate(status.setup_complete ? '/' : '/setup')
       } else {
         const res = await authApi.register(email, password, name)
-        const me = await authApi.me()
-        login(me.id, me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC', me.accent_color || null, me.dark_mode || 'system', me.background || null, me.density || 'comfortable', me.corner_style || 'rounded')
+        login(res.id, res.name, res.role, res.disabled_modules || [], res.timezone || 'UTC', res.accent_color || null, res.dark_mode || 'system', res.background || null, res.density || 'comfortable', res.corner_style || 'rounded')
         navigate('/setup')
       }
     } catch (err) {
