@@ -141,7 +141,7 @@ The App currently provides:
 - Docker Compose deployment
 - Notes module (markdown notes editor, stored in Brain/Notes/)
 - Journal module (daily entries stored in Brain/Journal/YYYY-MM-DD.md, with agent tools)
-- Calendar backend (module guard enforcement, independent of tasks module)
+- Calendar backend (module guard enforcement, events CRUD with household pool and color picker)
 
 **Phase 2 (complete):**
 
@@ -154,7 +154,7 @@ The App currently provides:
 **Planned (future phases):**
 
 - Projects (deferred from Phase 1; roadmapped for Phase 3+)
-- Calendar UI (backend guards in place; UI not yet built)
+- Calendar UI (backend + events API complete; frontend UI not yet built — see docs/BACKLOG.md)
 - Health tracking
 - Home automation
 - External integrations (Google Calendar, Apple Health, etc.)
@@ -261,8 +261,12 @@ The `brain/` folder and `auth.json` are mounted as volumes — all data persists
 | `ANTHROPIC_API_KEY` | *(required for chat)* | Anthropic API key |
 | `AI_MODEL` | `claude-sonnet-4-6` | Model to use |
 | `ALLOWED_ORIGINS` | `*` | CORS origins (lock down in production) |
+| `COOKIE_SECURE` | `true` | Require HTTPS for auth cookies (set false for local HTTP) |
+| `TRUST_PROXY_HEADERS` | `false` | Trust X-Forwarded-For header (enable behind a reverse proxy) |
 | `SCHEDULER_TIMEZONE` | `America/Chicago` | IANA timezone for all scheduled jobs |
 | `ALLOW_OPEN_REGISTRATION` | `false` | Allow self-registration after first user |
+
+`COOKIE_SECURE` and `TRUST_PROXY_HEADERS` can be overridden at runtime without a restart via **Admin → Hosting**. The panel writes to `brain/hosting.json`; the app reads that file on every request and the runtime value always wins over the env var.
 
 **Backups:**
 
@@ -329,7 +333,7 @@ Done:
 - Docker Compose deployment
 - Notes module (markdown notes editor, stored in Brain/Notes/)
 - Journal module (daily entries stored in Brain/Journal/YYYY-MM-DD.md, with agent tools)
-- Calendar backend (module guard enforcement, independent of tasks module)
+- Calendar backend (module guard enforcement, events CRUD with household pool and color picker)
 
 Deferred:
 

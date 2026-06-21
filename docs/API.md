@@ -141,6 +141,44 @@ Update runtime admin settings.
 
 **Body** `{ "allow_open_registration": true }`
 
+### `GET /auth/admin/ai-settings`
+Get AI provider configuration.
+
+**Response** `{ "provider": "anthropic", "model": "claude-sonnet-4-6", "api_key_set": true }`
+
+### `PATCH /auth/admin/ai-settings`
+Update AI provider configuration.
+
+**Body** `{ "provider": "anthropic", "model": "claude-sonnet-4-6", "api_key": "sk-..." }`
+
+### `GET /auth/admin/search-settings`
+Get Tavily web search configuration.
+
+**Response** `{ "tavily_key_set": true }`
+
+### `PATCH /auth/admin/search-settings`
+Update Tavily API key.
+
+**Body** `{ "tavily_key": "tvly-..." }`
+
+### `GET /auth/admin/hosting-settings`
+Get current hosting configuration (reads from `brain/hosting.json` with env var fallback).
+
+**Response** `{ "cookie_secure": false, "trust_proxy_headers": false, "domain_url": "" }`
+
+### `PATCH /auth/admin/hosting-settings`
+Update hosting configuration. Takes effect immediately without a restart.
+
+**Body** `{ "cookie_secure": true, "trust_proxy_headers": true, "domain_url": "https://logcore.example.com" }`
+
+### `POST /auth/admin/users`
+Create a new user (admin only).
+
+**Body** `{ "email": "bob@example.com", "password": "secret", "name": "Bob", "role": "member" }`
+
+### `DELETE /auth/admin/users/{user_id}`
+Delete a user and their Brain folder.
+
 ---
 
 ## Tasks
@@ -287,7 +325,186 @@ Download the current user's entire brain folder as a `.zip` file.
 
 ---
 
+## Notes
+
+All endpoints require the `notes` module to be enabled.
+
+### `GET /notes`
+List all notes files and folders for the current user.
+
+### `GET /notes/file/{path}`
+Read a note file. Path is relative to the user's Notes folder.
+
+### `POST /notes/file`
+Create a new note file.
+
+**Body** `{ "path": "ideas/startup.md", "content": "# Ideas\n\n..." }`
+
+### `PUT /notes/file/{path}`
+Update an existing note file.
+
+**Body** `{ "content": "# Updated\n\n..." }`
+
+### `DELETE /notes/file/{path}`
+Delete a note file.
+
+### `POST /notes/folder`
+Create a new folder.
+
+**Body** `{ "path": "projects/logcore" }`
+
+### `DELETE /notes/folder/{path}`
+Delete a folder and all its contents.
+
+### `POST /notes/move`
+Move or rename a file or folder.
+
+**Body** `{ "from": "old/path.md", "to": "new/path.md" }`
+
+---
+
+## Journal
+
+All endpoints require the `journal` module to be enabled.
+
+### `GET /journal`
+List all journal entry dates for the current user.
+
+### `GET /journal/{date}`
+Read a journal entry. `date` format: `YYYY-MM-DD`.
+
+### `PUT /journal/{date}`
+Write or replace a journal entry.
+
+**Body** `{ "content": "# Today\n\n..." }`
+
+### `DELETE /journal/{date}`
+Delete a journal entry.
+
+---
+
+## Calendar
+
+All endpoints require the `calendar` module to be enabled.
+
+### `GET /calendar/tasks`
+Get tasks that have a due date (for calendar display).
+
+### `GET /calendar/events`
+List calendar events for the current user.
+
+### `POST /calendar/events`
+Create a calendar event.
+
+**Body**
+```json
+{
+  "title": "Family dinner",
+  "date": "2026-06-25",
+  "color": "#f97316",
+  "notes": "Book the restaurant"
+}
+```
+
+### `GET /calendar/events/{event_id}`
+Get a single event.
+
+### `PATCH /calendar/events/{event_id}`
+Update a calendar event. Only send fields to change.
+
+### `DELETE /calendar/events/{event_id}`
+Delete a calendar event.
+
+---
+
+## Profile
+
+### `GET /profile`
+Read the current user's `Profile.md` content.
+
+**Response** `{ "content": "# Profile\n\n..." }`
+
+### `PUT /profile`
+Replace the current user's `Profile.md`.
+
+**Body** `{ "content": "# Profile\n\n..." }`
+
+---
+
+## Suggestions
+
+### `GET /suggestions`
+List active proactive suggestions for the current user.
+
+### `PUT /suggestions/{suggestion_id}`
+Update a suggestion (e.g., dismiss or snooze).
+
+### `POST /suggestions/{suggestion_id}/run`
+Execute a suggestion action.
+
+### `DELETE /suggestions/custom/{suggestion_id}`
+Delete a custom suggestion.
+
+### `GET /suggestions/notifications`
+List the notification inbox for the current user.
+
+### `POST /suggestions/notifications/{notif_id}/read`
+Mark a notification as read.
+
+### `DELETE /suggestions/notifications`
+Clear all notifications.
+
+---
+
+## Shared Tasks & Events
+
+Shared endpoints are for the household pool (tasks and events shared across users). Prefix: `/api/v1/shared/tasks`.
+
+### `GET /shared/tasks`
+List shared tasks.
+
+### `POST /shared/tasks`
+Create a shared task.
+
+### `PATCH /shared/tasks/{task_id}`
+Update a shared task.
+
+### `DELETE /shared/tasks/{task_id}`
+Delete a shared task.
+
+### `GET /shared/tasks/events`
+List shared calendar events (household pool).
+
+### `POST /shared/tasks/events`
+Create a shared calendar event.
+
+### `PATCH /shared/tasks/events/{event_id}`
+Update a shared event.
+
+### `DELETE /shared/tasks/events/{event_id}`
+Delete a shared event.
+
+---
+
+## Push Notifications
+
+### `GET /push/vapid-key`
+Get the VAPID public key for web push subscription.
+
+### `POST /push/subscribe`
+Register a push subscription.
+
+**Body** — Web Push subscription object from the browser.
+
+### `DELETE /push/subscribe`
+Remove the current push subscription.
+
+### `POST /push/test`
+Send a test push notification to the current user.
+
+---
+
 ## Health
 
 ### `GET /health`
-Returns `{ "status": "ok" }`. No auth required.
+Returns `{ "status": "ok" }`. No auth required. Used by Docker healthcheck.
