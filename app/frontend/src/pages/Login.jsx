@@ -29,12 +29,12 @@ export default function Login() {
         // Cookie is set server-side by the login response — no token handling needed here
         const res = await authApi.login(email, password)
         const [me, status] = await Promise.all([authApi.me(), setupApi.status()])
-        login(me.id, me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC')
+        login(me.id, me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC', me.accent_color || null, me.dark_mode || 'system', me.background || null, me.density || 'comfortable', me.corner_style || 'rounded')
         navigate(status.setup_complete ? '/' : '/setup')
       } else {
         const res = await authApi.register(email, password, name)
         const me = await authApi.me()
-        login(me.id, me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC')
+        login(me.id, me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC', me.accent_color || null, me.dark_mode || 'system', me.background || null, me.density || 'comfortable', me.corner_style || 'rounded')
         navigate('/setup')
       }
     } catch (err) {

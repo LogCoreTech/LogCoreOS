@@ -117,6 +117,13 @@ export default function Layout() {
   const navigate = useNavigate()
   const [shortcuts, setShortcuts] = useState(getShortcuts)
   const [showDrawer, setShowDrawer] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('lc_sidebar') === 'collapsed')
+
+  function toggleSidebar() {
+    const next = !collapsed
+    setCollapsed(next)
+    localStorage.setItem('lc_sidebar', next ? 'collapsed' : 'expanded')
+  }
 
   // Re-read shortcuts when Settings saves them
   useEffect(() => {
@@ -138,69 +145,86 @@ export default function Layout() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-charcoal-50 dark:bg-charcoal-900">
+    <div className="flex h-screen overflow-hidden">
 
-      {/* Sidebar — desktop only, always shows all modules */}
-      <aside className="hidden md:flex flex-col w-56 bg-white dark:bg-charcoal-950 border-r border-charcoal-200 dark:border-charcoal-800">
-        <div className="px-5 py-5 border-b border-charcoal-200 dark:border-charcoal-800 flex items-start justify-between">
-          <div>
-            <span className="text-orange-500 font-bold text-xl tracking-tight">LogCore</span>
-            <span className="text-charcoal-400 dark:text-charcoal-500 text-xs block mt-0.5">
-              {user?.name}
-            </span>
-          </div>
-          <NotifBell />
+      {/* Sidebar — desktop only */}
+      <aside className={`hidden md:flex flex-col bg-white dark:bg-charcoal-950 border-r border-charcoal-200 dark:border-charcoal-800 transition-all duration-200 ${collapsed ? 'w-14' : 'w-56'}`}>
+        <div className={`border-b border-charcoal-200 dark:border-charcoal-800 ${collapsed ? 'px-2 py-3 flex flex-col items-center gap-2' : 'px-5 py-5 flex items-start justify-between'}`}>
+          {collapsed ? (
+            <>
+              <span className="text-orange-500 font-bold text-xl">LC</span>
+              <NotifBell />
+            </>
+          ) : (
+            <>
+              <div>
+                <span className="text-orange-500 font-bold text-xl tracking-tight">LogCore</span>
+                <span className="text-charcoal-400 dark:text-charcoal-500 text-xs block mt-0.5">{user?.name}</span>
+              </div>
+              <NotifBell />
+            </>
+          )}
         </div>
 
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 p-2 space-y-0.5">
           {visibleModules.map(({ id, to, icon, label }) => (
             <NavLink
               key={id}
               to={to}
               end={to === '/'}
+              title={collapsed ? label : undefined}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                `flex items-center gap-3 px-3 py-2 text-sm font-medium transition-colors border-l-2 rounded-r-lg ${
                   isActive
-                    ? 'bg-orange-500 text-white'
-                    : 'text-charcoal-600 dark:text-charcoal-400 hover:bg-charcoal-100 dark:hover:bg-charcoal-800'
-                }`
+                    ? 'border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400'
+                    : 'border-transparent text-charcoal-600 dark:text-charcoal-400 hover:bg-charcoal-100 dark:hover:bg-charcoal-800'
+                } ${collapsed ? 'justify-center' : ''}`
               }
             >
-              <span className="text-base">{icon}</span>
-              {label}
+              <span className="text-base shrink-0">{icon}</span>
+              {!collapsed && label}
             </NavLink>
           ))}
         </nav>
 
-        <div className="p-3 border-t border-charcoal-200 dark:border-charcoal-800 space-y-1">
+        <div className="p-2 border-t border-charcoal-200 dark:border-charcoal-800 space-y-0.5">
           {user?.role === 'admin' && (
             <NavLink
               to="/admin"
+              title={collapsed ? 'Admin' : undefined}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                `flex items-center gap-3 px-3 py-2 text-sm font-medium transition-colors border-l-2 rounded-r-lg ${
                   isActive
-                    ? 'bg-orange-500 text-white'
-                    : 'text-charcoal-600 dark:text-charcoal-400 hover:bg-charcoal-100 dark:hover:bg-charcoal-800'
-                }`
+                    ? 'border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400'
+                    : 'border-transparent text-charcoal-600 dark:text-charcoal-400 hover:bg-charcoal-100 dark:hover:bg-charcoal-800'
+                } ${collapsed ? 'justify-center' : ''}`
               }
             >
-              <span className="text-base">🛡</span>
-              Admin
+              <span className="text-base shrink-0">🛡</span>
+              {!collapsed && 'Admin'}
             </NavLink>
           )}
           <NavLink
             to="/settings"
+            title={collapsed ? 'Settings' : undefined}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              `flex items-center gap-3 px-3 py-2 text-sm font-medium transition-colors border-l-2 rounded-r-lg ${
                 isActive
-                  ? 'bg-orange-500 text-white'
-                  : 'text-charcoal-600 dark:text-charcoal-400 hover:bg-charcoal-100 dark:hover:bg-charcoal-800'
-              }`
+                  ? 'border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400'
+                  : 'border-transparent text-charcoal-600 dark:text-charcoal-400 hover:bg-charcoal-100 dark:hover:bg-charcoal-800'
+              } ${collapsed ? 'justify-center' : ''}`
             }
           >
-            <span className="text-base">⚙</span>
-            Settings
+            <span className="text-base shrink-0">⚙</span>
+            {!collapsed && 'Settings'}
           </NavLink>
+          <button
+            onClick={toggleSidebar}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className="w-full flex items-center justify-center py-2 text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200 transition-colors text-xs"
+          >
+            {collapsed ? '›' : '‹'}
+          </button>
         </div>
       </aside>
 

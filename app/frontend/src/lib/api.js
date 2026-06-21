@@ -29,17 +29,34 @@ const post   = (path, body) => request('POST',   path, body)
 const patch  = (path, body) => request('PATCH',  path, body)
 const del    = (path)       => request('DELETE', path)
 
+async function requestFile(method, path, file) {
+  const fd = new FormData()
+  fd.append('file', file)
+  const res = await fetch(`${BASE}${path}`, { method, credentials: 'include', body: fd })
+  if (res.status === 401) {
+    localStorage.removeItem('lc_user')
+    if (!window.location.pathname.startsWith('/login')) window.location.href = '/login'
+    return
+  }
+  if (res.status === 204) return null
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.detail || 'Request failed')
+  return data
+}
+
 export const auth = {
   register: (email, password, name, session_minutes) =>
     post('/auth/register', { email, password, name, session_minutes }),
-  login:         (email, password) => post('/auth/login',   { email, password }),
-  logout:        ()                => post('/auth/logout',  {}),
-  token:         (email, password) => post('/auth/token',   { email, password }),
-  me:            ()                => get('/auth/me'),
-  today:         ()                => get('/auth/today'),
-  status:        ()                => get('/auth/status'),
-  updateSession: (session_minutes) => patch('/auth/session', { session_minutes }),
-  updateMe:      (data)            => patch('/auth/me', data),
+  login:            (email, password) => post('/auth/login',   { email, password }),
+  logout:           ()                => post('/auth/logout',  {}),
+  token:            (email, password) => post('/auth/token',   { email, password }),
+  me:               ()                => get('/auth/me'),
+  today:            ()                => get('/auth/today'),
+  status:           ()                => get('/auth/status'),
+  updateSession:    (session_minutes) => patch('/auth/session', { session_minutes }),
+  updateMe:         (data)            => patch('/auth/me', data),
+  uploadBackground: (file)            => requestFile('POST', '/auth/me/background', file),
+  deleteBackground: ()                => del('/auth/me/background'),
 }
 
 export const tasks = {
