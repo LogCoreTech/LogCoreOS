@@ -4,7 +4,6 @@ from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -13,6 +12,7 @@ from config import settings
 from migrations.runner import run_pending as run_migrations
 from routers import auth, tasks, priorities, chat, setup, health, brain, export, shared, push, notes, journal, calendar, profile, suggestions
 from scheduler import start as start_scheduler
+from services.hosting_service import effective_domain_url
 
 logger = logging.getLogger("logcore")
 
@@ -93,26 +93,46 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class DynamicCORSMiddleware(BaseHTTPMiddleware):
+    """CORS middleware that reads allowed origins from brain/hosting.json at request time.
+
+    Reflects the request Origin header (never sends '*') so credentials work per the CORS
+    spec. When a domain_url is set via Admin → Hosting, only that origin is permitted.
+    Falls back to settings.allowed_origins when no domain is configured.
+    """
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        origin = request.headers.get("origin", "")
+
+        if request.method == "OPTIONS":
+            response = Response(status_code=200)
+        else:
+            response = await call_next(request)
+
+        if origin and self._is_allowed(origin):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+            if request.method == "OPTIONS":
+                response.headers["Access-Control-Max-Age"] = "600"
+
+        return response
+
+    @staticmethod
+    def _is_allowed(origin: str) -> bool:
+        domain = effective_domain_url()
+        if domain:
+            return origin.rstrip("/") == domain.rstrip("/")
+        # No domain configured: fall back to env-var setting
+        allowed = settings.allowed_origins.strip()
+        if allowed == "*":
+            return True
+        return origin in {o.strip() for o in allowed.split(",") if o.strip()}
+
+
 app.add_middleware(SecurityHeadersMiddleware)
-
-_wildcard_cors = settings.allowed_origins.strip() == "*"
-_origins = (
-    []
-    if _wildcard_cors
-    else [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    # When wildcard is requested, use allow_origin_regex=".*" so the browser
-    # receives a reflected origin instead of "*", which is required when
-    # allow_credentials=True (browsers reject "*" + credentials per CORS spec).
-    allow_origin_regex=".*" if _wildcard_cors else None,
-    allow_origins=_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(DynamicCORSMiddleware)
 
 app.include_router(health.router,     prefix="/api/v1/health",     tags=["health"])
 app.include_router(auth.router,       prefix="/api/v1/auth",       tags=["auth"])

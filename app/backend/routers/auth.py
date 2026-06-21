@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from config import settings
 from services import auth_service
 from services.file_service import brain_path, read_json, write_json
+from services.hosting_service import effective_cookie_secure
 from services.rate_limiter import rate_limit
 
 router = APIRouter()
@@ -45,7 +46,7 @@ def _set_auth_cookie(response: Response, token: str, session_minutes: int) -> No
         key=_COOKIE,
         value=token,
         httponly=True,
-        secure=settings.cookie_secure,
+        secure=effective_cookie_secure(),
         samesite="lax",
         max_age=session_minutes * 60,
         path="/",
@@ -406,6 +407,42 @@ def update_search_settings(
     write_json(_AI_SETTINGS_PATH, stored)
     key_set = bool(stored.get("tavily_api_key") or settings.tavily_api_key)
     return {"tavily_key_set": key_set}
+
+
+# ---------------------------------------------------------------------------
+# Admin — hosting settings
+# ---------------------------------------------------------------------------
+
+_HOSTING_SETTINGS_PATH = brain_path() / "hosting.json"
+
+
+class HostingSettingsRequest(BaseModel):
+    cookie_secure: bool
+    trust_proxy_headers: bool
+    domain_url: str = ""
+
+
+@router.get("/admin/hosting-settings")
+def get_hosting_settings(current_user: dict = Depends(require_admin)):
+    stored = read_json(_HOSTING_SETTINGS_PATH, default={})
+    return {
+        "cookie_secure": stored.get("cookie_secure", settings.cookie_secure),
+        "trust_proxy_headers": stored.get("trust_proxy_headers", settings.trust_proxy_headers),
+        "domain_url": stored.get("domain_url", ""),
+    }
+
+
+@router.patch("/admin/hosting-settings")
+def update_hosting_settings(
+    req: HostingSettingsRequest,
+    current_user: dict = Depends(require_admin),
+):
+    stored = read_json(_HOSTING_SETTINGS_PATH, default={})
+    stored["cookie_secure"] = req.cookie_secure
+    stored["trust_proxy_headers"] = req.trust_proxy_headers
+    stored["domain_url"] = req.domain_url.rstrip("/")
+    write_json(_HOSTING_SETTINGS_PATH, stored)
+    return stored
 
 
 # ---------------------------------------------------------------------------

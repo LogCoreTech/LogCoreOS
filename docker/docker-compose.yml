@@ -8,7 +8,7 @@ services:
       - "8000:8000"
     volumes:
       - ../brain:/data/brain
-      - ../app/frontend/dist:/app/frontend/dist
+      - ../app/frontend/dist:/frontend/dist
     environment:
       BRAIN_PATH: /data/brain
       SECRET_KEY: ${SECRET_KEY}
@@ -21,10 +21,12 @@ services:
       MORNING_DIGEST_HOUR: ${MORNING_DIGEST_HOUR:-6}
       OVERDUE_CHECK_HOUR: ${OVERDUE_CHECK_HOUR:-19}
       ALLOW_OPEN_REGISTRATION: ${ALLOW_OPEN_REGISTRATION:-false}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
     depends_on:
       - ntfy
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8000/api/health"]
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/api/v1/health"]
       interval: 30s
       timeout: 5s
       retries: 3

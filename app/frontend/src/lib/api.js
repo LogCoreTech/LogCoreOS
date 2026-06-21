@@ -87,6 +87,9 @@ export const admin = {
   // Web search settings
   getSearchSettings:     ()    => get('/auth/admin/search-settings'),
   updateSearchSettings:  (s)   => patch('/auth/admin/search-settings', s),
+  // Hosting / tunnel settings
+  getHostingSettings:    ()    => get('/auth/admin/hosting-settings'),
+  updateHostingSettings: (s)   => patch('/auth/admin/hosting-settings', s),
 }
 
 export const setup = {

@@ -667,6 +667,132 @@ function WebSearchCard() {
 }
 
 // ---------------------------------------------------------------------------
+// Hosting card
+// ---------------------------------------------------------------------------
+function HostingCard() {
+  const [form, setForm]       = useState({ mode: 'local', domain_url: '' })
+  const [saving, setSaving]   = useState(false)
+  const [msg, setMsg]         = useState(null)
+
+  useEffect(() => {
+    adminApi.getHostingSettings().then(s => {
+      const isHttps = s.cookie_secure === true || s.trust_proxy_headers === true
+      setForm({
+        mode: isHttps ? 'https' : 'local',
+        domain_url: s.domain_url || '',
+      })
+    }).catch(() => {})
+  }, [])
+
+  async function save(e) {
+    e.preventDefault()
+    setSaving(true)
+    setMsg(null)
+    const isHttps = form.mode === 'https'
+    try {
+      await adminApi.updateHostingSettings({
+        cookie_secure: isHttps,
+        trust_proxy_headers: isHttps,
+        domain_url: isHttps ? form.domain_url.trim() : '',
+      })
+      setMsg({ ok: true, text: 'Saved.' })
+    } catch (err) {
+      setMsg({ ok: false, text: err.message || 'Save failed.' })
+    } finally {
+      setSaving(false)
+      setTimeout(() => setMsg(null), 4000)
+    }
+  }
+
+  const isHttps = form.mode === 'https'
+
+  return (
+    <div className="card p-5">
+      <h2 className="font-semibold mb-1">Hosting</h2>
+      <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-4">
+        Configure how this app is accessed. Changes take effect immediately — no restart needed.
+      </p>
+
+      <form onSubmit={save} className="space-y-4">
+        <div className="space-y-2">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="radio"
+              name="mode"
+              value="local"
+              checked={form.mode === 'local'}
+              onChange={() => setForm(f => ({ ...f, mode: 'local', domain_url: '' }))}
+              className="accent-orange-500"
+            />
+            <span className="text-sm">
+              <span className="font-medium">Local only</span>
+              <span className="text-charcoal-500 dark:text-charcoal-400"> — http://localhost:8000</span>
+            </span>
+          </label>
+
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="radio"
+              name="mode"
+              value="https"
+              checked={form.mode === 'https'}
+              onChange={() => setForm(f => ({ ...f, mode: 'https' }))}
+              className="accent-orange-500"
+            />
+            <span className="text-sm font-medium">HTTPS via Tunnel or Reverse Proxy</span>
+          </label>
+        </div>
+
+        {isHttps && (
+          <div>
+            <label className="block text-sm font-medium mb-1">Domain URL</label>
+            <input
+              type="url"
+              value={form.domain_url}
+              onChange={e => setForm(f => ({ ...f, domain_url: e.target.value }))}
+              placeholder="https://logcore.yourdomain.com"
+              className="input"
+              required={isHttps}
+            />
+            <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mt-1">
+              The full URL you use to access this app. Your tunnel or proxy must forward to{' '}
+              <span className="font-mono">localhost:8000</span>.
+            </p>
+          </div>
+        )}
+
+        {msg && (
+          <p className={`text-sm ${msg.ok ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+            {msg.text}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={saving || (isHttps && !form.domain_url.trim())}
+          className="btn-primary w-full disabled:opacity-50"
+        >
+          {saving ? 'Saving…' : 'Save Hosting Settings'}
+        </button>
+
+        {isHttps && form.domain_url && (
+          <p className="text-xs text-charcoal-500 dark:text-charcoal-400 flex items-start gap-1">
+            <span>✓</span>
+            <span>
+              App accessible at{' '}
+              <a href={form.domain_url} target="_blank" rel="noopener noreferrer" className="text-orange-500 underline">
+                {form.domain_url}
+              </a>
+              . Make sure your tunnel passes the <span className="font-mono">X-Forwarded-For</span> header.
+            </span>
+          </p>
+        )}
+      </form>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 export default function Admin() {
@@ -679,6 +805,7 @@ export default function Admin() {
       <RegistrationCard />
       <AiProviderCard />
       <WebSearchCard />
+      <HostingCard />
     </div>
   )
 }
