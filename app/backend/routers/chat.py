@@ -22,7 +22,8 @@ router = APIRouter()
 
 _require_chat = require_module("chat")
 _chat_limit   = rate_limit(20, 60)  # 20 messages per minute per IP
-_memory_limit = rate_limit(5, 60)   # 5 memory saves per minute per IP
+_memory_limit = rate_limit(5, 60)    # 5 memory saves per minute per IP
+_save_limit   = rate_limit(30, 60)  # 30 chat auto-saves per minute per IP
 
 _MEMORY_MAX_BYTES = 100_000  # 100 KB cap per memory file
 
@@ -206,13 +207,15 @@ async def save_memory(
 
 class ChatSaveRequest(BaseModel):
     history: list[HistoryMessage] = Field(..., min_length=1, max_length=50)
+    name: str = Field("", max_length=100)
+    filename: str = Field("", max_length=50)  # if set, overwrite this existing file
 
 
 @router.post("/save")
 async def save_chat(
     req: ChatSaveRequest,
     current_user: dict = Depends(_require_chat),
-    _rl: None = Depends(_memory_limit),
+    _rl: None = Depends(_save_limit),
 ):
     from datetime import datetime
     from zoneinfo import ZoneInfo
@@ -223,19 +226,37 @@ async def save_chat(
     except Exception:
         now = datetime.now(ZoneInfo("UTC"))
 
-    timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
-    date_label = now.strftime("%B %d, %Y at %I:%M %p")
-
     chats_dir = user_path(current_user["name"]) / "Chats"
     chats_dir.mkdir(parents=True, exist_ok=True)
 
-    lines = [f"# Chat — {date_label}\n"]
+    # Overwrite existing file if filename provided, otherwise create new
+    if req.filename.strip():
+        target = (chats_dir / req.filename.strip()).resolve()
+        if not target.is_relative_to(chats_dir.resolve()):
+            raise HTTPException(status_code=400, detail="Invalid filename")
+        filename = req.filename.strip()
+        # Preserve original title from first line if no new name given
+        existing_title = None
+        if target.exists():
+            try:
+                existing_title = target.open().readline().strip().lstrip('# ')
+            except Exception:
+                pass
+        title = req.name.strip() or existing_title or "Chat"
+    else:
+        timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
+        filename = f"{timestamp}.md"
+        date_label = now.strftime("%B %d, %Y at %I:%M %p")
+        title = req.name.strip() or f"Chat — {date_label}"
+
+    date_label = now.strftime("%B %d, %Y at %I:%M %p")
+    lines = [f"# {title}\n", f"*{date_label}*\n"]
     for msg in req.history:
         label = "**You**" if msg.role == "user" else "**AI**"
         lines.append(f"{label}: {msg.content}\n")
 
-    write_markdown(chats_dir / f"{timestamp}.md", "\n".join(lines))
-    return {"ok": True, "filename": f"{timestamp}.md"}
+    write_markdown(chats_dir / filename, "\n".join(lines))
+    return {"ok": True, "filename": filename, "title": title}
 
 
 @router.get("/saved")
@@ -244,7 +265,27 @@ def list_saved_chats(current_user: dict = Depends(_require_chat)):
     if not chats_dir.exists():
         return []
     files = sorted(chats_dir.glob("*.md"), reverse=True)
-    return [{"filename": f.name, "path": f"Chats/{f.name}"} for f in files]
+    result = []
+    for f in files:
+        # Read only the first line to get the title cheaply
+        try:
+            first_line = f.open().readline().strip().lstrip('# ')
+        except Exception:
+            first_line = f.stem
+        result.append({"filename": f.name, "path": f"Chats/{f.name}", "title": first_line})
+    return result
+
+
+@router.delete("/saved/{filename}")
+def delete_saved_chat(filename: str, current_user: dict = Depends(_require_chat)):
+    chats_dir = user_path(current_user["name"]) / "Chats"
+    target = (chats_dir / filename).resolve()
+    if not target.is_relative_to(chats_dir.resolve()):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Chat not found")
+    target.unlink()
+    return {"ok": True}
 
 
 @router.get("/runs")

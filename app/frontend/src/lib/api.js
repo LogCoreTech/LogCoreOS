@@ -84,8 +84,9 @@ export const profile = {
 export const chat = {
   send:       (message, history, mode = 'plan') => post('/chat', { message, history, mode }),
   saveMemory: (history, target = 'short') => post('/chat/save-memory',  { history, target }),
-  saveChat:   (history)                   => post('/chat/save', { history }),
+  saveChat:   (history, name = '', filename = '') => post('/chat/save', { history, name, filename }),
   listSaved:  ()                          => get('/chat/saved'),
+  deleteSaved: (filename)                 => del(`/chat/saved/${encodeURIComponent(filename)}`),
   runs:       ()                          => get('/chat/runs'),
   getRun:     (id)                        => get(`/chat/runs/${id}`),
 }
