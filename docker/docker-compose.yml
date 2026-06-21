@@ -9,6 +9,7 @@ services:
     volumes:
       - ../brain:/data/brain
       - ../app/frontend/dist:/frontend/dist
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       BRAIN_PATH: /data/brain
       SECRET_KEY: ${SECRET_KEY}
@@ -23,6 +24,8 @@ services:
       ALLOW_OPEN_REGISTRATION: ${ALLOW_OPEN_REGISTRATION:-false}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
+    group_add:
+      - "${DOCKER_GID:-973}"
     depends_on:
       - ntfy
     healthcheck:
@@ -31,6 +34,15 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: logcore-tunnel
+    restart: unless-stopped
+    network_mode: host
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - app
 
   ntfy:
     image: binwiederhier/ntfy

@@ -12,3 +12,4 @@ openai>=1.0.0
 pydantic==2.7.4
 pydantic-settings==2.3.1
 tzdata==2024.1
+docker>=7.0.0

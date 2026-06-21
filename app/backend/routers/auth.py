@@ -420,6 +420,8 @@ class HostingSettingsRequest(BaseModel):
     cookie_secure: bool
     trust_proxy_headers: bool
     domain_url: str = ""
+    proxy_type: str = ""      # "cloudflare" | "nginx" | ""
+    tunnel_token: str = ""    # Cloudflare tunnel token; empty = don't overwrite stored value
 
 
 @router.get("/admin/hosting-settings")
@@ -429,6 +431,8 @@ def get_hosting_settings(current_user: dict = Depends(require_admin)):
         "cookie_secure": stored.get("cookie_secure", settings.cookie_secure),
         "trust_proxy_headers": stored.get("trust_proxy_headers", settings.trust_proxy_headers),
         "domain_url": stored.get("domain_url", ""),
+        "proxy_type": stored.get("proxy_type", ""),
+        "tunnel_token_set": bool(stored.get("tunnel_token", "")),
     }
 
 
@@ -441,8 +445,50 @@ def update_hosting_settings(
     stored["cookie_secure"] = req.cookie_secure
     stored["trust_proxy_headers"] = req.trust_proxy_headers
     stored["domain_url"] = req.domain_url.rstrip("/")
+    stored["proxy_type"] = req.proxy_type
+    if req.tunnel_token:
+        stored["tunnel_token"] = req.tunnel_token
     write_json(_HOSTING_SETTINGS_PATH, stored)
-    return stored
+    return {
+        "cookie_secure": stored["cookie_secure"],
+        "trust_proxy_headers": stored["trust_proxy_headers"],
+        "domain_url": stored["domain_url"],
+        "proxy_type": stored["proxy_type"],
+        "tunnel_token_set": bool(stored.get("tunnel_token", "")),
+    }
+
+
+@router.post("/admin/hosting-settings/apply")
+def apply_hosting_settings(current_user: dict = Depends(require_admin)):
+    stored = read_json(_HOSTING_SETTINGS_PATH, default={})
+    if stored.get("proxy_type") != "cloudflare":
+        raise HTTPException(status_code=400, detail="Apply is only available for Cloudflare Tunnel mode.")
+    token = stored.get("tunnel_token", "")
+    if not token:
+        raise HTTPException(status_code=400, detail="No tunnel token saved. Save settings first.")
+    try:
+        import docker as docker_sdk
+        client = docker_sdk.from_env()
+        # Stop and remove the existing container so we can recreate it with the current token.
+        # A plain restart keeps the original env vars from container creation time.
+        try:
+            old = client.containers.get("logcore-tunnel")
+            old.stop(timeout=10)
+            old.remove()
+        except docker_sdk.errors.NotFound:
+            pass
+        client.containers.run(
+            "cloudflare/cloudflared:latest",
+            command="tunnel --no-autoupdate run",
+            name="logcore-tunnel",
+            detach=True,
+            network_mode="host",
+            restart_policy={"Name": "unless-stopped"},
+            environment={"TUNNEL_TOKEN": token},
+        )
+    except docker_sdk.errors.DockerException as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    return {"status": "ok"}
 
 
 # ---------------------------------------------------------------------------

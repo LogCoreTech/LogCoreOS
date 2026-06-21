@@ -18,6 +18,7 @@ ENV_FILE="$DOCKER_DIR/.env"
 ENV_EXAMPLE="$DOCKER_DIR/.env.example"
 FRONTEND_DIR="$REPO_ROOT/app/frontend"
 DIST_DIR="$FRONTEND_DIR/dist"
+BRAIN_HOSTING="$REPO_ROOT/brain/hosting.json"
 HEALTH_URL="http://localhost:8000/api/v1/health"
 HEALTH_TIMEOUT=90
 HEALTH_INTERVAL=3
@@ -130,14 +131,31 @@ generate_env() {
 
   local secret_key
   secret_key="$(generate_secret_key)"
-  env_set SECRET_KEY    "$secret_key"
-  env_set ALLOWED_ORIGINS "*"
-  env_set COOKIE_SECURE  "false"
+  env_set SECRET_KEY          "$secret_key"
+  env_set ALLOWED_ORIGINS     "*"
+  env_set COOKIE_SECURE       "false"
   env_set TRUST_PROXY_HEADERS "false"
+  env_set DOCKER_GID          "$(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo '999')"
 
   log_info "docker/.env created with a generated SECRET_KEY."
   log_info "After first login, go to Admin → AI Settings to add your API key."
   log_info "Go to Admin → Hosting to enable HTTPS/tunnel mode."
+}
+
+# ── Tunnel token sync ─────────────────────────────────────────────────────────
+
+sync_tunnel_token() {
+  [[ -f "$BRAIN_HOSTING" ]] || return 0
+  command -v python3 &>/dev/null || return 0
+
+  local proxy_type token
+  proxy_type="$(python3 -c "import json; d=json.load(open('$BRAIN_HOSTING')); print(d.get('proxy_type',''))" 2>/dev/null || true)"
+  token="$(python3 -c "import json; d=json.load(open('$BRAIN_HOSTING')); print(d.get('tunnel_token',''))" 2>/dev/null || true)"
+
+  if [[ "$proxy_type" == "cloudflare" && -n "$token" ]]; then
+    env_set CLOUDFLARE_TUNNEL_TOKEN "$token"
+    log_info "Cloudflare tunnel token synced from brain/hosting.json."
+  fi
 }
 
 # ── Frontend build ────────────────────────────────────────────────────────────
@@ -245,6 +263,11 @@ main() {
   else
     log_info "docker/.env exists — skipping setup (use --reconfigure to reset it)."
   fi
+
+  sync_tunnel_token
+
+  # Keep DOCKER_GID current (socket GID can vary by host/distro)
+  env_set DOCKER_GID "$(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo '999')"
 
   build_frontend
   launch_containers
