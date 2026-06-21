@@ -14,41 +14,46 @@ A self-hosted, values-driven family life operating system with an AI that knows 
 
 ## Quick Start
 
-### Requirements
-- Docker + Docker Compose
-- Node.js 20+ (to build the frontend)
-- An Anthropic API key (for AI chat — optional but recommended)
+### Prerequisites
+Install these before running the launch script:
 
-### 1. Build the frontend
+| Tool | Version | Install |
+|---|---|---|
+| Docker | latest | [docs.docker.com/engine/install](https://docs.docker.com/engine/install/) |
+| Docker Compose plugin (v2) | latest | [docs.docker.com/compose/install](https://docs.docker.com/compose/install/) |
+| Node.js | 20+ | [nodejs.org](https://nodejs.org/en/download/) or [nvm](https://github.com/nvm-sh/nvm) |
+| curl | any | `sudo apt-get install curl` |
+
+### Launch
+
 ```bash
-cd app/frontend
-npm install
-npm run build
+git clone <repo-url>
+cd LogCoreOS
+./launch.sh
 ```
 
-### 2. Configure environment
+That's it. The script handles everything else:
+- Generates a secure `SECRET_KEY` automatically
+- Builds the React frontend
+- Starts all Docker containers
+- Waits for the app to become healthy
+
+### First login
+Open `http://localhost:8000` in your browser. The first user to register becomes the admin.
+
+After logging in, go to **Admin → AI Settings** to add your Anthropic API key (needed for AI chat).
+
+### Tunnel / external access
+If you're exposing the app via Cloudflare Tunnel, ngrok, or a reverse proxy, go to **Admin → Hosting** after first login, select "HTTPS via Tunnel", and enter your domain URL. No restart needed.
+
+On your phone: open Chrome → go to your app URL → tap "Add to Home Screen" to install as a PWA.
+
+### Re-running the script
 ```bash
-cp docker/.env.example docker/.env
-# Edit docker/.env and fill in SECRET_KEY and ANTHROPIC_API_KEY
+./launch.sh              # rebuild frontend + restart containers
+./launch.sh --skip-build # restart only (skip npm build if nothing changed)
+./launch.sh --reconfigure # reset docker/.env and start fresh
 ```
-
-Generate a secret key:
-```bash
-python3 -c "import secrets; print(secrets.token_hex(32))"
-```
-
-### 3. Start the stack
-```bash
-cd docker
-docker compose up -d
-```
-
-> **Note:** User accounts and auth data are stored in `brain/_system/auth.json`, which is created automatically on first run inside the brain volume. No manual setup required.
-
-### 4. Open the app
-Go to `http://localhost:8000` in your browser.
-
-On your phone: open Chrome → go to `http://YOUR_SERVER_IP:8000` → tap "Add to Home Screen" to install as a PWA.
 
 ---
 

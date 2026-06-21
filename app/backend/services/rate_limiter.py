@@ -4,6 +4,7 @@ import time
 from fastapi import HTTPException, Request
 
 from config import settings
+from services.hosting_service import effective_trust_proxy_headers
 
 _hits: dict[str, list[float]] = {}
 _sweep_n = 0
@@ -22,7 +23,7 @@ def _client_ip(request: Request) -> str:
     X-Forwarded-For is only trusted when TRUST_PROXY_HEADERS=true, preventing
     attackers from spoofing IPs to bypass rate limits when the app is exposed directly.
     """
-    if settings.trust_proxy_headers:
+    if effective_trust_proxy_headers():
         forwarded = request.headers.get("X-Forwarded-For")
         if forwarded:
             candidate = forwarded.split(",")[0].strip()
