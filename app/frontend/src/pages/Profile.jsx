@@ -101,6 +101,13 @@ export default function Profile() {
   }
   function onDragEnd() { setDragIdx(null) }
 
+  function movePriority(from, to) {
+    const next = [...priorityOrder]
+    const [m] = next.splice(from, 1)
+    next.splice(to, 0, m)
+    setPriorityOrder(next)
+  }
+
   function addCustomCat() {
     const v = customCat.trim()
     if (v && !priorityOrder.includes(v)) {
@@ -346,21 +353,35 @@ export default function Profile() {
               onDragStart={() => onDragStart(i)}
               onDragOver={e => onDragOver(e, i)}
               onDragEnd={onDragEnd}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-grab transition-colors ${
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors ${
                 dragIdx === i
                   ? 'border-orange-500 bg-orange-500/10'
                   : 'border-charcoal-200 dark:border-charcoal-700 bg-white dark:bg-charcoal-800'
               }`}
             >
-              <span className="text-charcoal-400 text-xs w-4">{i + 1}</span>
+              <span className="text-charcoal-400 text-xs w-4 shrink-0">{i + 1}</span>
               <span className="flex-1 text-sm">{cat}</span>
+              <div className="flex flex-col shrink-0">
+                <button
+                  type="button"
+                  onClick={() => movePriority(i, i - 1)}
+                  disabled={i === 0}
+                  className="text-charcoal-400 hover:text-orange-500 disabled:opacity-20 leading-none px-1 py-0.5 text-xs"
+                >▲</button>
+                <button
+                  type="button"
+                  onClick={() => movePriority(i, i + 1)}
+                  disabled={i === priorityOrder.length - 1}
+                  className="text-charcoal-400 hover:text-orange-500 disabled:opacity-20 leading-none px-1 py-0.5 text-xs"
+                >▼</button>
+              </div>
               {!BASE_CATS.includes(cat) && (
                 <button
                   onClick={() => removeCustomCat(cat)}
-                  className="text-charcoal-400 hover:text-red-500 text-xs"
+                  className="text-charcoal-400 hover:text-red-500 text-xs shrink-0"
                 >✕</button>
               )}
-              <span className="text-charcoal-300 dark:text-charcoal-600">⠿</span>
+              <span className="text-charcoal-300 dark:text-charcoal-600 cursor-grab hidden md:block">⠿</span>
             </li>
           ))}
         </ul>

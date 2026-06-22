@@ -73,7 +73,8 @@ export const tasks = {
 }
 
 export const priorities = {
-  get: () => get('/priorities'),
+  get:          ()        => get('/priorities'),
+  saveOverride: (order)   => post('/priorities/override', { order }),
 }
 
 export const profile = {

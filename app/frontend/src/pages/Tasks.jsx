@@ -43,12 +43,14 @@ export default function Tasks() {
   }
 
   async function saveOverride() {
-    await prioritiesApi.override(tempOrder)
+    try {
+      await prioritiesApi.saveOverride(tempOrder)
+    } catch { /* non-fatal — order is still applied locally */ }
     setPriorityOrder(tempOrder)
     setShowReorder(false)
   }
 
-  // Drag for reorder modal
+  // Drag for reorder modal (desktop)
   function onDragStart(i) { setDragIdx(i) }
   function onDragOver(e, i) {
     e.preventDefault()
@@ -60,6 +62,13 @@ export default function Tasks() {
     setDragIdx(i)
   }
   function onDragEnd() { setDragIdx(null) }
+
+  function moveItem(from, to) {
+    const next = [...tempOrder]
+    const [m] = next.splice(from, 1)
+    next.splice(to, 0, m)
+    setTempOrder(next)
+  }
 
   const _today = new Date()
   const _todayStr = `${_today.getFullYear()}-${String(_today.getMonth() + 1).padStart(2, '0')}-${String(_today.getDate()).padStart(2, '0')}`
@@ -195,7 +204,7 @@ export default function Tasks() {
           <div className="card p-5 w-full max-w-sm">
             <h3 className="font-semibold mb-1">Reorder Today's Priorities</h3>
             <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-4">
-              Drag to change order for today only. Resets tomorrow.
+              Use the arrows or drag to change order for today only. Resets tomorrow.
             </p>
             <ul className="space-y-2 mb-4">
               {tempOrder.map((cat, i) => (
@@ -205,15 +214,29 @@ export default function Tasks() {
                   onDragStart={() => onDragStart(i)}
                   onDragOver={e => onDragOver(e, i)}
                   onDragEnd={onDragEnd}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-grab transition-colors ${
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors ${
                     dragIdx === i
                       ? 'border-orange-500 bg-orange-500/10'
                       : 'border-charcoal-200 dark:border-charcoal-700 bg-white dark:bg-charcoal-800'
                   }`}
                 >
-                  <span className="text-charcoal-400 text-xs w-4">{i+1}</span>
+                  <span className="text-charcoal-400 text-xs w-4 shrink-0">{i+1}</span>
                   <span className="flex-1 text-sm">{cat}</span>
-                  <span className="text-charcoal-300 dark:text-charcoal-600">⠿</span>
+                  <div className="flex flex-col shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => moveItem(i, i - 1)}
+                      disabled={i === 0}
+                      className="text-charcoal-400 hover:text-orange-500 disabled:opacity-20 leading-none px-1 py-0.5 text-xs"
+                    >▲</button>
+                    <button
+                      type="button"
+                      onClick={() => moveItem(i, i + 1)}
+                      disabled={i === tempOrder.length - 1}
+                      className="text-charcoal-400 hover:text-orange-500 disabled:opacity-20 leading-none px-1 py-0.5 text-xs"
+                    >▼</button>
+                  </div>
+                  <span className="text-charcoal-300 dark:text-charcoal-600 cursor-grab hidden md:block">⠿</span>
                 </li>
               ))}
             </ul>
