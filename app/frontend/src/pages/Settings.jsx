@@ -293,6 +293,28 @@ export default function Settings() {
     <div className="max-w-lg mx-auto space-y-6">
       <h1 className="text-2xl font-bold">Settings</h1>
 
+      {/* Profile */}
+      <div className="card p-5">
+        <h2 className="font-semibold mb-1">Profile</h2>
+        <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-3">
+          {user?.name} · {user?.role}
+        </p>
+        <button onClick={() => navigate('/profile')} className="btn-primary text-sm">
+          Edit Full Profile →
+        </button>
+      </div>
+
+      {/* Brain Editor */}
+      <div className="card p-5">
+        <h2 className="font-semibold mb-1">Brain Editor</h2>
+        <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-3">
+          View and edit your Brain files directly — memory, profile, notes, and more.
+        </p>
+        <button onClick={() => navigate('/brain')} className="btn-primary">
+          Open Brain Editor
+        </button>
+      </div>
+
       {/* Appearance */}
       <div className="card p-5 space-y-5">
         <div className="flex items-center justify-between">
@@ -462,28 +484,6 @@ export default function Settings() {
 
         <button onClick={saveAppearance} className="btn-primary w-full">
           Save Appearance
-        </button>
-      </div>
-
-      {/* Profile */}
-      <div className="card p-5">
-        <h2 className="font-semibold mb-1">Profile</h2>
-        <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-3">
-          {user?.name} · {user?.role}
-        </p>
-        <button onClick={() => navigate('/profile')} className="btn-primary text-sm">
-          Edit Full Profile →
-        </button>
-      </div>
-
-      {/* Brain Editor */}
-      <div className="card p-5">
-        <h2 className="font-semibold mb-1">Brain Editor</h2>
-        <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-3">
-          View and edit your Brain files directly — memory, profile, notes, and more.
-        </p>
-        <button onClick={() => navigate('/brain')} className="btn-primary">
-          Open Brain Editor
         </button>
       </div>
 
