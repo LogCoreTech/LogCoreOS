@@ -117,7 +117,7 @@ export default function Profile() {
   }
 
   function removeCustomCat(cat) {
-    if (BASE_CATS.includes(cat)) return
+    if (priorityOrder.length <= 1) return
     setPriorityOrder(priorityOrder.filter(c => c !== cat))
   }
 
@@ -375,12 +375,11 @@ export default function Profile() {
                   className="text-charcoal-400 hover:text-orange-500 disabled:opacity-20 leading-none px-1 py-0.5 text-xs"
                 >▼</button>
               </div>
-              {!BASE_CATS.includes(cat) && (
-                <button
-                  onClick={() => removeCustomCat(cat)}
-                  className="text-charcoal-400 hover:text-red-500 text-xs shrink-0"
-                >✕</button>
-              )}
+              <button
+                onClick={() => removeCustomCat(cat)}
+                disabled={priorityOrder.length <= 1}
+                className="text-charcoal-400 hover:text-red-500 disabled:opacity-20 text-xs shrink-0"
+              >✕</button>
               <span className="text-charcoal-300 dark:text-charcoal-600 cursor-grab hidden md:block">⠿</span>
             </li>
           ))}
