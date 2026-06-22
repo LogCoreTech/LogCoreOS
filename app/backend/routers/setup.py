@@ -71,7 +71,10 @@ def setup_user(req: SetupRequest, current_user: dict = Depends(get_current_user)
     # Sanitize free-text fields before writing to markdown
     safe_role = _sanitize(req.role, "role") if req.role else ""
     safe_timezone = _sanitize(req.timezone, "timezone")
-    safe_categories = [_sanitize(c, "category") for c in req.priority_order + req.custom_categories]
+    # Validate all categories (custom_categories is a subset of priority_order, so validating
+    # priority_order is sufficient — do NOT concatenate them or custom cats get written twice)
+    for c in req.priority_order:
+        _sanitize(c, "category")
 
     # Copy template — handle race where two simultaneous requests arrive for the same user
     try:
@@ -86,9 +89,8 @@ def setup_user(req: SetupRequest, current_user: dict = Depends(get_current_user)
     profile_content = profile_content.replace("{e.g., Electrician, Teacher, Student}", safe_role)
     profile_content = profile_content.replace("{e.g., America/Chicago}", safe_timezone)
 
-    # Inject priority order
-    all_categories = req.priority_order + req.custom_categories
-    priority_lines = "\n".join(f"{i+1}. {_sanitize(cat, 'category')}" for i, cat in enumerate(all_categories))
+    # Inject priority order — priority_order already includes custom cats; never concatenate again
+    priority_lines = "\n".join(f"{i+1}. {cat}" for i, cat in enumerate(req.priority_order))
     custom_lines = (
         "\n".join(f"- {_sanitize(cat, 'category')}" for cat in req.custom_categories)
         or "- (none)"
@@ -108,6 +110,13 @@ def setup_user(req: SetupRequest, current_user: dict = Depends(get_current_user)
     )
 
     write_markdown(dest / "Profile.md", profile_content)
+
+    # Seed profile.json so the Profile page reads canonical data without parsing Profile.md
+    profile_json: dict = {"priority_order": req.priority_order}
+    if safe_role:
+        profile_json["occupation"] = safe_role
+    from services.file_service import write_json
+    write_json(dest / "profile.json", profile_json)
 
     # Replace placeholders in memory files (atomic writes)
     for md_file in [dest / "Long_Term_Memory.md", dest / "Short_Term_Memory.md"]:
