@@ -46,6 +46,7 @@ export default function Profile() {
   const [error, setError] = useState('')
   const [dragIdx, setDragIdx] = useState(null)
   const [customCat, setCustomCat] = useState('')
+  const [confirmDeleteCat, setConfirmDeleteCat] = useState(null)
 
   useEffect(() => {
     profileApi.get()
@@ -119,6 +120,7 @@ export default function Profile() {
   function removeCustomCat(cat) {
     if (priorityOrder.length <= 1) return
     setPriorityOrder(priorityOrder.filter(c => c !== cat))
+    setConfirmDeleteCat(null)
   }
 
   // Children (Family section)
@@ -361,7 +363,7 @@ export default function Profile() {
             >
               <span className="text-charcoal-400 text-xs w-4 shrink-0">{i + 1}</span>
               <span className="flex-1 text-sm">{cat}</span>
-              <div className="flex flex-col shrink-0">
+              <div className="flex flex-col shrink-0 mr-3">
                 <button
                   type="button"
                   onClick={() => movePriority(i, i - 1)}
@@ -375,12 +377,29 @@ export default function Profile() {
                   className="text-charcoal-400 hover:text-orange-500 disabled:opacity-20 leading-none px-1 py-0.5 text-xs"
                 >▼</button>
               </div>
-              <button
-                onClick={() => removeCustomCat(cat)}
-                disabled={priorityOrder.length <= 1}
-                className="text-charcoal-400 hover:text-red-500 disabled:opacity-20 text-xs shrink-0"
-              >✕</button>
-              <span className="text-charcoal-300 dark:text-charcoal-600 cursor-grab hidden md:block">⠿</span>
+              {confirmDeleteCat === cat ? (
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="text-xs text-charcoal-500 dark:text-charcoal-400">Remove?</span>
+                  <button
+                    type="button"
+                    onClick={() => removeCustomCat(cat)}
+                    className="text-xs px-2 py-0.5 rounded bg-red-500 text-white hover:bg-red-600"
+                  >Yes</button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteCat(null)}
+                    className="text-xs px-2 py-0.5 rounded border border-charcoal-300 dark:border-charcoal-600 text-charcoal-500 hover:text-charcoal-700 dark:hover:text-charcoal-200"
+                  >No</button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteCat(cat)}
+                  disabled={priorityOrder.length <= 1}
+                  className="text-charcoal-400 hover:text-red-500 disabled:opacity-20 text-xs shrink-0"
+                >✕</button>
+              )}
+              <span className="text-charcoal-300 dark:text-charcoal-600 cursor-grab hidden md:block ml-1">⠿</span>
             </li>
           ))}
         </ul>
