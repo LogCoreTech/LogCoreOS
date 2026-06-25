@@ -63,6 +63,11 @@ def update_task(user_name: str, task_id: str, updates: dict) -> dict | None:
             if task.get("type") == "recurring":
                 updates["last_completed_date"] = today_for_user(user_name).isoformat()
                 updates["streak_count"] = task.get("streak_count", 0) + 1
+        elif updates.get("status") == "pending" and task.get("status") == "done":
+            updates["completed_at"] = None
+            if task.get("type") == "recurring":
+                updates["last_completed_date"] = None
+                updates["streak_count"] = max(0, task.get("streak_count", 0) - 1)
 
         tasks[i] = {**task, **updates}
 

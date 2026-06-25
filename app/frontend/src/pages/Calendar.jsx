@@ -29,8 +29,9 @@ export default function Calendar() {
   const today = new Date()
   const [year, setYear]   = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
-  const [tasks, setTasks]       = useState([])
-  const [events, setEvents]     = useState([])
+  const [tasks, setTasks]                     = useState([])
+  const [assignedHouseholdTasks, setAssignedHouseholdTasks] = useState([])
+  const [events, setEvents]                   = useState([])
   const [householdEvents, setHouseholdEvents] = useState([])
   const [selected, setSelected] = useState(todayStr())
   const [shownPriorities, setShownPriorities] = useState(['High', 'Medium', 'Low'])
@@ -49,18 +50,24 @@ export default function Calendar() {
 
   async function load() {
     setLoading(true)
-    const [t, e, he] = await Promise.allSettled([
+    const [t, e, he, ht] = await Promise.allSettled([
       calendarApi.tasks(),
       calendarApi.events(),
       sharedApi.sharedEvents(),
+      sharedApi.list(),
     ])
     if (t.status === 'fulfilled') setTasks(t.value)
     if (e.status === 'fulfilled') setEvents(e.value)
     if (he.status === 'fulfilled') setHouseholdEvents(he.value)
+    if (ht.status === 'fulfilled') {
+      setAssignedHouseholdTasks(
+        ht.value.filter(task => task.assigned_to === user?.name)
+      )
+    }
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [user?.name])
 
   function prev() {
     if (month === 0) { setYear(y => y - 1); setMonth(11) }
@@ -82,7 +89,11 @@ export default function Calendar() {
     )
   }
 
-  const visibleTasks = tasks.filter(t => shownPriorities.includes(t.priority))
+  const allCalendarTasks = [
+    ...tasks.filter(t => t.status !== 'done'),
+    ...assignedHouseholdTasks.filter(t => t.status !== 'done').map(t => ({ ...t, _household: true })),
+  ]
+  const visibleTasks = allCalendarTasks.filter(t => shownPriorities.includes(t.priority))
 
   // Merge personal + household events; tag household ones
   const allEvents = [
@@ -152,7 +163,7 @@ export default function Calendar() {
       {/* Calendar grid — full-bleed on mobile, card on desktop */}
       <div className="-mx-4 md:mx-0 md:card md:p-4">
         <CalendarGrid
-          tasks={tasks}
+          tasks={allCalendarTasks}
           visibleTasks={visibleTasks}
           events={allEvents}
           year={year}

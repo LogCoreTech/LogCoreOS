@@ -80,12 +80,14 @@ export default function Household() {
       prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]
     )
   }
-  async function markDone(id) {
-    await sharedApi.update(id, { status: 'done' })
+  async function toggleDone(task) {
+    const newStatus = task.status === 'done' ? 'pending' : 'done'
+    await sharedApi.update(task.id, { status: newStatus })
     load()
   }
 
-  const visibleTasks = tasks.filter(t => shownPriorities.includes(t.priority))
+  const pendingTasks = tasks.filter(t => t.status !== 'done')
+  const visibleTasks = pendingTasks.filter(t => shownPriorities.includes(t.priority))
 
   const _today = todayStr()
   const filteredTasks = tasks.filter(t =>
@@ -185,7 +187,7 @@ export default function Household() {
           {/* Calendar grid — full-bleed on mobile, card on desktop */}
           <div className="-mx-4 md:mx-0 md:card md:p-4">
             <CalendarGrid
-              tasks={tasks}
+              tasks={pendingTasks}
               visibleTasks={visibleTasks}
               events={events}
               year={year}
@@ -236,7 +238,7 @@ export default function Household() {
                   task={task}
                   isAdmin={isAdmin}
                   today={_today}
-                  onDone={() => markDone(task.id)}
+                  onDone={() => toggleDone(task)}
                   onEdit={() => { setEditTask(task); setShowTaskModal(true) }}
                 />
               ))}
@@ -275,14 +277,16 @@ function HouseholdTaskCard({ task, isAdmin, today, onDone, onEdit }) {
   return (
     <div className={`card p-3 flex items-start gap-3 overflow-hidden ${overdue ? 'border-red-500/40' : ''}`}>
       {/* Checkbox */}
-      {task.status === 'pending' ? (
-        <button
-          onClick={onDone}
-          className="mt-0.5 shrink-0 w-5 h-5 rounded border-2 border-charcoal-300 dark:border-charcoal-600 hover:border-orange-500 hover:bg-orange-500 transition-colors"
-        />
-      ) : (
-        <div className="mt-0.5 shrink-0 w-5 h-5 rounded bg-orange-500 flex items-center justify-center text-white text-xs">✓</div>
-      )}
+      <button
+        onClick={onDone}
+        className={`mt-0.5 shrink-0 w-5 h-5 rounded transition-colors flex items-center justify-center text-white text-xs ${
+          task.status === 'done'
+            ? 'bg-orange-500 hover:bg-orange-400'
+            : 'border-2 border-charcoal-300 dark:border-charcoal-600 hover:border-orange-500 hover:bg-orange-500'
+        }`}
+      >
+        {task.status === 'done' && '✓'}
+      </button>
 
       {/* Content */}
       <div className="flex-1 min-w-0">

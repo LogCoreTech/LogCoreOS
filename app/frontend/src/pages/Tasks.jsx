@@ -39,13 +39,14 @@ export default function Tasks() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [user?.name])
 
-  async function markDone(task) {
+  async function toggleDone(task) {
+    const newStatus = task.status === 'done' ? 'pending' : 'done'
     if (task._household) {
-      await sharedApi.update(task.id, { status: 'done' })
+      await sharedApi.update(task.id, { status: newStatus })
     } else {
-      await tasksApi.update(task.id, { status: 'done' })
+      await tasksApi.update(task.id, { status: newStatus })
     }
     load()
   }
@@ -165,7 +166,7 @@ export default function Tasks() {
                     key={task.id}
                     task={task}
                     catColor={catColor(task.category)}
-                    onDone={() => markDone(task)}
+                    onDone={() => toggleDone(task)}
                     onEdit={() => { setEditTask(task); setShowModal(true) }}
                   />
                 ))}
@@ -181,7 +182,7 @@ export default function Tasks() {
                     key={task.id}
                     task={task}
                     catColor={catColor(task.category)}
-                    onDone={() => markDone(task)}
+                    onDone={() => toggleDone(task)}
                     onEdit={() => { setEditTask(task); setShowModal(true) }}
                   />
                 ))}
@@ -260,14 +261,16 @@ function TaskCard({ task, catColor, onDone, onEdit }) {
 
   return (
     <div className={`card p-3 flex items-start gap-3 overflow-hidden ${overdue ? 'border-red-500/40' : ''}`}>
-      {task.status === 'pending' ? (
-        <button
-          onClick={onDone}
-          className="mt-0.5 shrink-0 w-5 h-5 rounded border-2 border-charcoal-300 dark:border-charcoal-600 hover:border-orange-500 hover:bg-orange-500 transition-colors"
-        />
-      ) : (
-        <div className="mt-0.5 shrink-0 w-5 h-5 rounded bg-orange-500 flex items-center justify-center text-white text-xs">✓</div>
-      )}
+      <button
+        onClick={onDone}
+        className={`mt-0.5 shrink-0 w-5 h-5 rounded transition-colors flex items-center justify-center text-white text-xs ${
+          task.status === 'done'
+            ? 'bg-orange-500 hover:bg-orange-400'
+            : 'border-2 border-charcoal-300 dark:border-charcoal-600 hover:border-orange-500 hover:bg-orange-500'
+        }`}
+      >
+        {task.status === 'done' && '✓'}
+      </button>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
