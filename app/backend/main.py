@@ -142,7 +142,7 @@ app.include_router(chat.router,       prefix="/api/v1/chat",       tags=["chat"]
 app.include_router(setup.router,      prefix="/api/v1/setup",      tags=["setup"])
 app.include_router(brain.router,      prefix="/api/v1/brain",      tags=["brain"])
 app.include_router(export.router,     prefix="/api/v1/user",       tags=["export"])
-app.include_router(shared.router,     prefix="/api/v1/shared/tasks", tags=["shared"])
+app.include_router(shared.router,     prefix="/api/v1/shared",       tags=["shared"])
 app.include_router(push.router,       prefix="/api/v1/push",         tags=["push"])
 app.include_router(notes.router,      prefix="/api/v1/notes",        tags=["notes"])
 app.include_router(journal.router,    prefix="/api/v1/journal",      tags=["journal"])

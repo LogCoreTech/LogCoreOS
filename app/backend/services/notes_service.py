@@ -9,6 +9,25 @@ from services.file_service import user_path, read_markdown, write_markdown
 _SEGMENT_RE = re.compile(r'^[\w \-. ]+$')
 _MAX_CONTENT_BYTES = 512_000
 
+_GETTING_STARTED_PATH = "Getting Started"
+_GETTING_STARTED_CONTENT = """# Welcome to Notes
+
+Use the sidebar to create and organize your notes.
+
+## Navigation
+
+- **+ Note** — create a new note (inside the selected folder, or at the root if none selected)
+- **+ Folder** — create a folder to organize notes
+- Click a folder to open/close it; click it again to deselect it so new notes go to the root
+- Hover any note or folder and click **···** for rename, move, or delete options
+
+## Tips
+
+- Notes auto-save as you type — no save button needed
+- Your notes are stored as plain Markdown files in your Brain folder
+- You can access and edit them from any AI tool that reads your Brain
+"""
+
 
 def _validate_path(path: str) -> None:
     parts = path.split("/")
@@ -57,6 +76,19 @@ def list_notes(user_name: str) -> list[dict]:
                 })
 
     _walk(root, "")
+
+    # Create a Getting Started note for first-time users (no notes exist yet)
+    if not any(i["type"] == "note" for i in items):
+        p = _note_path(user_name, _GETTING_STARTED_PATH)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(_GETTING_STARTED_CONTENT, encoding="utf-8")
+        items.append({
+            "type": "note",
+            "path": _GETTING_STARTED_PATH,
+            "name": "Getting Started",
+            "modified_at": datetime.fromtimestamp(p.stat().st_mtime).isoformat(),
+        })
+
     return items
 
 

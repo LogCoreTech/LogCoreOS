@@ -3,7 +3,7 @@ import calendar
 from datetime import timedelta
 
 from services.auth_service import today_for_user
-from services.file_service import read_json, write_json, tasks_path, brain_path
+from services.file_service import read_json, write_json, tasks_path, history_path, brain_path
 
 
 def _next_due(due: str, recurrence: str) -> str:
@@ -29,13 +29,28 @@ def process_user(user_name: str) -> dict:
     advanced = 0
     broken = 0
 
+    # Archive done non-recurring tasks completed before today
+    tasks_to_archive = []
+    for t in data["tasks"]:
+        if t.get("type") == "recurring" or t.get("status") != "done":
+            continue
+        completed_date = (t.get("completed_at") or "")[:10]
+        if completed_date and completed_date < today:
+            tasks_to_archive.append(t)
+    if tasks_to_archive:
+        hist = read_json(history_path(user_name), default={"tasks": []})
+        hist["tasks"].extend(tasks_to_archive)
+        write_json(history_path(user_name), hist)
+        archive_ids = {t["id"] for t in tasks_to_archive}
+        data["tasks"] = [t for t in data["tasks"] if t["id"] not in archive_ids]
+
     for task in data["tasks"]:
         if task.get("type") != "recurring":
             continue
         due = task.get("due_date") or today
         recurrence = task.get("recurrence", "daily")
 
-        if task.get("status") == "done" and task.get("last_completed_date") == today:
+        if task.get("status") == "done" and task.get("last_completed_date") and task.get("last_completed_date") < today:
             task["due_date"] = _next_due(due, recurrence)
             task["status"] = "pending"
             advanced += 1

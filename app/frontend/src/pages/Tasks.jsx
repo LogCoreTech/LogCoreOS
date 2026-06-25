@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
-import { tasks as tasksApi, priorities as prioritiesApi } from '../lib/api'
+import { tasks as tasksApi, priorities as prioritiesApi, shared as sharedApi } from '../lib/api'
+import { useAuth } from '../lib/auth'
 import TaskModal from '../components/TaskModal'
 import { catColor } from '../lib/constants'
 
 const PRIORITY_ORDER = ['High', 'Medium', 'Low']
 
 export default function Tasks() {
+  const { user } = useAuth()
   const [taskList, setTaskList] = useState([])
+  const [assignedHouseholdTasks, setAssignedHouseholdTasks] = useState([])
   const [priorityOrder, setPriorityOrder] = useState([])
   const [filter, setFilter] = useState('pending')
   const [editTask, setEditTask] = useState(null)
@@ -15,30 +18,35 @@ export default function Tasks() {
   const [tempOrder, setTempOrder] = useState([])
   const [dragIdx, setDragIdx] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
 
   async function load() {
     setLoading(true)
-    try {
-      const [all, prio] = await Promise.all([tasksApi.list(), prioritiesApi.get()])
-      setTaskList(all)
-      setPriorityOrder(prio.order || [])
-      setTempOrder(prio.order || [])
-    } finally {
-      setLoading(false)
+    const [all, prio, shared] = await Promise.allSettled([
+      tasksApi.list(),
+      prioritiesApi.get(),
+      sharedApi.list(),
+    ])
+    if (all.status === 'fulfilled') setTaskList(all.value)
+    if (prio.status === 'fulfilled') {
+      setPriorityOrder(prio.value.order || [])
+      setTempOrder(prio.value.order || [])
     }
+    if (shared.status === 'fulfilled') {
+      setAssignedHouseholdTasks(
+        shared.value.filter(t => t.assigned_to === user?.name)
+      )
+    }
+    setLoading(false)
   }
 
   useEffect(() => { load() }, [])
 
-  async function markDone(id) {
-    await tasksApi.update(id, { status: 'done' })
-    load()
-  }
-
-  async function remove(id) {
-    await tasksApi.remove(id)
-    setConfirmDeleteId(null)
+  async function markDone(task) {
+    if (task._household) {
+      await sharedApi.update(task.id, { status: 'done' })
+    } else {
+      await tasksApi.update(task.id, { status: 'done' })
+    }
     load()
   }
 
@@ -73,7 +81,13 @@ export default function Tasks() {
   const _today = new Date()
   const _todayStr = `${_today.getFullYear()}-${String(_today.getMonth() + 1).padStart(2, '0')}-${String(_today.getDate()).padStart(2, '0')}`
 
-  const filtered = taskList.filter(t =>
+  // Merge personal + assigned household tasks (household tasks tagged with _household)
+  const allTasks = [
+    ...taskList,
+    ...assignedHouseholdTasks.map(t => ({ ...t, _household: true })),
+  ]
+
+  const filtered = allTasks.filter(t =>
     filter === 'all'     ? true :
     filter === 'pending' ? t.status === 'pending' :
     filter === 'done'    ? t.status === 'done' :
@@ -95,18 +109,18 @@ export default function Tasks() {
   const uncategorized = filtered.filter(t => !knownCats.has(t.category))
 
   return (
-    <div className="max-w-2xl mx-auto space-y-5">
+    <div className="w-full max-w-2xl mx-auto space-y-5 overflow-x-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <h1 className="text-2xl font-bold">Tasks</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 shrink-0">
           <button
             onClick={() => setShowReorder(true)}
-            className="btn-ghost text-sm"
+            className="btn-ghost text-sm whitespace-nowrap"
           >
-            ⇅ Reorder Today
+            ⇅ <span className="hidden sm:inline">Reorder </span>Today
           </button>
-          <button onClick={() => { setEditTask(null); setShowModal(true) }} className="btn-primary">
+          <button onClick={() => { setEditTask(null); setShowModal(true) }} className="btn-primary whitespace-nowrap">
             + Add
           </button>
         </div>
@@ -151,9 +165,8 @@ export default function Tasks() {
                     key={task.id}
                     task={task}
                     catColor={catColor(task.category)}
-                    onDone={() => markDone(task.id)}
+                    onDone={() => markDone(task)}
                     onEdit={() => { setEditTask(task); setShowModal(true) }}
-                    onDelete={() => setConfirmDeleteId(task.id)}
                   />
                 ))}
               </div>
@@ -168,34 +181,14 @@ export default function Tasks() {
                     key={task.id}
                     task={task}
                     catColor={catColor(task.category)}
-                    onDone={() => markDone(task.id)}
+                    onDone={() => markDone(task)}
                     onEdit={() => { setEditTask(task); setShowModal(true) }}
-                    onDelete={() => setConfirmDeleteId(task.id)}
                   />
                 ))}
               </div>
             </div>
           )}
         </>
-      )}
-
-      {/* Delete confirmation modal */}
-      {confirmDeleteId && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="card p-5 w-full max-w-xs">
-            <h2 className="font-semibold mb-1">Delete Task?</h2>
-            <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mb-4">This cannot be undone.</p>
-            <div className="flex gap-2">
-              <button onClick={() => setConfirmDeleteId(null)} className="btn-ghost flex-1">Cancel</button>
-              <button
-                onClick={() => remove(confirmDeleteId)}
-                className="flex-1 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* Reorder Today modal */}
@@ -254,18 +247,19 @@ export default function Tasks() {
           categories={priorityOrder}
           onClose={() => { setShowModal(false); setEditTask(null) }}
           onSave={() => { setShowModal(false); setEditTask(null); load() }}
+          onDelete={() => { setShowModal(false); setEditTask(null); load() }}
         />
       )}
     </div>
   )
 }
 
-function TaskCard({ task, catColor, onDone, onEdit, onDelete }) {
+function TaskCard({ task, catColor, onDone, onEdit }) {
   const today = new Date().toISOString().split('T')[0]
   const overdue = task.due_date && task.due_date < today && task.status === 'pending'
 
   return (
-    <div className={`card p-3 flex items-start gap-3 ${overdue ? 'border-red-500/40' : ''}`}>
+    <div className={`card p-3 flex items-start gap-3 overflow-hidden ${overdue ? 'border-red-500/40' : ''}`}>
       {task.status === 'pending' ? (
         <button
           onClick={onDone}
@@ -281,12 +275,13 @@ function TaskCard({ task, catColor, onDone, onEdit, onDelete }) {
           <span className="badge bg-charcoal-100 dark:bg-charcoal-700 text-charcoal-600 dark:text-charcoal-300">
             {task.priority}
           </span>
+          {task._household && <span className="text-xs text-blue-500 dark:text-blue-400">🏠</span>}
           {task.streak_count > 0 && (
             <span className="text-xs text-orange-500">🔥 {task.streak_count}</span>
           )}
           {overdue && <span className="text-xs text-red-500 font-medium">OVERDUE</span>}
         </div>
-        <p className={`text-sm mt-1 ${task.status === 'done' ? 'line-through text-charcoal-400' : ''}`}>
+        <p className={`text-sm mt-1 truncate ${task.status === 'done' ? 'line-through text-charcoal-400' : ''}`}>
           {task.title}
         </p>
         {task.due_date && (
@@ -297,9 +292,8 @@ function TaskCard({ task, catColor, onDone, onEdit, onDelete }) {
         )}
       </div>
 
-      <div className="flex gap-1 shrink-0">
+      <div className="shrink-0">
         <button onClick={onEdit} className="text-charcoal-400 hover:text-orange-500 p-1 text-xs">✎</button>
-        <button onClick={onDelete} className="text-charcoal-400 hover:text-red-500 p-1 text-xs">✕</button>
       </div>
     </div>
   )

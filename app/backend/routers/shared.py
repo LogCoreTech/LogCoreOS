@@ -47,13 +47,13 @@ def _validate_task_id(task_id: str) -> str:
     return task_id
 
 
-@router.get("")
+@router.get("/tasks")
 def list_shared(current_user: dict = Depends(_require_household)):
     _ensure_household()
     return task_service.list_tasks(_HOUSEHOLD)
 
 
-@router.post("")
+@router.post("/tasks")
 def add_shared(req: SharedTaskCreate, current_user: dict = Depends(_require_household)):
     _ensure_household()
     payload = req.model_dump()
@@ -61,7 +61,7 @@ def add_shared(req: SharedTaskCreate, current_user: dict = Depends(_require_hous
     return task_service.add_task(_HOUSEHOLD, payload)
 
 
-@router.patch("/{task_id}")
+@router.patch("/tasks/{task_id}")
 def update_shared(task_id: str, req: SharedTaskUpdate, current_user: dict = Depends(_require_household)):
     _validate_task_id(task_id)
     _ensure_household()
@@ -74,7 +74,7 @@ def update_shared(task_id: str, req: SharedTaskUpdate, current_user: dict = Depe
     return result
 
 
-@router.delete("/{task_id}")
+@router.delete("/tasks/{task_id}")
 def delete_shared(task_id: str, current_user: dict = Depends(_require_household)):
     _validate_task_id(task_id)
     _ensure_household()
@@ -104,8 +104,6 @@ def list_household_events(current_user: dict = Depends(_require_household)):
 
 @router.post("/events", status_code=201)
 def add_household_event(req: EventCreate, current_user: dict = Depends(_require_household)):
-    if current_user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
     _ensure_household_events()
     payload = req.model_dump()
     payload["created_by"] = current_user["name"]

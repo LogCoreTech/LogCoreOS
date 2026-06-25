@@ -504,33 +504,37 @@ Clear all notifications.
 
 ---
 
-## Shared Tasks & Events
+## Shared (Household)
 
-Shared endpoints are for the household pool (tasks and events shared across users). Prefix: `/api/v1/shared/tasks`.
+Endpoints for the household pool — tasks and events shared across all household members. Router mounted at `/api/v1/shared`.
+
+Any authenticated member may read and create tasks. Event write operations (create/update/delete) require admin role.
 
 ### `GET /shared/tasks`
-List shared tasks.
+List all shared tasks. Returns all tasks regardless of due date.
 
 ### `POST /shared/tasks`
-Create a shared task.
+Create a shared task. `created_by` is set automatically from the auth token.
+
+**Body** — same shape as `POST /tasks` (all optional fields apply).
 
 ### `PATCH /shared/tasks/{task_id}`
-Update a shared task.
+Update a shared task. Setting `status` to `done` or `skipped` records `completed_by`.
 
 ### `DELETE /shared/tasks/{task_id}`
 Delete a shared task.
 
-### `GET /shared/tasks/events`
+### `GET /shared/events`
 List shared calendar events (household pool).
 
-### `POST /shared/tasks/events`
-Create a shared calendar event.
+### `POST /shared/events`
+Create a shared calendar event. Admin only. `created_by` set automatically.
 
-### `PATCH /shared/tasks/events/{event_id}`
-Update a shared event.
+### `PATCH /shared/events/{event_id}`
+Update a shared event. Admin only.
 
-### `DELETE /shared/tasks/events/{event_id}`
-Delete a shared event.
+### `DELETE /shared/events/{event_id}`
+Delete a shared event. Admin only. Returns `204 No Content`.
 
 ---
 

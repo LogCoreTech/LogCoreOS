@@ -9,7 +9,7 @@ from services.file_service import (
     read_json,
     write_json,
     tasks_path,
-    history_path,
+    history_path,  # used by list_history
 )
 
 
@@ -40,8 +40,8 @@ def add_task(user_name: str, task_data: dict) -> dict:
         "streak_count": 0,
         "last_completed_date": None,
     }
-    # Pass through optional attribution fields (e.g. created_by for household tasks)
-    for extra in ("created_by",):
+    # Pass through optional attribution/assignment fields
+    for extra in ("created_by", "assigned_to"):
         if extra in task_data:
             task[extra] = task_data[extra]
     data["tasks"].append(task)
@@ -65,14 +65,6 @@ def update_task(user_name: str, task_id: str, updates: dict) -> dict | None:
                 updates["streak_count"] = task.get("streak_count", 0) + 1
 
         tasks[i] = {**task, **updates}
-
-        if tasks[i]["status"] == "done" and tasks[i].get("type") != "recurring":
-            history = read_json(history_path(user_name), default={"tasks": []})
-            history["tasks"].append(tasks[i])
-            write_json(history_path(user_name), history)
-            data["tasks"] = [t for t in tasks if t["id"] != task_id]
-            write_json(tasks_path(user_name), data)
-            return tasks[i]
 
         write_json(tasks_path(user_name), data)
         return tasks[i]
