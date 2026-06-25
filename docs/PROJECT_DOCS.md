@@ -142,7 +142,7 @@ The App currently provides:
 - Notes module (markdown notes editor, stored in Brain/Notes/)
 - Journal module (daily entries stored in Brain/Journal/YYYY-MM-DD.md, with agent tools)
 - Calendar module — full stack: events CRUD, personal calendar UI (CalendarGrid with multi-day event bars, holiday engine, task pills, day detail panel), household calendar tab
-- Household module — tab-based hub: Calendar tab (shared events + tasks on grid) + Tasks tab (all shared tasks including undated, filter by status, created_by attribution); admin-only write for events, any member can create/complete tasks
+- Household module — tab-based hub: Calendar tab (shared events + tasks on grid) + Tasks tab (all shared tasks with filter by status, created_by attribution); **task assignment** (admin assigns tasks to a named member; assigned member sees the task in personal Tasks + calendar with 🏠 badge); **shared events** visible on every member's personal calendar with toggle; **"Add to Household"** in personal EventModal moves event to household pool; any member can create events, admin-only edit/delete; done tasks filtered from calendar grids
 - Per-user appearance theming: accent color (8 presets + any hex), dark/light/system mode, background (7 gradient presets + custom image upload), density (comfortable/compact), corner radius (rounded/sharp) — all persisted in `auth.json` and applied via CSS variables with FOUC prevention
 - Collapsible sidebar (desktop) with collapse state persisted to `localStorage`
 - Frosted card blur, left-border active nav highlight, CSS variable-driven corner radii
@@ -197,7 +197,7 @@ When notification automation expands (email digests, SMS alerts, etc.), user rec
 
 Each field is optional — the notification service checks which ones are populated before sending. This avoids breaking changes when new channels are added. Phone number (SMS via Twilio or similar) should only be added when a concrete SMS feature is being built — not speculatively.
 
-Shared spaces and family-level features (shared calendar, chores, family dashboard) are planned for Phase 5.
+Shared spaces and family-level features (shared calendar, chores, family dashboard) were originally planned for Phase 5; core household functionality (shared tasks, events, task assignment, personal calendar integration) shipped in Phase 1.
 
 ---
 
@@ -209,7 +209,7 @@ The `scheduler.py` background service handles all internal automation:
 
 | Job | Schedule | What it does |
 |-----|----------|--------------|
-| Recurring processor | Nightly 00:01 | Advances due dates, resets broken streaks |
+| Recurring processor | Nightly 00:01 | Archives done non-recurring tasks to history; advances recurring due dates; resets broken streaks |
 | Morning digest | 06:00 | Sends top-3 tasks via ntfy |
 | Overdue check | 19:00 | Alerts on overdue tasks |
 | Weekly review | Sunday 19:00 | Summary of completed tasks by category |

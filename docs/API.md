@@ -268,6 +268,10 @@ Create a task.
 
 Fields `due_date`, `due_time`, `notes`, `recurrence` are optional. `due_time` requires `due_date`.
 
+**Done-task retention:** Non-recurring tasks marked done stay in `/tasks` until the nightly 00:01 scheduler archives them to history. Recurring tasks are never archived.
+
+**Un-marking done:** Send `{ "status": "pending" }` to revert a completed task. `completed_at` is cleared automatically; recurring tasks also have `streak_count` decremented and `last_completed_date` cleared.
+
 ### `PATCH /tasks/{task_id}`
 Update a task. Only send fields you want to change. Pass `null` to clear optional fields.
 
@@ -508,33 +512,47 @@ Clear all notifications.
 
 Endpoints for the household pool — tasks and events shared across all household members. Router mounted at `/api/v1/shared`.
 
-Any authenticated member may read and create tasks. Event write operations (create/update/delete) require admin role.
+Any authenticated household member may read and write tasks and create events. Event edit/delete operations require admin role.
 
 ### `GET /shared/tasks`
-List all shared tasks. Returns all tasks regardless of due date.
+List all shared tasks. Returns all tasks regardless of due date or status.
 
 ### `POST /shared/tasks`
 Create a shared task. `created_by` is set automatically from the auth token.
 
-**Body** — same shape as `POST /tasks` (all optional fields apply).
+**Body**
+```json
+{
+  "title": "Grocery run",
+  "category": "Family",
+  "priority": "Medium",
+  "type": "todo",
+  "due_date": "2026-07-01",
+  "assigned_to": "Alice"
+}
+```
+
+`assigned_to` is optional. When set to a user's display name, that user sees the task in their personal Tasks page (filtered client-side) and calendar grid, both tagged with a 🏠 badge.
 
 ### `PATCH /shared/tasks/{task_id}`
-Update a shared task. Setting `status` to `done` or `skipped` records `completed_by`.
+Update a shared task. Setting `status` to `done` or `skipped` records `completed_by`. Setting `status` to `pending` un-marks a completed task (clears `completed_at`; decrements streak for recurring).
 
 ### `DELETE /shared/tasks/{task_id}`
 Delete a shared task.
 
 ### `GET /shared/events`
-List shared calendar events (household pool).
+List shared calendar events (household pool). Visible on every member's personal calendar when the 🏠 toggle is on.
 
 ### `POST /shared/events`
-Create a shared calendar event. Admin only. `created_by` set automatically.
+Create a shared calendar event. Any household member. `created_by` set automatically.
+
+Household events are also created indirectly by the **"Add to Household"** toggle in the personal calendar's EventModal — this deletes the personal event and creates a household event in one operation.
 
 ### `PATCH /shared/events/{event_id}`
-Update a shared event. Admin only.
+Update a shared event. **Admin only.**
 
 ### `DELETE /shared/events/{event_id}`
-Delete a shared event. Admin only. Returns `204 No Content`.
+Delete a shared event. **Admin only.** Returns `204 No Content`.
 
 ---
 
