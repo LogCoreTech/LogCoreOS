@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { notes as notesApi } from '../lib/api'
 
 // ── Tree builder ─────────────────────────────────────────────────────────────
@@ -161,6 +161,7 @@ export default function Notes() {
   const [modalTarget, setModalTarget] = useState('')
   const [modalBusy, setModalBusy]   = useState(false)
   const [showSidebar, setShowSidebar] = useState(true)
+  const autoSaveTimer = useRef(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -176,6 +177,14 @@ export default function Notes() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Auto-save 1.5 s after the user stops typing
+  useEffect(() => {
+    if (!note) return
+    clearTimeout(autoSaveTimer.current)
+    autoSaveTimer.current = setTimeout(() => { save() }, 1500)
+    return () => clearTimeout(autoSaveTimer.current)
+  }, [editContent]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close context menu on outside click
   useEffect(() => {
@@ -219,7 +228,7 @@ export default function Notes() {
       next.has(path) ? next.delete(path) : next.add(path)
       return next
     })
-    setSelectedPath(path)
+    setSelectedPath(prev => prev === path ? null : path)
   }
 
   function handleAction(type, node) {
@@ -432,7 +441,7 @@ export default function Notes() {
   // ── Editor ────────────────────────────────────────────────────────────────
 
   const editor = note ? (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-w-0">
       {/* Editor toolbar */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-charcoal-200 dark:border-charcoal-700 shrink-0">
         <button
@@ -441,27 +450,12 @@ export default function Notes() {
         >
           ← Back
         </button>
-        <p className="flex-1 text-xs text-charcoal-400 dark:text-charcoal-500 truncate font-mono">
+        <p className="flex-1 text-xs text-charcoal-400 dark:text-charcoal-500 truncate font-mono min-w-0">
           {note.path}
         </p>
-        <button
-          onClick={() => openModal('deleteNote', { ...note, type: 'note' })}
-          className="text-charcoal-400 hover:text-red-500 p-1 text-sm shrink-0 transition-colors"
-          title="Delete note"
-        >
-          🗑
-        </button>
-        <button
-          onClick={save}
-          disabled={saving}
-          className={`text-sm px-4 py-1.5 rounded-lg font-medium transition-colors shrink-0 ${
-            saved
-              ? 'bg-green-500 text-white'
-              : 'bg-orange-500 hover:bg-orange-600 text-white'
-          }`}
-        >
-          {saving ? '…' : saved ? 'Saved ✓' : 'Save'}
-        </button>
+        <span className="text-xs text-charcoal-400 dark:text-charcoal-500 shrink-0">
+          {saving ? 'Saving…' : saved ? 'Saved ✓' : ''}
+        </span>
       </div>
 
       {error && <p className="text-red-500 text-sm px-4 py-2">{error}</p>}
@@ -471,7 +465,7 @@ export default function Notes() {
         onChange={e => setEditContent(e.target.value)}
         spellCheck={false}
         placeholder="Start writing…"
-        className="flex-1 font-mono text-sm p-4 bg-white dark:bg-charcoal-900 resize-none focus:outline-none leading-relaxed"
+        className="flex-1 w-full font-mono text-sm p-4 bg-white dark:bg-charcoal-900 resize-none focus:outline-none leading-relaxed overflow-x-hidden"
       />
     </div>
   ) : (

@@ -141,7 +141,8 @@ The App currently provides:
 - Docker Compose deployment
 - Notes module (markdown notes editor, stored in Brain/Notes/)
 - Journal module (daily entries stored in Brain/Journal/YYYY-MM-DD.md, with agent tools)
-- Calendar backend (module guard enforcement, events CRUD with household pool and color picker)
+- Calendar module — full stack: events CRUD, personal calendar UI (CalendarGrid with multi-day event bars, holiday engine, task pills, day detail panel), household calendar tab
+- Household module — tab-based hub: Calendar tab (shared events + tasks on grid) + Tasks tab (all shared tasks including undated, filter by status, created_by attribution); admin-only write for events, any member can create/complete tasks
 - Per-user appearance theming: accent color (8 presets + any hex), dark/light/system mode, background (7 gradient presets + custom image upload), density (comfortable/compact), corner radius (rounded/sharp) — all persisted in `auth.json` and applied via CSS variables with FOUC prevention
 - Collapsible sidebar (desktop) with collapse state persisted to `localStorage`
 - Frosted card blur, left-border active nav highlight, CSS variable-driven corner radii
@@ -157,7 +158,6 @@ The App currently provides:
 **Planned (future phases):**
 
 - Projects (deferred from Phase 1; roadmapped for Phase 3+)
-- Calendar UI (backend + events API complete; frontend UI not yet built — see docs/BACKLOG.md)
 - Health tracking
 - Home automation
 - External integrations (Google Calendar, Apple Health, etc.)
@@ -336,7 +336,8 @@ Done:
 - Docker Compose deployment
 - Notes module (markdown notes editor, stored in Brain/Notes/)
 - Journal module (daily entries stored in Brain/Journal/YYYY-MM-DD.md, with agent tools)
-- Calendar backend (module guard enforcement, events CRUD with household pool and color picker)
+- Calendar module — full stack: personal calendar UI with multi-day event bars, client-side holiday engine (17 US holidays), task pills, day detail panel; household calendar tab with shared events
+- Household module — tab-based hub (Calendar + Tasks); shared tasks visible to all members, shared events admin-only; undated tasks visible in Tasks tab
 - Per-user appearance theming (accent color, dark/light/system mode, background gradients + custom image, density, corner style)
 - Collapsible desktop sidebar, frosted card blur, left-border active nav, CSS variable-driven design tokens
 - Admin hosting panel (cookie_secure, trust_proxy_headers, domain URL, Cloudflare Tunnel token + apply)
@@ -404,13 +405,18 @@ The AI organizes everything into the Brain.
 
 ## Phase 5: Family Operating System
 
-Build on the existing multi-user foundation:
+Build on the existing multi-user foundation. Foundation already shipped:
 
-- Shared spaces (family calendar, shared tasks)
-- Permission controls (what each user can see)
+- ✅ Shared calendar (household events visible to all members, admin-only write)
+- ✅ Shared tasks (household task pool, any member can create/complete, created_by attribution)
+- ✅ Household module tab architecture (Calendar + Tasks tabs; extensible for future tabs)
+
+Remaining:
+
+- Permission controls (what each user can see / is allowed to edit)
 - Family dashboard
 - Shared shopping lists
-- Chore management
+- Chore management with assignments
 - Household automation via LogCore Workflows
 
 ---

@@ -41,7 +41,7 @@ LogCoreOS/
 │   │   │   ├── setup.py          → first-time setup wizard
 │   │   │   ├── health.py         → GET /health (no auth, used by Docker healthcheck)
 │   │   │   ├── export.py         → brain zip download
-│   │   │   ├── shared.py         → shared task/event public links (household pool)
+│   │   │   ├── shared.py         → household pool: tasks at /shared/tasks, events at /shared/events (admin write)
 │   │   │   ├── push.py           → ntfy push notification subscription
 │   │   │   ├── suggestions.py    → proactive AI suggestion engine + notification inbox
 │   │   │   └── profile.py        → user Profile.md read/write
@@ -69,13 +69,14 @@ LogCoreOS/
 │           │   └── theme.js       → CSS variable theme engine (accent color, dark mode, background, density, corners)
 │           ├── pages/
 │           │   ├── Home.jsx       → dashboard (top3 tasks, priority override)
-│           │   ├── Tasks.jsx      → task management
+│           │   ├── Tasks.jsx      → personal task management (list, filter, edit, delete via modal)
 │           │   ├── Chat.jsx       → AI chat interface
 │           │   ├── Admin.jsx      → admin panel (users, AI settings, web search, hosting)
 │           │   ├── Settings.jsx   → user settings (appearance, timezone, session, notifications, shortcuts)
 │           │   ├── Notes.jsx      → notes module
 │           │   ├── Journal.jsx    → journal module
-│           │   ├── Calendar.jsx   → calendar UI (backend complete; UI in progress)
+│           │   ├── Calendar.jsx   → personal calendar (events + dated tasks; CalendarGrid + detail panel)
+│           │   ├── Household.jsx  → household hub: tab-based (Calendar tab + Tasks tab); shared events and tasks across all users
 │           │   ├── Login.jsx      → login + register
 │           │   └── Setup.jsx      → first-time setup wizard
 │           └── components/        → shared UI components
@@ -344,6 +345,16 @@ Timezone is set via `SCHEDULER_TIMEZONE` env var (IANA string, validated at star
 6. Add API methods to `app/frontend/src/lib/api.js`
 7. Update this file if the module introduces new conventions or file layout
 
+## Adding a New Household Section
+
+The Household module uses a tab architecture (`view` state in `Household.jsx`). To add a new household section (e.g. Shopping, Notes):
+
+1. Add `{ id: 'shopping', label: 'Shopping' }` to the `TABS` array in `Household.jsx`
+2. Add a `{view === 'shopping' && (...)}` conditional block for the content
+3. Add any required backend endpoints to `routers/shared.py` and API methods to `lib/api.js`
+
+No new routes or modules are needed — everything lives within the existing `/household` route.
+
 ---
 
 ## Agent Skills
@@ -412,7 +423,6 @@ After `POST /auth/login` the session cookie is set by the server. On mobile brow
 
 See `docs/PROJECT_DOCS.md` for the full roadmap. Current known gaps:
 
-- **Calendar UI** — backend and events CRUD are complete; the frontend UI is not yet built (tracked in `docs/BACKLOG.md`)
 - **No database migration story** — Brain schema changes require manual file updates
 - **Single-worker only** — file locks are in-process; multi-worker uvicorn would need distributed locking
 - **No email verification** — user emails are trusted as-is

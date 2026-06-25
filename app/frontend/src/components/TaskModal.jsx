@@ -5,18 +5,19 @@ const PRIORITIES = ['High', 'Medium', 'Low']
 const TYPES = ['todo', 'recurring', 'goal', 'appointment']
 const RECURRENCES = ['daily', 'weekly', 'monthly']
 
-export default function TaskModal({ task, categories: propCategories, defaultType, saveApi, onClose, onSave }) {
+export default function TaskModal({ task, categories: propCategories, defaultType, saveApi, users, onClose, onSave, onDelete }) {
   const editing = !!task
   const [categories, setCategories] = useState(propCategories || [])
   const [form, setForm] = useState({
-    title:      task?.title       || '',
-    category:   task?.category    || '',
-    priority:   task?.priority    || 'Medium',
-    type:       task?.type        || defaultType || 'todo',
-    recurrence: task?.recurrence  || null,
-    due_date:   task?.due_date    || '',
-    due_time:   task?.due_time    || '',
-    notes:      task?.notes       || '',
+    title:       task?.title       || '',
+    category:    task?.category    || '',
+    priority:    task?.priority    || 'Medium',
+    type:        task?.type        || defaultType || 'todo',
+    recurrence:  task?.recurrence  || null,
+    due_date:    task?.due_date    || '',
+    due_time:    task?.due_time    || '',
+    notes:       task?.notes       || '',
+    assigned_to: task?.assigned_to || '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -38,6 +39,21 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
     setForm(f => ({ ...f, [field]: value }))
   }
 
+  // Derive 12-hour display parts from stored 24-hour value
+  const _tp    = (form.due_time || '').split(':')
+  const _h24   = _tp[0] ? parseInt(_tp[0], 10) : null
+  const tHour  = _h24 === null ? '' : _h24 === 0 ? '12' : _h24 > 12 ? String(_h24 - 12) : String(_h24)
+  const tMin   = _tp[1] || ''
+  const tAmpm  = _h24 === null ? '' : _h24 < 12 ? 'AM' : 'PM'
+
+  function applyTime(h, m, ap) {
+    if (!h) { set('due_time', ''); return }
+    const h12 = parseInt(h, 10)
+    const period = ap || 'AM'
+    const h24out = period === 'AM' ? (h12 === 12 ? 0 : h12) : (h12 === 12 ? 12 : h12 + 12)
+    set('due_time', `${String(h24out).padStart(2, '0')}:${m || '00'}`)
+  }
+
   async function submit(e) {
     e.preventDefault()
     if (!form.title.trim()) { setError('Title is required'); return }
@@ -46,10 +62,11 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
     try {
       const payload = {
         ...form,
-        due_date:   form.due_date   || null,
-        due_time:   (form.due_date && form.due_time) ? form.due_time : null,
-        recurrence: form.type === 'recurring' ? (form.recurrence || 'daily') : null,
-        notes:      form.notes      || null,
+        due_date:    form.due_date   || null,
+        due_time:    (form.due_date && form.due_time) ? form.due_time : null,
+        recurrence:  form.type === 'recurring' ? (form.recurrence || 'daily') : null,
+        notes:       form.notes      || null,
+        assigned_to: form.assigned_to || null,
       }
       const api = saveApi || tasksApi
       if (editing) {
@@ -58,6 +75,20 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
         await api.add(payload)
       }
       onSave()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirm('Delete this task?')) return
+    setLoading(true)
+    try {
+      const api = saveApi || tasksApi
+      await api.remove(task.id)
+      onDelete?.()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -143,7 +174,7 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
             <label className="block text-sm font-medium mb-1">
               Due Date <span className="text-charcoal-400 font-normal">(optional)</span>
             </label>
-            <div className="flex gap-2">
+            <div className="space-y-2">
               <input
                 type="date"
                 value={form.due_date}
@@ -151,17 +182,52 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
                   set('due_date', e.target.value)
                   if (!e.target.value) set('due_time', '')
                 }}
-                className="input flex-1"
+                className="input"
               />
               {form.due_date && (
-                <input
-                  type="time"
-                  value={form.due_time}
-                  onChange={e => set('due_time', e.target.value)}
-                  placeholder="--:--"
-                  className="input w-28"
-                  title="Time (optional — for appointments)"
-                />
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-charcoal-500 dark:text-charcoal-400 shrink-0 w-8">Time</span>
+                  <select
+                    value={tHour}
+                    onChange={e => applyTime(e.target.value, tMin, tAmpm)}
+                    className="input !w-14 !px-1.5 text-center"
+                  >
+                    <option value="">--</option>
+                    {['1','2','3','4','5','6','7','8','9','10','11','12'].map(h => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                  <span className="text-charcoal-400 font-bold shrink-0">:</span>
+                  <select
+                    value={tMin}
+                    onChange={e => applyTime(tHour, e.target.value, tAmpm)}
+                    className="input !w-14 !px-1.5 text-center"
+                  >
+                    <option value="">--</option>
+                    {Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0')).map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={tAmpm}
+                    onChange={e => applyTime(tHour, tMin, e.target.value)}
+                    className="input !w-16 !px-1.5 text-center"
+                  >
+                    <option value="">--</option>
+                    <option value="AM">AM</option>
+                    <option value="PM">PM</option>
+                  </select>
+                  {form.due_time && (
+                    <button
+                      type="button"
+                      onClick={() => set('due_time', '')}
+                      className="text-charcoal-400 hover:text-red-500 transition-colors ml-0.5 text-sm"
+                      title="Clear time"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -180,9 +246,26 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
             />
           </div>
 
+          {/* Assign to — only shown in household context when users list provided */}
+          {users && users.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium mb-1">Assign to</label>
+              <select value={form.assigned_to} onChange={e => set('assigned_to', e.target.value)} className="input">
+                <option value="">Unassigned</option>
+                {users.map(u => <option key={u.name} value={u.name}>{u.name}</option>)}
+              </select>
+            </div>
+          )}
+
           {error && <p className="text-red-500 text-sm">{error}</p>}
 
           <div className="flex gap-2 pt-1">
+            {editing && onDelete && (
+              <button type="button" onClick={handleDelete} disabled={loading}
+                className="px-3 py-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                Delete
+              </button>
+            )}
             <button type="button" onClick={onClose} className="btn-ghost flex-1">Cancel</button>
             <button type="submit" disabled={loading} className="btn-primary flex-1">
               {loading ? 'Saving…' : editing ? 'Save Changes' : 'Add Task'}
