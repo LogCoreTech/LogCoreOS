@@ -326,12 +326,20 @@ APScheduler runs 4 jobs (all times in `settings.scheduler_timezone`):
 
 | Job | Schedule | What it does |
 |-----|----------|--------------|
-| Recurring processor | Nightly 00:01 | Advances due dates, resets broken streaks |
+| Recurring processor | Nightly 00:01 | Archives yesterday's done non-recurring tasks → `tasks_history.json`; advances recurring task due dates; resets broken streaks |
 | Morning digest | Configurable (default 06:00) | Sends top-3 tasks via ntfy |
 | Overdue check | Configurable (default 19:00) | Alerts on overdue tasks |
 | Weekly review | Sunday 19:00 | Summary of completed tasks by category |
 
 Timezone is set via `SCHEDULER_TIMEZONE` env var (IANA string, validated at startup).
+
+### Task Lifecycle (done tasks)
+
+Non-recurring tasks marked **done** stay in `tasks.json` until the 00:01 nightly job runs. At that point any task with `status == "done"`, `type != "recurring"`, and `completed_at` date earlier than today is moved to `tasks_history.json`. This gives users ~1 day of visibility in the "done" filter before archival.
+
+Recurring tasks are **never** archived — they stay in `tasks.json` and have their `due_date` / `last_completed_date` advanced by the nightly job.
+
+**Un-marking done:** `PATCH /tasks/{id}` or `PATCH /shared/tasks/{id}` with `{ "status": "pending" }` reverts the task. `task_service.update_task` clears `completed_at`; for recurring tasks it also decrements `streak_count` (min 0) and clears `last_completed_date`.
 
 ---
 
@@ -345,7 +353,21 @@ Timezone is set via `SCHEDULER_TIMEZONE` env var (IANA string, validated at star
 6. Add API methods to `app/frontend/src/lib/api.js`
 7. Update this file if the module introduces new conventions or file layout
 
-## Adding a New Household Section
+## Household Module
+
+### Architecture
+
+The Household module (`pages/Household.jsx`) is a tab-based shared space. All data lives in `brain/USERS/_household/` — tasks in `Tasks/tasks.json`, events in `Calendar/events.json`. These are separate from any real user's Brain folder.
+
+**Shared events:** Any household member can create events (`POST /shared/events`). Only admins can edit or delete (`PATCH` / `DELETE`). Events are displayed on every member's personal calendar with a 🏠 badge via the household toggle pill.
+
+**"Add to Household" (EventModal):** Personal calendar events can be moved to the household pool via the "Add to Household" toggle in EventModal. This deletes the personal event and creates a household event — there is only one record, so admin edits reflect everywhere automatically.
+
+**Task assignment:** Admin creates household tasks with an optional `assigned_to` field (a user's display name). Assigned users see the task in their personal Tasks page with a 🏠 badge and on their personal calendar grid. Marking the task done from personal Tasks calls `PATCH /shared/tasks/{id}` — the household record is the single source of truth.
+
+**Done-task visibility:** Completed household tasks are filtered out of both the Household and personal calendar grids immediately on mark-done. They remain visible in the household Tasks tab under the "done" filter.
+
+### Adding a New Household Section
 
 The Household module uses a tab architecture (`view` state in `Household.jsx`). To add a new household section (e.g. Shopping, Notes):
 
@@ -354,6 +376,15 @@ The Household module uses a tab architecture (`view` state in `Household.jsx`). 
 3. Add any required backend endpoints to `routers/shared.py` and API methods to `lib/api.js`
 
 No new routes or modules are needed — everything lives within the existing `/household` route.
+
+---
+
+## Notes Module
+
+- **Auto-save:** Edits are debounced and auto-saved 1.5 s after the user stops typing (same pattern as Chat auto-archive). There is no explicit Save button.
+- **Getting Started note:** On first list call (`GET /notes`), if the user has no notes, `notes_service` creates `Getting Started.md` automatically.
+- **Folder deselection:** Clicking a selected folder in the sidebar deselects it (no active folder = notes created at root level).
+- **Horizontal scroll prevention:** The note editor uses `overflow-x-hidden w-full` on the textarea and `min-w-0` on the flex container to prevent long lines from expanding the page.
 
 ---
 
@@ -404,6 +435,13 @@ nvm is a version manager — installing nvm does not install Node.js. You must r
 
 **Runtime hosting config vs env vars:**
 `cookie_secure` and `trust_proxy_headers` can be set in `docker/.env` (static defaults) or overridden at runtime by the Admin → Hosting panel (written to `brain/hosting.json`). The runtime value always wins. Use `hosting_service.effective_cookie_secure()` and `hosting_service.effective_trust_proxy_headers()` — never read `settings.*` directly in code that serves requests.
+
+**Backend code changes require a Docker image rebuild:**
+The backend Python code is baked into the Docker image at build time (`build: ../app/backend` in `docker-compose.yml`) — there is no bind mount for source code. Any change to `app/backend/` requires rebuilding the image:
+```bash
+bash launch.sh --skip-build   # rebuilds image only, skips npm
+```
+Running `uvicorn` without `--reload` (production mode) will not pick up file changes. Always rebuild after backend edits.
 
 **Mobile viewport height — use `100dvh` not `100vh`:**
 `100vh` on mobile browsers includes the browser chrome (address bar, navigation) that may appear or disappear while scrolling. This causes the app shell to be taller than the visible area and makes fixed elements overlap. Always use `h-[100dvh]` on the root container, not `h-screen` / `h-[100vh]`.
