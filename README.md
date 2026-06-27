@@ -1,18 +1,26 @@
 # LogCore OS
 
-A self-hosted, values-driven family life operating system with an AI that knows you personally.
+A self-hosted life operating system for individuals, families, and households. An AI that knows you personally — your priorities, your goals, your people — running privately on your own server.
 
 ---
 
-## Two Products
+## What it does
 
-**LogCore Brain** (`brain/`) — Free, open source. Markdown + JSON files. Works with any AI — Claude Code, GPT, Ollama, anything. Take your Brain folder anywhere, and your AI context comes with you.
+LogCore OS gives you a private command centre for your life:
 
-**LogCore App** (`app/`) — The software layer. Python FastAPI backend + React frontend, installable as a PWA on phones and desktops. Dashboards, task management, integrated AI chat, background scheduling, push notifications. This is what you run (or pay to have hosted).
+- **AI chat** with full personal context — your priorities, tasks, and memory are injected automatically
+- **Task management** with intelligent scoring based on your life priorities
+- **Journal, Notes, and Calendar** — all in one place
+- **Household hub** — shared tasks and events across everyone in your home
+- **Push notifications** for daily task digests, overdue reminders, and weekly reviews
+- **PWA** — installs on your phone and desktop like a native app
+- **Multi-user** — one server supports a whole household or small team
+
+All your data lives as readable files on your own server. No third-party cloud. No vendor lock-in.
 
 ---
 
-## Quick Start
+## Self-Hosting
 
 ### Linux (recommended for servers)
 
@@ -22,11 +30,11 @@ cd LogCoreOS
 bash launch.sh --install-deps
 ```
 
-`--install-deps` installs Docker, Node.js 20+, and curl automatically if they're missing, then launches the app. Re-running it is safe — nothing is reinstalled if it's already present.
+`--install-deps` automatically installs Docker, Node.js, and curl if they are missing, then launches the app. Safe to re-run — nothing is reinstalled if already present.
 
 ### macOS / Windows
 
-Install these first, then run `bash launch.sh`:
+Install the following first, then run `bash launch.sh`:
 
 | Tool | Version | Install |
 |---|---|---|
@@ -35,23 +43,27 @@ Install these first, then run `bash launch.sh`:
 | Node.js | 20+ | [nodejs.org](https://nodejs.org/en/download/) or [nvm](https://github.com/nvm-sh/nvm) |
 | curl | any | `brew install curl` |
 
-The script handles everything else:
+### What the launch script does
+
 - Generates a secure `SECRET_KEY` automatically
 - Builds the React frontend
 - Starts all Docker containers
-- Waits for the app to become healthy
+- Waits for the app to be healthy
 
 ### First login
+
 Open `http://localhost:8000` in your browser. The first user to register becomes the admin.
 
-After logging in, go to **Admin → AI Settings** to add your Anthropic API key (needed for AI chat).
+After logging in, go to **Admin → AI Settings** to add your Anthropic API key (required for AI chat).
 
-### Tunnel / external access
+### External access
+
 If you're exposing the app via Cloudflare Tunnel, ngrok, or a reverse proxy, go to **Admin → Hosting** after first login, select "HTTPS via Tunnel", and enter your domain URL. No restart needed.
 
-On your phone: open Chrome → go to your app URL → tap "Add to Home Screen" to install as a PWA.
+To install as a PWA on your phone: open your browser, navigate to your app URL, and tap "Add to Home Screen".
 
-### Re-running the script
+### Script options
+
 ```bash
 bash launch.sh                  # rebuild frontend + restart containers
 bash launch.sh --install-deps   # install any missing deps, then launch
@@ -61,59 +73,36 @@ bash launch.sh --reconfigure    # reset docker/.env and start fresh
 
 ---
 
-## Architecture
+## Managed Hosting
 
-```
-brain/               ← The Brain (free, portable, AI-readable)
-  AGENTS.md          ← AI boot protocol
-  SOUL.md            ← AI personality
-  USERS/
-    _template/       ← Template copied for each new user
-    {User Name}/     ← Created by the setup wizard on first login
-      Profile.md
-      Long_Term_Memory.md
-      Short_Term_Memory.md
-      Tasks/
-        tasks.json
-        tasks_history.json
-        tasks_view.md
-  skills/
-    life-priorities/ ← Task scoring + recurring logic
+Don't want to run your own server? LogCore OS is available as a fully managed hosted service.
 
-app/
-  backend/           ← Python FastAPI (reads/writes brain/ files)
-  frontend/          ← React + Vite + Tailwind (PWA)
+We handle setup, updates, backups, and uptime — you just use the app.
 
-docker/
-  docker-compose.yml
-  .env.example
-```
+> Hosted plans coming soon. [logcoretech.com](https://logcoretech.com)
 
 ---
 
-## Using the Brain Without the App
+## Your Data
 
-The Brain files work with any AI out of the box. To use with Claude Code:
+All your data is stored as Markdown and JSON files in the `brain/` folder on your server. It is human-readable, portable, and not tied to this app.
 
-1. Open Claude Code in this directory
-2. The AI reads `brain/AGENTS.md` and follows its boot protocol
-3. Tell it which user you are and it loads your personal context
-4. Chat naturally — it knows your priorities, tasks, and context
+You can export your Brain at any time from **Admin → Export** as a zip file. The files work with any AI — Claude, GPT, Ollama, or anything else. Your context comes with you wherever you go.
 
 ---
 
-## Notifications (ntfy)
+## Notifications
 
-The app sends push notifications via [ntfy](https://ntfy.sh) (self-hosted, free).
+Push notifications are handled via [ntfy](https://ntfy.sh) (self-hosted, included in the Docker stack).
 
 1. Install the ntfy app on your phone (Android or iOS)
 2. Add your server: `http://YOUR_SERVER_IP:5680`
 3. Subscribe to your personal channel — find it in **Settings → Notifications** after logging in
-4. Your channel ID is randomly generated at registration for privacy
 
 ---
 
 ## License
 
-Brain files: MIT (free, open source, share freely)
-App: AGPL v3 — free to self-host and modify; any commercial service built on this code must also be open source
+AGPL v3 — free to self-host and modify. Any commercial service built on this code must also be published as open source.
+
+See [LICENSE](./LICENSE) for the full terms.
