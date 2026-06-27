@@ -69,13 +69,22 @@ ensure_docker_group() {
   # the group without requiring a full logout/login.
   if getent group docker 2>/dev/null | grep -qw "$user" && ! id -Gn | grep -qw docker; then
     log_info "Docker group membership isn't active in this session."
-    log_info "Re-launching via 'sg docker' (no logout needed)..."
-    if [[ $# -eq 0 ]]; then
-      exec sg docker -c "bash \"$SCRIPT_DIR/launch.sh\""
-    else
-      local args
-      args="$(printf '%q ' "$@")"
+    local args
+    args="$(printf '%q ' "$@")"
+    if command -v sg &>/dev/null; then
+      log_info "Re-launching via 'sg docker' (no logout needed)..."
       exec sg docker -c "bash \"$SCRIPT_DIR/launch.sh\" $args"
+    elif [[ -z "${SUDO_USER:-}" ]] && command -v sudo &>/dev/null; then
+      # Re-exec through sudo so PAM re-initialises supplementary groups (picks
+      # up the docker group that was just added). SUDO_USER being set on the
+      # re-launched process means PAM ran; if docker is still inactive we stop
+      # rather than loop.
+      log_info "Re-launching via sudo to activate docker group (no logout needed)..."
+      exec sudo -E -u "$user" bash "$SCRIPT_DIR/launch.sh" "$@"
+    else
+      die "Docker group membership is not active and neither 'sg' nor 'sudo' are available.
+    Log out and back in (or open a new terminal), then re-run:
+      bash \"$SCRIPT_DIR/launch.sh\" $args"
     fi
   fi
 
