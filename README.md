@@ -116,4 +116,4 @@ The app sends push notifications via [ntfy](https://ntfy.sh) (self-hosted, free)
 ## License
 
 Brain files: MIT (free, open source, share freely)
-App: TBD
+App: AGPL v3 — free to self-host and modify; any commercial service built on this code must also be open source
