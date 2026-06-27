@@ -14,25 +14,28 @@ A self-hosted, values-driven family life operating system with an AI that knows 
 
 ## Quick Start
 
-### Prerequisites
-Install these before running the launch script:
+### Linux (recommended for servers)
+
+```bash
+git clone <repo-url>
+cd LogCoreOS
+bash launch.sh --install-deps
+```
+
+`--install-deps` installs Docker, Node.js 20+, and curl automatically if they're missing, then launches the app. Re-running it is safe — nothing is reinstalled if it's already present.
+
+### macOS / Windows
+
+Install these first, then run `bash launch.sh`:
 
 | Tool | Version | Install |
 |---|---|---|
 | Docker | latest | [docs.docker.com/engine/install](https://docs.docker.com/engine/install/) |
 | Docker Compose plugin (v2) | latest | [docs.docker.com/compose/install](https://docs.docker.com/compose/install/) |
 | Node.js | 20+ | [nodejs.org](https://nodejs.org/en/download/) or [nvm](https://github.com/nvm-sh/nvm) |
-| curl | any | `sudo apt-get install curl` |
+| curl | any | `brew install curl` |
 
-### Launch
-
-```bash
-git clone <repo-url>
-cd LogCoreOS
-./launch.sh
-```
-
-That's it. The script handles everything else:
+The script handles everything else:
 - Generates a secure `SECRET_KEY` automatically
 - Builds the React frontend
 - Starts all Docker containers
@@ -50,9 +53,10 @@ On your phone: open Chrome → go to your app URL → tap "Add to Home Screen" t
 
 ### Re-running the script
 ```bash
-./launch.sh              # rebuild frontend + restart containers
-./launch.sh --skip-build # restart only (skip npm build if nothing changed)
-./launch.sh --reconfigure # reset docker/.env and start fresh
+bash launch.sh                  # rebuild frontend + restart containers
+bash launch.sh --install-deps   # install any missing deps, then launch
+bash launch.sh --skip-build     # restart only (skip npm build if nothing changed)
+bash launch.sh --reconfigure    # reset docker/.env and start fresh
 ```
 
 ---
