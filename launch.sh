@@ -3,11 +3,13 @@
 # Builds the frontend, configures the environment, and starts the Docker stack.
 #
 # Usage:
-#   bash launch.sh               # first-time setup or normal restart
-#   bash launch.sh --reconfigure # re-run setup even if docker/.env already exists
-#   bash launch.sh --skip-build  # skip npm build (requires app/frontend/dist/ to exist)
+#   bash launch.sh                  # first-time setup or normal restart
+#   bash launch.sh --install-deps   # auto-install prerequisites (Linux only), then launch
+#   bash launch.sh --reconfigure    # re-run setup even if docker/.env already exists
+#   bash launch.sh --skip-build     # skip npm build (requires app/frontend/dist/ to exist)
 #
 # Requirements: Docker (with Compose plugin v2), Node.js 20+, curl
+# On Linux, pass --install-deps to have the script install these automatically.
 
 set -euo pipefail
 
@@ -25,17 +27,19 @@ HEALTH_INTERVAL=3
 
 FLAG_RECONFIGURE=false
 FLAG_SKIP_BUILD=false
+FLAG_INSTALL_DEPS=false
 
 # ── Flags ─────────────────────────────────────────────────────────────────────
 
 parse_flags() {
   for arg in "$@"; do
     case "$arg" in
-      --reconfigure) FLAG_RECONFIGURE=true ;;
-      --skip-build)  FLAG_SKIP_BUILD=true  ;;
+      --reconfigure)   FLAG_RECONFIGURE=true   ;;
+      --skip-build)    FLAG_SKIP_BUILD=true     ;;
+      --install-deps)  FLAG_INSTALL_DEPS=true   ;;
       *)
         echo "ERROR: Unknown flag: $arg"
-        echo "Usage: bash launch.sh [--reconfigure] [--skip-build]"
+        echo "Usage: bash launch.sh [--install-deps] [--reconfigure] [--skip-build]"
         exit 1
         ;;
     esac
@@ -83,6 +87,85 @@ ensure_docker_group() {
     Then either log out and back in, or run:
       newgrp docker"
   fi
+}
+
+# ── Dependency installation ───────────────────────────────────────────────────
+
+detect_os() {
+  case "$(uname -s)" in
+    Linux*)            echo "linux"   ;;
+    Darwin*)           echo "macos"   ;;
+    CYGWIN*|MINGW*|MSYS*) echo "windows" ;;
+    *)                 echo "unknown" ;;
+  esac
+}
+
+install_deps() {
+  [[ "$FLAG_INSTALL_DEPS" == "true" ]] || return 0
+
+  local os
+  os="$(detect_os)"
+
+  if [[ "$os" != "linux" ]]; then
+    log_warn "Auto-install is only supported on Linux. Install prerequisites manually:"
+    log_info "  Docker:  https://docs.docker.com/engine/install/"
+    log_info "  Node.js: https://nodejs.org/en/download/"
+    log_info "  curl:    use your system package manager"
+    return 0
+  fi
+
+  log_step "Installing prerequisites"
+
+  local pm
+  if command -v apt-get &>/dev/null; then
+    pm="apt"
+  elif command -v dnf &>/dev/null; then
+    pm="dnf"
+  elif command -v yum &>/dev/null; then
+    pm="yum"
+  else
+    die "No supported package manager found (apt, dnf, yum). Install prerequisites manually."
+  fi
+
+  # curl — needed for everything below
+  if ! command -v curl &>/dev/null; then
+    log_info "Installing curl..."
+    case "$pm" in
+      apt) sudo apt-get update -qq && sudo apt-get install -y curl ;;
+      dnf) sudo dnf install -y curl ;;
+      yum) sudo yum install -y curl ;;
+    esac
+  fi
+
+  # Docker Engine + Compose plugin (official install script covers both)
+  if ! command -v docker &>/dev/null; then
+    log_info "Installing Docker..."
+    curl -fsSL https://get.docker.com | sudo sh
+    sudo usermod -aG docker "$(id -un)"
+    log_info "Added $(id -un) to the docker group."
+  fi
+
+  # Node.js 20+ via NodeSource
+  local need_node=true
+  if [[ "$FLAG_SKIP_BUILD" == "true" && -d "$DIST_DIR" ]]; then
+    need_node=false
+  fi
+
+  if [[ "$need_node" == "true" ]] && ! command -v node &>/dev/null; then
+    log_info "Installing Node.js 20..."
+    case "$pm" in
+      apt)
+        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+        sudo apt-get install -y nodejs
+        ;;
+      dnf|yum)
+        curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+        sudo "$pm" install -y nodejs
+        ;;
+    esac
+  fi
+
+  log_info "Prerequisites ready."
 }
 
 # ── Prerequisites ─────────────────────────────────────────────────────────────
@@ -286,8 +369,9 @@ print_success() {
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 main() {
-  ensure_docker_group "$@"
   parse_flags "$@"
+  install_deps
+  ensure_docker_group "$@"
 
   echo ""
   echo "LogCore OS — Launch"
