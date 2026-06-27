@@ -25,7 +25,7 @@ All your data lives as readable files on your own server. No third-party cloud. 
 ### Linux (recommended for servers)
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/LogCoreTech/LogCoreOS.git
 cd LogCoreOS
 bash launch.sh --install-deps
 ```
