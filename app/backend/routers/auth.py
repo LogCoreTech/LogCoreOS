@@ -632,7 +632,7 @@ class CreateUserRequest(BaseModel):
     password: str
     name: str
     role: Literal["admin", "member", "guest"] = "member"
-    feature_role: str = "member"
+    feature_role: str = "guest"
 
 
 class UpdateRoleRequest(BaseModel):
@@ -645,7 +645,7 @@ def admin_create_user(req: CreateUserRequest, current_user: dict = Depends(requi
         user = auth_service.create_user(req.email, req.password, req.name, role=req.role)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    if req.feature_role and req.feature_role != "member":
+    if req.feature_role and req.feature_role != "guest":
         auth_service.update_user(user["id"], {"feature_role": req.feature_role})
     return {k: v for k, v in user.items() if k in {"id", "email", "name", "role", "created_at"}}
 

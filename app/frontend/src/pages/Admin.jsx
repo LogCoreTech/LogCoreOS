@@ -54,11 +54,10 @@ function initials(name) {
 // ---------------------------------------------------------------------------
 // Users card
 // ---------------------------------------------------------------------------
-const BLANK_NEW_USER = { email: '', name: '', password: '', role: 'member' }
+const BLANK_NEW_USER = { email: '', name: '', password: '', role: 'member', feature_role: 'guest' }
 
-function UsersCard({ currentUserId }) {
+function UsersCard({ currentUserId, roles, onRolesLoaded }) {
   const [users, setUsers]             = useState([])
-  const [roles, setRoles]             = useState([])       // available feature roles
   const [loading, setLoading]         = useState(true)
   const [pendingRole, setPendingRole] = useState({})
   const [saving, setSaving]           = useState(null)
@@ -88,7 +87,7 @@ function UsersCard({ currentUserId }) {
     const modMap = {}
     list.forEach(u => { modMap[u.id] = u.disabled_modules || [] })
     setUserModules(modMap)
-    setRoles(Object.keys(fd.roles || { member: {} }))
+    onRolesLoaded(Object.keys(fd.roles || { member: {} }))
   }
 
   useEffect(() => {
@@ -133,9 +132,9 @@ function UsersCard({ currentUserId }) {
     try {
       const created = await adminApi.createUser({
         ...newUser,
-        feature_role: newUser.feature_role || 'member',
+        feature_role: newUser.feature_role || 'guest',
       })
-      setUsers(us => [...us, { ...created, feature_role: newUser.feature_role || 'member' }])
+      setUsers(us => [...us, { ...created, feature_role: newUser.feature_role || 'guest' }])
       setUserModules(prev => ({ ...prev, [created.id]: [] }))
       setNewUser(BLANK_NEW_USER)
       setShowCreate(false)
@@ -226,8 +225,8 @@ function UsersCard({ currentUserId }) {
                 onChange={e => setNewUser(u => ({ ...u, role: e.target.value }))}
                 className="input text-sm"
               >
-                <option value="member">member</option>
                 <option value="admin">admin</option>
+                <option value="member">member</option>
                 <option value="guest">guest</option>
               </select>
             </div>
@@ -236,7 +235,7 @@ function UsersCard({ currentUserId }) {
           <div>
             <label className="block text-xs font-medium mb-1">Feature Access Role</label>
             <select
-              value={newUser.feature_role || 'member'}
+              value={newUser.feature_role || 'guest'}
               onChange={e => setNewUser(u => ({ ...u, feature_role: e.target.value }))}
               className="input text-sm"
             >
@@ -357,7 +356,7 @@ function UsersCard({ currentUserId }) {
                           <p className="text-xs font-medium text-charcoal-500 dark:text-charcoal-400 mb-1">Feature Role</p>
                           <div className="flex gap-2">
                             <select
-                              value={pendingFRole[user.id] ?? (user.feature_role || 'member')}
+                              value={pendingFRole[user.id] ?? (user.feature_role || 'guest')}
                               onChange={e => setPendingFRole(p => ({ ...p, [user.id]: e.target.value }))}
                               className="input text-sm flex-1"
                             >
@@ -365,7 +364,7 @@ function UsersCard({ currentUserId }) {
                             </select>
                             <button
                               onClick={() => saveFeatureRole(user.id)}
-                              disabled={!pendingFRole[user.id] || pendingFRole[user.id] === (user.feature_role || 'member') || fRoleSaving === user.id}
+                              disabled={!pendingFRole[user.id] || pendingFRole[user.id] === (user.feature_role || 'guest') || fRoleSaving === user.id}
                               className="btn-primary text-xs px-3 py-1 shrink-0 disabled:opacity-30"
                             >
                               {fRoleSaving === user.id ? '…' : 'Save'}
@@ -1072,13 +1071,14 @@ function InfisicalCard() {
 // ---------------------------------------------------------------------------
 // Roles card
 // ---------------------------------------------------------------------------
-function RolesCard() {
+function RolesCard({ roles, onRolesChange }) {
   const [data, setData]         = useState(null)
   const [loading, setLoading]   = useState(true)
   const [roleMods, setRoleMods] = useState({})
-  const [saving, setSaving]     = useState(null)
-  const [deleting, setDeleting] = useState(null)
-  const [msg, setMsg]           = useState(null)
+  const [saving, setSaving]       = useState(null)
+  const [deleting, setDeleting]   = useState(null)
+  const [expandedRole, setExpandedRole] = useState(null)
+  const [msg, setMsg]             = useState(null)
   const [showCreate, setShowCreate] = useState(false)
   const [newRoleName, setNewRoleName] = useState('')
   const [newRoleMods, setNewRoleMods] = useState({})
@@ -1093,10 +1093,13 @@ function RolesCard() {
     const d = await featuresApi.get()
     setData(d)
     const mods = {}
+    const names = []
     for (const [name, map] of Object.entries(d.roles || {})) {
       mods[name] = { ...map }
+      names.push(name)
     }
     setRoleMods(mods)
+    onRolesChange(names)
   }
 
   useEffect(() => {
@@ -1129,10 +1132,11 @@ function RolesCard() {
       await featuresApi.deleteRole(name)
       setRoleMods(prev => { const n = { ...prev }; delete n[name]; return n })
       setData(prev => {
-        const roles = { ...prev.roles }
-        delete roles[name]
-        return { ...prev, roles }
+        const r = { ...prev.roles }
+        delete r[name]
+        return { ...prev, roles: r }
       })
+      onRolesChange(roles.filter(r => r !== name))
       flash(true, `Role "${name}" deleted.`)
     } catch (err) {
       flash(false, err.message || 'Failed to delete role')
@@ -1152,6 +1156,7 @@ function RolesCard() {
       await featuresApi.createRole(trimmed, modMap)
       setRoleMods(prev => ({ ...prev, [trimmed]: modMap }))
       setData(prev => ({ ...prev, roles: { ...prev.roles, [trimmed]: modMap } }))
+      onRolesChange([...roles, trimmed])
       setNewRoleName('')
       setNewRoleMods({})
       setShowCreate(false)
@@ -1164,8 +1169,6 @@ function RolesCard() {
   }
 
   if (loading) return <div className="card p-5"><p className="text-sm text-charcoal-400">Loading…</p></div>
-
-  const roleNames = data ? Object.keys(data.roles || {}) : []
 
   return (
     <div className="card p-5">
@@ -1228,56 +1231,70 @@ function RolesCard() {
       )}
 
       {/* Role list */}
-      <div className="space-y-4">
-        {roleNames.map(name => {
-          const isMember = name === 'member'
+      <div className="space-y-2">
+        {roles.map(name => {
+          const isBuiltIn = name === 'member' || name === 'guest'
           const mods = roleMods[name] || {}
+          const open = expandedRole === name
           return (
-            <div key={name} className="rounded-lg border border-charcoal-100 dark:border-charcoal-800 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div>
+            <div key={name} className="rounded-lg border border-charcoal-100 dark:border-charcoal-800">
+              {/* Row header — always visible */}
+              <div className="flex items-center gap-3 px-4 py-3">
+                <button
+                  onClick={() => setExpandedRole(open ? null : name)}
+                  className="flex-1 flex items-center gap-2 text-left"
+                >
+                  <span className="text-xs text-charcoal-400">{open ? '▾' : '▸'}</span>
                   <span className="font-medium text-sm">{name}</span>
-                  {isMember && (
-                    <span className="ml-2 text-xs text-charcoal-400">Default for all users</span>
+                  {isBuiltIn && (
+                    <span className="text-xs text-charcoal-400">
+                      {name === 'guest' ? 'built-in · default' : 'built-in'}
+                    </span>
                   )}
-                </div>
-                {!isMember && (
+                </button>
+                {!isBuiltIn && (
                   <button
                     onClick={() => deleteRole(name)}
                     disabled={deleting === name}
-                    className="text-xs text-charcoal-400 hover:text-red-500 transition-colors disabled:opacity-30"
+                    className="text-xs text-charcoal-400 hover:text-red-500 transition-colors disabled:opacity-30 shrink-0"
                   >
                     {deleting === name ? '…' : 'Delete'}
                   </button>
                 )}
               </div>
-              <div className="space-y-1 mb-3">
-                {ALL_MODULES.map(mod => {
-                  const enabled = mods[mod.id] !== false
-                  return (
-                    <label
-                      key={mod.id}
-                      className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-charcoal-50 dark:hover:bg-charcoal-800 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={enabled}
-                        onChange={() => toggleMod(name, mod.id)}
-                        className="accent-orange-500 w-4 h-4"
-                      />
-                      <span className="text-sm leading-none">{mod.icon}</span>
-                      <span className="text-sm">{mod.label}</span>
-                    </label>
-                  )
-                })}
-              </div>
-              <button
-                onClick={() => saveRole(name)}
-                disabled={saving === name}
-                className="btn-primary text-xs px-3 py-1 w-full"
-              >
-                {saving === name ? '…' : 'Save Role'}
-              </button>
+
+              {/* Expanded module toggles */}
+              {open && (
+                <div className="border-t border-charcoal-100 dark:border-charcoal-800 px-4 pb-4 pt-3">
+                  <div className="space-y-1 mb-3">
+                    {ALL_MODULES.map(mod => {
+                      const enabled = mods[mod.id] !== false
+                      return (
+                        <label
+                          key={mod.id}
+                          className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-charcoal-50 dark:hover:bg-charcoal-800 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={enabled}
+                            onChange={() => toggleMod(name, mod.id)}
+                            className="accent-orange-500 w-4 h-4"
+                          />
+                          <span className="text-sm leading-none">{mod.icon}</span>
+                          <span className="text-sm">{mod.label}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                  <button
+                    onClick={() => saveRole(name)}
+                    disabled={saving === name}
+                    className="btn-primary text-xs px-3 py-1 w-full"
+                  >
+                    {saving === name ? '…' : 'Save Role'}
+                  </button>
+                </div>
+              )}
             </div>
           )
         })}
@@ -1294,13 +1311,14 @@ function RolesCard() {
 
 export default function Admin() {
   const { user } = useAuth()
+  const [roles, setRoles] = useState(['member'])
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
       <h1 className="text-2xl font-bold">Admin</h1>
-      <UsersCard currentUserId={user?.id || ''} />
+      <UsersCard currentUserId={user?.id || ''} roles={roles} onRolesLoaded={setRoles} />
       <RegistrationCard />
-      <RolesCard />
+      <RolesCard roles={roles} onRolesChange={setRoles} />
       <AiProviderCard />
       <WebSearchCard />
       <HostingCard />
