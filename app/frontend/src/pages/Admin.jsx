@@ -731,10 +731,13 @@ function HostingCard() {
   const isHttps = form.mode !== 'local'
   const needsDomain = isHttps && !form.domain_url.trim()
 
-  const nginxConfig = form.domain_url
-    ? `server {
+  const nginxConfig = (() => {
+    if (!form.domain_url) return ''
+    try {
+      const { hostname } = new URL(form.domain_url)
+      return `server {
     listen 443 ssl;
-    server_name ${new URL(form.domain_url).hostname};
+    server_name ${hostname};
 
     location / {
         proxy_pass http://localhost:8000;
@@ -743,7 +746,8 @@ function HostingCard() {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 }`
-    : ''
+    } catch { return '' }
+  })()
 
   return (
     <div className="card p-5">
@@ -790,6 +794,7 @@ function HostingCard() {
               onChange={e => setForm(f => ({ ...f, domain_url: e.target.value }))}
               placeholder="https://logcore.yourdomain.com"
               className="input"
+              autoComplete="off"
               required
             />
             {form.mode === 'cloudflare' && (
@@ -815,6 +820,7 @@ function HostingCard() {
               onChange={e => setForm(f => ({ ...f, tunnel_token: e.target.value }))}
               placeholder={tokenSaved ? '••••••••••••• (saved — paste to replace)' : 'Paste token from Cloudflare dashboard'}
               className="input font-mono"
+              autoComplete="new-password"
             />
             <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mt-1">
               Find your token in Cloudflare Zero Trust → Networks → Tunnels → your tunnel → Configure.
