@@ -3,6 +3,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+# Infisical must inject env vars before Settings() is instantiated at config import time
+from services.infisical_loader import load_infisical_secrets
+load_infisical_secrets()
+
 from fastapi import FastAPI, Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.responses import FileResponse, Response
@@ -10,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from config import settings
 from migrations.runner import run_pending as run_migrations
-from routers import auth, tasks, priorities, chat, setup, health, brain, export, shared, push, notes, journal, calendar, profile, suggestions
+from routers import auth, tasks, priorities, chat, setup, health, brain, export, shared, push, notes, journal, calendar, profile, suggestions, infisical
 from scheduler import start as start_scheduler
 from services.hosting_service import effective_domain_url
 
@@ -149,6 +153,7 @@ app.include_router(journal.router,    prefix="/api/v1/journal",      tags=["jour
 app.include_router(calendar.router,   prefix="/api/v1/calendar",     tags=["calendar"])
 app.include_router(profile.router,    prefix="/api/v1/profile",      tags=["profile"])
 app.include_router(suggestions.router, prefix="/api/v1/suggestions",  tags=["suggestions"])
+app.include_router(infisical.router,  prefix="/api/v1/auth",          tags=["infisical"])
 
 # Serve React frontend — must come last
 static_dir = Path(__file__).parent.parent / "frontend" / "dist"

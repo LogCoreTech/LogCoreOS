@@ -188,6 +188,12 @@ export const suggestions = {
   clearAll:          ()    => request('DELETE', '/suggestions/notifications'),
 }
 
+export const infisical = {
+  getStatus:  ()      => get('/auth/admin/infisical-status'),
+  setToken:   (token) => patch('/auth/admin/infisical-token', { token }),
+  clearToken: ()      => del('/auth/admin/infisical-token'),
+}
+
 export const user = {
   async export() {
     const res = await fetch(`${BASE}/user/export`, { headers: headers(), credentials: 'include' })
