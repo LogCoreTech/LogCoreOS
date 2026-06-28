@@ -25,13 +25,18 @@ export function AuthProvider({ children }) {
           role:            me.role,
           disabledModules: me.disabled_modules || [],
           timezone:        me.timezone     || 'UTC',
+          // Preferences live server-side only — not written to localStorage
           accentColor:     me.accent_color || null,
           darkMode:        me.dark_mode    || 'system',
           background:      me.background   || null,
           density:         me.density      || 'comfortable',
           cornerStyle:     me.corner_style || 'rounded',
         }
-        localStorage.setItem('lc_user', JSON.stringify(u))
+        // Only persist session/routing fields — preferences are always re-fetched from server
+        localStorage.setItem('lc_user', JSON.stringify({
+          id: u.id, name: u.name, role: u.role,
+          disabledModules: u.disabledModules, timezone: u.timezone,
+        }))
         setUser(u)
         applyAccentColor(u.accentColor)
         applyDarkMode(u.darkMode, getSystemDarkPreference())
@@ -49,9 +54,9 @@ export function AuthProvider({ children }) {
 
   function login(id, name, role, disabledModules = [], timezone = 'UTC', accentColor = null, darkMode = 'system', background = null, density = 'comfortable', cornerStyle = 'rounded') {
     // Auth is handled via httpOnly cookie set by the server.
-    // Only cache non-sensitive user metadata in localStorage.
+    // Only persist session/routing fields — preferences come from server and stay in memory only.
     const u = { id, name, role, disabledModules, timezone, accentColor, darkMode, background, density, cornerStyle }
-    localStorage.setItem('lc_user', JSON.stringify(u))
+    localStorage.setItem('lc_user', JSON.stringify({ id, name, role, disabledModules, timezone }))
     setUser(u)
     applyAccentColor(accentColor)
     applyDarkMode(darkMode, getSystemDarkPreference())
@@ -107,7 +112,11 @@ export function AuthProvider({ children }) {
           density:         me.density      || 'comfortable',
           cornerStyle:     me.corner_style || 'rounded',
         }
-        localStorage.setItem('lc_user', JSON.stringify(updated))
+        // Persist only session/routing fields; preferences stay in memory
+        localStorage.setItem('lc_user', JSON.stringify({
+          id: updated.id, name: updated.name, role: updated.role,
+          disabledModules: updated.disabledModules, timezone: updated.timezone,
+        }))
         setUser(updated)
         applyAccentColor(updated.accentColor)
         applyDarkMode(updated.darkMode, getSystemDarkPreference())

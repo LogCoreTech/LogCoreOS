@@ -2,6 +2,7 @@
 import re
 import shutil
 from pathlib import Path
+from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,6 +11,7 @@ from pydantic import BaseModel, Field, field_validator
 from config import settings
 from routers.auth import get_current_user
 from services import auth_service
+from services.features_service import init_features
 from services.file_service import brain_path, write_markdown, user_path
 from services.rate_limiter import rate_limit
 
@@ -40,6 +42,7 @@ class SetupRequest(BaseModel):
     custom_categories: list[str] = Field(default=[], max_length=10)
     role: str = Field(default="", max_length=100)
     timezone: str = Field(default="America/Chicago", max_length=50)
+    profile: Literal["personal", "business"] = "personal"
 
     @field_validator("priority_order", "custom_categories", mode="before")
     @classmethod
@@ -135,5 +138,8 @@ def setup_user(req: SetupRequest, current_user: dict = Depends(get_current_user)
             f"| {name} | `USERS/{name}/` | Active |",
         )
         write_markdown(users_md, users_content)
+
+    # Initialise feature flags with chosen profile (no-op if features.json already exists)
+    init_features(req.profile)
 
     return {"ok": True, "message": f"Brain folder created for {name}"}
