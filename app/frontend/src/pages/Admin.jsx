@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { admin as adminApi, infisical as infisicalApi } from '../lib/api'
+import { admin as adminApi, features as featuresApi, infisical as infisicalApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { ALL_MODULES } from '../lib/constants'
 
@@ -58,6 +58,7 @@ const BLANK_NEW_USER = { email: '', name: '', password: '', role: 'member' }
 
 function UsersCard({ currentUserId }) {
   const [users, setUsers]             = useState([])
+  const [roles, setRoles]             = useState([])       // available feature roles
   const [loading, setLoading]         = useState(true)
   const [pendingRole, setPendingRole] = useState({})
   const [saving, setSaving]           = useState(null)
@@ -68,9 +69,12 @@ function UsersCard({ currentUserId }) {
   const [creating, setCreating]       = useState(false)
 
   // Module management state
-  const [userModules, setUserModules]   = useState({})
-  const [moduleSaving, setModuleSaving] = useState(null)
-  const [expandedUser, setExpandedUser] = useState(null)
+  const [userModules, setUserModules]       = useState({})
+  const [moduleSaving, setModuleSaving]     = useState(null)
+  const [expandedUser, setExpandedUser]     = useState(null)
+  // Feature role assignment
+  const [pendingFRole, setPendingFRole]     = useState({})
+  const [fRoleSaving, setFRoleSaving]       = useState(null)
 
   function flash(ok, text) {
     setMsg({ ok, text })
@@ -78,12 +82,13 @@ function UsersCard({ currentUserId }) {
   }
 
   async function loadUsers() {
-    const d = await adminApi.listUsers()
+    const [d, fd] = await Promise.all([adminApi.listUsers(), featuresApi.get()])
     const list = d.users || d
     setUsers(list)
     const modMap = {}
     list.forEach(u => { modMap[u.id] = u.disabled_modules || [] })
     setUserModules(modMap)
+    setRoles(Object.keys(fd.roles || { member: {} }))
   }
 
   useEffect(() => {
@@ -126,8 +131,11 @@ function UsersCard({ currentUserId }) {
     e.preventDefault()
     setCreating(true)
     try {
-      const created = await adminApi.createUser(newUser)
-      setUsers(us => [...us, created])
+      const created = await adminApi.createUser({
+        ...newUser,
+        feature_role: newUser.feature_role || 'member',
+      })
+      setUsers(us => [...us, { ...created, feature_role: newUser.feature_role || 'member' }])
       setUserModules(prev => ({ ...prev, [created.id]: [] }))
       setNewUser(BLANK_NEW_USER)
       setShowCreate(false)
@@ -160,6 +168,22 @@ function UsersCard({ currentUserId }) {
       flash(false, err.message || 'Failed to save module access')
     } finally {
       setModuleSaving(null)
+    }
+  }
+
+  async function saveFeatureRole(userId) {
+    const role = pendingFRole[userId]
+    if (!role) return
+    setFRoleSaving(userId)
+    try {
+      await featuresApi.setUserRole(userId, role)
+      setUsers(us => us.map(u => u.id === userId ? { ...u, feature_role: role } : u))
+      setPendingFRole(p => { const n = { ...p }; delete n[userId]; return n })
+      flash(true, 'Feature role updated.')
+    } catch (err) {
+      flash(false, err.message || 'Failed to update feature role')
+    } finally {
+      setFRoleSaving(null)
     }
   }
 
@@ -207,6 +231,18 @@ function UsersCard({ currentUserId }) {
                 <option value="guest">guest</option>
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium mb-1">Feature Access Role</label>
+            <select
+              value={newUser.feature_role || 'member'}
+              onChange={e => setNewUser(u => ({ ...u, feature_role: e.target.value }))}
+              className="input text-sm"
+            >
+              {roles.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+            <p className="text-xs text-charcoal-400 mt-1">Controls which app features this user can see.</p>
           </div>
 
           <div>
@@ -315,34 +351,62 @@ function UsersCard({ currentUserId }) {
                     </div>
 
                     {expanded && (
-                      <div className="px-3 pb-3">
-                        <div className="space-y-1 mb-2">
-                          {ALL_MODULES.filter(m => m.id !== 'settings').map(mod => {
-                            const disabled = (userModules[user.id] || []).includes(mod.id)
-                            return (
-                              <label
-                                key={mod.id}
-                                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-charcoal-50 dark:hover:bg-charcoal-800 cursor-pointer"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={!disabled}
-                                  onChange={() => toggleUserModule(user.id, mod.id)}
-                                  className="accent-orange-500 w-4 h-4"
-                                />
-                                <span className="text-sm leading-none">{mod.icon}</span>
-                                <span className="text-sm">{mod.label}</span>
-                              </label>
-                            )
-                          })}
+                      <div className="px-3 pb-3 space-y-3">
+                        {/* Feature role assignment */}
+                        <div>
+                          <p className="text-xs font-medium text-charcoal-500 dark:text-charcoal-400 mb-1">Feature Role</p>
+                          <div className="flex gap-2">
+                            <select
+                              value={pendingFRole[user.id] ?? (user.feature_role || 'member')}
+                              onChange={e => setPendingFRole(p => ({ ...p, [user.id]: e.target.value }))}
+                              className="input text-sm flex-1"
+                            >
+                              {roles.map(r => <option key={r} value={r}>{r}</option>)}
+                            </select>
+                            <button
+                              onClick={() => saveFeatureRole(user.id)}
+                              disabled={!pendingFRole[user.id] || pendingFRole[user.id] === (user.feature_role || 'member') || fRoleSaving === user.id}
+                              className="btn-primary text-xs px-3 py-1 shrink-0 disabled:opacity-30"
+                            >
+                              {fRoleSaving === user.id ? '…' : 'Save'}
+                            </button>
+                          </div>
+                          <p className="text-xs text-charcoal-400 mt-1">
+                            Controls which app features this user sees. Per-module overrides below are additive.
+                          </p>
                         </div>
-                        <button
-                          onClick={() => saveUserModules(user.id)}
-                          disabled={moduleSaving === user.id}
-                          className="btn-primary text-xs px-3 py-1 w-full"
-                        >
-                          {moduleSaving === user.id ? '…' : 'Save Module Access'}
-                        </button>
+
+                        {/* Per-user module overrides */}
+                        <div>
+                          <p className="text-xs font-medium text-charcoal-500 dark:text-charcoal-400 mb-1">Additional Module Restrictions</p>
+                          <div className="space-y-1 mb-2">
+                            {ALL_MODULES.map(mod => {
+                              const disabled = (userModules[user.id] || []).includes(mod.id)
+                              return (
+                                <label
+                                  key={mod.id}
+                                  className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-charcoal-50 dark:hover:bg-charcoal-800 cursor-pointer"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={!disabled}
+                                    onChange={() => toggleUserModule(user.id, mod.id)}
+                                    className="accent-orange-500 w-4 h-4"
+                                  />
+                                  <span className="text-sm leading-none">{mod.icon}</span>
+                                  <span className="text-sm">{mod.label}</span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                          <button
+                            onClick={() => saveUserModules(user.id)}
+                            disabled={moduleSaving === user.id}
+                            className="btn-primary text-xs px-3 py-1 w-full"
+                          >
+                            {moduleSaving === user.id ? '…' : 'Save Overrides'}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </>
@@ -1005,6 +1069,229 @@ function InfisicalCard() {
   )
 }
 
+// ---------------------------------------------------------------------------
+// Roles card
+// ---------------------------------------------------------------------------
+function RolesCard() {
+  const [data, setData]         = useState(null)
+  const [loading, setLoading]   = useState(true)
+  const [roleMods, setRoleMods] = useState({})
+  const [saving, setSaving]     = useState(null)
+  const [deleting, setDeleting] = useState(null)
+  const [msg, setMsg]           = useState(null)
+  const [showCreate, setShowCreate] = useState(false)
+  const [newRoleName, setNewRoleName] = useState('')
+  const [newRoleMods, setNewRoleMods] = useState({})
+  const [creating, setCreating] = useState(false)
+
+  function flash(ok, text) {
+    setMsg({ ok, text })
+    setTimeout(() => setMsg(null), 4000)
+  }
+
+  async function load() {
+    const d = await featuresApi.get()
+    setData(d)
+    const mods = {}
+    for (const [name, map] of Object.entries(d.roles || {})) {
+      mods[name] = { ...map }
+    }
+    setRoleMods(mods)
+  }
+
+  useEffect(() => {
+    load().catch(() => flash(false, 'Failed to load feature roles')).finally(() => setLoading(false))
+  }, [])
+
+  function toggleMod(roleName, modId) {
+    setRoleMods(prev => ({
+      ...prev,
+      [roleName]: { ...prev[roleName], [modId]: !prev[roleName]?.[modId] },
+    }))
+  }
+
+  async function saveRole(name) {
+    setSaving(name)
+    try {
+      await featuresApi.updateRole(name, roleMods[name])
+      flash(true, `Role "${name}" saved.`)
+    } catch (err) {
+      flash(false, err.message || 'Failed to save role')
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  async function deleteRole(name) {
+    if (!window.confirm(`Delete role "${name}"? Users with this role will fall back to "member".`)) return
+    setDeleting(name)
+    try {
+      await featuresApi.deleteRole(name)
+      setRoleMods(prev => { const n = { ...prev }; delete n[name]; return n })
+      setData(prev => {
+        const roles = { ...prev.roles }
+        delete roles[name]
+        return { ...prev, roles }
+      })
+      flash(true, `Role "${name}" deleted.`)
+    } catch (err) {
+      flash(false, err.message || 'Failed to delete role')
+    } finally {
+      setDeleting(null)
+    }
+  }
+
+  async function createRole(e) {
+    e.preventDefault()
+    const trimmed = newRoleName.trim()
+    if (!trimmed) return
+    setCreating(true)
+    try {
+      const modMap = {}
+      ALL_MODULES.forEach(m => { modMap[m.id] = newRoleMods[m.id] !== false })
+      await featuresApi.createRole(trimmed, modMap)
+      setRoleMods(prev => ({ ...prev, [trimmed]: modMap }))
+      setData(prev => ({ ...prev, roles: { ...prev.roles, [trimmed]: modMap } }))
+      setNewRoleName('')
+      setNewRoleMods({})
+      setShowCreate(false)
+      flash(true, `Role "${trimmed}" created.`)
+    } catch (err) {
+      flash(false, err.message || 'Failed to create role')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  if (loading) return <div className="card p-5"><p className="text-sm text-charcoal-400">Loading…</p></div>
+
+  const roleNames = data ? Object.keys(data.roles || {}) : []
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="font-semibold">Feature Roles</h2>
+        <button onClick={() => setShowCreate(o => !o)} className="btn-primary text-sm py-1 px-3">
+          {showCreate ? 'Cancel' : '+ New Role'}
+        </button>
+      </div>
+      <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-4">
+        Define which modules each role can access. Assign roles to users in the Users card above.
+      </p>
+
+      {/* Create role form */}
+      {showCreate && (
+        <form
+          onSubmit={createRole}
+          className="mb-4 p-4 rounded-lg border border-orange-200 dark:border-orange-900/40 bg-orange-50 dark:bg-orange-900/10 space-y-3"
+        >
+          <p className="text-sm font-medium text-orange-700 dark:text-orange-400">New role</p>
+          <div>
+            <label className="block text-xs font-medium mb-1">Role name</label>
+            <input
+              type="text"
+              required
+              maxLength={40}
+              value={newRoleName}
+              onChange={e => setNewRoleName(e.target.value)}
+              placeholder="e.g. cleaner, nanny, employee"
+              className="input text-sm"
+            />
+          </div>
+          <div>
+            <p className="text-xs font-medium mb-2">Modules enabled</p>
+            <div className="space-y-1">
+              {ALL_MODULES.map(mod => {
+                const enabled = newRoleMods[mod.id] !== false
+                return (
+                  <label
+                    key={mod.id}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-charcoal-50 dark:hover:bg-charcoal-800 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={enabled}
+                      onChange={() => setNewRoleMods(p => ({ ...p, [mod.id]: !enabled }))}
+                      className="accent-orange-500 w-4 h-4"
+                    />
+                    <span className="text-sm leading-none">{mod.icon}</span>
+                    <span className="text-sm">{mod.label}</span>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+          <button type="submit" disabled={creating || !newRoleName.trim()} className="btn-primary w-full text-sm">
+            {creating ? 'Creating…' : 'Create Role'}
+          </button>
+        </form>
+      )}
+
+      {/* Role list */}
+      <div className="space-y-4">
+        {roleNames.map(name => {
+          const isMember = name === 'member'
+          const mods = roleMods[name] || {}
+          return (
+            <div key={name} className="rounded-lg border border-charcoal-100 dark:border-charcoal-800 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <span className="font-medium text-sm">{name}</span>
+                  {isMember && (
+                    <span className="ml-2 text-xs text-charcoal-400">Default for all users</span>
+                  )}
+                </div>
+                {!isMember && (
+                  <button
+                    onClick={() => deleteRole(name)}
+                    disabled={deleting === name}
+                    className="text-xs text-charcoal-400 hover:text-red-500 transition-colors disabled:opacity-30"
+                  >
+                    {deleting === name ? '…' : 'Delete'}
+                  </button>
+                )}
+              </div>
+              <div className="space-y-1 mb-3">
+                {ALL_MODULES.map(mod => {
+                  const enabled = mods[mod.id] !== false
+                  return (
+                    <label
+                      key={mod.id}
+                      className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-charcoal-50 dark:hover:bg-charcoal-800 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={enabled}
+                        onChange={() => toggleMod(name, mod.id)}
+                        className="accent-orange-500 w-4 h-4"
+                      />
+                      <span className="text-sm leading-none">{mod.icon}</span>
+                      <span className="text-sm">{mod.label}</span>
+                    </label>
+                  )
+                })}
+              </div>
+              <button
+                onClick={() => saveRole(name)}
+                disabled={saving === name}
+                className="btn-primary text-xs px-3 py-1 w-full"
+              >
+                {saving === name ? '…' : 'Save Role'}
+              </button>
+            </div>
+          )
+        })}
+      </div>
+
+      {msg && (
+        <p className={`text-sm mt-3 ${msg.ok ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+          {msg.text}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function Admin() {
   const { user } = useAuth()
 
@@ -1013,6 +1300,7 @@ export default function Admin() {
       <h1 className="text-2xl font-bold">Admin</h1>
       <UsersCard currentUserId={user?.id || ''} />
       <RegistrationCard />
+      <RolesCard />
       <AiProviderCard />
       <WebSearchCard />
       <HostingCard />

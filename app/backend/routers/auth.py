@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from config import settings
 from services import auth_service
+from services.features_service import get_effective_disabled
 from services.file_service import brain_path, read_json, user_path, write_json
 from services.hosting_service import effective_cookie_secure
 from services.rate_limiter import rate_limit
@@ -78,6 +79,11 @@ def get_current_user(
     # Attach jti and exp so logout can revoke with persistence
     user["_jti"] = payload.get("jti")
     user["_exp"] = payload.get("exp")
+    # Compute effective disabled modules from feature role + per-user overrides
+    user["disabled_modules"] = get_effective_disabled(
+        user.get("feature_role", "member"),
+        user.get("disabled_modules", []),
+    )
     return user
 
 
@@ -301,6 +307,7 @@ def me(current_user: dict = Depends(get_current_user), _rl: None = Depends(_get_
         "notification_channel": current_user.get("notification_channel", ""),
         "session_minutes":      current_user.get("session_minutes", 10080),
         "timezone":             current_user.get("timezone", "UTC"),
+        "feature_role":         current_user.get("feature_role", "member"),
         "disabled_modules":     current_user.get("disabled_modules", []),
         "accent_color":         current_user.get("accent_color"),
         "dark_mode":            current_user.get("dark_mode", "system"),
@@ -379,7 +386,7 @@ def update_user_role_legacy(
     return {"ok": True, "role": req.role}
 
 
-VALID_MODULE_IDS = {"dashboard", "tasks", "calendar", "goals", "household", "chat", "brain", "settings"}
+VALID_MODULE_IDS = {"dashboard", "tasks", "calendar", "household", "notes", "journal", "chat"}
 
 
 class ModuleAccessRequest(BaseModel):
@@ -625,6 +632,7 @@ class CreateUserRequest(BaseModel):
     password: str
     name: str
     role: Literal["admin", "member", "guest"] = "member"
+    feature_role: str = "member"
 
 
 class UpdateRoleRequest(BaseModel):
@@ -637,6 +645,8 @@ def admin_create_user(req: CreateUserRequest, current_user: dict = Depends(requi
         user = auth_service.create_user(req.email, req.password, req.name, role=req.role)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    if req.feature_role and req.feature_role != "member":
+        auth_service.update_user(user["id"], {"feature_role": req.feature_role})
     return {k: v for k, v in user.items() if k in {"id", "email", "name", "role", "created_at"}}
 
 

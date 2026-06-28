@@ -188,6 +188,14 @@ export const suggestions = {
   clearAll:          ()    => request('DELETE', '/suggestions/notifications'),
 }
 
+export const features = {
+  get:         ()                     => get('/auth/admin/features'),
+  createRole:  (name, modules)        => post('/auth/admin/features/roles', { name, modules }),
+  updateRole:  (name, modules)        => patch(`/auth/admin/features/roles/${name}`, { modules }),
+  deleteRole:  (name)                 => del(`/auth/admin/features/roles/${name}`),
+  setUserRole: (userId, feature_role) => patch(`/auth/admin/features/users/${userId}/role`, { feature_role }),
+}
+
 export const infisical = {
   getStatus:  ()      => get('/auth/admin/infisical-status'),
   setToken:   (token) => patch('/auth/admin/infisical-token', { token }),
