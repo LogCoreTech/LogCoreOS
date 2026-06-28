@@ -8,7 +8,7 @@ from services.features_service import ALL_MODULE_IDS
 
 router = APIRouter()
 
-_PROTECTED_ROLES = {"member"}
+_PROTECTED_ROLES = {"member", "guest"}
 
 
 class RoleModulesRequest(BaseModel):
@@ -33,7 +33,7 @@ class CreateRoleRequest(BaseModel):
         v = v.strip().lower()
         if not v:
             raise ValueError("Role name cannot be empty.")
-        if v in _PROTECTED_ROLES or v == "admin":
+        if v in _PROTECTED_ROLES or v in {"admin"}:
             raise ValueError(f"'{v}' is a reserved role name.")
         if len(v) > 40:
             raise ValueError("Role name must be 40 characters or fewer.")

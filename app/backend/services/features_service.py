@@ -40,6 +40,7 @@ _DEFAULT_FEATURES: dict = {
     "profile": "personal",
     "roles": {
         "member": _PERSONAL_MEMBER.copy(),
+        "guest":  _PERSONAL_MEMBER.copy(),
     },
 }
 
@@ -53,10 +54,12 @@ def load_features() -> dict:
     """Load features.json; merge with defaults so missing keys are always present."""
     data = read_json(_features_path(), default={})
     result: dict = {**_DEFAULT_FEATURES, **data}
-    # Ensure member role always exists
+    # Ensure built-in roles always exist
     roles = dict(result.get("roles") or {})
     if "member" not in roles:
         roles["member"] = _PERSONAL_MEMBER.copy()
+    if "guest" not in roles:
+        roles["guest"] = _PERSONAL_MEMBER.copy()
     # Fill in any missing module keys for each role
     for role_name, role_map in roles.items():
         for mod in ALL_MODULE_IDS:
@@ -76,7 +79,7 @@ def init_features(profile: str) -> None:
     if path.exists():
         return
     member_map = _BUSINESS_MEMBER.copy() if profile == "business" else _PERSONAL_MEMBER.copy()
-    save_features({"profile": profile, "roles": {"member": member_map}})
+    save_features({"profile": profile, "roles": {"member": member_map, "guest": member_map.copy()}})
 
 
 def get_effective_disabled(feature_role: str, user_disabled_modules: list[str]) -> list[str]:
