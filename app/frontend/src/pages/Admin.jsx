@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { admin as adminApi } from '../lib/api'
+import { admin as adminApi, infisical as infisicalApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { ALL_MODULES } from '../lib/constants'
 
@@ -885,6 +885,126 @@ function HostingCard() {
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Infisical / Managed Hosting card — only visible when a token is configured
+// ---------------------------------------------------------------------------
+function InfisicalCard() {
+  const [status, setStatus]   = useState(null)   // null = loading
+  const [token, setToken]     = useState('')
+  const [saving, setSaving]   = useState(false)
+  const [clearing, setClearing] = useState(false)
+  const [msg, setMsg]         = useState(null)
+
+  useEffect(() => {
+    infisicalApi.getStatus()
+      .then(s => setStatus(s))
+      .catch(() => setStatus({ configured: false }))
+  }, [])
+
+  // Hidden entirely when not configured — self-hosters never see this
+  if (!status || !status.configured) return null
+
+  function flash(ok, text) {
+    setMsg({ ok, text })
+    setTimeout(() => setMsg(null), 5000)
+  }
+
+  async function save(e) {
+    e.preventDefault()
+    if (!token.trim()) return
+    setSaving(true)
+    setMsg(null)
+    try {
+      const res = await infisicalApi.setToken(token.trim())
+      setStatus(res)
+      setToken('')
+      flash(true, res.message || 'Token saved. New secrets will load on next restart.')
+    } catch (err) {
+      flash(false, err.message || 'Save failed.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function clear() {
+    if (!confirm('Clear the saved Infisical token? The app will revert to local .env on next restart.')) return
+    setClearing(true)
+    setMsg(null)
+    try {
+      await infisicalApi.clearToken()
+      setStatus({ configured: false, source: null })
+      flash(true, 'Token cleared.')
+    } catch (err) {
+      flash(false, err.message || 'Clear failed.')
+    } finally {
+      setClearing(false)
+    }
+  }
+
+  const sourceLabel = status.source === 'env'
+    ? 'environment variable (set at deploy time)'
+    : 'admin panel'
+
+  return (
+    <div className="card p-5">
+      <h2 className="font-semibold mb-1">Managed Hosting</h2>
+      <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-4">
+        Secrets are pulled from Infisical at startup. Rotate the token here — new secrets apply on next restart.
+      </p>
+
+      <div className="flex items-center gap-2 mb-4">
+        <div className={`w-2 h-2 rounded-full ${status.connected ? 'bg-green-500' : 'bg-red-400'}`} />
+        <span className="text-sm">
+          {status.connected ? 'Connected to Infisical' : 'Infisical unreachable (running from cache)'}
+        </span>
+      </div>
+
+      <p className="text-xs text-charcoal-400 dark:text-charcoal-500 mb-4">
+        Token source: {sourceLabel}
+        {status.last_fetched && (
+          <span className="ml-2">· Last fetched: {new Date(status.last_fetched).toLocaleString()}</span>
+        )}
+      </p>
+
+      <form onSubmit={save} className="space-y-3">
+        <div>
+          <label className="block text-sm font-medium mb-1">Rotate Token</label>
+          <input
+            type="password"
+            value={token}
+            onChange={e => setToken(e.target.value)}
+            placeholder="Paste new Infisical token to rotate"
+            className="input font-mono"
+            autoComplete="new-password"
+          />
+        </div>
+        {msg && (
+          <p className={`text-sm ${msg.ok ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+            {msg.text}
+          </p>
+        )}
+        <button
+          type="submit"
+          disabled={saving || !token.trim()}
+          className="btn-primary w-full disabled:opacity-50"
+        >
+          {saving ? 'Validating & saving…' : 'Save new token'}
+        </button>
+      </form>
+
+      {status.source === 'file' && (
+        <button
+          onClick={clear}
+          disabled={clearing}
+          className="mt-3 w-full text-sm text-red-500 hover:text-red-600 disabled:opacity-50 text-center"
+        >
+          {clearing ? 'Clearing…' : 'Clear token (revert to self-hosted .env mode)'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 export default function Admin() {
   const { user } = useAuth()
 
@@ -896,6 +1016,7 @@ export default function Admin() {
       <AiProviderCard />
       <WebSearchCard />
       <HostingCard />
+      <InfisicalCard />
     </div>
   )
 }

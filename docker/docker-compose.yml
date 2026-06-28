@@ -24,6 +24,11 @@ services:
       ALLOW_OPEN_REGISTRATION: ${ALLOW_OPEN_REGISTRATION:-false}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
+      # Managed hosting only — leave all three blank for self-hosted
+      INFISICAL_URL: ${INFISICAL_URL:-}
+      INFISICAL_TOKEN: ${INFISICAL_TOKEN:-}
+      INFISICAL_ENV: ${INFISICAL_ENV:-prod}
+      INFISICAL_PROJECT_ID: ${INFISICAL_PROJECT_ID:-}
     group_add:
       - "${DOCKER_GID:-973}"
     depends_on:
