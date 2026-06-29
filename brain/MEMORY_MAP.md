@@ -31,7 +31,7 @@ Each user has a personal folder under `USERS/`. Load these after identifying the
 
 | Path pattern | What it contains |
 |-------------|-----------------|
-| `USERS/{name}/{name}_Profile.md` | Personal info, priority order, preferences |
+| `USERS/{name}/Profile.md` | Personal info, priority order, preferences |
 | `USERS/{name}/Long_Term_Memory.md` | Personal stable knowledge and AI behavior rules |
 | `USERS/{name}/Short_Term_Memory.md` | Personal active context, current focus, follow-up queue |
 | `USERS/{name}/Tasks/tasks.json` | Active tasks (source of truth) |

@@ -6,8 +6,11 @@ const BASE_CATEGORIES = ['God', 'Family', 'Job', 'Personal Growth', 'Hobbies']
 
 export default function Setup() {
   const [step, setStep] = useState(1)
+  const [profile, setProfile] = useState('personal')
   const [role, setRole] = useState('')
-  const [timezone, setTimezone] = useState('America/Chicago')
+  const [timezone, setTimezone] = useState(() => {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Chicago' } catch { return 'America/Chicago' }
+  })
   const [categories, setCategories] = useState([...BASE_CATEGORIES])
   const [customCat, setCustomCat] = useState('')
   const [dragIdx, setDragIdx] = useState(null)
@@ -50,6 +53,7 @@ export default function Setup() {
         custom_categories: categories.filter(c => !BASE_CATEGORIES.includes(c)),
         role,
         timezone,
+        profile,
       })
       navigate('/')
     } catch (err) {
@@ -83,6 +87,34 @@ export default function Setup() {
           {step === 1 && (
             <div className="space-y-4">
               <h2 className="font-semibold text-lg">About You</h2>
+
+              {/* Profile type */}
+              <div>
+                <p className="block text-sm font-medium mb-2 text-charcoal-700 dark:text-charcoal-300">
+                  How will you use LogCore?
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { value: 'personal', label: '🏠 Personal', desc: 'For yourself and household' },
+                    { value: 'business', label: '💼 Business', desc: 'For teams and employees' },
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setProfile(opt.value)}
+                      className={`rounded-lg border-2 p-3 text-left transition-colors ${
+                        profile === opt.value
+                          ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
+                          : 'border-charcoal-200 dark:border-charcoal-700 hover:border-charcoal-300 dark:hover:border-charcoal-600'
+                      }`}
+                    >
+                      <p className="text-sm font-medium">{opt.label}</p>
+                      <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mt-0.5">{opt.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium mb-1 text-charcoal-700 dark:text-charcoal-300">
                   Your Role / Occupation
@@ -99,17 +131,33 @@ export default function Setup() {
                 <label className="block text-sm font-medium mb-1 text-charcoal-700 dark:text-charcoal-300">
                   Timezone
                 </label>
-                <select
-                  value={timezone}
-                  onChange={e => setTimezone(e.target.value)}
-                  className="input"
-                >
-                  <option value="America/Chicago">Central Time (CT)</option>
-                  <option value="America/New_York">Eastern Time (ET)</option>
-                  <option value="America/Denver">Mountain Time (MT)</option>
-                  <option value="America/Los_Angeles">Pacific Time (PT)</option>
-                  <option value="UTC">UTC</option>
-                </select>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={timezone}
+                    onChange={e => setTimezone(e.target.value)}
+                    placeholder="e.g. America/Chicago"
+                    className="input flex-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try { setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone) } catch {}
+                    }}
+                    className="btn-ghost text-xs px-3 whitespace-nowrap"
+                  >
+                    Detect
+                  </button>
+                </div>
+                <p className="text-xs text-charcoal-400 dark:text-charcoal-500 mt-1">
+                  Auto-detected from your device. Use any{' '}
+                  <a
+                    href="https://en.wikipedia.org/wiki/List_of_tz_database_time_zones"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-orange-500 hover:underline"
+                  >IANA timezone name</a>.
+                </p>
               </div>
               <button onClick={() => setStep(2)} className="btn-primary w-full mt-2">
                 Next →
@@ -180,7 +228,8 @@ export default function Setup() {
               </p>
 
               <div className="bg-charcoal-100 dark:bg-charcoal-700 rounded-lg p-4 space-y-1">
-                {role && <p className="text-sm"><span className="text-charcoal-500">Role:</span> {role}</p>}
+                <p className="text-sm"><span className="text-charcoal-500">Profile:</span> {profile === 'business' ? 'Business' : 'Personal'}</p>
+                {role && <p className="text-sm"><span className="text-charcoal-500">Occupation:</span> {role}</p>}
                 <p className="text-sm"><span className="text-charcoal-500">Timezone:</span> {timezone}</p>
                 <p className="text-sm font-medium mt-2">Priority order:</p>
                 {categories.map((cat, i) => (

@@ -1,0 +1,159 @@
+# MAP.md — LogCoreOS Navigation Index
+
+This is the navigation index for all files in this repo. Keep it updated when files or folders are added.
+
+---
+
+## Repository Layout
+
+```
+LogCoreOS/
+│
+├── CLAUDE.md                     → thin pointer to docs/AGENTS.md
+├── README.md                     → user-facing quick start (do not move — it's for humans)
+├── launch.sh                     → one-command startup: builds frontend, generates .env, starts Docker
+├── requirements-dev.txt          → dev/test deps (pytest, etc.)
+│
+├── app/
+│   ├── backend/
+│   │   ├── main.py               → app factory, router registration, CORS + security headers middleware, static file serving
+│   │   ├── config.py             → all env vars via Pydantic Settings (reads docker/.env)
+│   │   ├── scheduler.py          → 7 APScheduler jobs (recurring, digest, overdue, weekly, goal drift, JTI cleanup, custom)
+│   │   ├── routers/
+│   │   │   ├── _task_models.py   → shared Pydantic models for tasks (CreateTaskRequest, UpdateTaskRequest)
+│   │   │   ├── _event_models.py  → shared Pydantic models for calendar events
+│   │   │   ├── auth.py           → login, register, logout, /me, admin user management, AI/search/hosting settings, infisical + feature flags
+│   │   │   ├── tasks.py          → task CRUD, top3, scored, history
+│   │   │   ├── chat.py           → AI chat with plan/auto/research modes, Brain context injection, tool use, chat save/load
+│   │   │   ├── brain.py          → Brain file read/write (path-validated, admin-only writes)
+│   │   │   ├── notes.py          → notes module (files + folders CRUD, move)
+│   │   │   ├── journal.py        → journal module (daily entries by date)
+│   │   │   ├── calendar.py       → calendar module (tasks view + events CRUD)
+│   │   │   ├── priorities.py     → priority order + daily override
+│   │   │   ├── setup.py          → first-time setup wizard
+│   │   │   ├── health.py         → GET /health (no auth, used by Docker healthcheck)
+│   │   │   ├── export.py         → brain zip download (mounted at /api/v1/user)
+│   │   │   ├── shared.py         → household pool: tasks at /shared/tasks, events at /shared/events (admin write)
+│   │   │   ├── push.py           → web push subscriptions (VAPID), subscribe/unsubscribe/test
+│   │   │   ├── suggestions.py    → proactive AI suggestion engine + per-user custom schedules + notification inbox
+│   │   │   ├── profile.py        → user Profile.md read/write
+│   │   │   ├── infisical.py      → Infisical secrets manager integration (admin only; status, token set/clear)
+│   │   │   └── features.py       → feature flags + custom role management (admin only)
+│   │   ├── services/
+│   │   │   ├── file_service.py        → atomic Brain file reads/writes — ALWAYS use this, never open(...,'w')
+│   │   │   ├── auth_service.py        → user CRUD, JWT create/verify, bcrypt, JTI revocation
+│   │   │   ├── ai_provider.py         → AI abstraction layer (Anthropic + OpenAI-compatible; sync/async bridge)
+│   │   │   ├── agent_service.py       → multi-tool AI agent orchestration (plan/auto/research modes, tool registry)
+│   │   │   ├── task_service.py        → task business logic (CRUD, pagination, type handling)
+│   │   │   ├── events_service.py      → calendar event CRUD
+│   │   │   ├── notes_service.py       → notes CRUD, folder management, move operations
+│   │   │   ├── journal_service.py     → daily journal entry CRUD
+│   │   │   ├── profile_service.py     → user Profile.md + profile.json read/write
+│   │   │   ├── priority_service.py    → life priority scoring formula + top3 logic
+│   │   │   ├── hosting_service.py     → runtime hosting config (reads brain/hosting.json at request time)
+│   │   │   ├── rate_limiter.py        → IP-based rate limiting (respects trust_proxy_headers)
+│   │   │   ├── recurring_service.py   → recurring task date advancement + streak logic
+│   │   │   ├── notification_service.py → ntfy push notification delivery
+│   │   │   ├── push_service.py        → web push subscription management + VAPID send
+│   │   │   ├── suggestions_service.py → proactive suggestion generation + custom schedule management
+│   │   │   ├── web_search_service.py  → Tavily API web search (for chat research mode)
+│   │   │   ├── infisical_loader.py    → Infisical secrets pull on startup; token validation + file storage
+│   │   │   └── features_service.py    → feature flags + role resolution (get_effective_disabled)
+│   │   ├── migrations/
+│   │   │   └── runner.py         → runs pending Brain schema migrations at startup
+│   │   └── tests/                → pytest suite (see Testing section in AGENTS.md)
+│   │
+│   └── frontend/
+│       └── src/
+│           ├── lib/
+│           │   ├── api.js         → ALL API calls go here — never fetch() directly in components
+│           │   ├── auth.jsx       → useAuth() hook + AuthProvider; polls /me every 30s; preferences server-only (not in localStorage)
+│           │   ├── constants.js   → ALL_MODULES registry (must match backend require_module IDs), CATEGORY_COLORS, DEFAULT_SHORTCUTS
+│           │   └── theme.js       → CSS variable theme engine (accent color, dark mode, background, density, corners)
+│           ├── pages/
+│           │   ├── Dashboard.jsx  → dashboard: top 3 scored tasks, today's tasks, streaks for recurring tasks
+│           │   ├── Tasks.jsx      → personal task management (list, filter, priority reorder, edit modal, household assigned tasks)
+│           │   ├── Goals.jsx      → goal tracking (filters tasks where type='goal', shows progress)
+│           │   ├── Chat.jsx       → AI chat: plan/auto/research modes, proposal cards, step trace, memory save, chat save/load
+│           │   ├── Calendar.jsx   → personal calendar (month grid, events + dated tasks overlay, EventModal)
+│           │   ├── Household.jsx  → household hub: shared task pool (all read/write), shared events (admin write)
+│           │   ├── Notes.jsx      → markdown notes with folder tree, auto-save, create/delete/move
+│           │   ├── Journal.jsx    → daily journal (date picker, markdown editor per day, entry list)
+│           │   ├── Brain.jsx      → browse + edit user's Brain markdown files directly
+│           │   ├── Profile.jsx    → edit Profile.md and profile.json fields (priorities, occupation, etc.)
+│           │   ├── Admin.jsx      → admin panel (users, feature roles, AI settings, web search, hosting, Infisical)
+│           │   ├── Settings.jsx   → user settings (appearance, timezone, session, notifications, background upload, shortcuts)
+│           │   ├── Login.jsx      → login + register form
+│           │   └── Setup.jsx      → first-time setup wizard (Personal/Business profile, priorities, timezone)
+│           └── components/
+│               ├── Layout.jsx     → root shell: sidebar nav, user menu, theme toggle, module access guard
+│               ├── TaskModal.jsx  → create/edit task form (title, category, type, recurrence, due date/time, assigned_to)
+│               ├── EventModal.jsx → create/edit calendar event form (title, dates, times, all_day, color, notes)
+│               ├── CalendarGrid.jsx → month view: day cells with event/task indicators, click to open detail
+│               └── ErrorBoundary.jsx → catch React render errors, display fallback UI
+│
+├── brain/                         → starter Brain (mounted at /data/brain in Docker)
+│   ├── AGENTS.md                  → AI boot protocol (in-app AI session start order)
+│   ├── SOUL.md                    → AI personality and communication principles
+│   ├── USERS.md                   → user registry and selection logic
+│   ├── MEMORY_MAP.md              → navigation index for all Brain files
+│   ├── Memory/
+│   │   └── Long_Term_Memory.md    → system-wide stable facts (shared AI context)
+│   ├── USERS/_template/           → copied for each new user at setup
+│   ├── skills/life-priorities/    → task scoring + recurring task logic
+│   ├── _system/auth.json          → user accounts, JTI blacklist (NEVER commit; volume-mounted)
+│   ├── _system/features.json      → feature flags + custom role definitions (created at first setup)
+│   ├── _system/migrations.json    → migration tracking (which schema migrations have run)
+│   ├── _system/vapid_keys.json    → VAPID keypair for web push notifications (auto-generated)
+│   ├── ai_settings.json           → AI provider, model, API keys (written by Admin UI; not in git)
+│   └── hosting.json               → runtime hosting config written by Admin → Hosting panel
+│
+├── docker/
+│   ├── docker-compose.yml         → service definitions (app + ntfy)
+│   ├── .env.example               → env var template
+│   ├── .env                       → live secrets (NEVER commit; generated by launch.sh)
+│   └── backup.sh                  → Brain backup script (keeps 30 most recent)
+│
+├── agent/
+│   └── skills/                    → reusable agent skills for in-app AI
+│       ├── run-tests/             → run pytest + structured GREEN/RED report
+│       ├── diagnose/              → full security/architecture audit
+│       └── run-agent/
+│
+└── docs/
+    ├── README.md                  → docs folder overview and file table
+    ├── AGENTS.md                  → AI boot protocol + dev conventions
+    ├── SOUL.md                    → AI personality and principles
+    ├── PROJECT.md                 → system architecture + development roadmap
+    ├── TASKS.md                   → active work queue + backlog
+    ├── MEMORY.md                  → design decisions, security rules, known gotchas
+    ├── MAP.md                     → THIS FILE — navigation index
+    ├── API.md                     → REST API endpoint reference
+    ├── Daily Notes/               → per-session work logs (YYYY-MM-DD.md)
+    └── hooks/
+        ├── docs_loader.sh         → UserPromptSubmit hook: injects key docs at session start
+        ├── docs_reminder.sh       → Stop hook: prompts doc updates at end of each turn
+        ├── commit_reminder.sh     → Stop hook: reminds to commit every 30 min if changes exist
+        └── safety_check.sh        → PreToolUse hook: blocks destructive Bash commands
+```
+
+---
+
+## Key Reference Points
+
+| What you need | Where to look |
+|---|---|
+| What this project is | `docs/README.md`, `docs/PROJECT.md` |
+| Current priorities / tasks | `docs/TASKS.md` |
+| Design decisions & hard rules | `docs/MEMORY.md` |
+| Architecture & roadmap | `docs/PROJECT.md` |
+| What was worked on recently | `docs/Daily Notes/YYYY-MM-DD.md` |
+| Full API reference | `docs/API.md` |
+| How to work on this codebase | `docs/AGENTS.md` |
+| AI behavior rules | `docs/SOUL.md` |
+
+---
+
+## Update Rule
+
+Any time a new file or folder is added to this repo, add it here with a one-line description before the session ends.

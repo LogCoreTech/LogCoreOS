@@ -1,0 +1,414 @@
+#!/usr/bin/env bash
+# LogCore OS — Launch Script
+# Builds the frontend, configures the environment, and starts the Docker stack.
+#
+# Usage:
+#   bash launch.sh                  # first-time setup or normal restart
+#   bash launch.sh --install-deps   # auto-install prerequisites (Linux only), then launch
+#   bash launch.sh --reconfigure    # re-run setup even if docker/.env already exists
+#   bash launch.sh --skip-build     # skip npm build (requires app/frontend/dist/ to exist)
+#
+# Requirements: Docker (with Compose plugin v2), Node.js 20+, curl
+# On Linux, pass --install-deps to have the script install these automatically.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$SCRIPT_DIR"
+DOCKER_DIR="$REPO_ROOT/docker"
+ENV_FILE="$DOCKER_DIR/.env"
+ENV_EXAMPLE="$DOCKER_DIR/.env.example"
+FRONTEND_DIR="$REPO_ROOT/app/frontend"
+DIST_DIR="$FRONTEND_DIR/dist"
+BRAIN_HOSTING="$REPO_ROOT/brain/hosting.json"
+HEALTH_URL="http://localhost:8000/api/v1/health"
+HEALTH_TIMEOUT=90
+HEALTH_INTERVAL=3
+
+FLAG_RECONFIGURE=false
+FLAG_SKIP_BUILD=false
+FLAG_INSTALL_DEPS=false
+
+# ── Flags ─────────────────────────────────────────────────────────────────────
+
+parse_flags() {
+  for arg in "$@"; do
+    case "$arg" in
+      --reconfigure)   FLAG_RECONFIGURE=true   ;;
+      --skip-build)    FLAG_SKIP_BUILD=true     ;;
+      --install-deps)  FLAG_INSTALL_DEPS=true   ;;
+      *)
+        echo "ERROR: Unknown flag: $arg"
+        echo "Usage: bash launch.sh [--install-deps] [--reconfigure] [--skip-build]"
+        exit 1
+        ;;
+    esac
+  done
+}
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+
+log_step() { echo "==> $1"; }
+log_info()  { echo "    $1"; }
+log_warn()  { echo "    WARNING: $1"; }
+die()       { echo "    ERROR: $1"; exit 1; }
+
+# ── Docker group ──────────────────────────────────────────────────────────────
+
+ensure_docker_group() {
+  # Fast path: Docker socket is already accessible.
+  if docker info &>/dev/null 2>&1; then
+    return 0
+  fi
+
+  local user
+  user="$(id -un)"
+
+  # User is listed in the docker group in /etc/group but the current session
+  # was opened before they were added — re-exec via 'sg docker' to activate
+  # the group without requiring a full logout/login.
+  if getent group docker 2>/dev/null | grep -qw "$user" && ! id -Gn | grep -qw docker; then
+    log_info "Docker group membership isn't active in this session."
+    local args
+    args="$(printf '%q ' "$@")"
+    if command -v sg &>/dev/null; then
+      log_info "Re-launching via 'sg docker' (no logout needed)..."
+      exec sg docker -c "bash \"$SCRIPT_DIR/launch.sh\" $args"
+    elif [[ -z "${SUDO_USER:-}" ]] && command -v sudo &>/dev/null; then
+      # Re-exec through sudo so PAM re-initialises supplementary groups (picks
+      # up the docker group that was just added). SUDO_USER being set on the
+      # re-launched process means PAM ran; if docker is still inactive we stop
+      # rather than loop.
+      log_info "Re-launching via sudo to activate docker group (no logout needed)..."
+      exec sudo -E -u "$user" bash "$SCRIPT_DIR/launch.sh" "$@"
+    else
+      die "Docker group membership is not active and neither 'sg' nor 'sudo' are available.
+    Log out and back in (or open a new terminal), then re-run:
+      bash \"$SCRIPT_DIR/launch.sh\" $args"
+    fi
+  fi
+
+  # User isn't in the docker group at all.
+  if ! getent group docker 2>/dev/null | grep -qw "$user"; then
+    die "Cannot connect to Docker. '$user' is not in the docker group.
+    Fix it with:
+      sudo usermod -aG docker $user
+    Then either log out and back in, or run:
+      newgrp docker"
+  fi
+}
+
+# ── Dependency installation ───────────────────────────────────────────────────
+
+detect_os() {
+  case "$(uname -s)" in
+    Linux*)            echo "linux"   ;;
+    Darwin*)           echo "macos"   ;;
+    CYGWIN*|MINGW*|MSYS*) echo "windows" ;;
+    *)                 echo "unknown" ;;
+  esac
+}
+
+install_deps() {
+  [[ "$FLAG_INSTALL_DEPS" == "true" ]] || return 0
+
+  local os
+  os="$(detect_os)"
+
+  if [[ "$os" != "linux" ]]; then
+    log_warn "Auto-install is only supported on Linux. Install prerequisites manually:"
+    log_info "  Docker:  https://docs.docker.com/engine/install/"
+    log_info "  Node.js: https://nodejs.org/en/download/"
+    log_info "  curl:    use your system package manager"
+    return 0
+  fi
+
+  log_step "Installing prerequisites"
+
+  local pm
+  if command -v apt-get &>/dev/null; then
+    pm="apt"
+  elif command -v dnf &>/dev/null; then
+    pm="dnf"
+  elif command -v yum &>/dev/null; then
+    pm="yum"
+  else
+    die "No supported package manager found (apt, dnf, yum). Install prerequisites manually."
+  fi
+
+  # curl — needed for everything below
+  if ! command -v curl &>/dev/null; then
+    log_info "Installing curl..."
+    case "$pm" in
+      apt) sudo apt-get update -qq && sudo apt-get install -y curl ;;
+      dnf) sudo dnf install -y curl ;;
+      yum) sudo yum install -y curl ;;
+    esac
+  fi
+
+  # Docker Engine + Compose plugin (official install script covers both)
+  if ! command -v docker &>/dev/null; then
+    log_info "Installing Docker..."
+    curl -fsSL https://get.docker.com | sudo sh
+    sudo usermod -aG docker "$(id -un)"
+    log_info "Added $(id -un) to the docker group."
+  fi
+
+  # Node.js 20+ via NodeSource
+  local need_node=true
+  if [[ "$FLAG_SKIP_BUILD" == "true" && -d "$DIST_DIR" ]]; then
+    need_node=false
+  fi
+
+  if [[ "$need_node" == "true" ]] && ! command -v node &>/dev/null; then
+    log_info "Installing Node.js 20..."
+    case "$pm" in
+      apt)
+        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+        sudo apt-get install -y nodejs
+        ;;
+      dnf|yum)
+        curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+        sudo "$pm" install -y nodejs
+        ;;
+    esac
+  fi
+
+  log_info "Prerequisites ready."
+}
+
+# ── Prerequisites ─────────────────────────────────────────────────────────────
+
+check_prerequisites() {
+  log_step "Checking prerequisites"
+
+  if ! command -v docker &>/dev/null; then
+    die "Docker is not installed.
+    Install it from: https://docs.docker.com/engine/install/
+    Then re-run this script."
+  fi
+
+  if ! docker info &>/dev/null 2>&1; then
+    die "Docker is installed but the daemon isn't running.
+    Start it:  sudo systemctl start docker
+    Status:    sudo systemctl status docker"
+  fi
+
+  if ! docker compose version &>/dev/null 2>&1; then
+    if command -v docker-compose &>/dev/null; then
+      die "docker-compose v1 is installed but is not supported.
+    Upgrade to the Docker Compose v2 plugin:
+    https://docs.docker.com/compose/install/"
+    fi
+    die "Docker Compose plugin (v2) is not installed.
+    Install it from: https://docs.docker.com/compose/install/"
+  fi
+
+  if ! command -v curl &>/dev/null; then
+    die "curl is not installed (required for the health check).
+    Install it: sudo apt-get install curl   # Debian/Ubuntu
+                sudo dnf install curl       # Fedora/RHEL"
+  fi
+
+  local need_node=true
+  if [[ "$FLAG_SKIP_BUILD" == "true" && -d "$DIST_DIR" ]]; then
+    need_node=false
+  fi
+
+  if [[ "$need_node" == "true" ]]; then
+    if ! command -v node &>/dev/null || ! command -v npm &>/dev/null; then
+      die "Node.js is not installed (required to build the frontend).
+    Install Node.js 20+ from: https://nodejs.org/en/download/
+    Or via nvm:               https://github.com/nvm-sh/nvm
+
+    If app/frontend/dist/ already exists you can skip the build:
+      bash launch.sh --skip-build"
+    fi
+  fi
+
+  log_info "All prerequisites found."
+}
+
+# ── Secret key ────────────────────────────────────────────────────────────────
+
+generate_secret_key() {
+  if command -v python3 &>/dev/null; then
+    python3 -c "import secrets; print(secrets.token_hex(32))"
+  elif command -v openssl &>/dev/null; then
+    openssl rand -hex 32
+  else
+    tr -dc 'a-f0-9' < /dev/urandom | head -c 64
+  fi
+}
+
+# ── .env helpers ──────────────────────────────────────────────────────────────
+
+env_set() {
+  local key="$1" value="$2"
+  if grep -qE "^#?${key}=" "$ENV_FILE" 2>/dev/null; then
+    sed -i "s|^#\?${key}=.*|${key}=${value}|" "$ENV_FILE"
+  else
+    printf '\n%s=%s\n' "$key" "$value" >> "$ENV_FILE"
+  fi
+}
+
+env_get() {
+  grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2-
+}
+
+# ── Environment setup ─────────────────────────────────────────────────────────
+
+generate_env() {
+  log_step "Creating docker/.env"
+
+  cp "$ENV_EXAMPLE" "$ENV_FILE"
+
+  local secret_key
+  secret_key="$(generate_secret_key)"
+  env_set SECRET_KEY          "$secret_key"
+  env_set ALLOWED_ORIGINS     "*"
+  env_set COOKIE_SECURE       "false"
+  env_set TRUST_PROXY_HEADERS "false"
+  env_set DOCKER_GID          "$(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo '999')"
+
+  log_info "docker/.env created with a generated SECRET_KEY."
+  log_info "After first login, go to Admin → AI Settings to add your API key."
+  log_info "Go to Admin → Hosting to enable HTTPS/tunnel mode."
+}
+
+# ── Tunnel token sync ─────────────────────────────────────────────────────────
+
+sync_tunnel_token() {
+  [[ -f "$BRAIN_HOSTING" ]] || return 0
+  command -v python3 &>/dev/null || return 0
+
+  local proxy_type token
+  proxy_type="$(python3 -c "import json; d=json.load(open('$BRAIN_HOSTING')); print(d.get('proxy_type',''))" 2>/dev/null || true)"
+  token="$(python3 -c "import json; d=json.load(open('$BRAIN_HOSTING')); print(d.get('tunnel_token',''))" 2>/dev/null || true)"
+
+  if [[ "$proxy_type" == "cloudflare" && -n "$token" ]]; then
+    env_set CLOUDFLARE_TUNNEL_TOKEN "$token"
+    log_info "Cloudflare tunnel token synced from brain/hosting.json."
+  fi
+}
+
+# ── Frontend build ────────────────────────────────────────────────────────────
+
+build_frontend() {
+  if [[ "$FLAG_SKIP_BUILD" == "true" ]]; then
+    if [[ -d "$DIST_DIR" ]]; then
+      log_info "Skipping frontend build (--skip-build, dist/ exists)."
+      return 0
+    else
+      die "--skip-build was passed but $DIST_DIR does not exist. Remove the flag and re-run."
+    fi
+  fi
+
+  log_step "Building frontend"
+  npm --prefix "$FRONTEND_DIR" ci
+  npm --prefix "$FRONTEND_DIR" run build
+
+  [[ -d "$DIST_DIR" ]] || die "Build finished but $DIST_DIR was not created. Check the Vite config."
+  log_info "Frontend built: $DIST_DIR"
+}
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+
+launch_containers() {
+  log_step "Starting Docker containers"
+  docker compose \
+    -f "$DOCKER_DIR/docker-compose.yml" \
+    --project-directory "$DOCKER_DIR" \
+    up --build -d
+}
+
+# ── Health check ──────────────────────────────────────────────────────────────
+
+wait_for_health() {
+  log_step "Waiting for app to become healthy"
+  local elapsed=0 dots=0
+
+  while [[ $elapsed -lt $HEALTH_TIMEOUT ]]; do
+    if curl -sf --max-time 3 "$HEALTH_URL" > /dev/null 2>&1; then
+      echo ""
+      log_info "App is healthy (${elapsed}s)."
+      return 0
+    fi
+    printf "."
+    dots=$((dots + 1))
+    if [[ $((dots % 20)) -eq 0 ]]; then printf " ${elapsed}s\n"; fi
+    sleep "$HEALTH_INTERVAL"
+    elapsed=$((elapsed + HEALTH_INTERVAL))
+  done
+
+  echo ""
+  log_warn "App did not respond within ${HEALTH_TIMEOUT}s."
+  log_warn "It may still be starting. Check with:"
+  log_warn "  curl $HEALTH_URL"
+  log_warn "  docker compose -f docker/docker-compose.yml logs app"
+}
+
+# ── Success ───────────────────────────────────────────────────────────────────
+
+print_success() {
+  local app_url="http://localhost:8000"
+  local allowed
+  allowed="$(env_get ALLOWED_ORIGINS 2>/dev/null || true)"
+  if [[ -n "$allowed" && "$allowed" != "*" ]]; then
+    app_url="$allowed"
+  fi
+
+  echo ""
+  echo "  ╔══════════════════════════════════════════════╗"
+  echo "  ║       LogCore OS is running!                 ║"
+  echo "  ╚══════════════════════════════════════════════╝"
+  echo ""
+  echo "  App:           $app_url"
+  echo "  Notifications: http://localhost:5680  (ntfy)"
+  echo ""
+  echo "  First time? Register at $app_url"
+  echo "  The first user to register becomes admin."
+  echo ""
+  echo "  Stop:    docker compose -f docker/docker-compose.yml down"
+  echo "  Logs:    docker compose -f docker/docker-compose.yml logs -f app"
+  echo "  Backup:  bash docker/backup.sh"
+  echo ""
+}
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+main() {
+  parse_flags "$@"
+  install_deps
+  ensure_docker_group "$@"
+
+  echo ""
+  echo "LogCore OS — Launch"
+  echo "==================="
+  echo ""
+
+  check_prerequisites
+
+  if [[ ! -f "$ENV_FILE" ]]; then
+    generate_env
+  elif [[ "$FLAG_RECONFIGURE" == "true" ]]; then
+    log_warn "Reconfigure mode: docker/.env will be overwritten in 5 seconds."
+    log_warn "Press Ctrl+C to abort."
+    sleep 5
+    generate_env
+  else
+    log_info "docker/.env exists — skipping setup (use --reconfigure to reset it)."
+  fi
+
+  sync_tunnel_token
+
+  # Keep DOCKER_GID current (socket GID can vary by host/distro)
+  env_set DOCKER_GID "$(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo '999')"
+
+  build_frontend
+  launch_containers
+  wait_for_health
+  print_success
+}
+
+main "$@"
