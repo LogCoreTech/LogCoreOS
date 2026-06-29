@@ -24,6 +24,7 @@ export const ALL_MODULES = [
   { id: 'notes',     to: '/notes',    icon: '📝', label: 'Notes'     },
   { id: 'journal',   to: '/journal',  icon: '📖', label: 'Journal'   },
   { id: 'chat',      to: '/chat',     icon: '◈', label: 'AI Chat'   },
+  { id: 'automations', to: '/automations', icon: '⚡', label: 'Automations' },
 ]
 
 export const DEFAULT_SHORTCUTS = ['dashboard', 'tasks', 'chat']

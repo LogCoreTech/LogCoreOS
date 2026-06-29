@@ -22,7 +22,7 @@ from pathlib import Path
 
 from services.file_service import read_json, write_json
 
-ALL_MODULE_IDS = ["dashboard", "tasks", "calendar", "household", "notes", "journal", "chat"]
+ALL_MODULE_IDS = ["dashboard", "tasks", "calendar", "household", "notes", "journal", "chat", "automations"]
 
 _PERSONAL_MEMBER = {m: True for m in ALL_MODULE_IDS}
 
@@ -34,6 +34,7 @@ _BUSINESS_MEMBER = {
     "notes": True,
     "journal": False,
     "chat": True,
+    "automations": True,
 }
 
 _DEFAULT_FEATURES: dict = {
