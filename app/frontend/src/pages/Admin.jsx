@@ -337,75 +337,66 @@ function UsersCard({ currentUserId, roles, onRolesLoaded }) {
                   </button>
                 </div>
 
-                {/* Module access expansion — only for non-admins */}
+                {/* Feature role + module access — only for non-admins */}
                 {user.role !== 'admin' && (
                   <>
-                    <div className="border-t border-charcoal-100 dark:border-charcoal-800 px-3 py-2">
+                    {/* Feature role — always visible */}
+                    <div className="border-t border-charcoal-100 dark:border-charcoal-800 px-3 py-2 flex items-center gap-2">
+                      <span className="text-xs text-charcoal-500 dark:text-charcoal-400 shrink-0">Feature role</span>
+                      <select
+                        value={pendingFRole[user.id] ?? (user.feature_role || 'guest')}
+                        onChange={e => setPendingFRole(p => ({ ...p, [user.id]: e.target.value }))}
+                        className="input text-xs py-1 flex-1"
+                      >
+                        {roles.map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                      <button
+                        onClick={() => saveFeatureRole(user.id)}
+                        disabled={!pendingFRole[user.id] || pendingFRole[user.id] === (user.feature_role || 'guest') || fRoleSaving === user.id}
+                        className="btn-primary text-xs px-3 py-1 shrink-0 disabled:opacity-30"
+                      >
+                        {fRoleSaving === user.id ? '…' : 'Save'}
+                      </button>
                       <button
                         onClick={() => setExpandedUser(expanded ? null : user.id)}
-                        className="text-xs text-charcoal-500 hover:text-orange-500 transition-colors"
+                        className="text-xs text-charcoal-400 hover:text-orange-500 transition-colors shrink-0"
+                        title="Manage per-module overrides"
                       >
-                        {expanded ? '▾ Hide module access' : '▸ Manage module access'}
+                        {expanded ? '▾ Modules' : '▸ Modules'}
                       </button>
                     </div>
 
+                    {/* Per-module overrides — collapsed by default */}
                     {expanded && (
-                      <div className="px-3 pb-3 space-y-3">
-                        {/* Feature role assignment */}
-                        <div>
-                          <p className="text-xs font-medium text-charcoal-500 dark:text-charcoal-400 mb-1">Feature Role</p>
-                          <div className="flex gap-2">
-                            <select
-                              value={pendingFRole[user.id] ?? (user.feature_role || 'guest')}
-                              onChange={e => setPendingFRole(p => ({ ...p, [user.id]: e.target.value }))}
-                              className="input text-sm flex-1"
-                            >
-                              {roles.map(r => <option key={r} value={r}>{r}</option>)}
-                            </select>
-                            <button
-                              onClick={() => saveFeatureRole(user.id)}
-                              disabled={!pendingFRole[user.id] || pendingFRole[user.id] === (user.feature_role || 'guest') || fRoleSaving === user.id}
-                              className="btn-primary text-xs px-3 py-1 shrink-0 disabled:opacity-30"
-                            >
-                              {fRoleSaving === user.id ? '…' : 'Save'}
-                            </button>
-                          </div>
-                          <p className="text-xs text-charcoal-400 mt-1">
-                            Controls which app features this user sees. Per-module overrides below are additive.
-                          </p>
+                      <div className="px-3 pb-3">
+                        <p className="text-xs font-medium text-charcoal-500 dark:text-charcoal-400 mb-1">Additional Module Restrictions</p>
+                        <div className="space-y-1 mb-2">
+                          {ALL_MODULES.map(mod => {
+                            const disabled = (userModules[user.id] || []).includes(mod.id)
+                            return (
+                              <label
+                                key={mod.id}
+                                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-charcoal-50 dark:hover:bg-charcoal-800 cursor-pointer"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={!disabled}
+                                  onChange={() => toggleUserModule(user.id, mod.id)}
+                                  className="accent-orange-500 w-4 h-4"
+                                />
+                                <span className="text-sm leading-none">{mod.icon}</span>
+                                <span className="text-sm">{mod.label}</span>
+                              </label>
+                            )
+                          })}
                         </div>
-
-                        {/* Per-user module overrides */}
-                        <div>
-                          <p className="text-xs font-medium text-charcoal-500 dark:text-charcoal-400 mb-1">Additional Module Restrictions</p>
-                          <div className="space-y-1 mb-2">
-                            {ALL_MODULES.map(mod => {
-                              const disabled = (userModules[user.id] || []).includes(mod.id)
-                              return (
-                                <label
-                                  key={mod.id}
-                                  className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-charcoal-50 dark:hover:bg-charcoal-800 cursor-pointer"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={!disabled}
-                                    onChange={() => toggleUserModule(user.id, mod.id)}
-                                    className="accent-orange-500 w-4 h-4"
-                                  />
-                                  <span className="text-sm leading-none">{mod.icon}</span>
-                                  <span className="text-sm">{mod.label}</span>
-                                </label>
-                              )
-                            })}
-                          </div>
-                          <button
-                            onClick={() => saveUserModules(user.id)}
-                            disabled={moduleSaving === user.id}
-                            className="btn-primary text-xs px-3 py-1 w-full"
-                          >
-                            {moduleSaving === user.id ? '…' : 'Save Overrides'}
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => saveUserModules(user.id)}
+                          disabled={moduleSaving === user.id}
+                          className="btn-primary text-xs px-3 py-1 w-full"
+                        >
+                          {moduleSaving === user.id ? '…' : 'Save Overrides'}
+                        </button>
                       </div>
                     )}
                   </>
