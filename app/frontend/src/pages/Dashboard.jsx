@@ -15,11 +15,13 @@ export default function Dashboard() {
   const [today, setToday] = useState([])
   const [streaks, setStreaks] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [completing, setCompleting] = useState(null)
 
   async function load() {
     setLoading(true)
+    setError(null)
     try {
       const [t3, all, todayResp] = await Promise.all([
         tasksApi.top3(), tasksApi.list(), authApi.today(),
@@ -31,7 +33,7 @@ export default function Dashboard() {
         .sort((a, b) => b.streak_count - a.streak_count)
         .slice(0, 5))
     } catch (e) {
-      console.error(e)
+      setError(e.message || 'Failed to load dashboard')
     } finally {
       setLoading(false)
     }
@@ -63,6 +65,10 @@ export default function Dashboard() {
           + Add Task
         </button>
       </div>
+
+      {error && (
+        <p className="text-sm text-red-500 dark:text-red-400">{error}</p>
+      )}
 
       {/* Top 3 */}
       <div className="card p-5">

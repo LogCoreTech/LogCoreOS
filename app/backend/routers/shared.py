@@ -8,8 +8,10 @@ from routers._task_models import TaskCreateBase, TaskUpdateBase
 from routers._event_models import EventCreate, EventUpdate
 from services import task_service, events_service
 from services.file_service import tasks_path, events_path, write_json
+from services.rate_limiter import rate_limit
 
 _require_household = require_module("household")
+_write_limit = rate_limit(30, 60)
 
 router = APIRouter()
 
@@ -54,7 +56,11 @@ def list_shared(current_user: dict = Depends(_require_household)):
 
 
 @router.post("/tasks")
-def add_shared(req: SharedTaskCreate, current_user: dict = Depends(_require_household)):
+def add_shared(
+    req: SharedTaskCreate,
+    current_user: dict = Depends(_require_household),
+    _rl: None = Depends(_write_limit),
+):
     _ensure_household()
     payload = req.model_dump()
     payload["created_by"] = current_user["name"]
@@ -62,7 +68,12 @@ def add_shared(req: SharedTaskCreate, current_user: dict = Depends(_require_hous
 
 
 @router.patch("/tasks/{task_id}")
-def update_shared(task_id: str, req: SharedTaskUpdate, current_user: dict = Depends(_require_household)):
+def update_shared(
+    task_id: str,
+    req: SharedTaskUpdate,
+    current_user: dict = Depends(_require_household),
+    _rl: None = Depends(_write_limit),
+):
     _validate_task_id(task_id)
     _ensure_household()
     updates = req.model_dump(exclude_unset=True)
@@ -75,7 +86,11 @@ def update_shared(task_id: str, req: SharedTaskUpdate, current_user: dict = Depe
 
 
 @router.delete("/tasks/{task_id}")
-def delete_shared(task_id: str, current_user: dict = Depends(_require_household)):
+def delete_shared(
+    task_id: str,
+    current_user: dict = Depends(_require_household),
+    _rl: None = Depends(_write_limit),
+):
     _validate_task_id(task_id)
     _ensure_household()
     if not task_service.delete_task(_HOUSEHOLD, task_id):
@@ -103,7 +118,11 @@ def list_household_events(current_user: dict = Depends(_require_household)):
 
 
 @router.post("/events", status_code=201)
-def add_household_event(req: EventCreate, current_user: dict = Depends(_require_household)):
+def add_household_event(
+    req: EventCreate,
+    current_user: dict = Depends(_require_household),
+    _rl: None = Depends(_write_limit),
+):
     _ensure_household_events()
     payload = req.model_dump()
     payload["created_by"] = current_user["name"]
@@ -112,7 +131,10 @@ def add_household_event(req: EventCreate, current_user: dict = Depends(_require_
 
 @router.patch("/events/{event_id}")
 def update_household_event(
-    event_id: str, req: EventUpdate, current_user: dict = Depends(_require_household)
+    event_id: str,
+    req: EventUpdate,
+    current_user: dict = Depends(_require_household),
+    _rl: None = Depends(_write_limit),
 ):
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
@@ -124,7 +146,11 @@ def update_household_event(
 
 
 @router.delete("/events/{event_id}", status_code=204)
-def delete_household_event(event_id: str, current_user: dict = Depends(_require_household)):
+def delete_household_event(
+    event_id: str,
+    current_user: dict = Depends(_require_household),
+    _rl: None = Depends(_write_limit),
+):
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
     _validate_event_id(event_id)
