@@ -215,6 +215,8 @@ export const automations = {
     return data
   },
   remove:        (id)  => del(`/automations/${id}`),
+  activate:      (id)  => post(`/automations/${id}/activate`, {}),
+  deactivate:    (id)  => post(`/automations/${id}/deactivate`, {}),
   run:           (id)  => post(`/automations/${id}/run`, {}),
   logs:          (id, limit = 10) => get(`/automations/${id}/logs?limit=${limit}`),
   n8nStatus:     ()    => get('/automations/n8n/status'),

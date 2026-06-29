@@ -175,6 +175,52 @@ def run_automation(
     return result
 
 
+@router.post("/{record_id}/activate")
+def activate_automation(
+    record_id: str,
+    current_user: dict = Depends(_require_automations),
+    _rl: None = Depends(_write_limit),
+):
+    record = n8n_service.find_workflow(record_id, current_user["name"])
+    if not record:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    is_admin = current_user.get("role") == "admin"
+    if record.get("scope") == "business" and not is_admin:
+        raise HTTPException(status_code=403, detail="Only admins can activate business workflows")
+    n8n_id = record.get("n8n_id")
+    if not n8n_id:
+        raise HTTPException(status_code=400, detail="Workflow has no n8n ID")
+    try:
+        n8n_service.activate_workflow(n8n_id)
+        n8n_service.update_active_status(record_id, current_user["name"], record["scope"], True)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Activation failed: {exc}")
+    return {"ok": True, "active": True}
+
+
+@router.post("/{record_id}/deactivate")
+def deactivate_automation(
+    record_id: str,
+    current_user: dict = Depends(_require_automations),
+    _rl: None = Depends(_write_limit),
+):
+    record = n8n_service.find_workflow(record_id, current_user["name"])
+    if not record:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    is_admin = current_user.get("role") == "admin"
+    if record.get("scope") == "business" and not is_admin:
+        raise HTTPException(status_code=403, detail="Only admins can deactivate business workflows")
+    n8n_id = record.get("n8n_id")
+    if not n8n_id:
+        raise HTTPException(status_code=400, detail="Workflow has no n8n ID")
+    try:
+        n8n_service.deactivate_workflow(n8n_id)
+        n8n_service.update_active_status(record_id, current_user["name"], record["scope"], False)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Deactivation failed: {exc}")
+    return {"ok": True, "active": False}
+
+
 @router.get("/{record_id}/logs")
 def get_logs(
     record_id: str,
