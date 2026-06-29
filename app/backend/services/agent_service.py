@@ -472,6 +472,64 @@ _USER_TOOLS: list[dict] = [
             "required": ["query"],
         },
     },
+    {
+        "name": "get_home_state",
+        "description": (
+            "Get the current state of one or more Home Assistant entities (lights, sensors, thermostats, locks, etc.). "
+            "Only available when Home Assistant is configured."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "entity_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of entity_ids, e.g. ['light.living_room', 'sensor.temperature']",
+                },
+            },
+            "required": ["entity_ids"],
+        },
+    },
+    {
+        "name": "control_home_device",
+        "description": (
+            "Control a Home Assistant device. Use domain/service per HA docs "
+            "(e.g. light/turn_on, switch/turn_off, climate/set_temperature). "
+            "Only available when Home Assistant is configured."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "string",  "description": "HA entity_id to control"},
+                "domain":    {"type": "string",  "description": "HA service domain, e.g. 'light', 'switch', 'climate'"},
+                "service":   {"type": "string",  "description": "HA service name, e.g. 'turn_on', 'turn_off', 'set_temperature'"},
+                "data":      {"type": "object",  "description": "Optional service data, e.g. {brightness_pct: 80, temperature: 72}"},
+            },
+            "required": ["entity_id", "domain", "service"],
+        },
+    },
+    {
+        "name": "activate_scene",
+        "description": "Activate a Home Assistant scene by its entity_id. Only available when Home Assistant is configured.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "string", "description": "Scene entity_id, e.g. 'scene.movie_time'"},
+            },
+            "required": ["entity_id"],
+        },
+    },
+    {
+        "name": "trigger_home_automation",
+        "description": "Trigger a Home Assistant automation by its entity_id. Only available when Home Assistant is configured.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "string", "description": "Automation entity_id, e.g. 'automation.morning_routine'"},
+            },
+            "required": ["entity_id"],
+        },
+    },
 ]
 
 _ADMIN_TOOLS: list[dict] = [
@@ -570,7 +628,10 @@ _ADMIN_TOOLS: list[dict] = [
 
 
 def _get_tools(user: dict) -> list[dict]:
-    tools = list(_USER_TOOLS)
+    from services.ha_service import is_configured as _ha_configured
+    _HA_TOOL_NAMES = {"get_home_state", "control_home_device", "activate_scene", "trigger_home_automation"}
+    ha_ok = _ha_configured()
+    tools = [t for t in _USER_TOOLS if ha_ok or t["name"] not in _HA_TOOL_NAMES]
     if user.get("role") == "admin":
         tools.extend(_ADMIN_TOOLS)
     return tools
@@ -913,6 +974,24 @@ def _execute_tool(name: str, inputs: dict, user: dict) -> Any:
                 q = inputs["query"]
                 n = int(inputs.get("max_results", 5))
                 return _web_search(q, n)
+
+            case "get_home_state":
+                from services.ha_service import get_state as _ha_get_state
+                return [_ha_get_state(eid) for eid in inputs["entity_ids"]]
+
+            case "control_home_device":
+                from services.ha_service import call_service as _ha_call
+                data = dict(inputs.get("data") or {})
+                data["entity_id"] = inputs["entity_id"]
+                return _ha_call(inputs["domain"], inputs["service"], data)
+
+            case "activate_scene":
+                from services.ha_service import call_service as _ha_call
+                return _ha_call("scene", "turn_on", {"entity_id": inputs["entity_id"]})
+
+            case "trigger_home_automation":
+                from services.ha_service import trigger_automation as _ha_trigger
+                return _ha_trigger(inputs["entity_id"])
 
             case _:
                 return {"error": f"Unknown tool: {name!r}"}

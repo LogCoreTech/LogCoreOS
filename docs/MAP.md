@@ -39,7 +39,8 @@ LogCoreOS/
 │   │   │   ├── profile.py        → user Profile.md read/write
 │   │   │   ├── infisical.py      → Infisical secrets manager integration (admin only; status, token set/clear)
 │   │   │   ├── features.py       → feature flags + custom role management (admin only)
-│   │   │   └── automations.py    → automations module: import/run/logs n8n workflows (personal + business scopes)
+│   │   │   ├── automations.py    → automations module: import/run/logs n8n workflows (personal + business scopes)
+│   │   │   └── home.py           → Home Assistant module: entity control, scenes, automations, favourites, admin config
 │   │   ├── services/
 │   │   │   ├── file_service.py        → atomic Brain file reads/writes — ALWAYS use this, never open(...,'w')
 │   │   │   ├── auth_service.py        → user CRUD, JWT create/verify, bcrypt, JTI revocation
@@ -60,7 +61,8 @@ LogCoreOS/
 │   │   │   ├── web_search_service.py  → Tavily API web search (for chat research mode)
 │   │   │   ├── infisical_loader.py    → Infisical secrets pull on startup; token validation + file storage
 │   │   │   ├── features_service.py    → feature flags + role resolution (get_effective_disabled)
-│   │   │   └── n8n_service.py         → n8n REST API client; import/execute/delete/activate workflows; write docker/n8n.env; sync_business_workflows() for auto-sync
+│   │   │   ├── n8n_service.py         → n8n REST API client; import/execute/delete/activate workflows; write docker/n8n.env; sync_business_workflows() for auto-sync
+│   │   │   └── ha_service.py          → Home Assistant REST API client; config CRUD, entity states, service calls, scenes, automations, user favourites
 │   │   ├── automations_stubs/    → committed stub files (*.stub.json) that drive business workflow auto-sync; each has name/key/tags only — no workflow logic ever committed here
 │   │   ├── migrations/
 │   │   │   └── runner.py         → runs pending Brain schema migrations at startup
@@ -74,7 +76,7 @@ LogCoreOS/
 │           │   ├── constants.js   → ALL_MODULES registry (must match backend require_module IDs), CATEGORY_COLORS, DEFAULT_SHORTCUTS
 │           │   └── theme.js       → CSS variable theme engine (accent color, dark mode, background, density, corners)
 │           ├── pages/
-│           │   ├── Dashboard.jsx  → dashboard: top 3 scored tasks, today's tasks, streaks for recurring tasks
+│           │   ├── Dashboard.jsx  → dashboard: top 3 scored tasks, today's tasks, streaks, Smart Home favourites widget
 │           │   ├── Tasks.jsx      → personal task management (list, filter, priority reorder, edit modal, household assigned tasks)
 │           │   ├── Goals.jsx      → goal tracking (filters tasks where type='goal', shows progress)
 │           │   ├── Chat.jsx       → AI chat: plan/auto/research modes, proposal cards, step trace, memory save, chat save/load
@@ -85,6 +87,7 @@ LogCoreOS/
 │           │   ├── Brain.jsx      → browse + edit user's Brain markdown files directly
 │           │   ├── Profile.jsx    → edit Profile.md and profile.json fields (priorities, occupation, etc.)
 │           │   ├── Automations.jsx → automations: personal/business n8n workflow cards, import modal, run + logs
+│           │   ├── Home.jsx        → Smart Home: entity tiles by domain, scenes panel, HA automations, favourite stars
 │           │   ├── Admin.jsx      → admin panel (users, feature roles, AI settings, web search, hosting, Infisical, n8n)
 │           │   ├── Settings.jsx   → user settings (appearance, timezone, session, notifications, background upload, shortcuts)
 │           │   ├── Login.jsx      → login + register form
@@ -110,6 +113,7 @@ LogCoreOS/
 │   ├── _system/migrations.json    → migration tracking (which schema migrations have run)
 │   ├── _system/vapid_keys.json    → VAPID keypair for web push notifications (auto-generated)
 │   ├── _system/n8n_config.json    → n8n URL + API key (written by Admin → n8n card)
+│   ├── _system/ha_config.json     → Home Assistant URL + long-lived token (written by Admin → Smart Home card)
 │   └── _system/automations_index.json → business workflow metadata (n8n IDs + tags)
 │   ├── ai_settings.json           → AI provider, model, API keys (written by Admin UI; not in git)
 │   └── hosting.json               → runtime hosting config written by Admin → Hosting panel

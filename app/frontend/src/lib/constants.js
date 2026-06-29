@@ -26,6 +26,7 @@ export const ALL_MODULES = [
   { id: 'chat',      to: '/chat',     icon: '◈', label: 'AI Chat'   },
   { id: 'automations', to: '/automations', icon: '⚡', label: 'Automations' },
   { id: 'automations_business', label: 'Business Automations', nav: false },
+  { id: 'home', to: '/home', icon: '💡', label: 'Smart Home' },
 ]
 
 export const DEFAULT_SHORTCUTS = ['dashboard', 'tasks', 'chat']

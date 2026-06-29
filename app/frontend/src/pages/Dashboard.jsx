@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { tasks as tasksApi, auth as authApi } from '../lib/api'
+import { tasks as tasksApi, auth as authApi, home as homeApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import TaskModal from '../components/TaskModal'
 import { catColor } from '../lib/constants'
@@ -161,9 +161,86 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Smart Home widget */}
+      {!user?.disabledModules?.includes('home') && <HomeWidget />}
+
       {showModal && (
         <TaskModal onClose={() => setShowModal(false)} onSave={() => { setShowModal(false); load() }} />
       )}
+    </div>
+  )
+}
+
+function HomeWidget() {
+  const [favEntities, setFavEntities] = useState([])
+  const [loaded, setLoaded] = useState(false)
+
+  async function load() {
+    try {
+      const [favIds, all] = await Promise.all([homeApi.getFavourites(), homeApi.entities()])
+      if (!favIds?.length) { setLoaded(true); return }
+      const favSet = new Set(favIds)
+      setFavEntities((all || []).filter(e => favSet.has(e.entity_id)))
+    } catch {
+      // HA not configured — silently skip
+    } finally {
+      setLoaded(true)
+    }
+  }
+
+  useEffect(() => {
+    load()
+    const t = setInterval(load, 30000)
+    return () => clearInterval(t)
+  }, [])
+
+  if (!loaded || !favEntities.length) return null
+
+  async function quickToggle(entity) {
+    const domain = entity.entity_id.split('.')[0]
+    if (!['light', 'switch', 'input_boolean'].includes(domain)) return
+    const svc = entity.state === 'on' ? 'turn_off' : 'turn_on'
+    try {
+      await homeApi.callService(entity.entity_id, { service: svc, data: {} })
+      setTimeout(load, 800)
+    } catch {}
+  }
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold text-sm uppercase tracking-wide text-charcoal-500 dark:text-charcoal-400">
+          💡 Smart Home
+        </h2>
+        <Link to="/home" className="text-xs text-orange-500 hover:underline">All devices →</Link>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {favEntities.map(e => {
+          const domain = e.entity_id.split('.')[0]
+          const isToggleable = ['light', 'switch', 'input_boolean'].includes(domain)
+          const name = e.attributes?.friendly_name || e.entity_id
+          const isOn = e.state === 'on'
+          return (
+            <button
+              key={e.entity_id}
+              onClick={() => quickToggle(e)}
+              disabled={!isToggleable}
+              className={`text-left p-2 rounded-lg border transition-colors
+                ${isOn
+                  ? 'border-orange-300 bg-orange-50 dark:border-orange-700 dark:bg-orange-900/20'
+                  : 'border-charcoal-200 dark:border-charcoal-700 bg-charcoal-50 dark:bg-charcoal-800'
+                }
+                ${isToggleable ? 'hover:border-orange-400 cursor-pointer' : 'cursor-default'}`}
+            >
+              <p className="text-xs text-charcoal-400 dark:text-charcoal-500 truncate">{domain}</p>
+              <p className="text-sm font-medium truncate">{name}</p>
+              <p className={`text-xs font-semibold mt-0.5 ${isOn ? 'text-orange-500' : 'text-charcoal-400 dark:text-charcoal-500'}`}>
+                {e.state}{e.attributes?.unit_of_measurement ? ` ${e.attributes.unit_of_measurement}` : ''}
+              </p>
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
