@@ -235,7 +235,9 @@ export default function Chat() {
     try {
       await chatApi.deleteSaved(chat.filename)
       setSavedChats(prev => prev.filter(c => c.filename !== chat.filename))
-    } catch { /* ignore */ }
+    } catch (err) {
+      alert(err.message || 'Failed to delete chat')
+    }
   }
 
   async function openHistory() {
@@ -245,8 +247,12 @@ export default function Chat() {
     try {
       const list = await chatApi.listSaved()
       setSavedChats(list || [])
-    } catch { setSavedChats([]) }
-    finally { setHistoryLoading(false) }
+    } catch (err) {
+      setSavedChats([])
+      setSelectedChat({ filename: '', title: 'Error', content: err.message || 'Failed to load chat history.' })
+    } finally {
+      setHistoryLoading(false)
+    }
   }
 
   async function openSavedChat(chat) {
