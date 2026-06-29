@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { admin as adminApi, features as featuresApi, infisical as infisicalApi, automations as automationsApi } from '../lib/api'
+import { admin as adminApi, features as featuresApi, infisical as infisicalApi, automations as automationsApi, home as homeApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { ALL_MODULES } from '../lib/constants'
 
@@ -1443,6 +1443,105 @@ function N8nCard() {
   )
 }
 
+function HomeAssistantCard() {
+  const [haUrl, setHaUrl]   = useState('')
+  const [token, setToken]   = useState('')
+  const [msg, setMsg]       = useState(null)
+  const [testing, setTesting] = useState(false)
+  const [saving, setSaving]   = useState(false)
+
+  function flash(ok, text) {
+    setMsg({ ok, text })
+    setTimeout(() => setMsg(null), 5000)
+  }
+
+  async function testConn() {
+    setTesting(true)
+    setMsg(null)
+    try {
+      const res = await homeApi.status()
+      flash(res.ok, res.ok ? `Connected to ${res.url}` : (res.error || 'Connection failed'))
+    } catch (e) {
+      flash(false, e.message || 'Connection failed')
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  async function save(e) {
+    e.preventDefault()
+    setSaving(true)
+    setMsg(null)
+    try {
+      await homeApi.saveConfig({ url: haUrl.trim(), token: token.trim() })
+      flash(true, 'Config saved')
+    } catch (e) {
+      flash(false, e.message || 'Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="card p-4 space-y-3">
+      <div>
+        <h2 className="font-semibold text-lg">Smart Home</h2>
+        <p className="text-sm text-charcoal-500 dark:text-charcoal-400">
+          Connect a Home Assistant instance. Users can control devices, scenes, and automations from the Smart Home page.
+        </p>
+      </div>
+
+      <form onSubmit={save} className="space-y-3">
+        <div>
+          <label className="block text-sm font-medium mb-1">Home Assistant URL</label>
+          <input
+            type="url"
+            value={haUrl}
+            onChange={e => setHaUrl(e.target.value)}
+            placeholder="http://homeassistant.local:8123"
+            className="input"
+            autoComplete="off"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Long-Lived Access Token</label>
+          <input
+            type="password"
+            value={token}
+            onChange={e => setToken(e.target.value)}
+            placeholder="HA long-lived access token"
+            className="input"
+            autoComplete="new-password"
+          />
+          <p className="text-xs text-charcoal-400 dark:text-charcoal-500 mt-1">
+            Generate in HA → Profile → Long-Lived Access Tokens
+          </p>
+        </div>
+
+        {msg && (
+          <p className={`text-sm ${msg.ok ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+            {msg.text}
+          </p>
+        )}
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={testConn}
+            disabled={testing}
+            className="btn-ghost text-sm flex-1 disabled:opacity-50"
+          >
+            {testing ? 'Testing…' : 'Test Connection'}
+          </button>
+          <button type="submit" disabled={saving} className="btn-primary text-sm flex-1 disabled:opacity-50">
+            {saving ? 'Saving…' : 'Save Config'}
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
 export default function Admin() {
   const { user } = useAuth()
   const [roles, setRoles] = useState(['member'])
@@ -1458,6 +1557,7 @@ export default function Admin() {
       <HostingCard />
       <InfisicalCard />
       <N8nCard />
+      <HomeAssistantCard />
     </div>
   )
 }

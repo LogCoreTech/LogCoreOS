@@ -231,6 +231,21 @@ export const infisical = {
   clearToken: ()      => del('/auth/admin/infisical-token'),
 }
 
+export const home = {
+  status:            ()                => get('/home/status'),
+  saveConfig:        (cfg)             => post('/home/config', cfg),
+  entities:          (domain)          => get(`/home/entities${domain ? `?domain=${domain}` : ''}`),
+  entity:            (entity_id)       => get(`/home/entities/${entity_id}`),
+  callService:       (entity_id, body) => post(`/home/entities/${entity_id}/call`, body),
+  areas:             ()                => get('/home/areas'),
+  scenes:            ()                => get('/home/scenes'),
+  activateScene:     (entity_id)       => post(`/home/scenes/${entity_id}/activate`, {}),
+  automations:       ()                => get('/home/automations'),
+  triggerAutomation: (entity_id)       => post(`/home/automations/${entity_id}/trigger`, {}),
+  getFavourites:     ()                => get('/home/favourites'),
+  saveFavourites:    (entity_ids)      => request('PUT', '/home/favourites', { entity_ids }),
+}
+
 export const user = {
   async export() {
     const res = await fetch(`${BASE}/user/export`, { headers: headers(), credentials: 'include' })
