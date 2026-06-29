@@ -125,14 +125,27 @@ System files (not user-specific):
 ### Module System
 The module registry lives in `app/frontend/src/lib/constants.js` (`ALL_MODULES`). Each module has an `id` that matches the string used in `require_module(module_id)` on the backend. When you add a new module, update both.
 
-Backend enforcement: `require_module("module_id")` is a FastAPI dependency factory that returns 403 if the module is in `user["disabled_modules"]`.
+Backend enforcement: `require_module("module_id")` is a FastAPI dependency factory that returns 403 if the module is in `user["disabled_modules"]` for the current workspace.
 
-Valid module IDs: `dashboard`, `tasks`, `calendar`, `household`, `notes`, `journal`, `chat`
+Valid module IDs: `dashboard`, `tasks`, `calendar`, `household`, `notes`, `journal`, `chat`, `automations`, `automations_business`, `home`, `team`
+
+### Workspace Switching
+Users can have one or both of two workspaces: `personal` and `business`. The active workspace is stored in `localStorage('lc_ws')` and sent on every API call as the `X-Workspace: personal|business` request header.
+
+**Backend:** `get_workspace()` FastAPI dependency (in `routers/auth.py`) reads the `X-Workspace` header and validates it. It is injected into `get_current_user()` and all data routers (tasks, calendar, notes, journal). The helper `ws_path(user_name, workspace)` in `file_service.py` returns the workspace-scoped base path:
+- `personal` → `brain/USERS/{name}/` (unchanged — backward compat)
+- `business` → `brain/USERS/{name}/Business/`
+
+**Shared pools (Household & Team):** `household` (`_household` pseudo-user) is personal-only. `team` (`_team` pseudo-user) is business-only. Each uses its own router and its own pool — they are structurally separate so family data can never leak into business data.
+
+**disabled_modules format:** Was a flat list; is now a workspace-keyed dict `{"personal": [...], "business": [...]}`. Backward compat: if still a flat list, treated as applying to both workspaces. `get_effective_disabled(feature_role, user_disabled_modules, workspace="personal")` in `services/features_service.py` handles both forms.
+
+**workspaces field on users:** `["personal"]`, `["business"]`, or `["personal","business"]`. Users without the field default to `["personal"]`. Admin sets this per user. Frontend shows a toggle pill in the sidebar only when `user.workspaces.length > 1`.
 
 ### Feature Roles
 Feature roles (custom, e.g. `cleaner`, `nanny`) control which modules are visible per user. Separate from auth roles (`admin`, `member`, `guest`). Stored in `brain/_system/features.json`. `guest` is the default for new users. `member` is the internal fallback. Both are protected built-in roles.
 
-`get_effective_disabled(feature_role, user_disabled_modules)` in `services/features_service.py` resolves the union of role-level disables and per-user disables.
+`get_effective_disabled(feature_role, user_disabled_modules, workspace="personal")` in `services/features_service.py` resolves the union of role-level disables and per-user (per-workspace) disables.
 
 ### Web Push
 Push notifications use the Web Push API with VAPID keypair stored in `brain/_system/vapid_keys.json` (auto-generated on first startup). Subscriptions are stored per-user in the Brain. The internal ntfy service (`http://ntfy:80`) is used for server-initiated push. `push_service.py` handles subscription management and delivery.
@@ -241,10 +254,10 @@ All API calls go through `lib/api.js`. The `request()` function handles 401 by c
 `useAuth()` returns `{ user, login, logout, updateUserField }`. `user` has `{ name, role, disabledModules, timezone, accentColor, darkMode, background, density, cornerStyle }`. Use `updateUserField(key, value)` for immediate optimistic updates after a successful PATCH /me.
 
 ### Pages
-14 pages in `pages/`: `Dashboard.jsx`, `Tasks.jsx`, `Goals.jsx`, `Chat.jsx`, `Calendar.jsx`, `Household.jsx`, `Notes.jsx`, `Journal.jsx`, `Brain.jsx`, `Profile.jsx`, `Admin.jsx`, `Settings.jsx`, `Login.jsx`, `Setup.jsx`.
+15 pages in `pages/`: `Dashboard.jsx`, `Tasks.jsx`, `Goals.jsx`, `Chat.jsx`, `Calendar.jsx`, `Household.jsx`, `Team.jsx`, `Notes.jsx`, `Journal.jsx`, `Brain.jsx`, `Profile.jsx`, `Admin.jsx`, `Settings.jsx`, `Login.jsx`, `Setup.jsx`.
 
 ### Admin-Only Pages
-The `/admin` route is wrapped in `<AdminOnly>` which redirects non-admins to `/`. Admin UI lives in `pages/Admin.jsx`. Render order: UsersCard → RegistrationCard → RolesCard → AiProviderCard → WebSearchCard → HostingCard → InfisicalCard.
+The `/admin` route is wrapped in `<AdminOnly>` which redirects non-admins to `/`. Admin UI lives in `pages/Admin.jsx`. Render order: UsersCard → RegistrationCard → RolesCard → AiProviderCard → WebSearchCard → HostingCard → InfisicalCard → N8nCard → HomeAssistantCard.
 
 ### Styling
 Tailwind classes only. Custom classes (`btn-primary`, `btn-ghost`, `input`, `card`, `badge`) are defined in `src/index.css`. Design system:
@@ -319,9 +332,13 @@ Recurring tasks are **never** archived — they stay in `tasks.json` and have th
 
 ## Household Module
 
-The Household module (`pages/Household.jsx`) is tab-based. All data lives in `brain/USERS/_household/`. Shared events: any member can create; only admins can edit/delete. Task assignment: admin creates with optional `assigned_to` field; assigned users see task with a 🏠 badge. Household record is the single source of truth.
+The Household module (`pages/Household.jsx`) is personal-workspace-only. All data lives in `brain/USERS/_household/`. Any member with the `household` module enabled can create/complete tasks; only admins can edit/delete events. Task assignment: admin creates with optional `assigned_to` field; assigned users see task with a 🏠 badge.
 
 **To add a new household section:** add to the `TABS` array in `Household.jsx`, add a conditional content block, add backend endpoints to `routers/shared.py` and `lib/api.js`.
+
+## Team Module
+
+The Team module (`pages/Team.jsx`) is the business-workspace equivalent of Household. It uses a completely separate pool (`brain/USERS/_team/`) and a separate router (`routers/team.py`) — never shares code paths with Household. Module ID: `team`; defaults `True` for business members, `False` for personal. Admin can edit/delete events; any team member can create/complete tasks.
 
 ## Notes Module
 
