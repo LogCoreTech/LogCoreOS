@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from routers.auth import require_module
+from routers.auth import get_workspace, require_module
 from services import notes_service
 from services.rate_limiter import rate_limit
 
@@ -34,14 +34,21 @@ class MoveItem(BaseModel):
 
 
 @router.get("")
-def list_notes(current_user: dict = Depends(_require_notes)):
-    return notes_service.list_notes(current_user["name"])
+def list_notes(
+    current_user: dict = Depends(_require_notes),
+    workspace: str = Depends(get_workspace),
+):
+    return notes_service.list_notes(current_user["name"], workspace)
 
 
 @router.get("/file/{path:path}")
-def get_note(path: str, current_user: dict = Depends(_require_notes)):
+def get_note(
+    path: str,
+    current_user: dict = Depends(_require_notes),
+    workspace: str = Depends(get_workspace),
+):
     try:
-        note = notes_service.get_note(current_user["name"], path)
+        note = notes_service.get_note(current_user["name"], path, workspace)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if not note:
@@ -53,10 +60,11 @@ def get_note(path: str, current_user: dict = Depends(_require_notes)):
 def create_note(
     req: NoteCreate,
     current_user: dict = Depends(_require_notes),
+    workspace: str = Depends(get_workspace),
     _rl: None = Depends(_write_limit),
 ):
     try:
-        return notes_service.create_note(current_user["name"], req.path, req.content)
+        return notes_service.create_note(current_user["name"], req.path, req.content, workspace)
     except ValueError as e:
         status = 409 if "already exists" in str(e) else 400
         raise HTTPException(status_code=status, detail=str(e))
@@ -67,10 +75,11 @@ def update_note(
     path: str,
     req: NoteUpdate,
     current_user: dict = Depends(_require_notes),
+    workspace: str = Depends(get_workspace),
     _rl: None = Depends(_write_limit),
 ):
     try:
-        result = notes_service.update_note(current_user["name"], path, req.content)
+        result = notes_service.update_note(current_user["name"], path, req.content, workspace)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if not result:
@@ -82,10 +91,11 @@ def update_note(
 def delete_note(
     path: str,
     current_user: dict = Depends(_require_notes),
+    workspace: str = Depends(get_workspace),
     _rl: None = Depends(_write_limit),
 ):
     try:
-        deleted = notes_service.delete_note(current_user["name"], path)
+        deleted = notes_service.delete_note(current_user["name"], path, workspace)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if not deleted:
@@ -97,10 +107,11 @@ def delete_note(
 def create_folder(
     req: FolderCreate,
     current_user: dict = Depends(_require_notes),
+    workspace: str = Depends(get_workspace),
     _rl: None = Depends(_write_limit),
 ):
     try:
-        return notes_service.create_folder(current_user["name"], req.path)
+        return notes_service.create_folder(current_user["name"], req.path, workspace)
     except ValueError as e:
         status = 409 if "already exists" in str(e) else 400
         raise HTTPException(status_code=status, detail=str(e))
@@ -110,10 +121,11 @@ def create_folder(
 def delete_folder(
     path: str,
     current_user: dict = Depends(_require_notes),
+    workspace: str = Depends(get_workspace),
     _rl: None = Depends(_write_limit),
 ):
     try:
-        notes_service.delete_folder(current_user["name"], path)
+        notes_service.delete_folder(current_user["name"], path, workspace)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"ok": True}
@@ -123,11 +135,12 @@ def delete_folder(
 def move_item(
     req: MoveItem,
     current_user: dict = Depends(_require_notes),
+    workspace: str = Depends(get_workspace),
     _rl: None = Depends(_write_limit),
 ):
     try:
         return notes_service.move_item(
-            current_user["name"], req.from_path, req.to_path, req.type
+            current_user["name"], req.from_path, req.to_path, req.type, workspace
         )
     except ValueError as e:
         status = 409 if "already exists" in str(e) else 404 if "not found" in str(e).lower() else 400

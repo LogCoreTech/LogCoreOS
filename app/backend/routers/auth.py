@@ -1,7 +1,7 @@
 import re
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, Response, UploadFile, status
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -60,9 +60,15 @@ def _clear_auth_cookie(response: Response) -> None:
     response.delete_cookie(key=_COOKIE, path="/", samesite="lax")
 
 
+def get_workspace(x_workspace: str = Header(default="personal")) -> str:
+    """Read the X-Workspace header and return a validated workspace name."""
+    return x_workspace if x_workspace in ("personal", "business") else "personal"
+
+
 def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(bearer_optional),
+    workspace: str = Depends(get_workspace),
 ) -> dict:
     # Accept httpOnly cookie first, then fall back to Authorization header
     token = request.cookies.get(_COOKIE)
@@ -79,11 +85,13 @@ def get_current_user(
     # Attach jti and exp so logout can revoke with persistence
     user["_jti"] = payload.get("jti")
     user["_exp"] = payload.get("exp")
-    # Compute effective disabled modules from feature role + per-user overrides
+    # Compute effective disabled modules for the current workspace
     user["disabled_modules"] = get_effective_disabled(
         user.get("feature_role", "member"),
         user.get("disabled_modules", []),
+        workspace,
     )
+    user["_workspace"] = workspace
     return user
 
 
@@ -309,6 +317,7 @@ def me(current_user: dict = Depends(get_current_user), _rl: None = Depends(_get_
         "timezone":             current_user.get("timezone", "UTC"),
         "feature_role":         current_user.get("feature_role", "member"),
         "disabled_modules":     current_user.get("disabled_modules", []),
+        "workspaces":           current_user.get("workspaces", ["personal"]),
         "accent_color":         current_user.get("accent_color"),
         "dark_mode":            current_user.get("dark_mode", "system"),
         "background":           current_user.get("background"),
@@ -386,7 +395,10 @@ def update_user_role_legacy(
     return {"ok": True, "role": req.role}
 
 
-VALID_MODULE_IDS = {"dashboard", "tasks", "calendar", "household", "notes", "journal", "chat"}
+from services.features_service import ALL_MODULE_IDS as _ALL_MODULE_IDS
+VALID_MODULE_IDS = set(_ALL_MODULE_IDS)
+
+_VALID_WORKSPACES = {"personal", "business"}
 
 
 class ModuleAccessRequest(BaseModel):
@@ -415,6 +427,75 @@ def update_user_modules(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return {"ok": True, "disabled_modules": req.disabled_modules}
+
+
+class WorkspacesRequest(BaseModel):
+    workspaces: list[str]
+
+    @field_validator("workspaces")
+    @classmethod
+    def validate_workspaces(cls, v: list[str]) -> list[str]:
+        invalid = [w for w in v if w not in _VALID_WORKSPACES]
+        if invalid:
+            raise ValueError(f"Unknown workspaces: {invalid}")
+        if not v:
+            raise ValueError("At least one workspace is required")
+        return v
+
+
+@router.patch("/admin/users/{user_id}/workspaces")
+def update_user_workspaces(
+    user_id: str,
+    req: WorkspacesRequest,
+    current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_admin_limit),
+):
+    """Set which workspaces a user can access (admin only)."""
+    user = auth_service.update_user(user_id, {"workspaces": req.workspaces})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"ok": True, "workspaces": req.workspaces}
+
+
+class WorkspaceModulesRequest(BaseModel):
+    workspace: str
+    disabled_modules: list[str]
+
+    @field_validator("workspace")
+    @classmethod
+    def validate_ws(cls, v: str) -> str:
+        if v not in _VALID_WORKSPACES:
+            raise ValueError(f"workspace must be one of: {_VALID_WORKSPACES}")
+        return v
+
+    @field_validator("disabled_modules")
+    @classmethod
+    def validate_mods(cls, v: list[str]) -> list[str]:
+        invalid = [m for m in v if m not in VALID_MODULE_IDS]
+        if invalid:
+            raise ValueError(f"Unknown module IDs: {invalid}")
+        return v
+
+
+@router.patch("/admin/users/{user_id}/workspace-modules")
+def update_workspace_modules(
+    user_id: str,
+    req: WorkspaceModulesRequest,
+    current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_admin_limit),
+):
+    """Set disabled modules for a specific workspace for a user (admin only)."""
+    if user_id == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Admins cannot restrict their own module access")
+    target = auth_service.get_user_by_id(user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    raw = target.get("disabled_modules", {})
+    if isinstance(raw, list):
+        raw = {"personal": raw, "business": raw}
+    raw[req.workspace] = req.disabled_modules
+    auth_service.update_user(user_id, {"disabled_modules": raw})
+    return {"ok": True, "workspace": req.workspace, "disabled_modules": req.disabled_modules}
 
 
 class UserUpdateRequest(BaseModel):
@@ -633,6 +714,7 @@ class CreateUserRequest(BaseModel):
     name: str
     role: Literal["admin", "member", "guest"] = "member"
     feature_role: str = "guest"
+    workspaces: list[str] = ["personal"]
 
 
 class UpdateRoleRequest(BaseModel):
@@ -645,14 +727,28 @@ def admin_create_user(req: CreateUserRequest, current_user: dict = Depends(requi
         user = auth_service.create_user(req.email, req.password, req.name, role=req.role)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    updates: dict = {}
     if req.feature_role and req.feature_role != "guest":
-        auth_service.update_user(user["id"], {"feature_role": req.feature_role})
+        updates["feature_role"] = req.feature_role
+    valid_ws = [w for w in req.workspaces if w in ("personal", "business")]
+    if valid_ws:
+        updates["workspaces"] = valid_ws
+    if updates:
+        auth_service.update_user(user["id"], updates)
     return {k: v for k, v in user.items() if k in {"id", "email", "name", "role", "created_at"}}
+
+
+_ADMIN_USER_FIELDS = {"id", "email", "name", "role", "created_at", "feature_role", "disabled_modules", "workspaces", "timezone"}
 
 
 @router.get("/admin/users")
 def admin_list_users(current_user: dict = Depends(require_admin)):
-    return {"users": auth_service.list_users()}
+    data = auth_service._load_auth()
+    users = [
+        {k: v for k, v in u.items() if k in _ADMIN_USER_FIELDS}
+        for u in data.get("users", [])
+    ]
+    return {"users": users}
 
 
 @router.patch("/admin/users/{user_id}")

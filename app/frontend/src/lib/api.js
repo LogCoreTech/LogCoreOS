@@ -1,7 +1,11 @@
 const BASE = '/api/v1'
 
+function getWorkspace() {
+  return localStorage.getItem('lc_ws') || 'personal'
+}
+
 function headers(extra = {}) {
-  return { 'Content-Type': 'application/json', ...extra }
+  return { 'Content-Type': 'application/json', 'X-Workspace': getWorkspace(), ...extra }
 }
 
 async function request(method, path, body) {
@@ -99,7 +103,9 @@ export const admin = {
   createUser:        (u)                         => post('/auth/admin/users', u),
   updateUserRole:    (id, role)                  => patch(`/auth/admin/users/${id}`, { role }),
   deleteUser:        (id)                        => del(`/auth/admin/users/${id}`),
-  updateModules:     (userId, disabledModules)   => patch(`/auth/users/${userId}/modules`, { disabled_modules: disabledModules }),
+  updateModules:          (userId, disabledModules)          => patch(`/auth/users/${userId}/modules`, { disabled_modules: disabledModules }),
+  updateWorkspaceModules: (userId, workspace, disabledModules) => patch(`/auth/admin/users/${userId}/workspace-modules`, { workspace, disabled_modules: disabledModules }),
+  updateWorkspaces:       (userId, workspaces)               => patch(`/auth/admin/users/${userId}/workspaces`, { workspaces }),
   updateUser:        (userId, data)              => patch(`/auth/users/${userId}`, data),
   updateRole:        (userId, role)              => patch(`/auth/users/${userId}/role`, { role }),
   // Registration settings
@@ -144,6 +150,17 @@ export const shared = {
   addSharedEvent:     (body)       => post('/shared/events', body),
   updateSharedEvent:  (id, body)   => patch(`/shared/events/${id}`, body),
   removeSharedEvent:  (id)         => del(`/shared/events/${id}`),
+}
+
+export const team = {
+  list:             ()           => get('/team/tasks'),
+  add:              (task)       => post('/team/tasks', task),
+  update:           (id, upd)    => patch(`/team/tasks/${id}`, upd),
+  remove:           (id)         => del(`/team/tasks/${id}`),
+  sharedEvents:     ()           => get('/team/events'),
+  addSharedEvent:   (body)       => post('/team/events', body),
+  updateSharedEvent:(id, body)   => patch(`/team/events/${id}`, body),
+  removeSharedEvent:(id)         => del(`/team/events/${id}`),
 }
 
 function encodePath(path) {
