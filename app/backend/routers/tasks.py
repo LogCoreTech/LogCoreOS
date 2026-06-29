@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from routers.auth import get_current_user, require_module
+from routers.auth import get_current_user, get_workspace, require_module
 from routers._task_models import TaskCreateBase, TaskUpdateBase
 from services import task_service, priority_service
 
@@ -20,18 +20,27 @@ class TaskUpdate(TaskUpdateBase):
 
 
 @router.get("")
-def list_tasks(current_user: dict = Depends(_require_tasks)):
-    return task_service.list_tasks(current_user["name"])
+def list_tasks(
+    current_user: dict = Depends(_require_tasks),
+    workspace: str = Depends(get_workspace),
+):
+    return task_service.list_tasks(current_user["name"], workspace)
 
 
 @router.get("/top3")
-def top3(current_user: dict = Depends(_require_tasks)):
-    return priority_service.get_top3(current_user["name"])
+def top3(
+    current_user: dict = Depends(_require_tasks),
+    workspace: str = Depends(get_workspace),
+):
+    return priority_service.get_top3(current_user["name"], workspace)
 
 
 @router.get("/scored")
-def all_scored(current_user: dict = Depends(_require_tasks)):
-    return priority_service.get_all_scored(current_user["name"])
+def all_scored(
+    current_user: dict = Depends(_require_tasks),
+    workspace: str = Depends(get_workspace),
+):
+    return priority_service.get_all_scored(current_user["name"], workspace)
 
 
 @router.get("/history")
@@ -39,13 +48,18 @@ def history(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     current_user: dict = Depends(_require_tasks),
+    workspace: str = Depends(get_workspace),
 ):
-    return task_service.list_history(current_user["name"], limit=limit, offset=offset)
+    return task_service.list_history(current_user["name"], limit=limit, offset=offset, workspace=workspace)
 
 
 @router.post("")
-def add_task(req: TaskCreate, current_user: dict = Depends(_require_tasks)):
-    return task_service.add_task(current_user["name"], req.model_dump())
+def add_task(
+    req: TaskCreate,
+    current_user: dict = Depends(_require_tasks),
+    workspace: str = Depends(get_workspace),
+):
+    return task_service.add_task(current_user["name"], req.model_dump(), workspace)
 
 
 def _validate_task_id(task_id: str) -> str:
@@ -57,18 +71,27 @@ def _validate_task_id(task_id: str) -> str:
 
 
 @router.patch("/{task_id}")
-def update_task(task_id: str, req: TaskUpdate, current_user: dict = Depends(_require_tasks)):
+def update_task(
+    task_id: str,
+    req: TaskUpdate,
+    current_user: dict = Depends(_require_tasks),
+    workspace: str = Depends(get_workspace),
+):
     _validate_task_id(task_id)
     updates = req.model_dump(exclude_unset=True)
-    result = task_service.update_task(current_user["name"], task_id, updates)
+    result = task_service.update_task(current_user["name"], task_id, updates, workspace)
     if not result:
         raise HTTPException(status_code=404, detail="Task not found")
     return result
 
 
 @router.delete("/{task_id}")
-def delete_task(task_id: str, current_user: dict = Depends(_require_tasks)):
+def delete_task(
+    task_id: str,
+    current_user: dict = Depends(_require_tasks),
+    workspace: str = Depends(get_workspace),
+):
     _validate_task_id(task_id)
-    if not task_service.delete_task(current_user["name"], task_id):
+    if not task_service.delete_task(current_user["name"], task_id, workspace):
         raise HTTPException(status_code=404, detail="Task not found")
     return {"ok": True}

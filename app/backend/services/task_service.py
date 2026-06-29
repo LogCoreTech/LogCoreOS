@@ -9,20 +9,20 @@ from services.file_service import (
     read_json,
     write_json,
     tasks_path,
-    history_path,  # used by list_history
+    history_path,
 )
 
 
-def list_tasks(user_name: str) -> list[dict]:
-    return read_json(tasks_path(user_name), default={"tasks": []}).get("tasks", [])
+def list_tasks(user_name: str, workspace: str = "personal") -> list[dict]:
+    return read_json(tasks_path(user_name, workspace), default={"tasks": []}).get("tasks", [])
 
 
-def get_task(user_name: str, task_id: str) -> dict | None:
-    return next((t for t in list_tasks(user_name) if t["id"] == task_id), None)
+def get_task(user_name: str, task_id: str, workspace: str = "personal") -> dict | None:
+    return next((t for t in list_tasks(user_name, workspace) if t["id"] == task_id), None)
 
 
-def add_task(user_name: str, task_data: dict) -> dict:
-    data = read_json(tasks_path(user_name), default={"tasks": []})
+def add_task(user_name: str, task_data: dict, workspace: str = "personal") -> dict:
+    data = read_json(tasks_path(user_name, workspace), default={"tasks": []})
     tz = ZoneInfo(get_user_timezone(user_name))
     task: dict[str, Any] = {
         "id": str(uuid.uuid4()),
@@ -45,12 +45,12 @@ def add_task(user_name: str, task_data: dict) -> dict:
         if extra in task_data:
             task[extra] = task_data[extra]
     data["tasks"].append(task)
-    write_json(tasks_path(user_name), data)
+    write_json(tasks_path(user_name, workspace), data)
     return task
 
 
-def update_task(user_name: str, task_id: str, updates: dict) -> dict | None:
-    data = read_json(tasks_path(user_name), default={"tasks": []})
+def update_task(user_name: str, task_id: str, updates: dict, workspace: str = "personal") -> dict | None:
+    data = read_json(tasks_path(user_name, workspace), default={"tasks": []})
     tasks = data["tasks"]
     tz = ZoneInfo(get_user_timezone(user_name))
 
@@ -71,22 +71,21 @@ def update_task(user_name: str, task_id: str, updates: dict) -> dict | None:
 
         tasks[i] = {**task, **updates}
 
-        write_json(tasks_path(user_name), data)
+        write_json(tasks_path(user_name, workspace), data)
         return tasks[i]
     return None
 
 
-def delete_task(user_name: str, task_id: str) -> bool:
-    data = read_json(tasks_path(user_name), default={"tasks": []})
+def delete_task(user_name: str, task_id: str, workspace: str = "personal") -> bool:
+    data = read_json(tasks_path(user_name, workspace), default={"tasks": []})
     original = len(data["tasks"])
     data["tasks"] = [t for t in data["tasks"] if t["id"] != task_id]
     if len(data["tasks"]) == original:
         return False
-    write_json(tasks_path(user_name), data)
+    write_json(tasks_path(user_name, workspace), data)
     return True
 
 
-def list_history(user_name: str, limit: int = 50, offset: int = 0) -> list[dict]:
-    all_tasks = read_json(history_path(user_name), default={"tasks": []}).get("tasks", [])
-    # Return most recent first
+def list_history(user_name: str, limit: int = 50, offset: int = 0, workspace: str = "personal") -> list[dict]:
+    all_tasks = read_json(history_path(user_name, workspace), default={"tasks": []}).get("tasks", [])
     return list(reversed(all_tasks))[offset:offset + limit]

@@ -7,6 +7,7 @@ from services.file_service import read_json, tasks_path
 from services.profile_service import get_priority_order
 
 
+
 def score_task(task: dict, category_order: list[str], today_str: str) -> int:
     total = len(category_order)
     try:
@@ -34,9 +35,9 @@ def score_task(task: dict, category_order: list[str], today_str: str) -> int:
     return (cat_weight * pri_weight) + urgency
 
 
-def get_top3(user_name: str) -> list[dict[str, Any]]:
+def get_top3(user_name: str, workspace: str = "personal") -> list[dict[str, Any]]:
     """Return top 3 scored pending tasks with score attached."""
-    tasks_data = read_json(tasks_path(user_name), default={"tasks": []})
+    tasks_data = read_json(tasks_path(user_name, workspace), default={"tasks": []})
     order = get_priority_order(user_name)
     today_str = today_for_user(user_name).isoformat()
     pending = [t for t in tasks_data.get("tasks", []) if t.get("status") == "pending"]
@@ -45,9 +46,9 @@ def get_top3(user_name: str) -> list[dict[str, Any]]:
     return sorted(pending, key=lambda t: t["_score"], reverse=True)[:3]
 
 
-def get_all_scored(user_name: str) -> list[dict[str, Any]]:
+def get_all_scored(user_name: str, workspace: str = "personal") -> list[dict[str, Any]]:
     """Return all pending tasks sorted by score descending."""
-    tasks_data = read_json(tasks_path(user_name), default={"tasks": []})
+    tasks_data = read_json(tasks_path(user_name, workspace), default={"tasks": []})
     order = get_priority_order(user_name)
     today_str = today_for_user(user_name).isoformat()
     pending = [t for t in tasks_data.get("tasks", []) if t.get("status") == "pending"]

@@ -22,21 +22,22 @@ from pathlib import Path
 
 from services.file_service import read_json, write_json
 
-ALL_MODULE_IDS = ["dashboard", "tasks", "calendar", "household", "notes", "journal", "chat", "automations", "automations_business", "home"]
+ALL_MODULE_IDS = ["dashboard", "tasks", "calendar", "household", "notes", "journal", "chat", "automations", "automations_business", "home", "team"]
 
-_PERSONAL_MEMBER = {m: True for m in ALL_MODULE_IDS if m != "automations_business"}
+_PERSONAL_MEMBER = {m: True for m in ALL_MODULE_IDS if m not in ("automations_business", "team")}
 
 _BUSINESS_MEMBER = {
     "dashboard": True,
     "tasks": True,
     "calendar": True,
-    "household": True,
+    "household": False,
     "notes": True,
     "journal": False,
     "chat": True,
     "automations": True,
     "automations_business": True,
     "home": True,
+    "team": True,
 }
 
 _DEFAULT_FEATURES: dict = {
@@ -85,24 +86,26 @@ def init_features(profile: str) -> None:
     save_features({"profile": profile, "roles": {"member": member_map, "guest": member_map.copy()}})
 
 
-def get_effective_disabled(feature_role: str, user_disabled_modules: list[str]) -> list[str]:
-    """
-    Compute the effective list of disabled module IDs for a user.
+def get_effective_disabled(
+    feature_role: str,
+    user_disabled_modules,
+    workspace: str = "personal",
+) -> list[str]:
+    """Compute the effective list of disabled module IDs for a user in the given workspace.
 
-    Args:
-        feature_role: The user's feature role name (e.g. "member", "cleaner").
-        user_disabled_modules: Per-user explicit disables set by admin.
-
-    Returns:
-        Sorted list of disabled module IDs.
+    user_disabled_modules can be:
+      - list[str]: legacy flat list applied to every workspace
+      - dict[str, list[str]]: workspace-keyed {"personal": [...], "business": [...]}
     """
     features = load_features()
     roles = features.get("roles", {})
 
-    # Fall back to "member" if the assigned role no longer exists
     role_map = roles.get(feature_role) or roles.get("member") or {}
-
     role_disabled = {mod for mod, enabled in role_map.items() if not enabled}
-    user_disabled = set(user_disabled_modules or [])
+
+    if isinstance(user_disabled_modules, dict):
+        user_disabled = set(user_disabled_modules.get(workspace, []))
+    else:
+        user_disabled = set(user_disabled_modules or [])
 
     return sorted(role_disabled | user_disabled)

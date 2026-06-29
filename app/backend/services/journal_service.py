@@ -2,7 +2,7 @@
 import re
 from pathlib import Path
 
-from services.file_service import user_path, read_markdown, write_markdown
+from services.file_service import ws_path, read_markdown, write_markdown
 
 _DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
 _MAX_CONTENT_BYTES = 512_000
@@ -13,12 +13,16 @@ def _validate_date(date: str) -> None:
         raise ValueError("Date must be YYYY-MM-DD format")
 
 
-def _entry_path(user_name: str, date: str) -> Path:
-    return user_path(user_name) / "Journal" / f"{date}.md"
+def _journal_root(user_name: str, workspace: str = "personal") -> Path:
+    return ws_path(user_name, workspace) / "Journal"
 
 
-def list_entries(user_name: str) -> list[dict]:
-    folder = user_path(user_name) / "Journal"
+def _entry_path(user_name: str, date: str, workspace: str = "personal") -> Path:
+    return _journal_root(user_name, workspace) / f"{date}.md"
+
+
+def list_entries(user_name: str, workspace: str = "personal") -> list[dict]:
+    folder = _journal_root(user_name, workspace)
     if not folder.exists():
         return []
     entries = []
@@ -37,25 +41,25 @@ def list_entries(user_name: str) -> list[dict]:
     return entries
 
 
-def get_entry(user_name: str, date: str) -> dict | None:
+def get_entry(user_name: str, date: str, workspace: str = "personal") -> dict | None:
     _validate_date(date)
-    path = _entry_path(user_name, date)
+    path = _entry_path(user_name, date, workspace)
     if not path.exists():
         return None
     return {"date": date, "content": read_markdown(path)}
 
 
-def upsert_entry(user_name: str, date: str, content: str) -> dict:
+def upsert_entry(user_name: str, date: str, content: str, workspace: str = "personal") -> dict:
     _validate_date(date)
     if len(content.encode()) > _MAX_CONTENT_BYTES:
         raise ValueError("Entry content exceeds 500 KB limit")
-    write_markdown(_entry_path(user_name, date), content)
+    write_markdown(_entry_path(user_name, date, workspace), content)
     return {"date": date, "content": content}
 
 
-def delete_entry(user_name: str, date: str) -> bool:
+def delete_entry(user_name: str, date: str, workspace: str = "personal") -> bool:
     _validate_date(date)
-    path = _entry_path(user_name, date)
+    path = _entry_path(user_name, date, workspace)
     if not path.exists():
         return False
     path.unlink()

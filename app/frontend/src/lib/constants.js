@@ -27,6 +27,7 @@ export const ALL_MODULES = [
   { id: 'automations', to: '/automations', icon: '⚡', label: 'Automations' },
   { id: 'automations_business', label: 'Business Automations', nav: false },
   { id: 'home', to: '/home', icon: '💡', label: 'Smart Home' },
+  { id: 'team', to: '/team', icon: '🧑‍🤝‍🧑', label: 'Team' },
 ]
 
 export const DEFAULT_SHORTCUTS = ['dashboard', 'tasks', 'chat']
