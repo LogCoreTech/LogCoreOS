@@ -133,7 +133,7 @@ export default function Layout() {
   }, [])
 
   const disabledIds = new Set(user?.disabledModules || [])
-  const visibleModules = ALL_MODULES.filter(m => !disabledIds.has(m.id))
+  const visibleModules = ALL_MODULES.filter(m => m.nav !== false && m.to && !disabledIds.has(m.id))
 
   const shortcutModules = shortcuts
     .map(id => ALL_MODULES.find(m => m.id === id))
