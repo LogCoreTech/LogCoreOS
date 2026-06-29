@@ -1,10 +1,10 @@
 """n8n service — API client and Brain metadata management for the Automations module."""
 import logging
-import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+import docker as docker_sdk
 import httpx
 
 from config import settings
@@ -79,6 +79,7 @@ def import_workflow(
         "name": name or wf_json.get("name", "Untitled"),
         "scope": scope,
         "tags": tags or [],
+        "active": False,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "last_run": None,
     }
@@ -119,9 +120,21 @@ def delete_workflow(record_id: str, scope: str, owner: str) -> None:
 
 def execute_workflow(n8n_id: str) -> dict:
     with _client() as c:
-        r = c.post(f"/api/v1/workflows/{n8n_id}/execute")
+        r = c.post(f"/api/v1/workflows/{n8n_id}/run")
         r.raise_for_status()
         return r.json()
+
+
+def activate_workflow(n8n_id: str) -> None:
+    with _client() as c:
+        r = c.post(f"/api/v1/workflows/{n8n_id}/activate")
+        r.raise_for_status()
+
+
+def deactivate_workflow(n8n_id: str) -> None:
+    with _client() as c:
+        r = c.post(f"/api/v1/workflows/{n8n_id}/deactivate")
+        r.raise_for_status()
 
 
 def get_executions(n8n_id: str, limit: int = 10) -> list:
@@ -151,6 +164,16 @@ def find_workflow(record_id: str, user_name: str) -> dict | None:
     return None
 
 
+def update_active_status(record_id: str, user_name: str, scope: str, active: bool) -> None:
+    """Update active flag on a workflow record."""
+    path = system_automations_path() if scope == "business" else automations_path(user_name)
+    records = read_json(path, default=[])
+    for r in records:
+        if r["id"] == record_id:
+            r["active"] = active
+    write_json(path, records)
+
+
 def update_last_run(record_id: str, user_name: str, scope: str, timestamp: str) -> None:
     """Update last_run timestamp on a workflow record."""
     if scope == "business":
@@ -175,8 +198,10 @@ def write_n8n_env(secrets: dict) -> None:
 
 
 def restart_n8n() -> None:
-    """Restart logcore-n8n container via Docker CLI (socket is mounted read-only)."""
-    subprocess.run(["docker", "restart", "logcore-n8n"], check=True, timeout=30)
+    """Restart logcore-n8n container via Docker SDK."""
+    client = docker_sdk.from_env()
+    container = client.containers.get("logcore-n8n")
+    container.restart()
 
 
 # ── Internal helpers ───────────────────────────────────────────────────────────

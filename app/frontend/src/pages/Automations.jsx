@@ -176,13 +176,16 @@ function ImportModal({ defaultScope, isAdmin, onClose, onImported }) {
 }
 
 // ── Workflow Card ──────────────────────────────────────────────────────────────
-function WorkflowCard({ workflow, isAdmin, currentUserName, onDelete, onRun }) {
-  const [logsOpen, setLogsOpen] = useState(false)
-  const [running, setRunning]   = useState(false)
-  const [runError, setRunError] = useState('')
-  const [deleting, setDeleting] = useState(false)
+function WorkflowCard({ workflow, isAdmin, onDelete, onRun, onToggleActive }) {
+  const [logsOpen, setLogsOpen]     = useState(false)
+  const [running, setRunning]       = useState(false)
+  const [toggling, setToggling]     = useState(false)
+  const [runError, setRunError]     = useState('')
+  const [deleting, setDeleting]     = useState(false)
+  const [active, setActive]         = useState(workflow.active ?? false)
 
-  const canDelete = isAdmin || workflow.scope === 'personal'
+  const canDelete   = isAdmin || workflow.scope === 'personal'
+  const canActivate = isAdmin || workflow.scope === 'personal'
 
   async function handleRun() {
     setRunning(true)
@@ -207,12 +210,34 @@ function WorkflowCard({ workflow, isAdmin, currentUserName, onDelete, onRun }) {
     }
   }
 
+  async function handleToggleActive() {
+    setToggling(true)
+    try {
+      const result = await onToggleActive(workflow.id, active)
+      setActive(result.active)
+    } catch (err) {
+      alert(err.message)
+    } finally {
+      setToggling(false)
+    }
+  }
+
   return (
     <>
       <div className="rounded-xl border border-charcoal-100 dark:border-charcoal-800 bg-white dark:bg-charcoal-900 p-4 flex flex-col gap-3">
         <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="font-medium text-sm truncate">{workflow.name}</p>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="font-medium text-sm truncate">{workflow.name}</p>
+              <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full font-medium ${
+                active
+                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                  : 'bg-charcoal-100 text-charcoal-500 dark:bg-charcoal-800 dark:text-charcoal-400'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-green-500' : 'bg-charcoal-400'}`} />
+                {active ? 'Active' : 'Inactive'}
+              </span>
+            </div>
             <p className="text-xs text-charcoal-400 mt-0.5">Last run: {fmt(workflow.last_run)}</p>
           </div>
           {canDelete && (
@@ -242,10 +267,20 @@ function WorkflowCard({ workflow, isAdmin, currentUserName, onDelete, onRun }) {
           <button
             onClick={handleRun}
             disabled={running}
+            title={!active ? 'Workflow is inactive — activate it to enable scheduled/webhook triggers. Manual run still works.' : ''}
             className="btn-primary text-xs px-3 py-1.5 flex-1 disabled:opacity-50"
           >
             {running ? 'Running…' : '▶ Run'}
           </button>
+          {canActivate && (
+            <button
+              onClick={handleToggleActive}
+              disabled={toggling}
+              className="btn-ghost text-xs px-3 py-1.5 disabled:opacity-50"
+            >
+              {toggling ? '…' : active ? 'Deactivate' : 'Activate'}
+            </button>
+          )}
           <button
             onClick={() => setLogsOpen(true)}
             className="btn-ghost text-xs px-3 py-1.5"
@@ -288,6 +323,14 @@ export default function Automations() {
   async function handleRun(id) {
     await api.run(id)
     load()
+  }
+
+  async function handleToggleActive(id, currentlyActive) {
+    const result = currentlyActive
+      ? await api.deactivate(id)
+      : await api.activate(id)
+    setWorkflows(wfs => wfs.map(w => w.id === id ? { ...w, active: result.active } : w))
+    return result
   }
 
   async function handleDelete(id) {
@@ -351,9 +394,9 @@ export default function Automations() {
               key={wf.id}
               workflow={wf}
               isAdmin={isAdmin}
-              currentUserName={user?.name}
               onDelete={handleDelete}
               onRun={handleRun}
+              onToggleActive={handleToggleActive}
             />
           ))}
         </div>
