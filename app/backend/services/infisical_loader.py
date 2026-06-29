@@ -123,6 +123,12 @@ def load_infisical_secrets() -> None:
         _connected = True
         _last_fetched = datetime.now(timezone.utc).isoformat()
         logger.info("Infisical: loaded %d secret(s) into environment.", len(secrets))
+        # Write secrets to n8n.env so the n8n container can reference them as {{ $env.VAR }}
+        try:
+            from services.n8n_service import write_n8n_env
+            write_n8n_env(secrets)
+        except Exception as _n8n_exc:
+            logger.warning("Could not write n8n.env: %s", _n8n_exc)
     except Exception as exc:
         logger.warning("Infisical unreachable: %s — attempting local cache...", exc)
         cached = _load_cache()

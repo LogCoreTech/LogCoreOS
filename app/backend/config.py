@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # Must be a mailto: or https: URL identifying the push sender
     vapid_subject: str = "logcore@localhost"
 
+    # n8n workflow automation — bundled service default; override via Admin → n8n
+    n8n_url: str = "http://n8n:5678"
+    n8n_api_key: str = ""
+
     # Set to False only for local HTTP development; always True in production
     cookie_secure: bool = True
 
