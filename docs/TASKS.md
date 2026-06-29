@@ -22,6 +22,12 @@ Keep this up to date. Mark tasks done as they're completed. Add new tasks as the
 
 ## Done
 
+- [x] **Automations module (n8n)** — personal/business workflow tabs, import/run/logs, Admin n8n card, Infisical secret sync to n8n.env, bundled n8n Docker service (2026-06-29)
+- [x] **Admin UX fixes** — feature role dropdown always-visible in Users card; RolesCard description truncation fix (2026-06-29)
+- [x] **Setup wizard** — profile type (Personal/Business) now only shown for first user setup (2026-06-29)
+- [x] **Rate limiting** — added missing write-endpoint rate limits to shared.py (2026-06-29)
+- [x] **Error handling** — Dashboard and Chat silent swallows replaced with surfaced error states (2026-06-29)
+
 *(tracking starts from here — see git log for earlier history)*
 
 ---
