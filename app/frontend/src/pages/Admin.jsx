@@ -1178,8 +1178,8 @@ function RolesCard({ roles, onRolesChange }) {
           {showCreate ? 'Cancel' : '+ New Role'}
         </button>
       </div>
-      <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-4">
-        Define which modules each role can access. Assign roles to users in the Users card above.
+      <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-4 break-words">
+        Define which modules each role can access. Assign roles to users above.
       </p>
 
       {/* Create role form */}
