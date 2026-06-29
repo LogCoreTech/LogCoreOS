@@ -60,7 +60,8 @@ LogCoreOS/
 │   │   │   ├── web_search_service.py  → Tavily API web search (for chat research mode)
 │   │   │   ├── infisical_loader.py    → Infisical secrets pull on startup; token validation + file storage
 │   │   │   ├── features_service.py    → feature flags + role resolution (get_effective_disabled)
-│   │   │   └── n8n_service.py         → n8n REST API client; import/execute/delete workflows; write docker/n8n.env
+│   │   │   └── n8n_service.py         → n8n REST API client; import/execute/delete/activate workflows; write docker/n8n.env; sync_business_workflows() for auto-sync
+│   │   ├── automations_stubs/    → committed stub files (*.stub.json) that drive business workflow auto-sync; each has name/key/tags only — no workflow logic ever committed here
 │   │   ├── migrations/
 │   │   │   └── runner.py         → runs pending Brain schema migrations at startup
 │   │   └── tests/                → pytest suite (see Testing section in AGENTS.md)
