@@ -52,8 +52,17 @@ class SetupRequest(BaseModel):
 
 @router.get("/status")
 def setup_status(current_user: dict = Depends(get_current_user), _rl: None = Depends(_setup_limit)):
-    """Returns whether the user's Brain folder has been created."""
-    return {"setup_complete": user_path(current_user["name"]).exists()}
+    """Returns whether the user's Brain folder has been created.
+
+    show_profile_type is True only before the first user completes setup (i.e. before
+    features.json exists). All subsequent users skip that question — their profile choice
+    would be ignored anyway since init_features() is a no-op once the file exists.
+    """
+    features_chosen = (brain_path() / "_system" / "features.json").exists()
+    return {
+        "setup_complete": user_path(current_user["name"]).exists(),
+        "show_profile_type": not features_chosen,
+    }
 
 
 @router.post("")
