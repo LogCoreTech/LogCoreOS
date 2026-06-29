@@ -1,59 +1,65 @@
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from uuid import UUID
 
-from routers.auth import get_current_user
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from routers.auth import get_current_user, require_module
+from routers._task_models import TaskCreateBase, TaskUpdateBase
 from services import task_service, priority_service
+
+_require_tasks = require_module("tasks")
 
 router = APIRouter()
 
 
-class TaskCreate(BaseModel):
-    title: str
-    category: str = ""
-    priority: str = "Medium"
-    type: str = "todo"
-    recurrence: str | None = None
-    due_date: str | None = None
-    notes: str | None = None
+class TaskCreate(TaskCreateBase):
+    pass
 
 
-class TaskUpdate(BaseModel):
-    title: str | None = None
-    category: str | None = None
-    priority: str | None = None
-    status: str | None = None
-    due_date: str | None = None
-    notes: str | None = None
+class TaskUpdate(TaskUpdateBase):
+    pass
 
 
 @router.get("")
-def list_tasks(current_user: dict = Depends(get_current_user)):
+def list_tasks(current_user: dict = Depends(_require_tasks)):
     return task_service.list_tasks(current_user["name"])
 
 
 @router.get("/top3")
-def top3(current_user: dict = Depends(get_current_user)):
+def top3(current_user: dict = Depends(_require_tasks)):
     return priority_service.get_top3(current_user["name"])
 
 
 @router.get("/scored")
-def all_scored(current_user: dict = Depends(get_current_user)):
+def all_scored(current_user: dict = Depends(_require_tasks)):
     return priority_service.get_all_scored(current_user["name"])
 
 
 @router.get("/history")
-def history(current_user: dict = Depends(get_current_user)):
-    return task_service.list_history(current_user["name"])
+def history(
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    current_user: dict = Depends(_require_tasks),
+):
+    return task_service.list_history(current_user["name"], limit=limit, offset=offset)
 
 
 @router.post("")
-def add_task(req: TaskCreate, current_user: dict = Depends(get_current_user)):
+def add_task(req: TaskCreate, current_user: dict = Depends(_require_tasks)):
     return task_service.add_task(current_user["name"], req.model_dump())
 
 
+def _validate_task_id(task_id: str) -> str:
+    try:
+        UUID(task_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid task ID format")
+    return task_id
+
+
 @router.patch("/{task_id}")
-def update_task(task_id: str, req: TaskUpdate, current_user: dict = Depends(get_current_user)):
-    updates = {k: v for k, v in req.model_dump().items() if v is not None}
+def update_task(task_id: str, req: TaskUpdate, current_user: dict = Depends(_require_tasks)):
+    _validate_task_id(task_id)
+    updates = req.model_dump(exclude_unset=True)
     result = task_service.update_task(current_user["name"], task_id, updates)
     if not result:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -61,7 +67,8 @@ def update_task(task_id: str, req: TaskUpdate, current_user: dict = Depends(get_
 
 
 @router.delete("/{task_id}")
-def delete_task(task_id: str, current_user: dict = Depends(get_current_user)):
+def delete_task(task_id: str, current_user: dict = Depends(_require_tasks)):
+    _validate_task_id(task_id)
     if not task_service.delete_task(current_user["name"], task_id):
         raise HTTPException(status_code=404, detail="Task not found")
     return {"ok": True}

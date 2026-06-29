@@ -1,21 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { tasks as tasksApi } from '../lib/api'
+import { tasks as tasksApi, auth as authApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import TaskModal from '../components/TaskModal'
-
-const CATEGORY_COLORS = {
-  God:             'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
-  Family:          'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  Job:             'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
-  LogCore:         'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
-  'Personal Growth':'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',
-  Hobbies:         'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300',
-}
-
-function catColor(cat) {
-  return CATEGORY_COLORS[cat] || 'bg-charcoal-100 text-charcoal-700 dark:bg-charcoal-700 dark:text-charcoal-300'
-}
+import { catColor } from '../lib/constants'
 
 function priorityDot(p) {
   return p === 'High' ? 'bg-red-500' : p === 'Medium' ? 'bg-yellow-500' : 'bg-charcoal-400'
@@ -27,21 +15,25 @@ export default function Dashboard() {
   const [today, setToday] = useState([])
   const [streaks, setStreaks] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [completing, setCompleting] = useState(null)
 
   async function load() {
     setLoading(true)
+    setError(null)
     try {
-      const [t3, all] = await Promise.all([tasksApi.top3(), tasksApi.list()])
+      const [t3, all, todayResp] = await Promise.all([
+        tasksApi.top3(), tasksApi.list(), authApi.today(),
+      ])
+      const todayStr = todayResp?.today ?? new Date().toISOString().split('T')[0]
       setTop3(t3)
-      const todayStr = new Date().toISOString().split('T')[0]
       setToday(all.filter(t => t.status === 'pending' && t.due_date === todayStr))
       setStreaks(all.filter(t => t.type === 'recurring' && (t.streak_count || 0) > 0)
         .sort((a, b) => b.streak_count - a.streak_count)
         .slice(0, 5))
     } catch (e) {
-      console.error(e)
+      setError(e.message || 'Failed to load dashboard')
     } finally {
       setLoading(false)
     }
@@ -73,6 +65,10 @@ export default function Dashboard() {
           + Add Task
         </button>
       </div>
+
+      {error && (
+        <p className="text-sm text-red-500 dark:text-red-400">{error}</p>
+      )}
 
       {/* Top 3 */}
       <div className="card p-5">

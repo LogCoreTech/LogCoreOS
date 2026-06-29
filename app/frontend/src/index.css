@@ -10,6 +10,17 @@
     --border: #d4d4d4;
     --text: #1a1a1a;
     --text-secondary: #555555;
+
+    /* Accent color shades (space-separated RGB for Tailwind opacity modifier support) */
+    --accent-400: 251 146 60;   /* #fb923c */
+    --accent-500: 249 115 22;   /* #f97316 */
+    --accent-600: 234 88  12;   /* #ea580c */
+
+    /* Background image (set by theme.js; 'none' means no image) */
+    --bg-image: none;
+
+    /* Corner radius (set by theme.js applyCornerStyle) */
+    --card-radius: 0.75rem;
   }
 
   .dark {
@@ -23,10 +34,18 @@
 
   html {
     font-family: 'Inter', system-ui, sans-serif;
+    height: 100%;
+    overflow: hidden;
   }
 
   body {
     @apply bg-white text-charcoal-900 dark:bg-charcoal-900 dark:text-gray-100;
+    background-image: var(--bg-image, none);
+    background-size: cover;
+    background-attachment: fixed;
+    background-position: center;
+    height: 100%;
+    overflow: hidden;
   }
 
   * {
@@ -41,22 +60,38 @@
 
 @layer components {
   .card {
-    @apply bg-charcoal-50 dark:bg-charcoal-800 rounded-xl border border-charcoal-200 dark:border-charcoal-700;
+    @apply bg-charcoal-50/80 dark:bg-charcoal-800/80 backdrop-blur-sm border border-charcoal-200/70 dark:border-charcoal-700/70;
+    border-radius: var(--card-radius);
   }
 
   .btn-primary {
-    @apply bg-orange-500 hover:bg-orange-600 text-white font-medium px-4 py-2 rounded-lg transition-colors;
+    @apply bg-orange-500 hover:bg-orange-600 text-white font-medium px-4 py-2 transition-colors;
+    border-radius: calc(var(--card-radius) * 0.6);
   }
 
   .btn-ghost {
-    @apply text-charcoal-600 dark:text-charcoal-300 hover:bg-charcoal-100 dark:hover:bg-charcoal-700 px-3 py-2 rounded-lg transition-colors;
+    @apply text-charcoal-600 dark:text-charcoal-300 hover:bg-charcoal-100 dark:hover:bg-charcoal-700 px-3 py-2 transition-colors;
+    border-radius: calc(var(--card-radius) * 0.6);
   }
 
   .input {
-    @apply bg-white dark:bg-charcoal-700 border border-charcoal-300 dark:border-charcoal-600 rounded-lg px-3 py-2 text-charcoal-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500 w-full;
+    @apply bg-white dark:bg-charcoal-700 border border-charcoal-300 dark:border-charcoal-600 px-3 py-2 text-charcoal-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500 w-full;
+    border-radius: calc(var(--card-radius) * 0.6);
+    color-scheme: light;
+  }
+  .dark .input {
+    color-scheme: dark;
   }
 
   .badge {
     @apply text-xs font-medium px-2 py-0.5 rounded-full;
   }
 }
+
+/* Compact density overrides */
+html.compact .card        { @apply p-3; }
+html.compact main         { @apply p-3 md:p-4; }
+html.compact h1           { @apply text-xl; }
+html.compact h2           { @apply text-base; }
+html.compact .btn-primary { @apply px-3 py-1.5 text-sm; }
+html.compact .btn-ghost   { @apply px-2 py-1.5 text-sm; }

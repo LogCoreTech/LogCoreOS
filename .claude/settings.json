@@ -1,0 +1,43 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"/home/logcore/LogCoreDEV/LogCoreOS/docs/hooks/docs_reminder.sh\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "bash \"/home/logcore/LogCoreDEV/LogCoreOS/docs/hooks/commit_reminder.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"/home/logcore/LogCoreDEV/LogCoreOS/docs/hooks/safety_check.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"/home/logcore/LogCoreDEV/LogCoreOS/docs/hooks/docs_loader.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,108 +1,108 @@
 # LogCore OS
 
-A self-hosted, values-driven family life operating system with an AI that knows you personally.
+A self-hosted life operating system for individuals, families, and households. An AI that knows you personally — your priorities, your goals, your people — running privately on your own server.
 
 ---
 
-## Two Products
+## What it does
 
-**LogCore Brain** (`brain/`) — Free, open source. Markdown + JSON files. Works with any AI — Claude Code, GPT, Ollama, anything. Take your Brain folder anywhere, and your AI context comes with you.
+LogCore OS gives you a private command centre for your life:
 
-**LogCore App** (`app/`) — The software layer. Python FastAPI backend + React frontend, installable as a PWA on phones and desktops. Dashboards, task management, integrated AI chat, background scheduling, push notifications. This is what you run (or pay to have hosted).
+- **AI chat** with full personal context — your priorities, tasks, and memory are injected automatically
+- **Task management** with intelligent scoring based on your life priorities
+- **Journal, Notes, and Calendar** — all in one place
+- **Household hub** — shared tasks and events across everyone in your home
+- **Push notifications** for daily task digests, overdue reminders, and weekly reviews
+- **PWA** — installs on your phone and desktop like a native app
+- **Multi-user** — one server supports a whole household or small team
+
+All your data lives as readable files on your own server. No third-party cloud. No vendor lock-in.
 
 ---
 
-## Quick Start
+## Self-Hosting
 
-### Requirements
-- Docker + Docker Compose
-- Node.js 20+ (to build the frontend)
-- An Anthropic API key (for AI chat — optional but recommended)
+### Linux (recommended for servers)
 
-### 1. Build the frontend
 ```bash
-cd app/frontend
-npm install
-npm run build
+git clone https://github.com/LogCoreTech/LogCoreOS.git
+cd LogCoreOS
+bash launch.sh --install-deps
 ```
 
-### 2. Configure environment
+`--install-deps` automatically installs Docker, Node.js, and curl if they are missing, then launches the app. Safe to re-run — nothing is reinstalled if already present.
+
+### macOS / Windows
+
+Install the following first, then run `bash launch.sh`:
+
+| Tool | Version | Install |
+|---|---|---|
+| Docker | latest | [docs.docker.com/engine/install](https://docs.docker.com/engine/install/) |
+| Docker Compose plugin (v2) | latest | [docs.docker.com/compose/install](https://docs.docker.com/compose/install/) |
+| Node.js | 20+ | [nodejs.org](https://nodejs.org/en/download/) or [nvm](https://github.com/nvm-sh/nvm) |
+| curl | any | `brew install curl` |
+
+### What the launch script does
+
+- Generates a secure `SECRET_KEY` automatically
+- Builds the React frontend
+- Starts all Docker containers
+- Waits for the app to be healthy
+
+### First login
+
+Open `http://localhost:8000` in your browser. The first user to register becomes the admin.
+
+After logging in, go to **Admin → AI Settings** to add your Anthropic API key (required for AI chat).
+
+### External access
+
+If you're exposing the app via Cloudflare Tunnel, ngrok, or a reverse proxy, go to **Admin → Hosting** after first login, select "HTTPS via Tunnel", and enter your domain URL. No restart needed.
+
+To install as a PWA on your phone: open your browser, navigate to your app URL, and tap "Add to Home Screen".
+
+### Script options
+
 ```bash
-cp docker/.env.example docker/.env
-# Edit docker/.env and fill in SECRET_KEY and ANTHROPIC_API_KEY
-```
-
-Generate a secret key:
-```bash
-python3 -c "import secrets; print(secrets.token_hex(32))"
-```
-
-### 3. Start the stack
-```bash
-cd docker
-docker compose up -d
-```
-
-### 4. Open the app
-Go to `http://localhost:8000` in your browser.
-
-On your phone: open Chrome → go to `http://YOUR_SERVER_IP:8000` → tap "Add to Home Screen" to install as a PWA.
-
----
-
-## Architecture
-
-```
-brain/               ← The Brain (free, portable, AI-readable)
-  AGENTS.md          ← AI boot protocol
-  SOUL.md            ← AI personality
-  USERS/
-    _template/       ← Template copied for each new user
-    {User Name}/     ← Created by the setup wizard on first login
-      Profile.md
-      Long_Term_Memory.md
-      Short_Term_Memory.md
-      Tasks/
-        tasks.json
-        tasks_history.json
-        tasks_view.md
-  skills/
-    life-priorities/ ← Task scoring + recurring logic
-
-app/
-  backend/           ← Python FastAPI (reads/writes brain/ files)
-  frontend/          ← React + Vite + Tailwind (PWA)
-
-docker/
-  docker-compose.yml
-  .env.example
+bash launch.sh                  # rebuild frontend + restart containers
+bash launch.sh --install-deps   # install any missing deps, then launch
+bash launch.sh --skip-build     # restart only (skip npm build if nothing changed)
+bash launch.sh --reconfigure    # reset docker/.env and start fresh
 ```
 
 ---
 
-## Using the Brain Without the App
+## Managed Hosting
 
-The Brain files work with any AI out of the box. To use with Claude Code:
+Don't want to run your own server? LogCore OS is available as a fully managed hosted service.
 
-1. Open Claude Code in this directory
-2. The AI reads `brain/AGENTS.md` and follows its boot protocol
-3. Tell it which user you are and it loads your personal context
-4. Chat naturally — it knows your priorities, tasks, and context
+We handle setup, updates, backups, and uptime — you just use the app.
+
+> Hosted plans coming soon. [logcoretech.com](https://logcoretech.com)
 
 ---
 
-## Notifications (ntfy)
+## Your Data
 
-The app sends push notifications via [ntfy](https://ntfy.sh) (self-hosted, free).
+All your data is stored as Markdown and JSON files in the `brain/` folder on your server. It is human-readable, portable, and not tied to this app.
+
+You can export your Brain at any time from **Admin → Export** as a zip file. The files work with any AI — Claude, GPT, Ollama, or anything else. Your context comes with you wherever you go.
+
+---
+
+## Notifications
+
+Push notifications are handled via [ntfy](https://ntfy.sh) (self-hosted, included in the Docker stack).
 
 1. Install the ntfy app on your phone (Android or iOS)
 2. Add your server: `http://YOUR_SERVER_IP:5680`
-3. Subscribe to your channel: `logcore-{your-name}` (e.g., `logcore-anthony`)
-4. Configure your channel name in the app Settings
+3. Subscribe to your personal channel — find it in **Settings → Notifications** after logging in
 
 ---
 
 ## License
 
-Brain files: MIT (free, open source, share freely)
-App: TBD
+AGPL v3 — free to self-host and modify. Any commercial service built on this code must also be published as open source.
+
+See [LICENSE](./LICENSE) for the full terms.
