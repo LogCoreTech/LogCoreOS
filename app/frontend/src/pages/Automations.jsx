@@ -2,11 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { automations as api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
-const TABS = [
-  { id: 'personal',  label: 'Personal' },
-  { id: 'business',  label: 'Business' },
-]
-
 function fmt(iso) {
   if (!iso) return 'Never'
   return new Date(iso).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
@@ -299,7 +294,14 @@ function WorkflowCard({ workflow, isAdmin, onDelete, onRun, onToggleActive }) {
 export default function Automations() {
   const { user }                  = useAuth()
   const isAdmin                   = user?.role === 'admin'
-  const [tab, setTab]             = useState('personal')
+  const disabled                  = new Set(user?.disabledModules || [])
+
+  const TABS = [
+    !disabled.has('automations')          && { id: 'personal',  label: 'Personal'  },
+    !disabled.has('automations_business') && { id: 'business',  label: 'Business'  },
+  ].filter(Boolean)
+
+  const [tab, setTab]             = useState(() => TABS[0]?.id || 'personal')
   const [workflows, setWorkflows] = useState([])
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState('')
