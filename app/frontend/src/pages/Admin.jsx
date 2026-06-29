@@ -1305,12 +1305,13 @@ function RolesCard({ roles, onRolesChange }) {
 // n8n card
 // ---------------------------------------------------------------------------
 function N8nCard() {
-  const [url, setUrl]         = useState('http://n8n:5678')
-  const [apiKey, setApiKey]   = useState('')
-  const [testing, setTesting] = useState(false)
-  const [saving, setSaving]   = useState(false)
-  const [syncing, setSyncing] = useState(false)
-  const [msg, setMsg]         = useState(null)
+  const [url, setUrl]               = useState('http://n8n:5678')
+  const [apiKey, setApiKey]         = useState('')
+  const [testing, setTesting]       = useState(false)
+  const [saving, setSaving]         = useState(false)
+  const [syncing, setSyncing]       = useState(false)
+  const [syncingWf, setSyncingWf]   = useState(false)
+  const [msg, setMsg]               = useState(null)
 
   function flash(ok, text) {
     setMsg({ ok, text })
@@ -1409,13 +1410,35 @@ function N8nCard() {
         </div>
       </form>
 
-      <button
-        onClick={syncSecrets}
-        disabled={syncing}
-        className="mt-3 w-full text-sm text-charcoal-500 hover:text-orange-500 transition-colors disabled:opacity-50"
-      >
-        {syncing ? 'Syncing…' : '↺ Sync Infisical → n8n'}
-      </button>
+      <div className="mt-3 flex gap-2">
+        <button
+          onClick={syncSecrets}
+          disabled={syncing}
+          className="flex-1 text-sm text-charcoal-500 hover:text-orange-500 transition-colors disabled:opacity-50"
+        >
+          {syncing ? 'Syncing…' : '↺ Sync Infisical → n8n'}
+        </button>
+        <button
+          onClick={async () => {
+            setSyncingWf(true)
+            setMsg(null)
+            try {
+              const res = await automationsApi.syncWorkflows()
+              const { created = 0, updated = 0, deleted = 0, skipped = 0, errors = [] } = res
+              const summary = `Workflows synced — ${created} created, ${updated} updated, ${deleted} deleted, ${skipped} unchanged`
+              flash(errors.length === 0, errors.length ? `${summary}. Errors: ${errors.join('; ')}` : summary)
+            } catch (err) {
+              flash(false, err.message || 'Sync failed')
+            } finally {
+              setSyncingWf(false)
+            }
+          }}
+          disabled={syncingWf}
+          className="flex-1 text-sm text-charcoal-500 hover:text-orange-500 transition-colors disabled:opacity-50"
+        >
+          {syncingWf ? 'Syncing…' : '⚡ Sync Workflows Now'}
+        </button>
+      </div>
     </div>
   )
 }

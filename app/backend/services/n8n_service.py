@@ -1,4 +1,6 @@
 """n8n service — API client and Brain metadata management for the Automations module."""
+import hashlib
+import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,6 +17,8 @@ from services.file_service import (
     system_automations_path,
     write_json,
 )
+
+STUBS_DIR = Path(__file__).parent.parent / "automations_stubs"
 
 logger = logging.getLogger("logcore.n8n")
 
@@ -202,6 +206,140 @@ def restart_n8n() -> None:
     client = docker_sdk.from_env()
     container = client.containers.get("logcore-n8n")
     container.restart()
+
+
+# ── Business workflow auto-sync ────────────────────────────────────────────────
+
+def _content_hash(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _fetch_wf(base_url: str, token: str, key: str) -> tuple[dict, str]:
+    """Fetch a workflow JSON from the remote source. Returns (parsed_json, raw_text)."""
+    with httpx.Client(timeout=30.0) as c:
+        r = c.get(
+            f"{base_url.rstrip('/')}/{key}.json",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        r.raise_for_status()
+        return r.json(), r.text
+
+
+def sync_business_workflows() -> dict:
+    """
+    Reconcile auto-managed business workflows against stub files in automations_stubs/.
+
+    Requires WORKFLOWS_BASE_URL and WORKFLOWS_TOKEN in the Infisical secrets cache.
+    Self-hosted instances without those secrets skip silently.
+    """
+    result: dict = {"created": 0, "updated": 0, "deleted": 0, "skipped": 0, "errors": []}
+
+    # 1. Read credentials from Infisical cache
+    cache_path = brain_path() / "_system" / "infisical_cache.json"
+    cache = read_json(cache_path, default={})
+    secrets = cache.get("secrets", {})
+    base_url = secrets.get("WORKFLOWS_BASE_URL", "").rstrip("/")
+    token = secrets.get("WORKFLOWS_TOKEN", "")
+
+    if not base_url or not token:
+        logger.debug("Workflow auto-sync skipped: WORKFLOWS_BASE_URL/WORKFLOWS_TOKEN absent from Infisical cache")
+        return result
+
+    # 2. Read stub files — keys drive what SHOULD exist
+    stubs: dict[str, dict] = {}
+    if STUBS_DIR.is_dir():
+        for stub_file in sorted(STUBS_DIR.glob("*.stub.json")):
+            try:
+                stub = json.loads(stub_file.read_text())
+                key = stub.get("key") or stub_file.stem.replace(".stub", "")
+                stub["key"] = key
+                stubs[key] = stub
+            except Exception as exc:
+                result["errors"].append(f"bad stub {stub_file.name}: {exc}")
+
+    if not stubs:
+        logger.debug("No workflow stubs found in %s", STUBS_DIR)
+        return result
+
+    # 3. Load current Brain automations index
+    index_path = system_automations_path()
+    records: list[dict] = read_json(index_path, default=[])
+    existing: dict[str, dict] = {r["sync_key"]: r for r in records if r.get("auto_sync")}
+
+    # 4. Create or update each stub's workflow
+    for key, stub in stubs.items():
+        try:
+            wf_json, raw_text = _fetch_wf(base_url, token, key)
+        except Exception as exc:
+            logger.warning("Failed to fetch workflow '%s': %s", key, exc)
+            result["errors"].append(f"fetch {key}: {exc}")
+            continue
+
+        new_hash = _content_hash(raw_text)
+
+        if key in existing:
+            rec = existing[key]
+            if rec.get("content_hash") == new_hash:
+                result["skipped"] += 1
+                continue
+            try:
+                with _client() as c:
+                    c.put(f"/api/v1/workflows/{rec['n8n_id']}", json=wf_json).raise_for_status()
+            except Exception as exc:
+                logger.warning("n8n update failed for '%s': %s", key, exc)
+                result["errors"].append(f"update {key}: {exc}")
+                continue
+            for r in records:
+                if r.get("sync_key") == key:
+                    r["content_hash"] = new_hash
+                    r["name"] = stub.get("name", r["name"])
+                    r["tags"] = stub.get("tags", r.get("tags", []))
+            result["updated"] += 1
+            logger.info("Updated business workflow '%s'", key)
+        else:
+            try:
+                with _client() as c:
+                    resp = c.post("/api/v1/workflows", json=wf_json)
+                    resp.raise_for_status()
+                    n8n_data = resp.json()
+            except Exception as exc:
+                logger.warning("n8n import failed for '%s': %s", key, exc)
+                result["errors"].append(f"import {key}: {exc}")
+                continue
+            new_record: dict = {
+                "id": str(uuid4()),
+                "n8n_id": str(n8n_data.get("id", "")),
+                "name": stub.get("name") or wf_json.get("name", key),
+                "scope": "business",
+                "tags": stub.get("tags", []),
+                "active": False,
+                "auto_sync": True,
+                "sync_key": key,
+                "content_hash": new_hash,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "last_run": None,
+            }
+            records.append(new_record)
+            result["created"] += 1
+            logger.info("Created business workflow '%s'", key)
+
+    # 5. Delete auto-synced records whose stub was removed from the repo
+    orphans = [r for r in records if r.get("auto_sync") and r.get("sync_key") not in stubs]
+    for rec in orphans:
+        n8n_id = rec.get("n8n_id")
+        if n8n_id:
+            try:
+                with _client() as c:
+                    c.delete(f"/api/v1/workflows/{n8n_id}")
+            except Exception as exc:
+                logger.warning("Failed to delete orphaned workflow '%s' from n8n: %s", rec.get("name"), exc)
+        records = [r for r in records if r["id"] != rec["id"]]
+        result["deleted"] += 1
+        logger.info("Deleted removed business workflow '%s'", rec.get("name"))
+
+    write_json(index_path, records)
+    logger.info("Business workflow auto-sync complete: %s", result)
+    return result
 
 
 # ── Internal helpers ───────────────────────────────────────────────────────────
