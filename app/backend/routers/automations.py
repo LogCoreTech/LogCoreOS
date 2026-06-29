@@ -43,6 +43,16 @@ def save_n8n_config(
     return {"ok": True}
 
 
+@router.post("/n8n/sync-workflows")
+def trigger_workflow_sync(
+    current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_write_limit),
+):
+    """Manually trigger business workflow sync against the remote stub source."""
+    result = n8n_service.sync_business_workflows()
+    return result
+
+
 @router.post("/n8n/sync-secrets")
 def sync_secrets_to_n8n(
     current_user: dict = Depends(require_admin),

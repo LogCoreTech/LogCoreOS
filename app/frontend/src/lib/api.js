@@ -222,6 +222,7 @@ export const automations = {
   n8nStatus:     ()    => get('/automations/n8n/status'),
   saveN8nConfig: (cfg) => post('/automations/n8n/config', cfg),
   syncSecrets:   ()    => post('/automations/n8n/sync-secrets', {}),
+  syncWorkflows: ()    => post('/automations/n8n/sync-workflows', {}),
 }
 
 export const infisical = {
