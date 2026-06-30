@@ -25,17 +25,20 @@ export function AuthProvider({ children }) {
           role:            me.role,
           disabledModules: me.disabled_modules || [],
           timezone:        me.timezone     || 'UTC',
+          workspaces:      me.workspaces   || ['personal'],
           // Preferences live server-side only — not written to localStorage
           accentColor:     me.accent_color || null,
           darkMode:        me.dark_mode    || 'system',
           background:      me.background   || null,
           density:         me.density      || 'comfortable',
           cornerStyle:     me.corner_style || 'rounded',
+          shortcuts:       me.shortcuts    || {},
         }
         // Only persist session/routing fields — preferences are always re-fetched from server
         localStorage.setItem('lc_user', JSON.stringify({
           id: u.id, name: u.name, role: u.role,
           disabledModules: u.disabledModules, timezone: u.timezone,
+          workspaces: u.workspaces,
         }))
         setUser(u)
         applyAccentColor(u.accentColor)
@@ -106,16 +109,19 @@ export function AuthProvider({ children }) {
           ...user,
           disabledModules: me.disabled_modules || [],
           timezone:        me.timezone     || user.timezone,
+          workspaces:      me.workspaces   || ['personal'],
           accentColor:     me.accent_color || null,
           darkMode:        me.dark_mode    || 'system',
           background:      me.background   || null,
           density:         me.density      || 'comfortable',
           cornerStyle:     me.corner_style || 'rounded',
+          shortcuts:       me.shortcuts    || {},
         }
         // Persist only session/routing fields; preferences stay in memory
         localStorage.setItem('lc_user', JSON.stringify({
           id: updated.id, name: updated.name, role: updated.role,
           disabledModules: updated.disabledModules, timezone: updated.timezone,
+          workspaces: updated.workspaces,
         }))
         setUser(updated)
         applyAccentColor(updated.accentColor)

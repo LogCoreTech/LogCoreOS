@@ -19,6 +19,7 @@ export function catColor(cat) {
 export const ALL_MODULES = [
   { id: 'dashboard', to: '/',         icon: '⊞', label: 'Dashboard' },
   { id: 'tasks',     to: '/tasks',    icon: '✓', label: 'Tasks'     },
+  { id: 'goals',     to: '/goals',    icon: '🎯', label: 'Goals'    },
   { id: 'calendar',  to: '/calendar', icon: '📅', label: 'Calendar'  },
   { id: 'household', to: '/household',icon: '🏠', label: 'Household' },
   { id: 'notes',     to: '/notes',    icon: '📝', label: 'Notes'     },
@@ -32,21 +33,13 @@ export const ALL_MODULES = [
 
 export const DEFAULT_SHORTCUTS = ['dashboard', 'tasks', 'chat']
 
-export function getShortcuts() {
-  try {
-    const raw = localStorage.getItem('lc_shortcuts')
-    if (raw) {
-      const ids = JSON.parse(raw)
-      const knownIds = new Set(ALL_MODULES.map(m => m.id))
-      const valid = ids.filter(id => knownIds.has(id))
-      if (valid.length > 0) return valid.slice(0, 4)
-    }
-  } catch {}
+// Read shortcuts from the server-side user object for a specific workspace.
+export function getShortcutsForUser(user, workspace = 'personal') {
+  const saved = user?.shortcuts?.[workspace]
+  if (Array.isArray(saved) && saved.length > 0) {
+    const knownIds = new Set(ALL_MODULES.map(m => m.id))
+    const valid = saved.filter(id => knownIds.has(id))
+    if (valid.length > 0) return valid.slice(0, 4)
+  }
   return [...DEFAULT_SHORTCUTS]
 }
-
-export function saveShortcuts(ids) {
-  localStorage.setItem('lc_shortcuts', JSON.stringify(ids.slice(0, 4)))
-  window.dispatchEvent(new CustomEvent('lc_shortcuts_changed'))
-}
-

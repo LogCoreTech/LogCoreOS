@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
-import { ALL_MODULES, getShortcuts } from '../lib/constants'
+import { ALL_MODULES, getShortcutsForUser } from '../lib/constants'
 import { suggestions as sugApi } from '../lib/api'
 
 const ADMIN_NAV = { to: '/admin', icon: '⬡', label: 'Admin' }
@@ -117,7 +117,6 @@ export default function Layout() {
   const { user } = useAuth()
   const { workspace, switchWorkspace } = useWorkspace()
   const navigate = useNavigate()
-  const [shortcuts, setShortcuts] = useState(getShortcuts)
   const [showDrawer, setShowDrawer] = useState(false)
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('lc_sidebar') === 'collapsed')
 
@@ -130,17 +129,11 @@ export default function Layout() {
     localStorage.setItem('lc_sidebar', next ? 'collapsed' : 'expanded')
   }
 
-  // Re-read shortcuts when Settings saves them
-  useEffect(() => {
-    function refresh() { setShortcuts(getShortcuts()) }
-    window.addEventListener('lc_shortcuts_changed', refresh)
-    return () => window.removeEventListener('lc_shortcuts_changed', refresh)
-  }, [])
-
   const disabledIds = new Set(user?.disabledModules || [])
   const visibleModules = ALL_MODULES.filter(m => m.nav !== false && m.to && !disabledIds.has(m.id))
 
-  const shortcutModules = shortcuts
+  // Shortcuts flow from the server-side user object — reactive to workspace + user changes
+  const shortcutModules = getShortcutsForUser(user, workspace)
     .map(id => ALL_MODULES.find(m => m.id === id))
     .filter(m => m && !disabledIds.has(m.id))
 
