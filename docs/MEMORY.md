@@ -36,7 +36,7 @@ Tokens carry a unique `jti` field. Logout revokes the JTI in memory (`_revoked_j
 **Module system: frontend + backend must stay in sync**
 `ALL_MODULES` in `app/frontend/src/lib/constants.js` defines the module registry. Each module `id` must exactly match the string used in `require_module(module_id)` on the backend. Modules with `nav: false` and no `to` field appear in the Admin → RolesCard for toggling but are hidden from the sidebar and mobile drawer — used for sub-features that gate content within a page rather than a full page route.
 **Why:** Mismatch causes silent access failures or broken feature gating. `nav: false` modules must still be in `ALL_MODULE_IDS` in `features_service.py`.
-**How to apply:** When adding a module, update both `constants.js` AND the backend router's `require_module()` call. Current IDs: `dashboard`, `tasks`, `calendar`, `household`, `notes`, `journal`, `chat`, `automations`, `automations_business`, `home`.
+**How to apply:** When adding a module, update both `constants.js` AND the backend router's `require_module()` call. Current IDs: `dashboard`, `tasks`, `calendar`, `household`, `notes`, `journal`, `chat`, `automations`, `automations_business`, `home`, `team`.
 
 **Dynamic CORS reads hosting.json at request time**
 `DynamicCORSMiddleware` in `main.py` reads `brain/hosting.json` at each request, not at startup.

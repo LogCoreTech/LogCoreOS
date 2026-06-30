@@ -354,14 +354,24 @@ The Team module (`pages/Team.jsx`) is the business-workspace equivalent of House
 
 ---
 
-## Agent Skills
+## Dev Skills (Claude Code)
 
-Reusable agent tasks live in `agent/skills/`. Each skill gets its own folder with a `.md` instruction file and optional shell scripts.
+Dev tools for use during Claude Code sessions live in `docs/skills/`. Each skill has a `.md` instruction file and optional shell scripts.
 
 | Skill | When to use |
 |-------|-------------|
 | `run-tests` | After any backend change, before committing — runs pytest and reports GREEN/RED |
 | `diagnose` | Before a release or full health check — security/architecture audit with severity levels |
-| `run-agent` | CLI wrapper to send goals to the LogCore in-app AI agent and get results + tool trace |
+| `run-agent` | CLI wrapper to send a natural-language goal to the in-app LogCore AI and see its tool trace |
 
-To add a new skill: create the folder, add the `.md`, add any scripts, register it in `agent/README.md`.
+To add a new dev skill: create the folder under `docs/skills/`, add the `.md`, add any scripts, register it in `docs/skills/README.md`.
+
+## Brain Skills (In-App AI)
+
+Skills used by the in-app LogCore AI agent live in `brain/skills/`. The in-app AI reads them at runtime.
+
+| Skill | What it does |
+|-------|-------------|
+| `life-priorities` | Scores tasks by the user's life priority hierarchy; surfaces top 3 most pressing tasks |
+
+See `agent/README.md` for the full in-app agent architecture and tool registry.

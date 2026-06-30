@@ -129,10 +129,9 @@ LogCoreOS/
 │   └── backup.sh                  → Brain backup script (keeps 30 most recent)
 │
 ├── agent/
-│   └── skills/                    → reusable agent skills for in-app AI
-│       ├── run-tests/             → run pytest + structured GREEN/RED report
-│       ├── diagnose/              → full security/architecture audit
-│       └── run-agent/
+│   ├── README.md                  → in-app AI agent architecture: modes, tool registry, brain skills
+│   └── skills/                    → pointer files for brain skills (source lives in brain/skills/)
+│       └── life-priorities/       → pointer → brain/skills/life-priorities/ (task scoring + top 3)
 │
 └── docs/
     ├── README.md                  → docs folder overview and file table
@@ -144,6 +143,11 @@ LogCoreOS/
     ├── MAP.md                     → THIS FILE — navigation index
     ├── API.md                     → REST API endpoint reference
     ├── Daily Notes/               → per-session work logs (YYYY-MM-DD.md)
+    ├── skills/                    → dev tools for Claude Code sessions
+    │   ├── README.md              → skill index and usage
+    │   ├── diagnose/              → full security/architecture audit with severity levels
+    │   ├── run-tests/             → run pytest + structured GREEN/RED report
+    │   └── run-agent/             → CLI wrapper: send goals to the in-app AI, see tool trace
     └── hooks/
         ├── docs_loader.sh         → UserPromptSubmit hook: injects key docs at session start
         ├── docs_reminder.sh       → Stop hook: prompts doc updates at end of each turn
