@@ -275,6 +275,9 @@ def _find_user_background(user_name: str):
     return None
 
 
+_VALID_SHORTCUT_WORKSPACES = frozenset({"personal", "business"})
+
+
 class MeUpdateRequest(BaseModel):
     timezone:     str | None = Field(None, max_length=50)
     accent_color: str | None = Field(None, max_length=7)
@@ -282,6 +285,7 @@ class MeUpdateRequest(BaseModel):
     background:   str | None = Field(None, max_length=30)
     density:      str | None = Field(None, max_length=15)
     corner_style: str | None = Field(None, max_length=10)
+    shortcuts:    dict | None = None   # {"personal": [...], "business": [...]}
 
 
 @router.patch("/me")
@@ -300,6 +304,15 @@ def update_me(req: MeUpdateRequest, current_user: dict = Depends(get_current_use
         _validate_density(updates["density"])
     if "corner_style" in updates:
         _validate_corner_style(updates["corner_style"])
+    if "shortcuts" in updates:
+        sc = updates["shortcuts"]
+        if not isinstance(sc, dict):
+            raise HTTPException(status_code=400, detail="shortcuts must be an object")
+        for ws_key, ids in sc.items():
+            if ws_key not in _VALID_SHORTCUT_WORKSPACES:
+                raise HTTPException(status_code=400, detail=f"Invalid workspace key in shortcuts: {ws_key!r}")
+            if not isinstance(ids, list) or len(ids) > 4:
+                raise HTTPException(status_code=400, detail="shortcuts per workspace must be a list of up to 4 module IDs")
     if not updates:
         return {"ok": True}
     auth_service.update_user(current_user["id"], updates)
@@ -323,6 +336,7 @@ def me(current_user: dict = Depends(get_current_user), _rl: None = Depends(_get_
         "background":           current_user.get("background"),
         "density":              current_user.get("density", "comfortable"),
         "corner_style":         current_user.get("corner_style", "rounded"),
+        "shortcuts":            current_user.get("shortcuts", {}),
     }
 
 

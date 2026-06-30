@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { auth as authApi, user as userApi, push as pushApi, suggestions as sugApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useNavigate } from 'react-router-dom'
-import { getShortcuts, saveShortcuts, ALL_MODULES } from '../lib/constants'
+import { getShortcutsForUser, ALL_MODULES } from '../lib/constants'
+import { useWorkspace } from '../lib/workspace'
 import { applyAccentColor, applyDarkMode, applyBackground, applyDensity, applyCornerStyle, getSystemDarkPreference, BACKGROUND_PRESETS } from '../lib/theme'
 
 function _urlBase64ToUint8Array(base64String) {
@@ -29,6 +30,7 @@ const HEX_RE = /^#[0-9a-fA-F]{6}$/
 
 export default function Settings() {
   const { user, logout, updateUserField } = useAuth()
+  const { workspace } = useWorkspace()
   const navigate = useNavigate()
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -49,7 +51,7 @@ export default function Settings() {
   const [bgUploading, setBgUploading]       = useState(false)
   const [bgError, setBgError]               = useState('')
   const bgInputRef = useRef(null)
-  const [shortcutIds, setShortcutIds] = useState(getShortcuts)
+  const [shortcutIds, setShortcutIds] = useState(() => getShortcutsForUser(user, workspace))
   const [shortcutDragIdx, setShortcutDragIdx] = useState(null)
   const [shortcutSaved, setShortcutSaved] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -59,6 +61,11 @@ export default function Settings() {
   const [sugConfig, setSugConfig] = useState(null)
   const [sugRunning, setSugRunning] = useState({})
   const [sugFlash, setSugFlash] = useState({})
+
+  // Sync shortcut list when workspace changes or server shortcuts update
+  useEffect(() => {
+    setShortcutIds(getShortcutsForUser(user, workspace))
+  }, [workspace, user?.shortcuts])
 
   useEffect(() => {
     authApi.me().then(me => {
@@ -186,10 +193,15 @@ export default function Settings() {
   }
   function onShortcutDragEnd() { setShortcutDragIdx(null) }
 
-  function saveShortcutsHandler() {
-    saveShortcuts(shortcutIds)
-    setShortcutSaved(true)
-    setTimeout(() => setShortcutSaved(false), 2000)
+  async function saveShortcutsHandler() {
+    const newShortcuts = { ...(user?.shortcuts || {}), [workspace]: shortcutIds.slice(0, 4) }
+    try {
+      await authApi.updateMe({ shortcuts: newShortcuts })
+      updateUserField('shortcuts', newShortcuts)
+      flash(setShortcutSaved)
+    } catch (e) {
+      console.error('Failed to save shortcuts:', e)
+    }
   }
 
   async function subscribePush() {

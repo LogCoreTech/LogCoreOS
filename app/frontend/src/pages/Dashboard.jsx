@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { tasks as tasksApi, auth as authApi, home as homeApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useWorkspace } from '../lib/workspace'
 import TaskModal from '../components/TaskModal'
 import { catColor } from '../lib/constants'
 
@@ -11,6 +12,7 @@ function priorityDot(p) {
 
 export default function Dashboard() {
   const { user } = useAuth()
+  const { workspace } = useWorkspace()
   const [top3, setTop3] = useState([])
   const [today, setToday] = useState([])
   const [streaks, setStreaks] = useState([])
@@ -39,7 +41,7 @@ export default function Dashboard() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [workspace])
 
   async function markDone(id) {
     setCompleting(id)
