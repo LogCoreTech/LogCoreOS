@@ -23,6 +23,23 @@ def _all_users() -> list[str]:
     ]
 
 
+def _all_user_workspace_pairs() -> list[tuple[str, str]]:
+    """Return (user_name, workspace) pairs for all users × their enabled workspaces."""
+    pairs = []
+    users_dir = brain_path() / "USERS"
+    for d in users_dir.iterdir():
+        if not d.is_dir() or d.name.startswith("_"):
+            continue
+        user_record = get_user_by_name(d.name) or {}
+        workspaces = user_record.get("workspaces", ["personal"])
+        for ws in workspaces:
+            if ws == "personal" and tasks_path(d.name).exists():
+                pairs.append((d.name, ws))
+            elif ws == "business":
+                pairs.append((d.name, ws))
+    return pairs
+
+
 def job_recurring_processor():
     try:
         results = process_all_users()
@@ -33,50 +50,50 @@ def job_recurring_processor():
 
 def job_morning_digest():
     from services.suggestions_service import get_config, run_suggestion_sync
-    for user in _all_users():
+    for user, workspace in _all_user_workspace_pairs():
         try:
             cfg = get_config(user)
             if not cfg["daily_digest"].get("enabled", True):
                 continue
-            run_suggestion_sync(user, "daily_digest")
+            run_suggestion_sync(user, "daily_digest", workspace)
         except Exception:
-            logger.exception("morning digest failed for %s", user)
+            logger.exception("morning digest failed for %s/%s", user, workspace)
 
 
 def job_overdue_check():
     from services.suggestions_service import get_config, run_suggestion_sync
-    for user in _all_users():
+    for user, workspace in _all_user_workspace_pairs():
         try:
             cfg = get_config(user)
             if not cfg["overdue_alert"].get("enabled", True):
                 continue
-            run_suggestion_sync(user, "overdue_alert")
+            run_suggestion_sync(user, "overdue_alert", workspace)
         except Exception:
-            logger.exception("overdue check failed for %s", user)
+            logger.exception("overdue check failed for %s/%s", user, workspace)
 
 
 def job_weekly_review():
     from services.suggestions_service import get_config, run_suggestion_sync
-    for user in _all_users():
+    for user, workspace in _all_user_workspace_pairs():
         try:
             cfg = get_config(user)
             if not cfg["weekly_review"].get("enabled", True):
                 continue
-            run_suggestion_sync(user, "weekly_review")
+            run_suggestion_sync(user, "weekly_review", workspace)
         except Exception:
-            logger.exception("weekly review failed for %s", user)
+            logger.exception("weekly review failed for %s/%s", user, workspace)
 
 
 def job_goal_drift():
     from services.suggestions_service import get_config, run_suggestion_sync
-    for user in _all_users():
+    for user, workspace in _all_user_workspace_pairs():
         try:
             cfg = get_config(user)
             if not cfg["goal_drift"].get("enabled", True):
                 continue
-            run_suggestion_sync(user, "goal_drift")
+            run_suggestion_sync(user, "goal_drift", workspace)
         except Exception:
-            logger.exception("goal drift check failed for %s", user)
+            logger.exception("goal drift check failed for %s/%s", user, workspace)
 
 
 def job_custom_suggestion(user_name: str, suggestion: dict):

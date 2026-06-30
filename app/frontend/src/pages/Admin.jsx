@@ -54,7 +54,7 @@ function initials(name) {
 // ---------------------------------------------------------------------------
 // Users card
 // ---------------------------------------------------------------------------
-const BLANK_NEW_USER = { email: '', name: '', password: '', role: 'member', feature_role: 'guest' }
+const BLANK_NEW_USER = { email: '', name: '', password: '', role: 'member', feature_role: 'guest', workspaces: ['personal'] }
 
 function UsersCard({ currentUserId, roles, onRolesLoaded }) {
   const [users, setUsers]             = useState([])
@@ -71,6 +71,10 @@ function UsersCard({ currentUserId, roles, onRolesLoaded }) {
   const [userModules, setUserModules]       = useState({})
   const [moduleSaving, setModuleSaving]     = useState(null)
   const [expandedUser, setExpandedUser]     = useState(null)
+  const [wsTab, setWsTab]                   = useState({})
+  // Workspace access
+  const [userWorkspaces, setUserWorkspaces] = useState({})
+  const [wsSaving, setWsSaving]             = useState(null)
   // Feature role assignment
   const [pendingFRole, setPendingFRole]     = useState({})
   const [fRoleSaving, setFRoleSaving]       = useState(null)
@@ -85,8 +89,20 @@ function UsersCard({ currentUserId, roles, onRolesLoaded }) {
     const list = d.users || d
     setUsers(list)
     const modMap = {}
-    list.forEach(u => { modMap[u.id] = u.disabled_modules || [] })
+    const wsMap = {}
+    list.forEach(u => {
+      const raw = u.disabled_modules
+      if (Array.isArray(raw)) {
+        modMap[u.id] = { personal: raw, business: raw }
+      } else if (raw && typeof raw === 'object') {
+        modMap[u.id] = { personal: raw.personal || [], business: raw.business || [] }
+      } else {
+        modMap[u.id] = { personal: [], business: [] }
+      }
+      wsMap[u.id] = u.workspaces || ['personal']
+    })
     setUserModules(modMap)
+    setUserWorkspaces(wsMap)
     onRolesLoaded(Object.keys(fd.roles || { member: {} }))
   }
 
@@ -134,8 +150,9 @@ function UsersCard({ currentUserId, roles, onRolesLoaded }) {
         ...newUser,
         feature_role: newUser.feature_role || 'guest',
       })
-      setUsers(us => [...us, { ...created, feature_role: newUser.feature_role || 'guest' }])
-      setUserModules(prev => ({ ...prev, [created.id]: [] }))
+      setUsers(us => [...us, { ...created, feature_role: newUser.feature_role || 'guest', workspaces: newUser.workspaces || ['personal'] }])
+      setUserModules(prev => ({ ...prev, [created.id]: { personal: [], business: [] } }))
+      setUserWorkspaces(prev => ({ ...prev, [created.id]: newUser.workspaces || ['personal'] }))
       setNewUser(BLANK_NEW_USER)
       setShowCreate(false)
       flash(true, `${created.name} created.`)
@@ -146,27 +163,52 @@ function UsersCard({ currentUserId, roles, onRolesLoaded }) {
     }
   }
 
-  function toggleUserModule(userId, moduleId) {
+  function toggleUserModule(userId, moduleId, workspace) {
     setUserModules(prev => {
-      const cur = prev[userId] || []
+      const cur = prev[userId] || { personal: [], business: [] }
+      const list = cur[workspace] || []
       return {
         ...prev,
-        [userId]: cur.includes(moduleId)
-          ? cur.filter(id => id !== moduleId)
-          : [...cur, moduleId],
+        [userId]: {
+          ...cur,
+          [workspace]: list.includes(moduleId)
+            ? list.filter(id => id !== moduleId)
+            : [...list, moduleId],
+        },
       }
     })
   }
 
-  async function saveUserModules(userId) {
+  async function saveUserModules(userId, workspace) {
     setModuleSaving(userId)
     try {
-      await adminApi.updateModules(userId, userModules[userId] || [])
-      flash(true, 'Module access saved.')
+      const mods = userModules[userId] || { personal: [], business: [] }
+      await adminApi.updateWorkspaceModules(userId, workspace, mods[workspace] || [])
+      flash(true, `${workspace.charAt(0).toUpperCase() + workspace.slice(1)} module access saved.`)
     } catch (err) {
       flash(false, err.message || 'Failed to save module access')
     } finally {
       setModuleSaving(null)
+    }
+  }
+
+  function toggleUserWorkspace(userId, ws) {
+    setUserWorkspaces(prev => {
+      const cur = prev[userId] || ['personal']
+      const next = cur.includes(ws) ? cur.filter(w => w !== ws) : [...cur, ws]
+      return { ...prev, [userId]: next.length > 0 ? next : cur }
+    })
+  }
+
+  async function saveUserWorkspaces(userId) {
+    setWsSaving(userId)
+    try {
+      await adminApi.updateWorkspaces(userId, userWorkspaces[userId] || ['personal'])
+      flash(true, 'Workspace access saved.')
+    } catch (err) {
+      flash(false, err.message || 'Failed to save workspace access')
+    } finally {
+      setWsSaving(null)
     }
   }
 
@@ -242,6 +284,27 @@ function UsersCard({ currentUserId, roles, onRolesLoaded }) {
               {roles.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
             <p className="text-xs text-charcoal-400 mt-1">Controls which app features this user can see.</p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium mb-1">Workspace Access</label>
+            <div className="flex items-center gap-4">
+              {['personal', 'business'].map(ws => (
+                <label key={ws} className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={(newUser.workspaces || ['personal']).includes(ws)}
+                    onChange={() => {
+                      const cur = newUser.workspaces || ['personal']
+                      const next = cur.includes(ws) ? cur.filter(w => w !== ws) : [...cur, ws]
+                      if (next.length > 0) setNewUser(u => ({ ...u, workspaces: next }))
+                    }}
+                    className="accent-orange-500 w-4 h-4"
+                  />
+                  <span className="text-sm capitalize">{ws}</span>
+                </label>
+              ))}
+            </div>
           </div>
 
           <div>
@@ -340,6 +403,31 @@ function UsersCard({ currentUserId, roles, onRolesLoaded }) {
                 {/* Feature role + module access — only for non-admins */}
                 {user.role !== 'admin' && (
                   <>
+                    {/* Workspace access — always visible */}
+                    <div className="border-t border-charcoal-100 dark:border-charcoal-800 px-3 py-2 flex items-center gap-3 flex-wrap">
+                      <span className="text-xs text-charcoal-500 dark:text-charcoal-400 shrink-0">Workspaces</span>
+                      <div className="flex items-center gap-3">
+                        {['personal', 'business'].map(ws => (
+                          <label key={ws} className="flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={(userWorkspaces[user.id] || ['personal']).includes(ws)}
+                              onChange={() => toggleUserWorkspace(user.id, ws)}
+                              className="accent-orange-500 w-3.5 h-3.5"
+                            />
+                            <span className="text-xs capitalize">{ws}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => saveUserWorkspaces(user.id)}
+                        disabled={wsSaving === user.id}
+                        className="btn-primary text-xs px-3 py-1 shrink-0 disabled:opacity-30"
+                      >
+                        {wsSaving === user.id ? '…' : 'Save'}
+                      </button>
+                    </div>
+
                     {/* Feature role — always visible */}
                     <div className="border-t border-charcoal-100 dark:border-charcoal-800 px-3 py-2 flex items-center gap-2">
                       <span className="text-xs text-charcoal-500 dark:text-charcoal-400 shrink-0">Feature role</span>
@@ -366,37 +454,60 @@ function UsersCard({ currentUserId, roles, onRolesLoaded }) {
                       </button>
                     </div>
 
-                    {/* Per-module overrides — collapsed by default */}
+                    {/* Per-workspace module overrides — collapsed by default */}
                     {expanded && (
                       <div className="px-3 pb-3">
-                        <p className="text-xs font-medium text-charcoal-500 dark:text-charcoal-400 mb-1">Additional Module Restrictions</p>
-                        <div className="space-y-1 mb-2">
-                          {ALL_MODULES.map(mod => {
-                            const disabled = (userModules[user.id] || []).includes(mod.id)
-                            return (
-                              <label
-                                key={mod.id}
-                                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-charcoal-50 dark:hover:bg-charcoal-800 cursor-pointer"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={!disabled}
-                                  onChange={() => toggleUserModule(user.id, mod.id)}
-                                  className="accent-orange-500 w-4 h-4"
-                                />
-                                <span className="text-sm leading-none">{mod.icon}</span>
-                                <span className="text-sm">{mod.label}</span>
-                              </label>
-                            )
-                          })}
+                        <p className="text-xs font-medium text-charcoal-500 dark:text-charcoal-400 mb-2">Module Restrictions</p>
+                        <div className="flex gap-1 bg-charcoal-100 dark:bg-charcoal-800 rounded-lg p-1 mb-2">
+                          {['personal', 'business'].map(ws => (
+                            <button
+                              key={ws}
+                              onClick={() => setWsTab(p => ({ ...p, [user.id]: ws }))}
+                              className={`flex-1 py-1 rounded-md text-xs font-medium capitalize transition-colors ${
+                                (wsTab[user.id] || 'personal') === ws
+                                  ? 'bg-white dark:bg-charcoal-600 text-charcoal-900 dark:text-gray-100 shadow-sm'
+                                  : 'text-charcoal-500 dark:text-charcoal-400'
+                              }`}
+                            >
+                              {ws}
+                            </button>
+                          ))}
                         </div>
-                        <button
-                          onClick={() => saveUserModules(user.id)}
-                          disabled={moduleSaving === user.id}
-                          className="btn-primary text-xs px-3 py-1 w-full"
-                        >
-                          {moduleSaving === user.id ? '…' : 'Save Overrides'}
-                        </button>
+                        {(() => {
+                          const activeWs = wsTab[user.id] || 'personal'
+                          const wsDisabled = ((userModules[user.id] || {})[activeWs]) || []
+                          return (
+                            <>
+                              <div className="space-y-1 mb-2">
+                                {ALL_MODULES.map(mod => {
+                                  const disabled = wsDisabled.includes(mod.id)
+                                  return (
+                                    <label
+                                      key={mod.id}
+                                      className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-charcoal-50 dark:hover:bg-charcoal-800 cursor-pointer"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={!disabled}
+                                        onChange={() => toggleUserModule(user.id, mod.id, activeWs)}
+                                        className="accent-orange-500 w-4 h-4"
+                                      />
+                                      <span className="text-sm leading-none">{mod.icon}</span>
+                                      <span className="text-sm">{mod.label}</span>
+                                    </label>
+                                  )
+                                })}
+                              </div>
+                              <button
+                                onClick={() => saveUserModules(user.id, activeWs)}
+                                disabled={moduleSaving === user.id}
+                                className="btn-primary text-xs px-3 py-1 w-full capitalize"
+                              >
+                                {moduleSaving === user.id ? '…' : `Save ${activeWs} overrides`}
+                              </button>
+                            </>
+                          )
+                        })()}
                       </div>
                     )}
                   </>
