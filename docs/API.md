@@ -4,6 +4,17 @@ Base URL: `/api/v1`
 
 All authenticated endpoints require `Authorization: Bearer <token>`.
 
+### `X-Workspace` header
+
+Data endpoints (Tasks, Calendar, Notes, Journal) respect the `X-Workspace` header to route reads and writes to the correct workspace path:
+
+| Value | Path prefix |
+|-------|-------------|
+| `personal` (default) | `brain/USERS/{name}/` |
+| `business` | `brain/USERS/{name}/Business/` |
+
+Omitting the header or sending an invalid value defaults to `personal`. The frontend injects this header automatically via `api.js` `headers()` based on the active workspace in `localStorage`.
+
 ---
 
 ## Auth
@@ -70,14 +81,20 @@ Returns current user's profile.
   "notification_channel": "lc-abc123",
   "session_minutes": 10080,
   "timezone": "America/Chicago",
+  "workspaces": ["personal"],
   "disabled_modules": [],
   "accent_color": "#f97316",
   "dark_mode": "system",
   "background": "gradient:midnight",
   "density": "comfortable",
-  "corner_style": "rounded"
+  "corner_style": "rounded",
+  "shortcuts": { "personal": ["dashboard", "tasks", "chat"] }
 }
 ```
+
+`workspaces` — list of workspaces the user has access to. Possible values: `"personal"`, `"business"`. Defaults to `["personal"]` if absent in auth.json. When a user has both, the frontend shows a toggle pill in the sidebar.
+
+`shortcuts` — workspace-keyed dict of pinned sidebar shortcut module IDs, e.g. `{"personal": ["dashboard", "tasks", "chat"], "business": ["dashboard", "team", "automations"]}`. Each workspace list is capped at 4 entries. Defaults to `{}` (frontend falls back to `DEFAULT_SHORTCUTS`).
 
 ### `PATCH /auth/me`
 Update own profile. All fields optional.
@@ -90,7 +107,8 @@ Update own profile. All fields optional.
   "dark_mode": "dark",
   "background": "gradient:sunset",
   "density": "compact",
-  "corner_style": "sharp"
+  "corner_style": "sharp",
+  "shortcuts": { "personal": ["dashboard", "tasks", "chat"], "business": ["dashboard", "team", "automations"] }
 }
 ```
 
@@ -100,6 +118,7 @@ Valid values:
 - `density`: `"comfortable"` | `"compact"`
 - `corner_style`: `"rounded"` | `"sharp"`
 - `accent_color`: any 6-digit hex like `#f97316`
+- `shortcuts`: workspace-keyed dict of module ID arrays; each list is validated against known module IDs and capped at 4 entries. Allowed workspace keys: `"personal"`, `"business"`.
 
 **Response** `{ "ok": true, ...updated_fields }`
 
@@ -222,7 +241,42 @@ Update hosting configuration. Takes effect immediately without a restart.
 ### `POST /auth/admin/users`
 Create a new user (admin only).
 
-**Body** `{ "email": "bob@example.com", "password": "secret", "name": "Bob", "role": "member" }`
+**Body**
+```json
+{
+  "email": "bob@example.com",
+  "password": "secret",
+  "name": "Bob",
+  "role": "member",
+  "workspaces": ["personal"]
+}
+```
+
+`workspaces` defaults to `["personal"]` if omitted.
+
+### `PATCH /auth/admin/users/{user_id}/workspaces`
+Set which workspaces a user can access. Admin only.
+
+**Body** `{ "workspaces": ["personal", "business"] }`
+
+Valid workspace values: `"personal"`, `"business"`. At least one workspace must remain enabled.
+
+**Response** `{ "ok": true, "workspaces": ["personal", "business"] }`
+
+### `PATCH /auth/admin/users/{user_id}/workspace-modules`
+Set which modules are disabled for a specific workspace. Admin only.
+
+**Body**
+```json
+{
+  "workspace": "business",
+  "disabled_modules": ["notes", "journal"]
+}
+```
+
+Stores workspace-keyed disabled modules in auth.json. Backward compat: if `disabled_modules` is still a flat list (pre-workspace users), it is treated as applying to both workspaces until overwritten.
+
+**Response** `{ "ok": true }`
 
 ### `DELETE /auth/admin/users/{user_id}`
 Delete a user and their Brain folder.
@@ -553,6 +607,52 @@ Update a shared event. **Admin only.**
 
 ### `DELETE /shared/events/{event_id}`
 Delete a shared event. **Admin only.** Returns `204 No Content`.
+
+---
+
+## Team (Business Pool)
+
+Endpoints for the business team pool — tasks and events shared across all business workspace members. Router mounted at `/api/v1/team`. Requires the `team` module to be enabled.
+
+The team pool is completely isolated from the household pool (`/shared`). They share the same task/event shape but use separate pseudo-user stores (`_team` vs `_household`) and separate router code — there is no code path that can cross-contaminate the two pools.
+
+Any authenticated team member may read and write tasks and create events. Event edit/delete operations require admin role.
+
+### `GET /team/tasks`
+List all team tasks.
+
+### `POST /team/tasks`
+Create a team task. `created_by` is set automatically from the auth token.
+
+**Body**
+```json
+{
+  "title": "Quarterly report",
+  "category": "LogCore",
+  "priority": "High",
+  "type": "todo",
+  "due_date": "2026-07-15",
+  "assigned_to": "Bob"
+}
+```
+
+### `PATCH /team/tasks/{task_id}`
+Update a team task.
+
+### `DELETE /team/tasks/{task_id}`
+Delete a team task.
+
+### `GET /team/events`
+List team calendar events.
+
+### `POST /team/events`
+Create a team calendar event. Any team member.
+
+### `PATCH /team/events/{event_id}`
+Update a team event. **Admin only.**
+
+### `DELETE /team/events/{event_id}`
+Delete a team event. **Admin only.** Returns `204 No Content`.
 
 ---
 

@@ -34,6 +34,7 @@ LogCoreOS/
 │   │   │   ├── health.py         → GET /health (no auth, used by Docker healthcheck)
 │   │   │   ├── export.py         → brain zip download (mounted at /api/v1/user)
 │   │   │   ├── shared.py         → household pool: tasks at /shared/tasks, events at /shared/events (admin write)
+│   │   │   ├── team.py           → business team pool: tasks at /team/tasks, events at /team/events; own _team pseudo-user; separate from household
 │   │   │   ├── push.py           → web push subscriptions (VAPID), subscribe/unsubscribe/test
 │   │   │   ├── suggestions.py    → proactive AI suggestion engine + per-user custom schedules + notification inbox
 │   │   │   ├── profile.py        → user Profile.md read/write
@@ -71,25 +72,27 @@ LogCoreOS/
 │   └── frontend/
 │       └── src/
 │           ├── lib/
-│           │   ├── api.js         → ALL API calls go here — never fetch() directly in components
+│           │   ├── api.js         → ALL API calls go here — never fetch() directly in components; injects X-Workspace header on every request
 │           │   ├── auth.jsx       → useAuth() hook + AuthProvider; polls /me every 30s; preferences server-only (not in localStorage)
-│           │   ├── constants.js   → ALL_MODULES registry (must match backend require_module IDs), CATEGORY_COLORS, DEFAULT_SHORTCUTS
+│           │   ├── constants.js   → ALL_MODULES registry (must match backend require_module IDs), CATEGORY_COLORS, DEFAULT_SHORTCUTS, getShortcutsForUser(user, workspace)
+│           │   ├── workspace.jsx  → WorkspaceProvider context + useWorkspace() hook; persists active workspace to localStorage
 │           │   └── theme.js       → CSS variable theme engine (accent color, dark mode, background, density, corners)
 │           ├── pages/
 │           │   ├── Dashboard.jsx  → dashboard: top 3 scored tasks, today's tasks, streaks, Smart Home favourites widget
 │           │   ├── Tasks.jsx      → personal task management (list, filter, priority reorder, edit modal, household assigned tasks)
-│           │   ├── Goals.jsx      → goal tracking (filters tasks where type='goal', shows progress)
+│           │   ├── Goals.jsx      → standalone Goals page at /goals (gated by tasks module): filters tasks where type='goal', progress bar, category grouping
 │           │   ├── Chat.jsx       → AI chat: plan/auto/research modes, proposal cards, step trace, memory save, chat save/load
 │           │   ├── Calendar.jsx   → personal calendar (month grid, events + dated tasks overlay, EventModal)
-│           │   ├── Household.jsx  → household hub: shared task pool (all read/write), shared events (admin write)
+│           │   ├── Household.jsx  → household hub (personal workspace): shared task pool (all read/write), shared events (admin write)
+│           │   ├── Team.jsx        → business team hub (business workspace): shared task pool, shared events — mirrors Household but on _team pool
 │           │   ├── Notes.jsx      → markdown notes with folder tree, auto-save, create/delete/move
 │           │   ├── Journal.jsx    → daily journal (date picker, markdown editor per day, entry list)
 │           │   ├── Brain.jsx      → browse + edit user's Brain markdown files directly
 │           │   ├── Profile.jsx    → edit Profile.md and profile.json fields (priorities, occupation, etc.)
 │           │   ├── Automations.jsx → automations: personal/business n8n workflow cards, import modal, run + logs
 │           │   ├── Home.jsx        → Smart Home: entity tiles by domain, scenes panel, HA automations, favourite stars
-│           │   ├── Admin.jsx      → admin panel (users, feature roles, AI settings, web search, hosting, Infisical, n8n)
-│           │   ├── Settings.jsx   → user settings (appearance, timezone, session, notifications, background upload, shortcuts)
+│           │   ├── Admin.jsx      → admin panel (users, feature roles, workspace access, AI settings, web search, hosting, Infisical, n8n, Smart Home)
+│           │   ├── Settings.jsx   → user settings (appearance, timezone, session, notifications, background upload, shortcuts — server-side per-workspace via PATCH /auth/me)
 │           │   ├── Login.jsx      → login + register form
 │           │   └── Setup.jsx      → first-time setup wizard (Personal/Business profile, priorities, timezone)
 │           └── components/
@@ -107,6 +110,7 @@ LogCoreOS/
 │   ├── Memory/
 │   │   └── Long_Term_Memory.md    → system-wide stable facts (shared AI context)
 │   ├── USERS/_template/           → copied for each new user at setup
+│   │   └── Business/              → placeholder — provisioned as empty business workspace for new users
 │   ├── skills/life-priorities/    → task scoring + recurring task logic
 │   ├── _system/auth.json          → user accounts, JTI blacklist (NEVER commit; volume-mounted)
 │   ├── _system/features.json      → feature flags + custom role definitions (created at first setup)

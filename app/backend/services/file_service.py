@@ -30,20 +30,31 @@ def user_path(user_name: str) -> Path:
     return brain_path() / "USERS" / user_name
 
 
-def tasks_path(user_name: str) -> Path:
-    return user_path(user_name) / "Tasks" / "tasks.json"
+def ws_path(user_name: str, workspace: str = "personal") -> Path:
+    """Return the workspace-scoped base path for a user.
+
+    "personal" → brain/USERS/{name}/   (unchanged paths — backward compat)
+    "business"  → brain/USERS/{name}/Business/
+    Pseudo-users like _household/_team always use the "personal" base.
+    """
+    base = user_path(user_name)
+    return base if workspace == "personal" else base / "Business"
 
 
-def history_path(user_name: str) -> Path:
-    return user_path(user_name) / "Tasks" / "tasks_history.json"
+def tasks_path(user_name: str, workspace: str = "personal") -> Path:
+    return ws_path(user_name, workspace) / "Tasks" / "tasks.json"
 
 
-def override_path(user_name: str) -> Path:
-    return user_path(user_name) / "Tasks" / "daily_override.json"
+def history_path(user_name: str, workspace: str = "personal") -> Path:
+    return ws_path(user_name, workspace) / "Tasks" / "tasks_history.json"
 
 
-def events_path(user_name: str) -> Path:
-    return user_path(user_name) / "Calendar" / "events.json"
+def override_path(user_name: str, workspace: str = "personal") -> Path:
+    return ws_path(user_name, workspace) / "Tasks" / "daily_override.json"
+
+
+def events_path(user_name: str, workspace: str = "personal") -> Path:
+    return ws_path(user_name, workspace) / "Calendar" / "events.json"
 
 
 def automations_path(user_name: str) -> Path:

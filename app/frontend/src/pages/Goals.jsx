@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { tasks as tasksApi, priorities as prioritiesApi } from '../lib/api'
+import { useWorkspace } from '../lib/workspace'
 import TaskModal from '../components/TaskModal'
 import { catColor } from '../lib/constants'
 
-export default function GoalsSection() {
+export default function Goals() {
+  const { workspace } = useWorkspace()
   const [goals, setGoals] = useState([])
   const [categories, setCategories] = useState([])
   const [filter, setFilter] = useState('pending')
@@ -23,7 +25,7 @@ export default function GoalsSection() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [workspace])
 
   async function markDone(id) {
     await tasksApi.update(id, { status: 'done' })

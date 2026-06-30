@@ -195,23 +195,24 @@ def _deliver(user_name: str, title: str, body: str, source: str, delivery: list,
 # Per-user suggestion runners (sync — safe for scheduler + run-now)
 # ---------------------------------------------------------------------------
 
-def _run_daily_digest(user_name: str, cfg: dict) -> dict:
+def _run_daily_digest(user_name: str, cfg: dict, workspace: str = "personal") -> dict:
     from services.priority_service import get_top3
     today = today_for_user(user_name)
-    top3 = get_top3(user_name)
+    top3 = get_top3(user_name, workspace)
     if not top3:
         return {"ok": False, "reason": "no tasks"}
     date_str = f"{today.strftime('%A, %B')} {today.day}"
     lines = "\n".join(f"{i+1}. [{t['category']}] {t['title']}" for i, t in enumerate(top3))
-    title = f"Good morning, {user_name.split()[0]}! — {date_str}"
+    ws_label = f" [{workspace}]" if workspace != "personal" else ""
+    title = f"Good morning, {user_name.split()[0]}!{ws_label} — {date_str}"
     body = f"Your top 3 today:\n\n{lines}"
     _deliver(user_name, title, body, "daily_digest", cfg.get("delivery", ["push"]), url="/tasks")
     return {"ok": True, "fired": "daily_digest"}
 
 
-def _run_overdue_alert(user_name: str, cfg: dict) -> dict:
+def _run_overdue_alert(user_name: str, cfg: dict, workspace: str = "personal") -> dict:
     today_iso = today_for_user(user_name).isoformat()
-    data = read_json(tasks_path(user_name), default={"tasks": []})
+    data = read_json(tasks_path(user_name, workspace), default={"tasks": []})
     overdue = [
         t for t in data.get("tasks", [])
         if t.get("status") == "pending" and t.get("due_date") and t["due_date"] < today_iso
@@ -219,14 +220,15 @@ def _run_overdue_alert(user_name: str, cfg: dict) -> dict:
     if not overdue:
         return {"ok": False, "reason": "no overdue tasks"}
     lines = "\n".join(f"• [{t['category']}] {t['title']} (due {t['due_date']})" for t in overdue)
-    title = f"{len(overdue)} overdue task{'s' if len(overdue) > 1 else ''}"
+    ws_label = f" [{workspace}]" if workspace != "personal" else ""
+    title = f"{len(overdue)} overdue task{'s' if len(overdue) > 1 else ''}{ws_label}"
     _deliver(user_name, title, lines, "overdue_alert", cfg.get("delivery", ["push"]), url="/tasks")
     return {"ok": True, "fired": "overdue_alert", "count": len(overdue)}
 
 
-def _run_weekly_review(user_name: str, cfg: dict) -> dict:
+def _run_weekly_review(user_name: str, cfg: dict, workspace: str = "personal") -> dict:
     week_ago = (today_for_user(user_name) - timedelta(days=7)).isoformat()
-    hpath = history_path(user_name)
+    hpath = history_path(user_name, workspace)
     if not hpath.exists():
         return {"ok": False, "reason": "no history"}
     history = read_json(hpath, default={"tasks": []}).get("tasks", [])
@@ -240,17 +242,18 @@ def _run_weekly_review(user_name: str, cfg: dict) -> dict:
         f"• {cat}: {count} task{'s' if count > 1 else ''}"
         for cat, count in sorted(by_cat.items(), key=lambda x: -x[1])
     )
-    title = f"Weekly review — {len(this_week)} tasks completed"
+    ws_label = f" [{workspace}]" if workspace != "personal" else ""
+    title = f"Weekly review{ws_label} — {len(this_week)} tasks completed"
     body = f"Great week, {user_name.split()[0]}!\n\n{lines}"
     _deliver(user_name, title, body, "weekly_review", cfg.get("delivery", ["push"]))
     return {"ok": True, "fired": "weekly_review", "count": len(this_week)}
 
 
-def _run_goal_drift(user_name: str, cfg: dict) -> dict:
+def _run_goal_drift(user_name: str, cfg: dict, workspace: str = "personal") -> dict:
     days_threshold = cfg.get("days_threshold", 14)
     today = today_for_user(user_name)
     cutoff = (today - timedelta(days=days_threshold)).isoformat()
-    data = read_json(tasks_path(user_name), default={"tasks": []})
+    data = read_json(tasks_path(user_name, workspace), default={"tasks": []})
     drifting = [
         t for t in data.get("tasks", [])
         if t.get("type") == "goal" and t.get("status") == "pending"
@@ -264,7 +267,8 @@ def _run_goal_drift(user_name: str, cfg: dict) -> dict:
     names = ", ".join(t["title"] for t in drifting[:3])
     if len(drifting) > 3:
         names += f" and {len(drifting) - 3} more"
-    title = f"{len(drifting)} goal{'s' if len(drifting) > 1 else ''} need{'s' if len(drifting) == 1 else ''} attention"
+    ws_label = f" [{workspace}]" if workspace != "personal" else ""
+    title = f"{len(drifting)} goal{'s' if len(drifting) > 1 else ''}{ws_label} need{'s' if len(drifting) == 1 else ''} attention"
     body = f"You haven't made progress on: {names}"
     _deliver(user_name, title, body, "goal_drift", cfg.get("delivery", ["push", "in_app"]), url="/tasks")
     return {"ok": True, "fired": "goal_drift", "count": len(drifting)}
@@ -304,29 +308,29 @@ async def _run_custom_async(user_name: str, suggestion: dict) -> dict:
     return {"ok": True, "fired": suggestion["id"]}
 
 
-def run_suggestion_sync(user_name: str, suggestion_id: str) -> dict:
+def run_suggestion_sync(user_name: str, suggestion_id: str, workspace: str = "personal") -> dict:
     """Dispatch and run a suggestion synchronously (scheduler / agent tool)."""
     cfg = get_config(user_name)
     if suggestion_id == "daily_digest":
         c = cfg["daily_digest"]
         if not c.get("enabled", True):
             return {"ok": False, "reason": "disabled"}
-        return _run_daily_digest(user_name, c)
+        return _run_daily_digest(user_name, c, workspace)
     if suggestion_id == "overdue_alert":
         c = cfg["overdue_alert"]
         if not c.get("enabled", True):
             return {"ok": False, "reason": "disabled"}
-        return _run_overdue_alert(user_name, c)
+        return _run_overdue_alert(user_name, c, workspace)
     if suggestion_id == "weekly_review":
         c = cfg["weekly_review"]
         if not c.get("enabled", True):
             return {"ok": False, "reason": "disabled"}
-        return _run_weekly_review(user_name, c)
+        return _run_weekly_review(user_name, c, workspace)
     if suggestion_id == "goal_drift":
         c = cfg["goal_drift"]
         if not c.get("enabled", True):
             return {"ok": False, "reason": "disabled"}
-        return _run_goal_drift(user_name, c)
+        return _run_goal_drift(user_name, c, workspace)
     for c in cfg.get("custom", []):
         if c["id"] == suggestion_id:
             if not c.get("enabled", True):
@@ -335,29 +339,29 @@ def run_suggestion_sync(user_name: str, suggestion_id: str) -> dict:
     return {"error": f"Suggestion {suggestion_id!r} not found"}
 
 
-async def run_suggestion_async(user_name: str, suggestion_id: str) -> dict:
+async def run_suggestion_async(user_name: str, suggestion_id: str, workspace: str = "personal") -> dict:
     """Dispatch and run a suggestion asynchronously (API endpoints)."""
     cfg = get_config(user_name)
     if suggestion_id == "daily_digest":
         c = cfg["daily_digest"]
         if not c.get("enabled", True):
             return {"ok": False, "reason": "disabled"}
-        return _run_daily_digest(user_name, c)
+        return _run_daily_digest(user_name, c, workspace)
     if suggestion_id == "overdue_alert":
         c = cfg["overdue_alert"]
         if not c.get("enabled", True):
             return {"ok": False, "reason": "disabled"}
-        return _run_overdue_alert(user_name, c)
+        return _run_overdue_alert(user_name, c, workspace)
     if suggestion_id == "weekly_review":
         c = cfg["weekly_review"]
         if not c.get("enabled", True):
             return {"ok": False, "reason": "disabled"}
-        return _run_weekly_review(user_name, c)
+        return _run_weekly_review(user_name, c, workspace)
     if suggestion_id == "goal_drift":
         c = cfg["goal_drift"]
         if not c.get("enabled", True):
             return {"ok": False, "reason": "disabled"}
-        return _run_goal_drift(user_name, c)
+        return _run_goal_drift(user_name, c, workspace)
     for c in cfg.get("custom", []):
         if c["id"] == suggestion_id:
             if not c.get("enabled", True):

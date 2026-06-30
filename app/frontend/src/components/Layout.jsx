@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
-import { ALL_MODULES, getShortcuts } from '../lib/constants'
+import { useWorkspace } from '../lib/workspace'
+import { ALL_MODULES, getShortcutsForUser } from '../lib/constants'
 import { suggestions as sugApi } from '../lib/api'
 
 const ADMIN_NAV = { to: '/admin', icon: '⬡', label: 'Admin' }
@@ -114,10 +115,13 @@ function NotifBell() {
 
 export default function Layout() {
   const { user } = useAuth()
+  const { workspace, switchWorkspace } = useWorkspace()
   const navigate = useNavigate()
-  const [shortcuts, setShortcuts] = useState(getShortcuts)
   const [showDrawer, setShowDrawer] = useState(false)
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('lc_sidebar') === 'collapsed')
+
+  const userWorkspaces = user?.workspaces || ['personal']
+  const hasMultipleWorkspaces = userWorkspaces.length > 1
 
   function toggleSidebar() {
     const next = !collapsed
@@ -125,17 +129,11 @@ export default function Layout() {
     localStorage.setItem('lc_sidebar', next ? 'collapsed' : 'expanded')
   }
 
-  // Re-read shortcuts when Settings saves them
-  useEffect(() => {
-    function refresh() { setShortcuts(getShortcuts()) }
-    window.addEventListener('lc_shortcuts_changed', refresh)
-    return () => window.removeEventListener('lc_shortcuts_changed', refresh)
-  }, [])
-
   const disabledIds = new Set(user?.disabledModules || [])
   const visibleModules = ALL_MODULES.filter(m => m.nav !== false && m.to && !disabledIds.has(m.id))
 
-  const shortcutModules = shortcuts
+  // Shortcuts flow from the server-side user object — reactive to workspace + user changes
+  const shortcutModules = getShortcutsForUser(user, workspace)
     .map(id => ALL_MODULES.find(m => m.id === id))
     .filter(m => m && !disabledIds.has(m.id))
 
@@ -165,6 +163,43 @@ export default function Layout() {
             </>
           )}
         </div>
+
+        {/* Workspace toggle pill — only when user has multiple workspaces */}
+        {hasMultipleWorkspaces && !collapsed && (
+          <div className="flex gap-1 p-2 rounded-lg bg-charcoal-100 dark:bg-charcoal-800 mx-2 mt-2">
+            {userWorkspaces.map(w => (
+              <button
+                key={w}
+                onClick={() => switchWorkspace(w)}
+                className={`flex-1 py-1 rounded text-xs capitalize transition-colors ${
+                  workspace === w
+                    ? 'bg-white dark:bg-charcoal-700 shadow font-semibold text-charcoal-900 dark:text-charcoal-100'
+                    : 'text-charcoal-500 dark:text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200'
+                }`}
+              >
+                {w}
+              </button>
+            ))}
+          </div>
+        )}
+        {hasMultipleWorkspaces && collapsed && (
+          <div className="flex flex-col gap-1 px-1 mt-2">
+            {userWorkspaces.map(w => (
+              <button
+                key={w}
+                onClick={() => switchWorkspace(w)}
+                title={w}
+                className={`py-1 rounded text-[10px] capitalize transition-colors ${
+                  workspace === w
+                    ? 'bg-orange-500 text-white font-semibold'
+                    : 'text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200'
+                }`}
+              >
+                {w[0].toUpperCase()}
+              </button>
+            ))}
+          </div>
+        )}
 
         <nav className="flex-1 p-2 space-y-0.5">
           {visibleModules.map(({ id, to, icon, label }) => (

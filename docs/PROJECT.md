@@ -155,11 +155,20 @@ The App currently provides:
 - File modification from chat (read/write/list Brain files via agent tools)
 - Research mode with Tavily web search integration
 
+**Phase 3 (partial — shipped early):**
+
+- n8n Automations integration — personal and business workflow cards, import/run/logs via n8n REST API; business workflows auto-synced from `automations_stubs/` on startup
+- Smart Home (Home Assistant) — entity tiles, scene control, HA automation management, per-user starred favourites on dashboard widget; admin config panel
+- Team module — business-workspace shared task + event pool (`_team`), structurally separate from Household (`_household`); no data can cross between the two
+
+**Phase 4 (partial — shipped early):**
+
+- Workspace switching — personal / business dual-workspace support; per-workspace data paths, module visibility, and feature role defaults; workspace toggle pill in sidebar for dual-access users; admin UI for granting and per-workspace module control
+
 **Planned (future phases):**
 
 - Projects (deferred from Phase 1; roadmapped for Phase 3+)
 - Health tracking
-- Home automation
 - External integrations (Google Calendar, Apple Health, etc.)
 
 ---
@@ -370,16 +379,18 @@ Natural language command interface active. Examples that work now:
 
 ## Phase 3: LogCore Workflows (Automation)
 
-Build a native workflow engine inside the scheduler.
+**Shipped early:**
+- ✅ n8n integration — personal and business workflow management with auto-sync for business stubs
 
-Features:
+**Remaining:**
+
+Build a native workflow engine inside the scheduler.
 
 - Workflow definition format (JSON-based, human-readable)
 - Trigger types: time-based, event-based (task completed, Brain file changed, etc.)
 - Actions: send notification, update Brain file, call external API, run a skill
 - AI-generated workflows ("create an automation that reminds me every Sunday to review my goals")
-- App UI to view, create, and manage workflows
-- n8n export: workflows can be exported to n8n-compatible format for users who prefer n8n — but n8n is never required
+- Native workflow editor in the App UI
 
 The built-in scheduler handles all system jobs. LogCore Workflows handles everything the user defines.
 
@@ -387,13 +398,18 @@ The built-in scheduler handles all system jobs. LogCore Workflows handles everyt
 
 ## Phase 4: Integrations and Migration
 
+**Shipped early:**
+- ✅ Home Assistant smart home integration (entity control, scenes, HA automations, per-user favourites)
+- ✅ Workspace switching — personal / business dual-workspace with isolated data paths, per-workspace modules, and admin-controlled access
+
+**Remaining:**
+
 Develop connectors:
 
 - Existing note applications (Notion, Obsidian, Apple Notes)
 - Calendar systems (Google, Apple)
 - Task managers (Todoist, Things)
 - Health platforms (Apple Health, Garmin)
-- Smart home systems (Home Assistant)
 
 Build AI-assisted migration:
 
@@ -403,13 +419,15 @@ The AI organizes everything into the Brain.
 
 ---
 
-## Phase 5: Family Operating System
+## Phase 5: Family / Business Operating System
 
-Build on the existing multi-user foundation. Foundation already shipped:
+Build on the existing multi-user and workspace foundation. Foundation already shipped:
 
 - ✅ Shared calendar (household events visible to all members, admin-only write)
 - ✅ Shared tasks (household task pool, any member can create/complete, created_by attribution)
 - ✅ Household module tab architecture (Calendar + Tasks tabs; extensible for future tabs)
+- ✅ Team module (business team task + event pool, structurally isolated from Household)
+- ✅ Per-workspace module visibility control (admin sets which modules are active per workspace per user)
 
 Remaining:
 
@@ -417,7 +435,8 @@ Remaining:
 - Family dashboard
 - Shared shopping lists
 - Chore management with assignments
-- Household automation via LogCore Workflows
+- Business-specific features (project tracking, client management, etc.)
+- Household/Team automation via LogCore Workflows
 
 ---
 
