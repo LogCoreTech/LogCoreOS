@@ -142,6 +142,8 @@ Users can have one or both of two workspaces: `personal` and `business`. The act
 
 **workspaces field on users:** `["personal"]`, `["business"]`, or `["personal","business"]`. Users without the field default to `["personal"]`. Admin sets this per user. Frontend shows a toggle pill in the sidebar only when `user.workspaces.length > 1`.
 
+**Sidebar shortcuts:** Persisted in `auth.json` as `shortcuts: {"personal": [...], "business": [...]}` (up to 4 IDs per workspace). `getShortcutsForUser(user, workspace)` in `constants.js` reads from `user.shortcuts?.[workspace]` — a pure function, no localStorage. Settings page saves via `PATCH /auth/me` with the full shortcuts dict and calls `updateUserField('shortcuts', ...)` for an immediate optimistic update in the sidebar.
+
 ### Feature Roles
 Feature roles (custom, e.g. `cleaner`, `nanny`) control which modules are visible per user. Separate from auth roles (`admin`, `member`, `guest`). Stored in `brain/_system/features.json`. `guest` is the default for new users. `member` is the internal fallback. Both are protected built-in roles.
 
@@ -251,10 +253,10 @@ bash launch.sh --reconfigure    # reset docker/.env
 All API calls go through `lib/api.js`. The `request()` function handles 401 by clearing localStorage and redirecting to `/login`. Add new endpoints to the appropriate export object in `api.js`; never `fetch()` directly in components.
 
 ### Auth State
-`useAuth()` returns `{ user, login, logout, updateUserField }`. `user` has `{ name, role, disabledModules, timezone, accentColor, darkMode, background, density, cornerStyle }`. Use `updateUserField(key, value)` for immediate optimistic updates after a successful PATCH /me.
+`useAuth()` returns `{ user, login, logout, updateUserField }`. `user` has `{ name, role, disabledModules, timezone, accentColor, darkMode, background, density, cornerStyle, workspaces, shortcuts }`. Use `updateUserField(key, value)` for immediate optimistic updates after a successful PATCH /me (e.g. `updateUserField('shortcuts', newShortcuts)`).
 
 ### Pages
-15 pages in `pages/`: `Dashboard.jsx`, `Tasks.jsx`, `Goals.jsx`, `Chat.jsx`, `Calendar.jsx`, `Household.jsx`, `Team.jsx`, `Notes.jsx`, `Journal.jsx`, `Brain.jsx`, `Profile.jsx`, `Admin.jsx`, `Settings.jsx`, `Login.jsx`, `Setup.jsx`.
+17 pages in `pages/`: `Dashboard.jsx`, `Tasks.jsx`, `Goals.jsx`, `Chat.jsx`, `Calendar.jsx`, `Household.jsx`, `Team.jsx`, `Notes.jsx`, `Journal.jsx`, `Brain.jsx`, `Profile.jsx`, `Admin.jsx`, `Settings.jsx`, `Login.jsx`, `Setup.jsx`, `Automations.jsx`, `Home.jsx`.
 
 ### Admin-Only Pages
 The `/admin` route is wrapped in `<AdminOnly>` which redirects non-admins to `/`. Admin UI lives in `pages/Admin.jsx`. Render order: UsersCard → RegistrationCard → RolesCard → AiProviderCard → WebSearchCard → HostingCard → InfisicalCard → N8nCard → HomeAssistantCard.
@@ -311,6 +313,10 @@ APScheduler runs 7 fixed jobs plus dynamic per-user custom jobs (all times in `s
 | Custom jobs | User-configured (daily/weekly/interval) | Per-user custom suggestion schedules registered dynamically via `add_custom_job()` |
 
 Custom jobs are registered at startup via `_load_custom_jobs()` (reads all enabled custom suggestions across all users) and dynamically via `add_custom_job(user_name, suggestion)` / `remove_custom_job(user_name, suggestion_id)` when the user adds or deletes a custom suggestion.
+
+**Workspace-aware notification jobs:** The four notification jobs (morning digest, overdue check, weekly review, goal drift) iterate `_all_user_workspace_pairs()` instead of a flat user list. `_all_user_workspace_pairs()` reads each user's `workspaces` field from auth and expands to `(user_name, workspace)` tuples — personal workspace only if the task file exists; business workspace if the user has it. Each pair calls `run_suggestion_sync(user, suggestion_id, workspace)` so business-workspace tasks generate their own separate notification. Business notifications include a `[business]` label suffix in the title.
+
+`_load_custom_jobs()` still iterates a flat user list — custom suggestions are personal-only for now.
 
 ### Task Lifecycle (done tasks)
 
