@@ -87,11 +87,14 @@ Returns current user's profile.
   "dark_mode": "system",
   "background": "gradient:midnight",
   "density": "comfortable",
-  "corner_style": "rounded"
+  "corner_style": "rounded",
+  "shortcuts": { "personal": ["dashboard", "tasks", "chat"] }
 }
 ```
 
 `workspaces` — list of workspaces the user has access to. Possible values: `"personal"`, `"business"`. Defaults to `["personal"]` if absent in auth.json. When a user has both, the frontend shows a toggle pill in the sidebar.
+
+`shortcuts` — workspace-keyed dict of pinned sidebar shortcut module IDs, e.g. `{"personal": ["dashboard", "tasks", "chat"], "business": ["dashboard", "team", "automations"]}`. Each workspace list is capped at 4 entries. Defaults to `{}` (frontend falls back to `DEFAULT_SHORTCUTS`).
 
 ### `PATCH /auth/me`
 Update own profile. All fields optional.
@@ -104,7 +107,8 @@ Update own profile. All fields optional.
   "dark_mode": "dark",
   "background": "gradient:sunset",
   "density": "compact",
-  "corner_style": "sharp"
+  "corner_style": "sharp",
+  "shortcuts": { "personal": ["dashboard", "tasks", "chat"], "business": ["dashboard", "team", "automations"] }
 }
 ```
 
@@ -114,6 +118,7 @@ Valid values:
 - `density`: `"comfortable"` | `"compact"`
 - `corner_style`: `"rounded"` | `"sharp"`
 - `accent_color`: any 6-digit hex like `#f97316`
+- `shortcuts`: workspace-keyed dict of module ID arrays; each list is validated against known module IDs and capped at 4 entries. Allowed workspace keys: `"personal"`, `"business"`.
 
 **Response** `{ "ok": true, ...updated_fields }`
 

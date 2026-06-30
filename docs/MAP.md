@@ -74,13 +74,13 @@ LogCoreOS/
 │           ├── lib/
 │           │   ├── api.js         → ALL API calls go here — never fetch() directly in components; injects X-Workspace header on every request
 │           │   ├── auth.jsx       → useAuth() hook + AuthProvider; polls /me every 30s; preferences server-only (not in localStorage)
-│           │   ├── constants.js   → ALL_MODULES registry (must match backend require_module IDs), CATEGORY_COLORS, DEFAULT_SHORTCUTS
+│           │   ├── constants.js   → ALL_MODULES registry (must match backend require_module IDs), CATEGORY_COLORS, DEFAULT_SHORTCUTS, getShortcutsForUser(user, workspace)
 │           │   ├── workspace.jsx  → WorkspaceProvider context + useWorkspace() hook; persists active workspace to localStorage
 │           │   └── theme.js       → CSS variable theme engine (accent color, dark mode, background, density, corners)
 │           ├── pages/
 │           │   ├── Dashboard.jsx  → dashboard: top 3 scored tasks, today's tasks, streaks, Smart Home favourites widget
 │           │   ├── Tasks.jsx      → personal task management (list, filter, priority reorder, edit modal, household assigned tasks)
-│           │   ├── Goals.jsx      → goal tracking (filters tasks where type='goal', shows progress)
+│           │   ├── Goals.jsx      → standalone Goals page at /goals (gated by tasks module): filters tasks where type='goal', progress bar, category grouping
 │           │   ├── Chat.jsx       → AI chat: plan/auto/research modes, proposal cards, step trace, memory save, chat save/load
 │           │   ├── Calendar.jsx   → personal calendar (month grid, events + dated tasks overlay, EventModal)
 │           │   ├── Household.jsx  → household hub (personal workspace): shared task pool (all read/write), shared events (admin write)
@@ -92,7 +92,7 @@ LogCoreOS/
 │           │   ├── Automations.jsx → automations: personal/business n8n workflow cards, import modal, run + logs
 │           │   ├── Home.jsx        → Smart Home: entity tiles by domain, scenes panel, HA automations, favourite stars
 │           │   ├── Admin.jsx      → admin panel (users, feature roles, workspace access, AI settings, web search, hosting, Infisical, n8n, Smart Home)
-│           │   ├── Settings.jsx   → user settings (appearance, timezone, session, notifications, background upload, shortcuts)
+│           │   ├── Settings.jsx   → user settings (appearance, timezone, session, notifications, background upload, shortcuts — server-side per-workspace via PATCH /auth/me)
 │           │   ├── Login.jsx      → login + register form
 │           │   └── Setup.jsx      → first-time setup wizard (Personal/Business profile, priorities, timezone)
 │           └── components/

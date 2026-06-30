@@ -38,6 +38,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Workspace access checkboxes (personal / business) per user
 - n8n and Smart Home configuration cards
 
+**Goals standalone page**
+- `/goals` route added and gated by the `tasks` module (goals are task-type tasks)
+- 🎯 Goals nav entry added to `ALL_MODULES` — appears in sidebar and shortcuts picker
+- Dashboard and Goals pages re-fetch data immediately on workspace switch
+
+**Scheduler workspace notifications**
+- Morning digest, overdue alerts, weekly review, and goal drift notifications now run per workspace — a business-workspace user receives notifications about their business tasks separately from personal tasks
+- Business workspace notifications include a `[business]` label in the notification title
+
+**Server-side shortcuts**
+- Sidebar shortcuts are now persisted in `auth.json` as `{"personal": [...], "business": [...]}` rather than `localStorage`, so they sync across devices and are per-workspace
+- `PATCH /auth/me` accepts a `shortcuts` dict; `GET /auth/me` returns it
+- Switching workspaces immediately updates the sidebar shortcuts to the saved set for that workspace
+- Fixed bug: `workspaces` field was not included in the user object mapped from `/auth/me`, so the workspace toggle pill never appeared for dual-access users — now fixed
+
 ---
 
 ## [0.1.0] — 2026-06-27
