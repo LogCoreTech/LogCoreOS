@@ -314,8 +314,17 @@ build_frontend() {
 
 # ── Docker ────────────────────────────────────────────────────────────────────
 
+ensure_n8n_env() {
+  local n8n_env="$DOCKER_DIR/n8n.env"
+  if [[ ! -f "$n8n_env" ]]; then
+    touch "$n8n_env"
+    log_info "Created empty docker/n8n.env (populated by LogCore when Infisical is connected)."
+  fi
+}
+
 launch_containers() {
   log_step "Starting Docker containers"
+  ensure_n8n_env
   docker compose \
     -f "$DOCKER_DIR/docker-compose.yml" \
     --project-directory "$DOCKER_DIR" \

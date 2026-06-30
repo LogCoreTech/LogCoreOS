@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { setup as setupApi } from '../lib/api'
 
@@ -14,9 +14,14 @@ export default function Setup() {
   const [categories, setCategories] = useState([...BASE_CATEGORIES])
   const [customCat, setCustomCat] = useState('')
   const [dragIdx, setDragIdx] = useState(null)
+  const [showProfileType, setShowProfileType] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const navigate = useNavigate()
+
+  useEffect(() => {
+    setupApi.status().then(s => setShowProfileType(s.show_profile_type ?? false)).catch(() => {})
+  }, [])
 
   function addCustom() {
     const v = customCat.trim()
@@ -88,32 +93,34 @@ export default function Setup() {
             <div className="space-y-4">
               <h2 className="font-semibold text-lg">About You</h2>
 
-              {/* Profile type */}
-              <div>
-                <p className="block text-sm font-medium mb-2 text-charcoal-700 dark:text-charcoal-300">
-                  How will you use LogCore?
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { value: 'personal', label: '🏠 Personal', desc: 'For yourself and household' },
-                    { value: 'business', label: '💼 Business', desc: 'For teams and employees' },
-                  ].map(opt => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setProfile(opt.value)}
-                      className={`rounded-lg border-2 p-3 text-left transition-colors ${
-                        profile === opt.value
-                          ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
-                          : 'border-charcoal-200 dark:border-charcoal-700 hover:border-charcoal-300 dark:hover:border-charcoal-600'
-                      }`}
-                    >
-                      <p className="text-sm font-medium">{opt.label}</p>
-                      <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mt-0.5">{opt.desc}</p>
-                    </button>
-                  ))}
+              {/* Profile type — only shown for the first user (before features.json is created) */}
+              {showProfileType && (
+                <div>
+                  <p className="block text-sm font-medium mb-2 text-charcoal-700 dark:text-charcoal-300">
+                    How will you use LogCore?
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { value: 'personal', label: '🏠 Personal', desc: 'For yourself and household' },
+                      { value: 'business', label: '💼 Business', desc: 'For teams and employees' },
+                    ].map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setProfile(opt.value)}
+                        className={`rounded-lg border-2 p-3 text-left transition-colors ${
+                          profile === opt.value
+                            ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
+                            : 'border-charcoal-200 dark:border-charcoal-700 hover:border-charcoal-300 dark:hover:border-charcoal-600'
+                        }`}
+                      >
+                        <p className="text-sm font-medium">{opt.label}</p>
+                        <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mt-0.5">{opt.desc}</p>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium mb-1 text-charcoal-700 dark:text-charcoal-300">
@@ -228,7 +235,9 @@ export default function Setup() {
               </p>
 
               <div className="bg-charcoal-100 dark:bg-charcoal-700 rounded-lg p-4 space-y-1">
-                <p className="text-sm"><span className="text-charcoal-500">Profile:</span> {profile === 'business' ? 'Business' : 'Personal'}</p>
+                {showProfileType && (
+                  <p className="text-sm"><span className="text-charcoal-500">Profile:</span> {profile === 'business' ? 'Business' : 'Personal'}</p>
+                )}
                 {role && <p className="text-sm"><span className="text-charcoal-500">Occupation:</span> {role}</p>}
                 <p className="text-sm"><span className="text-charcoal-500">Timezone:</span> {timezone}</p>
                 <p className="text-sm font-medium mt-2">Priority order:</p>

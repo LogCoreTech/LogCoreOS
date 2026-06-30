@@ -59,5 +59,25 @@ services:
       - ntfy_data:/var/lib/ntfy
     command: serve
 
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: logcore-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    env_file:
+      - n8n.env
+    environment:
+      N8N_API_ENABLED: "true"
+      N8N_API_KEY: ${N8N_API_KEY:-logcore-n8n-key}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-change-me-n8n}
+      GENERIC_TIMEZONE: ${SCHEDULER_TIMEZONE:-America/Chicago}
+      N8N_BASIC_AUTH_ACTIVE: "false"
+    depends_on:
+      - app
+
 volumes:
   ntfy_data:
+  n8n_data:

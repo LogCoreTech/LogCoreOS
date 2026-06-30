@@ -111,6 +111,16 @@ def job_cleanup_revoked_jtis():
         logger.exception("revoked JTI cleanup failed")
 
 
+def job_workflow_sync():
+    try:
+        from services.n8n_service import sync_business_workflows
+        result = sync_business_workflows()
+        if any(result.get(k) for k in ("created", "updated", "deleted", "errors")):
+            logger.info("workflow sync: %s", result)
+    except Exception:
+        logger.exception("business workflow sync failed")
+
+
 def _custom_job_id(user_name: str, suggestion_id: str) -> str:
     return f"custom__{user_name}__{suggestion_id}"
 
@@ -175,12 +185,16 @@ def _load_custom_jobs() -> None:
 
 
 def start():
+    from datetime import datetime as _dt, timedelta as _td
     scheduler.add_job(job_recurring_processor,  CronTrigger(hour=0, minute=1),                                              id="recurring")
     scheduler.add_job(job_morning_digest,        CronTrigger(hour=settings.morning_digest_hour, minute=0),                  id="morning")
     scheduler.add_job(job_overdue_check,         CronTrigger(hour=settings.overdue_check_hour, minute=0),                   id="overdue")
     scheduler.add_job(job_weekly_review,         CronTrigger(day_of_week="sun", hour=settings.overdue_check_hour, minute=0), id="weekly")
     scheduler.add_job(job_goal_drift,            CronTrigger(hour=settings.overdue_check_hour, minute=30),                  id="goal_drift")
     scheduler.add_job(job_cleanup_revoked_jtis,  CronTrigger(hour=3, minute=0),                                             id="jti_cleanup")
+    # Workflow sync: 90s after boot (wait for n8n), then every 6 hours
+    scheduler.add_job(job_workflow_sync, "date",     run_date=_dt.now() + _td(seconds=90), id="workflow_sync_boot")
+    scheduler.add_job(job_workflow_sync, IntervalTrigger(hours=6),                          id="workflow_sync_periodic")
     scheduler.start()
     _load_custom_jobs()
     logger.info(

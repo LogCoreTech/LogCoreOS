@@ -57,6 +57,14 @@ def events_path(user_name: str, workspace: str = "personal") -> Path:
     return ws_path(user_name, workspace) / "Calendar" / "events.json"
 
 
+def automations_path(user_name: str) -> Path:
+    return user_path(user_name) / "Automations" / "workflows.json"
+
+
+def system_automations_path() -> Path:
+    return brain_path() / "_system" / "automations_index.json"
+
+
 def profile_path(user_name: str) -> Path:
     return user_path(user_name) / "Profile.md"
 
