@@ -22,13 +22,14 @@ from pathlib import Path
 
 from services.file_service import read_json, write_json
 
-ALL_MODULE_IDS = ["dashboard", "tasks", "calendar", "household", "notes", "journal", "chat", "automations", "automations_business", "home", "team"]
+ALL_MODULE_IDS = ["dashboard", "tasks", "goals", "calendar", "household", "notes", "journal", "chat", "automations", "automations_business", "home", "team"]
 
 _PERSONAL_MEMBER = {m: True for m in ALL_MODULE_IDS if m not in ("automations_business", "team")}
 
 _BUSINESS_MEMBER = {
     "dashboard": True,
     "tasks": True,
+    "goals": True,
     "calendar": True,
     "household": False,
     "notes": True,
@@ -36,7 +37,7 @@ _BUSINESS_MEMBER = {
     "chat": True,
     "automations": True,
     "automations_business": True,
-    "home": True,
+    "home": False,
     "team": True,
 }
 

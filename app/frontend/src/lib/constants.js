@@ -17,18 +17,18 @@ export function catColor(cat) {
 // ── Module registry ────────────────────────────────────────────────────────────
 // Add future modules here — they appear in the drawer and Settings automatically.
 export const ALL_MODULES = [
-  { id: 'dashboard', to: '/',         icon: '⊞', label: 'Dashboard' },
-  { id: 'tasks',     to: '/tasks',    icon: '✓', label: 'Tasks'     },
-  { id: 'goals',     to: '/goals',    icon: '🎯', label: 'Goals'    },
-  { id: 'calendar',  to: '/calendar', icon: '📅', label: 'Calendar'  },
-  { id: 'household', to: '/household',icon: '🏠', label: 'Household' },
-  { id: 'notes',     to: '/notes',    icon: '📝', label: 'Notes'     },
-  { id: 'journal',   to: '/journal',  icon: '📖', label: 'Journal'   },
-  { id: 'chat',      to: '/chat',     icon: '◈', label: 'AI Chat'   },
-  { id: 'automations', to: '/automations', icon: '⚡', label: 'Automations' },
-  { id: 'automations_business', label: 'Business Automations', nav: false },
-  { id: 'home', to: '/home', icon: '💡', label: 'Smart Home' },
-  { id: 'team', to: '/team', icon: '🧑‍🤝‍🧑', label: 'Team' },
+  { id: 'dashboard',            to: '/',             icon: '⊞',          label: 'Dashboard'             },
+  { id: 'tasks',                to: '/tasks',        icon: '✓',           label: 'Tasks'                 },
+  { id: 'goals',                to: '/goals',        icon: '🎯',          label: 'Goals'                 },
+  { id: 'calendar',             to: '/calendar',     icon: '📅',          label: 'Calendar'              },
+  { id: 'household',            to: '/household',    icon: '🏠',          label: 'Household',  workspace: 'personal' },
+  { id: 'notes',                to: '/notes',        icon: '📝',          label: 'Notes'                 },
+  { id: 'journal',              to: '/journal',      icon: '📖',          label: 'Journal',    workspace: 'personal' },
+  { id: 'chat',                 to: '/chat',         icon: '◈',           label: 'AI Chat'               },
+  { id: 'automations',          to: '/automations',  icon: '⚡',          label: 'Automations'           },
+  { id: 'automations_business', nav: false,                               label: 'Business Automations', workspace: 'business' },
+  { id: 'home',                 to: '/home',         icon: '💡',          label: 'Smart Home', workspace: 'personal' },
+  { id: 'team',                 to: '/team',         icon: '🧑‍🤝‍🧑',  label: 'Team',        workspace: 'business' },
 ]
 
 export const DEFAULT_SHORTCUTS = ['dashboard', 'tasks', 'chat']

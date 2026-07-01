@@ -114,7 +114,7 @@ function NotifBell() {
 }
 
 export default function Layout() {
-  const { user } = useAuth()
+  const { user, refreshUser } = useAuth()
   const { workspace, switchWorkspace } = useWorkspace()
   const navigate = useNavigate()
   const [showDrawer, setShowDrawer] = useState(false)
@@ -123,6 +123,18 @@ export default function Layout() {
   const userWorkspaces = user?.workspaces || ['personal']
   const hasMultipleWorkspaces = userWorkspaces.length > 1
 
+  // Auto-switch to first allowed workspace if current one isn't in the user's list
+  useEffect(() => {
+    if (userWorkspaces.length > 0 && !userWorkspaces.includes(workspace)) {
+      switchWorkspace(userWorkspaces[0])
+    }
+  }, [userWorkspaces.join(','), workspace])
+
+  // Re-fetch /me whenever workspace changes so disabled_modules reflects the new workspace
+  useEffect(() => {
+    if (user) refreshUser()
+  }, [workspace])
+
   function toggleSidebar() {
     const next = !collapsed
     setCollapsed(next)
@@ -130,7 +142,10 @@ export default function Layout() {
   }
 
   const disabledIds = new Set(user?.disabledModules || [])
-  const visibleModules = ALL_MODULES.filter(m => m.nav !== false && m.to && !disabledIds.has(m.id))
+  const visibleModules = ALL_MODULES.filter(m =>
+    m.nav !== false && m.to && !disabledIds.has(m.id) &&
+    (!m.workspace || m.workspace === workspace)
+  )
 
   // Shortcuts flow from the server-side user object — reactive to workspace + user changes
   const shortcutModules = getShortcutsForUser(user, workspace)
@@ -328,6 +343,25 @@ export default function Layout() {
             <div className="flex justify-center -mt-3 mb-2">
               <div className="w-10 h-1 rounded-full bg-charcoal-200 dark:bg-charcoal-700" />
             </div>
+
+            {/* Workspace switcher — mobile */}
+            {hasMultipleWorkspaces && (
+              <div className="flex gap-1 mx-5 mb-4 p-1 rounded-lg bg-charcoal-100 dark:bg-charcoal-800">
+                {userWorkspaces.map(w => (
+                  <button
+                    key={w}
+                    onClick={() => { switchWorkspace(w); setShowDrawer(false) }}
+                    className={`flex-1 py-1.5 rounded text-xs capitalize font-medium transition-colors ${
+                      workspace === w
+                        ? 'bg-white dark:bg-charcoal-700 shadow text-charcoal-900 dark:text-charcoal-100'
+                        : 'text-charcoal-500 dark:text-charcoal-400'
+                    }`}
+                  >
+                    {w}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="grid grid-cols-3 gap-3 px-5 pb-4">
               {visibleModules.map(({ id, to, icon, label }) => (
