@@ -296,14 +296,8 @@ export default function Automations() {
   const { user }                  = useAuth()
   const { workspace }             = useWorkspace()
   const isAdmin                   = user?.role === 'admin'
-  const disabled                  = new Set(user?.disabledModules || [])
+  const scope                     = workspace === 'business' ? 'business' : 'personal'
 
-  const TABS = [
-    !disabled.has('automations')                                          && { id: 'personal', label: 'Personal' },
-    !disabled.has('automations_business') && workspace === 'business'     && { id: 'business', label: 'Business' },
-  ].filter(Boolean)
-
-  const [tab, setTab]             = useState(() => TABS[0]?.id || 'personal')
   const [workflows, setWorkflows] = useState([])
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState('')
@@ -346,32 +340,15 @@ export default function Automations() {
     setWorkflows(wfs => [...wfs, record])
   }
 
-  const visible = workflows.filter(w => w.scope === tab)
+  const visible = workflows.filter(w => w.scope === scope)
 
   return (
     <div className="max-w-2xl mx-auto space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-6">
         <h1 className="text-2xl font-bold">Automations</h1>
-        <button onClick={() => setImporting(true)} className="btn-primary text-sm px-3 py-1.5">
+        <button onClick={() => setImporting(true)} className="btn-primary text-sm px-4 py-1.5 rounded-full shrink-0">
           + Import Workflow
         </button>
-      </div>
-
-      {/* Tab bar */}
-      <div className="flex gap-1 bg-charcoal-100 dark:bg-charcoal-800 rounded-lg p-1">
-        {TABS.map(({ id, label }) => (
-          <button
-            key={id}
-            onClick={() => setTab(id)}
-            className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              tab === id
-                ? 'bg-white dark:bg-charcoal-600 text-charcoal-900 dark:text-gray-100 shadow-sm'
-                : 'text-charcoal-500 dark:text-charcoal-400'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
       </div>
 
       {loading && <p className="text-sm text-charcoal-400">Loading…</p>}
@@ -380,9 +357,9 @@ export default function Automations() {
       {!loading && !error && visible.length === 0 && (
         <div className="text-center py-12 text-charcoal-400">
           <p className="text-4xl mb-3">⚡</p>
-          <p className="text-sm font-medium">No {tab} workflows yet</p>
+          <p className="text-sm font-medium">No {scope} workflows yet</p>
           <p className="text-xs mt-1">
-            {tab === 'personal'
+            {scope === 'personal'
               ? 'Import an n8n workflow JSON to get started.'
               : isAdmin
                 ? 'Import a workflow and set scope to Business.'
@@ -408,7 +385,7 @@ export default function Automations() {
 
       {importing && (
         <ImportModal
-          defaultScope={tab}
+          defaultScope={scope}
           isAdmin={isAdmin}
           onClose={() => setImporting(false)}
           onImported={handleImported}

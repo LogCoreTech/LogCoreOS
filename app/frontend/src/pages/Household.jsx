@@ -107,46 +107,9 @@ export default function Household() {
     <div className="w-full max-w-4xl mx-auto space-y-4">
 
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h1 className="text-2xl font-bold">Household</h1>
-          <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mt-0.5">Shared space for everyone</p>
-        </div>
-
-        {/* Tab-aware header actions */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {view === 'calendar' && (
-            <div className="flex gap-1">
-              {['High', 'Medium', 'Low'].map(p => (
-                <button
-                  key={p}
-                  onClick={() => togglePriority(p)}
-                  className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${
-                    shownPriorities.includes(p) ? PRI_ON[p] : PRI_OFF
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-          )}
-          {isAdmin && view === 'calendar' && (
-            <button
-              onClick={() => { setEditEvent(null); setShowEventModal(true) }}
-              className="btn-primary"
-            >
-              + Event
-            </button>
-          )}
-          {isAdmin && (
-            <button
-              onClick={() => { setEditTask(null); setShowTaskModal(true) }}
-              className="btn-ghost"
-            >
-              + Task
-            </button>
-          )}
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold">Household</h1>
+        <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mt-0.5">Shared space for everyone</p>
       </div>
 
       {/* Tab bar */}
@@ -184,6 +147,39 @@ export default function Household() {
             <button onClick={next} className="btn-ghost px-3 py-1.5 text-sm">›</button>
           </div>
 
+          {/* Calendar action bar — priority filters + add buttons */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex gap-1">
+              {['High', 'Medium', 'Low'].map(p => (
+                <button
+                  key={p}
+                  onClick={() => togglePriority(p)}
+                  className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${
+                    shownPriorities.includes(p) ? PRI_ON[p] : PRI_OFF
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+            {isAdmin && (
+              <div className="flex gap-2 ml-auto">
+                <button
+                  onClick={() => { setEditEvent(null); setShowEventModal(true) }}
+                  className="btn-primary text-sm px-3 py-1.5"
+                >
+                  + Event
+                </button>
+                <button
+                  onClick={() => { setEditTask(null); setShowTaskModal(true) }}
+                  className="btn-ghost text-sm px-3 py-1.5"
+                >
+                  + Task
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Calendar grid — full-bleed on mobile, card on desktop */}
           <div className="-mx-4 md:mx-0 md:card md:p-4">
             <CalendarGrid
@@ -207,21 +203,31 @@ export default function Household() {
       {/* ── Tasks tab ── */}
       {view === 'tasks' && (
         <>
-          {/* Filter tabs */}
-          <div className="flex gap-1 bg-charcoal-100 dark:bg-charcoal-800 rounded-lg p-1">
-            {['pending', 'all', 'done', 'overdue'].map(f => (
+          {/* Filter bar + add button */}
+          <div className="flex items-center gap-2">
+            <div className="flex gap-1 bg-charcoal-100 dark:bg-charcoal-800 rounded-lg p-1 flex-1">
+              {['pending', 'all', 'done', 'overdue'].map(f => (
+                <button
+                  key={f}
+                  onClick={() => setTaskFilter(f)}
+                  className={`flex-1 py-1 rounded-md text-xs font-medium capitalize transition-colors ${
+                    taskFilter === f
+                      ? 'bg-white dark:bg-charcoal-600 text-charcoal-900 dark:text-gray-100 shadow-sm'
+                      : 'text-charcoal-500 dark:text-charcoal-400'
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+            {isAdmin && (
               <button
-                key={f}
-                onClick={() => setTaskFilter(f)}
-                className={`flex-1 py-1 rounded-md text-xs font-medium capitalize transition-colors ${
-                  taskFilter === f
-                    ? 'bg-white dark:bg-charcoal-600 text-charcoal-900 dark:text-gray-100 shadow-sm'
-                    : 'text-charcoal-500 dark:text-charcoal-400'
-                }`}
+                onClick={() => { setEditTask(null); setShowTaskModal(true) }}
+                className="btn-primary text-sm px-3 py-1.5 shrink-0"
               >
-                {f}
+                + Task
               </button>
-            ))}
+            )}
           </div>
 
           {/* Task list */}
