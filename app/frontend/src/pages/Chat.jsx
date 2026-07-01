@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { chat as chatApi, suggestions as sugApi, brain as brainApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useWorkspace } from '../lib/workspace'
 
 function ProposalCard({ step, onConfirm, onCancel }) {
   const { summary, actions } = step.output || {}
@@ -94,6 +95,8 @@ function StepTrace({ steps }) {
 
 export default function Chat() {
   const { user } = useAuth()
+  const { workspace } = useWorkspace()
+  const hasBothWorkspaces = (user?.workspaces?.length ?? 0) > 1
   const navigate = useNavigate()
   const [messages, setMessages] = useState([
     {
@@ -106,6 +109,7 @@ export default function Chat() {
   const [loading, setLoading] = useState(false)
   const [continuedFromFile, setContinuedFromFile] = useState(null) // { filename, title }
   const [chatMode, setChatMode] = useState('plan')
+  const [crossWorkspace, setCrossWorkspace] = useState(false)
   const [showModeDrawer, setShowModeDrawer] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [savedChats, setSavedChats] = useState([])
@@ -147,6 +151,15 @@ export default function Chat() {
     return () => document.removeEventListener('mousedown', handler)
   }, [showModeDrawer])
 
+  // When workspace changes, reload saved chats list (if panel open) and clear cross-workspace toggle
+  useEffect(() => {
+    setCrossWorkspace(false)
+    setContinuedFromFile(null)
+    if (showHistory) {
+      chatApi.listSaved().then(list => setSavedChats(list || [])).catch(() => setSavedChats([]))
+    }
+  }, [workspace])
+
   // Auto-save after each AI response
   useEffect(() => {
     if (loading) return
@@ -184,7 +197,7 @@ export default function Chat() {
 
     try {
       const history = updated.slice(1, -1).map(m => ({ role: m.role, content: m.content }))
-      const res = await chatApi.send(msg, history, chatMode)
+      const res = await chatApi.send(msg, history, chatMode, crossWorkspace)
       setMessages([...updated, {
         role: 'assistant',
         content: res.response,
@@ -394,6 +407,20 @@ export default function Chat() {
           )}
         </div>
 
+        {hasBothWorkspaces && (
+          <button
+            type="button"
+            onClick={() => setCrossWorkspace(x => !x)}
+            title="Search both personal and business brain files"
+            className={`text-xs px-2 py-1 rounded border font-medium transition-colors ${
+              crossWorkspace
+                ? 'bg-blue-500 border-blue-500 text-white'
+                : 'btn-ghost border-transparent'
+            }`}
+          >
+            {crossWorkspace ? 'Both workspaces' : 'This workspace'}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => navigate('/brain?file=Short_Term_Memory.md', { state: { from: '/chat' } })}

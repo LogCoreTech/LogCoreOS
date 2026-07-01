@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { tasks as tasksApi, priorities as prioritiesApi, shared as sharedApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useWorkspace } from '../lib/workspace'
 import TaskModal from '../components/TaskModal'
 import { catColor } from '../lib/constants'
 
@@ -8,6 +9,7 @@ const PRIORITY_ORDER = ['High', 'Medium', 'Low']
 
 export default function Tasks() {
   const { user } = useAuth()
+  const { workspace } = useWorkspace()
   const [taskList, setTaskList] = useState([])
   const [assignedHouseholdTasks, setAssignedHouseholdTasks] = useState([])
   const [priorityOrder, setPriorityOrder] = useState([])
@@ -39,7 +41,7 @@ export default function Tasks() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [user?.name])
+  useEffect(() => { load() }, [user?.name, workspace])
 
   async function toggleDone(task) {
     const newStatus = task.status === 'done' ? 'pending' : 'done'

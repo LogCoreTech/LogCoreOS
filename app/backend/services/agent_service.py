@@ -9,6 +9,7 @@ from services import profile_service, push_service, auth_service
 from services.ai_provider import agent_completion
 from services.file_service import (
     user_path,
+    ws_path,
     brain_path,
     read_json,
     write_json,
@@ -641,7 +642,10 @@ def _get_tools(user: dict) -> list[dict]:
 # Tool executor
 # ---------------------------------------------------------------------------
 
-def _execute_tool(name: str, inputs: dict, user: dict) -> Any:
+def _execute_tool(
+    name: str, inputs: dict, user: dict,
+    workspace: str = "personal", cross_workspace: bool = False,
+) -> Any:
     """Run one tool; return result or an error dict — never raises."""
     try:
         match name:
@@ -670,7 +674,7 @@ def _execute_tool(name: str, inputs: dict, user: dict) -> Any:
                 return priority_service.get_all_scored(user["name"])
 
             case "list_brain_files":
-                base = user_path(user["name"])
+                base = ws_path(user["name"], workspace)
                 if not base.exists():
                     return []
                 files = []
@@ -681,10 +685,17 @@ def _execute_tool(name: str, inputs: dict, user: dict) -> Any:
                 return files
 
             case "read_brain_file":
-                path = resolve_user_md_path(user["name"], inputs["path"])
-                if not path.exists():
+                raw = inputs["path"].lstrip("/")
+                parts = raw.split("/")
+                if any(p in ("", ".", "..") for p in parts) or not raw.endswith(".md"):
+                    return {"error": "Access denied"}
+                base = ws_path(user["name"], workspace)
+                candidate = (base / raw).resolve()
+                if not candidate.is_relative_to(user_path(user["name"]).resolve()):
+                    return {"error": "Access denied"}
+                if not candidate.exists():
                     return {"error": f"File not found: {inputs['path']!r}"}
-                return read_markdown(path)
+                return read_markdown(candidate)
 
             case "write_brain_file":
                 path = resolve_user_md_path(user["name"], inputs["path"])
@@ -737,7 +748,7 @@ def _execute_tool(name: str, inputs: dict, user: dict) -> Any:
                 from datetime import date
                 target = inputs.get("target", "short")
                 fname = "Long_Term_Memory.md" if target == "long" else "Short_Term_Memory.md"
-                mem_path = user_path(user["name"]) / fname
+                mem_path = ws_path(user["name"], workspace) / fname
                 today = date.today().isoformat()
                 existing = mem_path.read_text() if mem_path.exists() else ""
                 safe_content = inputs["content"].replace("</brain_data>", "[/brain_data]")
@@ -748,7 +759,7 @@ def _execute_tool(name: str, inputs: dict, user: dict) -> Any:
             case "rewrite_memory":
                 target = inputs.get("target", "short")
                 fname = "Long_Term_Memory.md" if target == "long" else "Short_Term_Memory.md"
-                mem_path = user_path(user["name"]) / fname
+                mem_path = ws_path(user["name"], workspace) / fname
                 safe_content = inputs["content"].replace("</brain_data>", "[/brain_data]")
                 write_markdown(mem_path, safe_content)
                 return {"ok": True, "target": fname}
@@ -763,23 +774,35 @@ def _execute_tool(name: str, inputs: dict, user: dict) -> Any:
 
             case "search_brain":
                 query = inputs["query"].lower()
-                base = user_path(user["name"])
+                personal_base = user_path(user["name"])
+                business_base = personal_base / "Business"
+                if cross_workspace:
+                    search_roots = [
+                        ("personal", personal_base),
+                        ("business", business_base),
+                    ]
+                else:
+                    search_roots = [(workspace, ws_path(user["name"], workspace))]
                 results = []
-                for p in sorted(base.rglob("*.md")):
-                    rel = p.relative_to(base)
-                    if any(part in _BRAIN_SKIP for part in rel.parts):
+                for ws_label, base in search_roots:
+                    if not base.exists():
                         continue
-                    try:
-                        text = p.read_text()
-                    except OSError:
-                        continue
-                    idx = text.lower().find(query)
-                    if idx == -1:
-                        continue
-                    start = max(0, idx - 100)
-                    end = min(len(text), idx + 200)
-                    snippet = text[start:end].strip()
-                    results.append({"path": str(rel), "snippet": snippet})
+                    for p in sorted(base.rglob("*.md")):
+                        rel = p.relative_to(base)
+                        if any(part in _BRAIN_SKIP for part in rel.parts):
+                            continue
+                        try:
+                            text = p.read_text()
+                        except OSError:
+                            continue
+                        idx = text.lower().find(query)
+                        if idx == -1:
+                            continue
+                        start = max(0, idx - 100)
+                        end = min(len(text), idx + 200)
+                        snippet = text[start:end].strip()
+                        path_label = f"{ws_label}/{rel}" if cross_workspace else str(rel)
+                        results.append({"path": path_label, "snippet": snippet})
                 return results
 
             case "move_note":
@@ -1006,7 +1029,10 @@ def _execute_tool(name: str, inputs: dict, user: dict) -> Any:
 # Agent loop
 # ---------------------------------------------------------------------------
 
-async def run_agent(user: dict, goal: str, history: list[dict], system: str, mode: str = "plan") -> dict:
+async def run_agent(
+    user: dict, goal: str, history: list[dict], system: str,
+    mode: str = "plan", workspace: str = "personal", cross_workspace: bool = False,
+) -> dict:
     """Run the agent loop and return a run record."""
     run_id = str(uuid.uuid4())
     started_at = datetime.now(timezone.utc).isoformat()
@@ -1052,7 +1078,7 @@ async def run_agent(user: dict, goal: str, history: list[dict], system: str, mod
             }
             steps.append(step_entry)
 
-            result = _execute_tool(tc.name, tc.input, user)
+            result = _execute_tool(tc.name, tc.input, user, workspace=workspace, cross_workspace=cross_workspace)
             step_entry["output"] = result
 
             result_str = json.dumps(result) if not isinstance(result, str) else result
