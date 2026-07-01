@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
 import { ALL_MODULES, getShortcutsForUser } from '../lib/constants'
@@ -117,6 +117,7 @@ export default function Layout() {
   const { user, refreshUser } = useAuth()
   const { workspace, switchWorkspace } = useWorkspace()
   const navigate = useNavigate()
+  const location = useLocation()
   const [showDrawer, setShowDrawer] = useState(false)
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('lc_sidebar') === 'collapsed')
 
@@ -130,9 +131,14 @@ export default function Layout() {
     }
   }, [userWorkspaces.join(','), workspace])
 
-  // Re-fetch /me whenever workspace changes so disabled_modules reflects the new workspace
+  // Re-fetch /me whenever workspace changes so disabled_modules reflects the new workspace.
+  // Also redirect to dashboard if the current page is restricted to the other workspace.
   useEffect(() => {
     if (user) refreshUser()
+    const currentModule = ALL_MODULES.find(m => m.to && location.pathname.startsWith(m.to))
+    if (currentModule?.workspace && currentModule.workspace !== workspace) {
+      navigate('/')
+    }
   }, [workspace])
 
   function toggleSidebar() {

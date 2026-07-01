@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { calendar as calendarApi, shared as sharedApi } from '../lib/api'
+import { calendar as calendarApi, shared as sharedApi, team as teamApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useWorkspace } from '../lib/workspace'
 import TaskModal from '../components/TaskModal'
 import EventModal from '../components/EventModal'
 import CalendarGrid from '../components/CalendarGrid'
@@ -14,8 +15,8 @@ const PRI_ON = {
 }
 const PRI_OFF = 'bg-transparent text-charcoal-500 dark:text-charcoal-400 border-charcoal-300 dark:border-charcoal-600'
 
-const HH_ON  = 'bg-blue-500 text-white border-blue-500'
-const HH_OFF = 'bg-transparent text-charcoal-500 dark:text-charcoal-400 border-charcoal-300 dark:border-charcoal-600'
+const POOL_ON  = 'bg-blue-500 text-white border-blue-500'
+const POOL_OFF = 'bg-transparent text-charcoal-500 dark:text-charcoal-400 border-charcoal-300 dark:border-charcoal-600'
 
 function todayStr() {
   const d = new Date()
@@ -24,50 +25,55 @@ function todayStr() {
 
 export default function Calendar() {
   const { user } = useAuth()
+  const { workspace } = useWorkspace()
   const isAdmin  = user?.role === 'admin'
+  const isPersonal = workspace === 'personal'
+  const poolApi  = isPersonal ? sharedApi : teamApi
+  const poolEmoji = isPersonal ? '🏠' : '🧑‍🤝‍🧑'
+  const poolLabel = isPersonal ? 'Household' : 'Teams'
 
   const today = new Date()
   const [year, setYear]   = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
-  const [tasks, setTasks]                     = useState([])
-  const [assignedHouseholdTasks, setAssignedHouseholdTasks] = useState([])
-  const [events, setEvents]                   = useState([])
-  const [householdEvents, setHouseholdEvents] = useState([])
+  const [tasks, setTasks]               = useState([])
+  const [assignedPoolTasks, setAssignedPoolTasks] = useState([])
+  const [events, setEvents]             = useState([])
+  const [poolEvents, setPoolEvents]     = useState([])
   const [selected, setSelected] = useState(todayStr())
   const [shownPriorities, setShownPriorities] = useState(['High', 'Medium', 'Low'])
-  const [showHousehold, setShowHousehold]     = useState(true)
-  const [showModal, setShowModal]           = useState(false)
-  const [editTask, setEditTask]             = useState(null)
+  const [showPool, setShowPool]         = useState(true)
+  const [showModal, setShowModal]       = useState(false)
+  const [editTask, setEditTask]         = useState(null)
   const [showEventModal, setShowEventModal] = useState(false)
-  const [editEvent, setEditEvent]           = useState(null)
+  const [editEvent, setEditEvent]       = useState(null)
   const [loading, setLoading] = useState(true)
 
-  const householdEventApi = {
-    add:    body       => sharedApi.addSharedEvent(body),
-    update: (id, body) => sharedApi.updateSharedEvent(id, body),
-    remove: id         => sharedApi.removeSharedEvent(id),
+  const poolEventApi = {
+    add:    body       => poolApi.addSharedEvent(body),
+    update: (id, body) => poolApi.updateSharedEvent(id, body),
+    remove: id         => poolApi.removeSharedEvent(id),
   }
 
   async function load() {
     setLoading(true)
-    const [t, e, he, ht] = await Promise.allSettled([
+    const [t, e, pe, pt] = await Promise.allSettled([
       calendarApi.tasks(),
       calendarApi.events(),
-      sharedApi.sharedEvents(),
-      sharedApi.list(),
+      poolApi.sharedEvents(),
+      poolApi.list(),
     ])
-    if (t.status === 'fulfilled') setTasks(t.value)
-    if (e.status === 'fulfilled') setEvents(e.value)
-    if (he.status === 'fulfilled') setHouseholdEvents(he.value)
-    if (ht.status === 'fulfilled') {
-      setAssignedHouseholdTasks(
-        ht.value.filter(task => task.assigned_to === user?.name)
+    if (t.status  === 'fulfilled') setTasks(t.value)
+    if (e.status  === 'fulfilled') setEvents(e.value)
+    if (pe.status === 'fulfilled') setPoolEvents(pe.value)
+    if (pt.status === 'fulfilled') {
+      setAssignedPoolTasks(
+        pt.value.filter(task => task.assigned_to === user?.name)
       )
     }
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [user?.name])
+  useEffect(() => { load() }, [user?.name, workspace])
 
   function prev() {
     if (month === 0) { setYear(y => y - 1); setMonth(11) }
@@ -91,17 +97,17 @@ export default function Calendar() {
 
   const allCalendarTasks = [
     ...tasks.filter(t => t.status !== 'done'),
-    ...assignedHouseholdTasks.filter(t => t.status !== 'done').map(t => ({ ...t, _household: true })),
+    ...assignedPoolTasks.filter(t => t.status !== 'done').map(t => ({ ...t, _household: true, _poolEmoji: poolEmoji })),
   ]
   const visibleTasks = allCalendarTasks.filter(t => shownPriorities.includes(t.priority))
 
-  // Merge personal + household events; tag household ones
+  // Merge personal + shared pool events; tag pool ones for CalendarGrid display
   const allEvents = [
     ...events,
-    ...(showHousehold ? householdEvents.map(e => ({ ...e, _household: true })) : []),
+    ...(showPool ? poolEvents.map(e => ({ ...e, _household: true, _poolEmoji: poolEmoji })) : []),
   ]
 
-  const isHouseholdEv = editEvent?._household === true
+  const isPoolEv = editEvent?._household === true
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">
@@ -122,12 +128,12 @@ export default function Calendar() {
               </button>
             ))}
             <button
-              onClick={() => setShowHousehold(h => !h)}
+              onClick={() => setShowPool(h => !h)}
               className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${
-                showHousehold ? HH_ON : HH_OFF
+                showPool ? POOL_ON : POOL_OFF
               }`}
             >
-              🏠
+              {poolEmoji}
             </button>
           </div>
           <button
@@ -193,9 +199,10 @@ export default function Calendar() {
         <EventModal
           event={editEvent}
           defaultDate={selected || undefined}
-          saveApi={isHouseholdEv ? householdEventApi : undefined}
-          householdSaveApi={!isHouseholdEv ? householdEventApi : undefined}
-          isHouseholdEvent={isHouseholdEv}
+          saveApi={isPoolEv ? poolEventApi : undefined}
+          poolSaveApi={!isPoolEv ? poolEventApi : undefined}
+          poolLabel={poolLabel}
+          isHouseholdEvent={isPoolEv}
           onClose={() => { setShowEventModal(false); setEditEvent(null) }}
           onSave={() => { setShowEventModal(false); setEditEvent(null); load() }}
         />

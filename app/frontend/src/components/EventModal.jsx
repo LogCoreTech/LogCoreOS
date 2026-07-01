@@ -13,9 +13,10 @@ export const EVENT_COLORS = {
 }
 
 // saveApi: { add, update, remove } — defaults to personal calendar endpoints
-// householdSaveApi: same shape, household endpoints — enables "Add to Household" button
-// isHouseholdEvent: true when the event being edited is already a household event
-export default function EventModal({ event, defaultDate, onClose, onSave, saveApi, householdSaveApi, isHouseholdEvent }) {
+// poolSaveApi: same shape, shared pool endpoints — enables "Add to Household/Teams" button
+// poolLabel: display name for the shared pool ('Household' or 'Teams')
+// isHouseholdEvent: true when the event being edited is already a shared pool event
+export default function EventModal({ event, defaultDate, onClose, onSave, saveApi, poolSaveApi, poolLabel = 'Household', isHouseholdEvent }) {
   const editing = !!event
   const api = saveApi || {
     add:    (body)       => calendarApi.addEvent(body),
@@ -33,7 +34,7 @@ export default function EventModal({ event, defaultDate, onClose, onSave, saveAp
     color:      event?.color      || 'blue',
     notes:      event?.notes      || '',
   })
-  const [shareToHousehold, setShareToHousehold] = useState(false)
+  const [shareToPool, setShareToPool] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
 
@@ -60,13 +61,13 @@ export default function EventModal({ event, defaultDate, onClose, onSave, saveAp
         notes:      form.notes      || null,
       }
 
-      if (shareToHousehold && householdSaveApi) {
+      if (shareToPool && poolSaveApi) {
         if (editing) {
-          // Convert personal → household: delete personal, create household
+          // Convert personal → shared pool: delete personal, create in pool
           await api.remove(event.id)
-          await householdSaveApi.add(payload)
+          await poolSaveApi.add(payload)
         } else {
-          await householdSaveApi.add(payload)
+          await poolSaveApi.add(payload)
         }
       } else if (editing) {
         await api.update(event.id, payload)
@@ -201,18 +202,18 @@ export default function EventModal({ event, defaultDate, onClose, onSave, saveAp
             />
           </div>
 
-          {/* Add to Household toggle — only shown when householdSaveApi provided and not already a household event */}
-          {householdSaveApi && !isHouseholdEvent && (
+          {/* Add to shared pool toggle — shown when poolSaveApi provided and not already a pool event */}
+          {poolSaveApi && !isHouseholdEvent && (
             <button
               type="button"
-              onClick={() => setShareToHousehold(h => !h)}
+              onClick={() => setShareToPool(h => !h)}
               className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                shareToHousehold
+                shareToPool
                   ? 'bg-blue-500 border-blue-500 text-white'
                   : 'border-charcoal-300 dark:border-charcoal-600 text-charcoal-600 dark:text-charcoal-300 hover:border-blue-400 hover:text-blue-500'
               }`}
             >
-              🏠 {shareToHousehold ? 'Will be added to Household' : 'Add to Household'}
+              {shareToPool ? `Will be added to ${poolLabel}` : `Add to ${poolLabel}`}
             </button>
           )}
 
@@ -227,7 +228,7 @@ export default function EventModal({ event, defaultDate, onClose, onSave, saveAp
             )}
             <button type="button" onClick={onClose} className="btn-ghost flex-1">Cancel</button>
             <button type="submit" disabled={loading} className="btn-primary flex-1">
-              {loading ? 'Saving…' : editing ? 'Save Changes' : shareToHousehold ? 'Add to Household' : 'Add Event'}
+              {loading ? 'Saving…' : editing ? 'Save Changes' : shareToPool ? `Add to ${poolLabel}` : 'Add Event'}
             </button>
           </div>
         </form>

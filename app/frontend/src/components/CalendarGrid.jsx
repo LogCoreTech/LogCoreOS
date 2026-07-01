@@ -216,7 +216,7 @@ function WeekRow({ dates, events, visibleTasks, year, month, selectedDay, onSele
               }}
             >
               {!startsHere && <span className="text-[9px] mr-0.5 opacity-80">◀</span>}
-              {ev._household && startsHere && <span className="text-[9px] mr-0.5 opacity-90">🏠</span>}
+              {ev._household && startsHere && <span className="text-[9px] mr-0.5 opacity-90">{ev._poolEmoji || '🏠'}</span>}
               <span className="text-[11px] leading-none overflow-hidden whitespace-nowrap flex-1 font-medium">{ev.title}</span>
               {!endsHere && <span className="text-[9px] ml-0.5 opacity-80">▶</span>}
             </div>
@@ -418,7 +418,7 @@ export default function CalendarGrid({
                       style={{ backgroundColor: EVENT_COLORS[ev.color] || '#3b82f6' }}
                     />
                     <span className="flex-1 text-sm">{ev.title}</span>
-                    {ev._household && <span className="text-xs shrink-0">🏠</span>}
+                    {ev._household && <span className="text-xs shrink-0">{ev._poolEmoji || '🏠'}</span>}
                     {ev.created_by && (
                       <span className="text-xs text-charcoal-400 shrink-0">{ev.created_by}</span>
                     )}

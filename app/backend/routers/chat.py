@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
 from config import settings
-from routers.auth import get_current_user, require_module
+from routers.auth import get_current_user, get_workspace, require_module
 from services.auth_service import today_for_user
 from services.file_service import (
     read_markdown,
@@ -13,6 +13,7 @@ from services.file_service import (
     tasks_path,
     read_json,
     user_path,
+    ws_path,
 )
 from services.ai_provider import chat_completion, is_ai_configured
 from services.agent_service import run_agent
@@ -35,23 +36,27 @@ def _safe(content: str) -> str:
     return f"<brain_data>\n{escaped}\n</brain_data>"
 
 
-def _build_context(user_name: str) -> str:
-    """Assemble the user's Brain context for the AI system prompt."""
+def _build_context(user_name: str, workspace: str = "personal") -> str:
+    """Assemble the user's Brain context for the AI system prompt.
+
+    Profile.md is personal-only. Memory and tasks are scoped to the active workspace.
+    """
     parts = []
+    base = ws_path(user_name, workspace)
 
     pf = profile_path(user_name)
     if pf.exists():
         parts.append(f"# User Profile\n\n{_safe(read_markdown(pf))}")
 
-    ltm = user_path(user_name) / "Long_Term_Memory.md"
+    ltm = base / "Long_Term_Memory.md"
     if ltm.exists():
         parts.append(f"# Long-Term Memory\n\n{_safe(read_markdown(ltm))}")
 
-    stm = user_path(user_name) / "Short_Term_Memory.md"
+    stm = base / "Short_Term_Memory.md"
     if stm.exists():
         parts.append(f"# Short-Term Memory\n\n{_safe(read_markdown(stm))}")
 
-    tp = tasks_path(user_name)
+    tp = tasks_path(user_name, workspace)
     if tp.exists():
         tasks = read_json(tp).get("tasks", [])
         pending = [t for t in tasks if t.get("status") == "pending"]
@@ -74,6 +79,7 @@ class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=5000)
     history: list[HistoryMessage] = Field(default=[], max_length=50)
     mode: Literal["plan", "auto", "research"] = "plan"
+    cross_workspace: bool = False
 
     @model_validator(mode="after")
     def validate_history_alternates(self):
@@ -94,6 +100,7 @@ class ChatRequest(BaseModel):
 async def chat(
     req: ChatRequest,
     current_user: dict = Depends(_require_chat),
+    workspace: str = Depends(get_workspace),
     _rl: None = Depends(_chat_limit),
 ):
     if not is_ai_configured():
@@ -150,11 +157,14 @@ async def chat(
         "When the user asks you to take an action, use the appropriate tool.\n\n"
         + mode_block
         + tool_guidance
-        + _build_context(current_user["name"])
+        + _build_context(current_user["name"], workspace)
     )
 
     history = [m.model_dump() for m in req.history]
-    result = await run_agent(current_user, req.message, history, system_prompt, mode=req.mode)
+    result = await run_agent(
+        current_user, req.message, history, system_prompt,
+        mode=req.mode, workspace=workspace, cross_workspace=req.cross_workspace,
+    )
 
     return {
         "response": result["final_answer"],
@@ -172,6 +182,7 @@ class SaveMemoryRequest(BaseModel):
 async def save_memory(
     req: SaveMemoryRequest,
     current_user: dict = Depends(_require_chat),
+    workspace: str = Depends(get_workspace),
     _rl: None = Depends(_memory_limit),
 ):
     if not is_ai_configured():
@@ -190,7 +201,7 @@ async def save_memory(
     )
 
     fname = "Long_Term_Memory.md" if req.target == "long" else "Short_Term_Memory.md"
-    mem_path = user_path(current_user["name"]) / fname
+    mem_path = ws_path(current_user["name"], workspace) / fname
     today = today_for_user(current_user["name"]).isoformat()
 
     existing = mem_path.read_text() if mem_path.exists() else ""
@@ -215,6 +226,7 @@ class ChatSaveRequest(BaseModel):
 async def save_chat(
     req: ChatSaveRequest,
     current_user: dict = Depends(_require_chat),
+    workspace: str = Depends(get_workspace),
     _rl: None = Depends(_save_limit),
 ):
     from datetime import datetime
@@ -226,7 +238,7 @@ async def save_chat(
     except Exception:
         now = datetime.now(ZoneInfo("UTC"))
 
-    chats_dir = user_path(current_user["name"]) / "Chats"
+    chats_dir = ws_path(current_user["name"], workspace) / "Chats"
     chats_dir.mkdir(parents=True, exist_ok=True)
 
     # Overwrite existing file if filename provided, otherwise create new
@@ -260,8 +272,11 @@ async def save_chat(
 
 
 @router.get("/saved")
-def list_saved_chats(current_user: dict = Depends(_require_chat)):
-    chats_dir = user_path(current_user["name"]) / "Chats"
+def list_saved_chats(
+    current_user: dict = Depends(_require_chat),
+    workspace: str = Depends(get_workspace),
+):
+    chats_dir = ws_path(current_user["name"], workspace) / "Chats"
     if not chats_dir.exists():
         return []
     files = sorted(chats_dir.glob("*.md"), reverse=True)
@@ -277,8 +292,12 @@ def list_saved_chats(current_user: dict = Depends(_require_chat)):
 
 
 @router.delete("/saved/{filename}")
-def delete_saved_chat(filename: str, current_user: dict = Depends(_require_chat)):
-    chats_dir = user_path(current_user["name"]) / "Chats"
+def delete_saved_chat(
+    filename: str,
+    current_user: dict = Depends(_require_chat),
+    workspace: str = Depends(get_workspace),
+):
+    chats_dir = ws_path(current_user["name"], workspace) / "Chats"
     target = (chats_dir / filename).resolve()
     if not target.is_relative_to(chats_dir.resolve()):
         raise HTTPException(status_code=400, detail="Invalid filename")

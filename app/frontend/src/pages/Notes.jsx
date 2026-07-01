@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { notes as notesApi } from '../lib/api'
+import { useWorkspace } from '../lib/workspace'
 
 // ── Tree builder ─────────────────────────────────────────────────────────────
 
@@ -145,6 +146,7 @@ function Modal({ title, children, onClose }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function Notes() {
+  const { workspace } = useWorkspace()
   const [items, setItems]           = useState([])
   const [tree, setTree]             = useState([])
   const [loading, setLoading]       = useState(true)
@@ -174,7 +176,7 @@ export default function Notes() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [workspace])
 
   useEffect(() => { load() }, [load])
 

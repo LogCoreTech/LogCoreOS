@@ -93,7 +93,7 @@ export const profile = {
 }
 
 export const chat = {
-  send:       (message, history, mode = 'plan') => post('/chat', { message, history, mode }),
+  send:       (message, history, mode = 'plan', crossWorkspace = false) => post('/chat', { message, history, mode, cross_workspace: crossWorkspace }),
   saveMemory: (history, target = 'short') => post('/chat/save-memory',  { history, target }),
   saveChat:   (history, name = '', filename = '') => post('/chat/save', { history, name, filename }),
   listSaved:  ()                          => get('/chat/saved'),
