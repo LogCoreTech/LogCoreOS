@@ -29,11 +29,11 @@ export default function Login() {
         // Login sets the auth cookie; status check must come after so it has auth
         const me = await authApi.login(email, password)
         const status = await setupApi.status()
-        login(me.id, me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC', me.accent_color || null, me.dark_mode || 'system', me.background || null, me.density || 'comfortable', me.corner_style || 'rounded')
+        login(me.id, me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC', me.accent_color || null, me.dark_mode || 'system', me.background || null, me.density || 'comfortable', me.corner_style || 'rounded', me.workspaces || ['personal'])
         navigate(status.setup_complete ? '/' : '/setup')
       } else {
         const me = await authApi.register(email, password, name)
-        login(me.id, me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC', me.accent_color || null, me.dark_mode || 'system', me.background || null, me.density || 'comfortable', me.corner_style || 'rounded')
+        login(me.id, me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC', me.accent_color || null, me.dark_mode || 'system', me.background || null, me.density || 'comfortable', me.corner_style || 'rounded', me.workspaces || ['personal'])
         navigate('/setup')
       }
     } catch (err) {

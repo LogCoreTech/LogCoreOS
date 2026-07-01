@@ -85,6 +85,10 @@ def get_current_user(
     # Attach jti and exp so logout can revoke with persistence
     user["_jti"] = payload.get("jti")
     user["_exp"] = payload.get("exp")
+    # Lazy migration: ensure admin always has both workspaces
+    if user.get("role") == "admin" and "business" not in user.get("workspaces", []):
+        auth_service.update_user(user["id"], {"workspaces": ["personal", "business"]})
+        user["workspaces"] = ["personal", "business"]
     # Compute effective disabled modules for the current workspace
     user["disabled_modules"] = get_effective_disabled(
         user.get("feature_role", "member"),
@@ -155,13 +159,22 @@ def register(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    if is_first_user:
+        auth_service.update_user(user["id"], {"workspaces": ["personal", "business"]})
+        user["workspaces"] = ["personal", "business"]
     token = auth_service.create_token(user)
     _set_auth_cookie(response, token, user.get("session_minutes", 10080))
+    effective = get_effective_disabled(
+        user.get("feature_role", "member"),
+        user.get("disabled_modules", []),
+        "personal",
+    )
     return {
         "id":               user["id"],
         "name":             user["name"],
         "role":             user["role"],
-        "disabled_modules": user.get("disabled_modules", []),
+        "disabled_modules": effective,
+        "workspaces":       user.get("workspaces", ["personal"]),
         "timezone":         user.get("timezone", "UTC"),
         "accent_color":     user.get("accent_color"),
         "dark_mode":        user.get("dark_mode", "system"),
@@ -178,11 +191,17 @@ def login(req: LoginRequest, response: Response, _rl: None = Depends(_login_limi
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = auth_service.create_token(user)
     _set_auth_cookie(response, token, user.get("session_minutes", 10080))
+    effective = get_effective_disabled(
+        user.get("feature_role", "member"),
+        user.get("disabled_modules", []),
+        "personal",
+    )
     return {
         "id":               user["id"],
         "name":             user["name"],
         "role":             user["role"],
-        "disabled_modules": user.get("disabled_modules", []),
+        "disabled_modules": effective,
+        "workspaces":       user.get("workspaces", ["personal"]),
         "timezone":         user.get("timezone", "UTC"),
         "accent_color":     user.get("accent_color"),
         "dark_mode":        user.get("dark_mode", "system"),

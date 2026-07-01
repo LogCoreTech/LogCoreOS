@@ -15,51 +15,50 @@ export function AuthProvider({ children }) {
   })
   const [sessionChecked, setSessionChecked] = useState(false)
 
+  async function refreshUser() {
+    try {
+      const me = await authApi.me()
+      const u = {
+        id:              me.id,
+        name:            me.name,
+        role:            me.role,
+        disabledModules: me.disabled_modules || [],
+        timezone:        me.timezone     || 'UTC',
+        workspaces:      me.workspaces   || ['personal'],
+        accentColor:     me.accent_color || null,
+        darkMode:        me.dark_mode    || 'system',
+        background:      me.background   || null,
+        density:         me.density      || 'comfortable',
+        cornerStyle:     me.corner_style || 'rounded',
+        shortcuts:       me.shortcuts    || {},
+      }
+      localStorage.setItem('lc_user', JSON.stringify({
+        id: u.id, name: u.name, role: u.role,
+        disabledModules: u.disabledModules, timezone: u.timezone,
+        workspaces: u.workspaces,
+      }))
+      setUser(u)
+      applyAccentColor(u.accentColor)
+      applyDarkMode(u.darkMode, getSystemDarkPreference())
+      applyBackground(u.background)
+      applyDensity(u.density)
+      applyCornerStyle(u.cornerStyle)
+    } catch {
+      localStorage.removeItem('lc_user')
+      setUser(null)
+    }
+  }
+
   // On mount, verify the cookie session is still valid
   useEffect(() => {
-    authApi.me()
-      .then(me => {
-        const u = {
-          id:              me.id,
-          name:            me.name,
-          role:            me.role,
-          disabledModules: me.disabled_modules || [],
-          timezone:        me.timezone     || 'UTC',
-          workspaces:      me.workspaces   || ['personal'],
-          // Preferences live server-side only — not written to localStorage
-          accentColor:     me.accent_color || null,
-          darkMode:        me.dark_mode    || 'system',
-          background:      me.background   || null,
-          density:         me.density      || 'comfortable',
-          cornerStyle:     me.corner_style || 'rounded',
-          shortcuts:       me.shortcuts    || {},
-        }
-        // Only persist session/routing fields — preferences are always re-fetched from server
-        localStorage.setItem('lc_user', JSON.stringify({
-          id: u.id, name: u.name, role: u.role,
-          disabledModules: u.disabledModules, timezone: u.timezone,
-          workspaces: u.workspaces,
-        }))
-        setUser(u)
-        applyAccentColor(u.accentColor)
-        applyDarkMode(u.darkMode, getSystemDarkPreference())
-        applyBackground(u.background)
-        applyDensity(u.density)
-        applyCornerStyle(u.cornerStyle)
-      })
-      .catch(() => {
-        // Cookie expired or absent — clear stale localStorage and let the app redirect
-        localStorage.removeItem('lc_user')
-        setUser(null)
-      })
-      .finally(() => setSessionChecked(true))
+    refreshUser().finally(() => setSessionChecked(true))
   }, [])
 
-  function login(id, name, role, disabledModules = [], timezone = 'UTC', accentColor = null, darkMode = 'system', background = null, density = 'comfortable', cornerStyle = 'rounded') {
+  function login(id, name, role, disabledModules = [], timezone = 'UTC', accentColor = null, darkMode = 'system', background = null, density = 'comfortable', cornerStyle = 'rounded', workspaces = ['personal']) {
     // Auth is handled via httpOnly cookie set by the server.
     // Only persist session/routing fields — preferences come from server and stay in memory only.
-    const u = { id, name, role, disabledModules, timezone, accentColor, darkMode, background, density, cornerStyle }
-    localStorage.setItem('lc_user', JSON.stringify({ id, name, role, disabledModules, timezone }))
+    const u = { id, name, role, disabledModules, timezone, workspaces, accentColor, darkMode, background, density, cornerStyle }
+    localStorage.setItem('lc_user', JSON.stringify({ id, name, role, disabledModules, timezone, workspaces }))
     setUser(u)
     applyAccentColor(accentColor)
     applyDarkMode(darkMode, getSystemDarkPreference())
@@ -102,37 +101,7 @@ export function AuthProvider({ children }) {
   // Poll /me every 30 seconds so admin permission changes take effect live
   useEffect(() => {
     if (!user) return
-    const id = setInterval(async () => {
-      try {
-        const me = await authApi.me()
-        const updated = {
-          ...user,
-          disabledModules: me.disabled_modules || [],
-          timezone:        me.timezone     || user.timezone,
-          workspaces:      me.workspaces   || ['personal'],
-          accentColor:     me.accent_color || null,
-          darkMode:        me.dark_mode    || 'system',
-          background:      me.background   || null,
-          density:         me.density      || 'comfortable',
-          cornerStyle:     me.corner_style || 'rounded',
-          shortcuts:       me.shortcuts    || {},
-        }
-        // Persist only session/routing fields; preferences stay in memory
-        localStorage.setItem('lc_user', JSON.stringify({
-          id: updated.id, name: updated.name, role: updated.role,
-          disabledModules: updated.disabledModules, timezone: updated.timezone,
-          workspaces: updated.workspaces,
-        }))
-        setUser(updated)
-        applyAccentColor(updated.accentColor)
-        applyDarkMode(updated.darkMode, getSystemDarkPreference())
-        applyBackground(updated.background)
-        applyDensity(updated.density)
-        applyCornerStyle(updated.cornerStyle)
-      } catch {
-        // 401 handled in api.js — clears storage and redirects to /login
-      }
-    }, 30_000)
+    const id = setInterval(() => refreshUser(), 30_000)
     return () => clearInterval(id)
   }, [user?.name])
 
@@ -144,7 +113,7 @@ export function AuthProvider({ children }) {
   )
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, updateUserField }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUserField, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )

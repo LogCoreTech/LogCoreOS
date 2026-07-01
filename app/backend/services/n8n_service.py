@@ -38,6 +38,10 @@ def save_config(cfg: dict) -> None:
     write_json(_CONFIG_PATH(), cfg)
 
 
+def is_configured() -> bool:
+    return bool(get_config().get("api_key"))
+
+
 def _client() -> httpx.Client:
     cfg = get_config()
     return httpx.Client(

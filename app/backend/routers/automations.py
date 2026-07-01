@@ -165,6 +165,8 @@ def run_automation(
     current_user: dict = Depends(_require_automations),
     _rl: None = Depends(_write_limit),
 ):
+    if not n8n_service.is_configured():
+        raise HTTPException(status_code=503, detail="n8n is not configured. Go to Admin → Automations to set up n8n.")
     record = n8n_service.find_workflow(record_id, current_user["name"])
     if not record:
         raise HTTPException(status_code=404, detail="Workflow not found")
@@ -191,6 +193,8 @@ def activate_automation(
     current_user: dict = Depends(_require_automations),
     _rl: None = Depends(_write_limit),
 ):
+    if not n8n_service.is_configured():
+        raise HTTPException(status_code=503, detail="n8n is not configured. Go to Admin → Automations to set up n8n.")
     record = n8n_service.find_workflow(record_id, current_user["name"])
     if not record:
         raise HTTPException(status_code=404, detail="Workflow not found")
@@ -214,6 +218,8 @@ def deactivate_automation(
     current_user: dict = Depends(_require_automations),
     _rl: None = Depends(_write_limit),
 ):
+    if not n8n_service.is_configured():
+        raise HTTPException(status_code=503, detail="n8n is not configured. Go to Admin → Automations to set up n8n.")
     record = n8n_service.find_workflow(record_id, current_user["name"])
     if not record:
         raise HTTPException(status_code=404, detail="Workflow not found")
@@ -238,6 +244,8 @@ def get_logs(
     current_user: dict = Depends(_require_automations),
     _rl: None = Depends(_read_limit),
 ):
+    if not n8n_service.is_configured():
+        raise HTTPException(status_code=503, detail="n8n is not configured. Go to Admin → Automations to set up n8n.")
     record = n8n_service.find_workflow(record_id, current_user["name"])
     if not record:
         raise HTTPException(status_code=404, detail="Workflow not found")
