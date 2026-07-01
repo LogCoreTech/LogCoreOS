@@ -12,11 +12,15 @@ read_file() {
 
 PENDING_FILE="/tmp/logcoreos_docs_pending"
 PENDING_REMINDER=""
+DOCS_UPDATE_STEP=""
 if [ -f "$PENDING_FILE" ]; then
+  PENDING_CONTENT=$(cat "$PENDING_FILE")
   PENDING_REMINDER="
---- PENDING DOCS REMINDER (from last turn) ---
-$(cat "$PENDING_FILE")
-----------------------------------------------"
+--- PENDING DOCS UPDATE (from last turn) ---
+${PENDING_CONTENT}
+--------------------------------------------"
+  DOCS_UPDATE_STEP="
+2. Address the PENDING DOCS UPDATE above — update every listed doc that applies, then respond with one line confirming what you updated (or 'Q+A only, skipped' if nothing changed)."
   rm -f "$PENDING_FILE"
 fi
 
@@ -35,13 +39,14 @@ ${PENDING_REMINDER}
 $(read_file "$DOCS_DIR/SOUL.md")
 --- END SOUL.md ---
 
-REQUIRED — before responding, use the Read tool to read these files:
-- $DOCS_DIR/AGENTS.md
-- $DOCS_DIR/MEMORY.md
-- $DOCS_DIR/TASKS.md
-$DAILY_READ
+REQUIRED — before responding:
+1. Use the Read tool to read these files:
+   - $DOCS_DIR/AGENTS.md
+   - $DOCS_DIR/MEMORY.md
+   - $DOCS_DIR/TASKS.md
+$DAILY_READ${DOCS_UPDATE_STEP}
 
-Read all of them, then respond to the user's message.
+Read all files, then respond to the user's message.
 === END SESSION CONTEXT ==="
 
 printf '%s' "$(jq -n --arg ctx "$CONTEXT" '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":$ctx}}')"
