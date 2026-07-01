@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { tasks as tasksApi, auth as authApi, home as homeApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
-import TaskModal from '../components/TaskModal'
 import { catColor } from '../lib/constants'
 
 function priorityDot(p) {
@@ -18,7 +17,6 @@ export default function Dashboard() {
   const [streaks, setStreaks] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [showModal, setShowModal] = useState(false)
   const [completing, setCompleting] = useState(null)
 
   async function load() {
@@ -58,14 +56,9 @@ export default function Dashboard() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Good {greeting()}, {user?.name?.split(' ')[0]}</h1>
-          <p className="text-charcoal-500 dark:text-charcoal-400 text-sm mt-0.5">{todayDate}</p>
-        </div>
-        <button onClick={() => setShowModal(true)} className="btn-primary">
-          + Add Task
-        </button>
+      <div>
+        <h1 className="text-2xl font-bold">Good {greeting()}, {user?.name?.split(' ')[0]}</h1>
+        <p className="text-charcoal-500 dark:text-charcoal-400 text-sm mt-0.5">{todayDate}</p>
       </div>
 
       {error && (
@@ -166,9 +159,6 @@ export default function Dashboard() {
       {/* Smart Home widget */}
       {!user?.disabledModules?.includes('home') && <HomeWidget />}
 
-      {showModal && (
-        <TaskModal onClose={() => setShowModal(false)} onSave={() => { setShowModal(false); load() }} />
-      )}
     </div>
   )
 }

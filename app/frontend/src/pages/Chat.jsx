@@ -411,14 +411,14 @@ export default function Chat() {
           <button
             type="button"
             onClick={() => setCrossWorkspace(x => !x)}
-            title="Search both personal and business brain files"
+            title={crossWorkspace ? 'AI is reading both personal and business Brain files — click to limit to current workspace' : 'AI is only reading current workspace Brain files — click to include both'}
             className={`text-xs px-2 py-1 rounded border font-medium transition-colors ${
               crossWorkspace
                 ? 'bg-blue-500 border-blue-500 text-white'
                 : 'btn-ghost border-transparent'
             }`}
           >
-            {crossWorkspace ? 'Both workspaces' : 'This workspace'}
+            {crossWorkspace ? '🧠 Both' : `🧠 ${workspace === 'business' ? 'Business' : 'Personal'}`}
           </button>
         )}
         <button
