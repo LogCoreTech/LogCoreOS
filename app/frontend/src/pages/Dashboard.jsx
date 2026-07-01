@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { tasks as tasksApi, auth as authApi, home as homeApi } from '../lib/api'
+import { tasks as tasksApi, auth as authApi, home as homeApi, team as teamApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
 import { catColor } from '../lib/constants'
@@ -53,8 +53,10 @@ export default function Dashboard() {
 
   const todayDate = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
 
+  const isPersonal = workspace === 'personal'
+
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div key={workspace} className="max-w-2xl mx-auto space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold">Good {greeting()}, {user?.name?.split(' ')[0]}</h1>
@@ -156,9 +158,59 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Smart Home widget */}
-      {!user?.disabledModules?.includes('home') && <HomeWidget />}
+      {/* Workspace-specific widgets */}
+      {isPersonal && !user?.disabledModules?.includes('home') && <HomeWidget />}
+      {!isPersonal && !user?.disabledModules?.includes('team') && <TeamWidget />}
 
+    </div>
+  )
+}
+
+function TeamWidget() {
+  const [tasks, setTasks] = useState([])
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    teamApi.list()
+      .then(all => setTasks((all || []).filter(t => t.status === 'pending').slice(0, 5)))
+      .catch(() => {})
+      .finally(() => setLoaded(true))
+  }, [])
+
+  if (!loaded) return null
+  if (!tasks.length) return (
+    <div className="card p-5">
+      <h2 className="font-semibold text-sm uppercase tracking-wide text-charcoal-500 dark:text-charcoal-400 mb-3">
+        🧑‍🤝‍🧑 Team Tasks
+      </h2>
+      <p className="text-charcoal-500 dark:text-charcoal-400 text-sm">
+        No pending team tasks. <Link to="/team" className="text-orange-500">Go to Team →</Link>
+      </p>
+    </div>
+  )
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold text-sm uppercase tracking-wide text-charcoal-500 dark:text-charcoal-400">
+          🧑‍🤝‍🧑 Team Tasks
+        </h2>
+        <Link to="/team" className="text-xs text-orange-500 hover:underline">All tasks →</Link>
+      </div>
+      <div className="space-y-2">
+        {tasks.map(task => (
+          <div key={task.id} className="flex items-center gap-3">
+            <div className={`w-2 h-2 rounded-full shrink-0 ${priorityDot(task.priority)}`} />
+            <span className="text-sm flex-1 truncate">{task.title}</span>
+            {task.assigned_to && (
+              <span className="text-xs text-charcoal-400 dark:text-charcoal-500 shrink-0">{task.assigned_to}</span>
+            )}
+            {task.due_date && (
+              <span className="text-xs text-charcoal-400 dark:text-charcoal-500 shrink-0">{task.due_date}</span>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

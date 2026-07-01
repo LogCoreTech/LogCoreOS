@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from routers.auth import get_current_user, get_workspace, require_module
 from routers._task_models import TaskCreateBase, TaskUpdateBase
 from services import task_service, priority_service
+from services.file_service import read_json, tasks_path
 
 _require_tasks = require_module("tasks")
 
@@ -41,6 +42,31 @@ def all_scored(
     workspace: str = Depends(get_workspace),
 ):
     return priority_service.get_all_scored(current_user["name"], workspace)
+
+
+@router.get("/assigned")
+def assigned_tasks(
+    current_user: dict = Depends(_require_tasks),
+    workspace: str = Depends(get_workspace),
+):
+    """Return pool tasks assigned to the current user.
+
+    Personal workspace → Household pool tasks assigned to this user.
+    Business workspace → Team pool tasks assigned to this user.
+    """
+    user_name = current_user["name"]
+    if workspace == "business":
+        pool, source = "_team", "team"
+    else:
+        pool, source = "_household", "household"
+
+    all_tasks = read_json(tasks_path(pool), default={"tasks": []}).get("tasks", [])
+    assigned = [
+        {**t, "_source": source}
+        for t in all_tasks
+        if t.get("assigned_to") == user_name and t.get("status") == "pending"
+    ]
+    return assigned
 
 
 @router.get("/history")

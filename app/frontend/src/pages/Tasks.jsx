@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { tasks as tasksApi, priorities as prioritiesApi, shared as sharedApi } from '../lib/api'
+import { tasks as tasksApi, priorities as prioritiesApi, shared as sharedApi, team as teamApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
 import TaskModal from '../components/TaskModal'
@@ -11,7 +11,7 @@ export default function Tasks() {
   const { user } = useAuth()
   const { workspace } = useWorkspace()
   const [taskList, setTaskList] = useState([])
-  const [assignedHouseholdTasks, setAssignedHouseholdTasks] = useState([])
+  const [assignedPoolTasks, setAssignedPoolTasks] = useState([])
   const [priorityOrder, setPriorityOrder] = useState([])
   const [filter, setFilter] = useState('pending')
   const [editTask, setEditTask] = useState(null)
@@ -23,20 +23,18 @@ export default function Tasks() {
 
   async function load() {
     setLoading(true)
-    const [all, prio, shared] = await Promise.allSettled([
+    const [all, prio, pool] = await Promise.allSettled([
       tasksApi.list(),
       prioritiesApi.get(),
-      sharedApi.list(),
+      tasksApi.assigned(),
     ])
     if (all.status === 'fulfilled') setTaskList(all.value)
     if (prio.status === 'fulfilled') {
       setPriorityOrder(prio.value.order || [])
       setTempOrder(prio.value.order || [])
     }
-    if (shared.status === 'fulfilled') {
-      setAssignedHouseholdTasks(
-        shared.value.filter(t => t.assigned_to === user?.name)
-      )
+    if (pool.status === 'fulfilled') {
+      setAssignedPoolTasks(pool.value)
     }
     setLoading(false)
   }
@@ -45,8 +43,10 @@ export default function Tasks() {
 
   async function toggleDone(task) {
     const newStatus = task.status === 'done' ? 'pending' : 'done'
-    if (task._household) {
+    if (task._source === 'household') {
       await sharedApi.update(task.id, { status: newStatus })
+    } else if (task._source === 'team') {
+      await teamApi.update(task.id, { status: newStatus })
     } else {
       await tasksApi.update(task.id, { status: newStatus })
     }
@@ -84,10 +84,10 @@ export default function Tasks() {
   const _today = new Date()
   const _todayStr = `${_today.getFullYear()}-${String(_today.getMonth() + 1).padStart(2, '0')}-${String(_today.getDate()).padStart(2, '0')}`
 
-  // Merge personal + assigned household tasks (household tasks tagged with _household)
+  // Merge personal tasks + assigned pool tasks (tagged with _source from backend)
   const allTasks = [
     ...taskList,
-    ...assignedHouseholdTasks.map(t => ({ ...t, _household: true })),
+    ...assignedPoolTasks,
   ]
 
   const filtered = allTasks.filter(t =>
@@ -280,7 +280,8 @@ function TaskCard({ task, catColor, onDone, onEdit }) {
           <span className="badge bg-charcoal-100 dark:bg-charcoal-700 text-charcoal-600 dark:text-charcoal-300">
             {task.priority}
           </span>
-          {task._household && <span className="text-xs text-blue-500 dark:text-blue-400">🏠</span>}
+          {task._source === 'household' && <span className="text-xs text-blue-500 dark:text-blue-400">🏠</span>}
+          {task._source === 'team' && <span className="text-xs text-indigo-500 dark:text-indigo-400">🧑‍🤝‍🧑</span>}
           {task.streak_count > 0 && (
             <span className="text-xs text-orange-500">🔥 {task.streak_count}</span>
           )}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { admin as adminApi, features as featuresApi, infisical as infisicalApi, automations as automationsApi, home as homeApi } from '../lib/api'
+import { admin as adminApi, features as featuresApi, infisical as infisicalApi, automations as automationsApi, home as homeApi, priorities as prioritiesApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { ALL_MODULES } from '../lib/constants'
 
@@ -1653,6 +1653,153 @@ function HomeAssistantCard() {
   )
 }
 
+const POOL_DEFAULT_HOUSEHOLD = ['Cleaning', 'Maintenance', 'Shopping', 'Cooking', 'Yard Work']
+const POOL_DEFAULT_TEAM      = ['Projects', 'Client Work', 'Operations', 'Admin', 'Strategy']
+
+function PoolPrioritiesCard() {
+  const [household, setHousehold] = useState([])
+  const [team, setTeam]           = useState([])
+  const [loading, setLoading]     = useState(true)
+  const [saving, setSaving]       = useState(false)
+  const [msg, setMsg]             = useState(null)
+  const [newHH, setNewHH]         = useState('')
+  const [newTeam, setNewTeam]     = useState('')
+  const [dragState, setDragState] = useState(null) // { pool, idx }
+
+  useEffect(() => {
+    prioritiesApi.getPool()
+      .then(d => {
+        setHousehold(d.household?.length ? d.household : [...POOL_DEFAULT_HOUSEHOLD])
+        setTeam(d.team?.length ? d.team : [...POOL_DEFAULT_TEAM])
+      })
+      .catch(() => {
+        setHousehold([...POOL_DEFAULT_HOUSEHOLD])
+        setTeam([...POOL_DEFAULT_TEAM])
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  function flash(ok, text) {
+    setMsg({ ok, text })
+    setTimeout(() => setMsg(null), 3000)
+  }
+
+  async function save() {
+    setSaving(true)
+    setMsg(null)
+    try {
+      await prioritiesApi.setPool({ household, team })
+      flash(true, 'Saved')
+    } catch (e) {
+      flash(false, e.message || 'Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function move(pool, setter, from, to) {
+    const next = [...pool]
+    const [m] = next.splice(from, 1)
+    next.splice(to, 0, m)
+    setter(next)
+  }
+
+  function remove(pool, setter, cat) {
+    if (pool.length <= 1) return
+    setter(pool.filter(c => c !== cat))
+  }
+
+  function add(pool, setter, val, clearFn) {
+    const v = val.trim()
+    if (v && !pool.includes(v)) { setter([...pool, v]); clearFn('') }
+  }
+
+  function onDragStart(pool, idx) { setDragState({ pool, idx }) }
+  function onDragOver(e, pool, idx, setter) {
+    e.preventDefault()
+    if (!dragState || dragState.pool !== pool || dragState.idx === idx) return
+    const next = [...pool]
+    const [m] = next.splice(dragState.idx, 1)
+    next.splice(idx, 0, m)
+    setter(next)
+    setDragState({ pool: dragState.pool, idx })
+  }
+  function onDragEnd() { setDragState(null) }
+
+  function PriorityList({ label, pool, setter, newVal, setNewVal }) {
+    return (
+      <div>
+        <p className="text-sm font-medium mb-2">{label}</p>
+        <ul className="space-y-1.5 mb-2">
+          {pool.map((cat, i) => (
+            <li
+              key={cat}
+              draggable
+              onDragStart={() => onDragStart(label, i)}
+              onDragOver={e => onDragOver(e, pool, i, setter)}
+              onDragEnd={onDragEnd}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm transition-colors ${
+                dragState?.pool === label && dragState?.idx === i
+                  ? 'border-orange-500 bg-orange-500/10'
+                  : 'border-charcoal-200 dark:border-charcoal-700 bg-white dark:bg-charcoal-800'
+              }`}
+            >
+              <span className="text-charcoal-400 text-xs w-4 shrink-0">{i + 1}</span>
+              <span className="flex-1">{cat}</span>
+              <div className="flex flex-col shrink-0 mr-2">
+                <button type="button" onClick={() => move(pool, setter, i, i - 1)} disabled={i === 0}
+                  className="text-charcoal-400 hover:text-orange-500 disabled:opacity-20 leading-none px-1 text-xs">▲</button>
+                <button type="button" onClick={() => move(pool, setter, i, i + 1)} disabled={i === pool.length - 1}
+                  className="text-charcoal-400 hover:text-orange-500 disabled:opacity-20 leading-none px-1 text-xs">▼</button>
+              </div>
+              <button type="button" onClick={() => remove(pool, setter, cat)} disabled={pool.length <= 1}
+                className="text-charcoal-400 hover:text-red-500 disabled:opacity-20 text-xs shrink-0">✕</button>
+              <span className="text-charcoal-300 dark:text-charcoal-600 cursor-grab hidden md:block">⠿</span>
+            </li>
+          ))}
+        </ul>
+        <div className="flex gap-2">
+          <input type="text" value={newVal} onChange={e => setNewVal(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && add(pool, setter, newVal, setNewVal)}
+            placeholder="Add category…" className="input text-sm" />
+          <button onClick={() => add(pool, setter, newVal, setNewVal)} className="btn-primary px-3 text-sm">+</button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="card p-4 space-y-4">
+      <div>
+        <h2 className="font-semibold text-lg">Pool Priorities</h2>
+        <p className="text-sm text-charcoal-500 dark:text-charcoal-400">
+          Category order used to score and rank tasks in the Household and Team shared pools.
+          Drag to reorder. These apply to all members of each pool.
+        </p>
+      </div>
+
+      {loading ? (
+        <div className="space-y-2">
+          {[1,2,3].map(i => <div key={i} className="h-8 bg-charcoal-100 dark:bg-charcoal-800 rounded animate-pulse" />)}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <PriorityList label="Household" pool={household} setter={setHousehold} newVal={newHH} setNewVal={setNewHH} />
+          <PriorityList label="Team" pool={team} setter={setTeam} newVal={newTeam} setNewVal={setNewTeam} />
+        </div>
+      )}
+
+      {msg && (
+        <p className={`text-sm ${msg.ok ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>{msg.text}</p>
+      )}
+
+      <button onClick={save} disabled={saving || loading} className="btn-primary text-sm disabled:opacity-50">
+        {saving ? 'Saving…' : 'Save Pool Priorities'}
+      </button>
+    </div>
+  )
+}
+
 export default function Admin() {
   const { user } = useAuth()
   const [roles, setRoles] = useState(['member'])
@@ -1669,6 +1816,7 @@ export default function Admin() {
       <InfisicalCard />
       <N8nCard />
       <HomeAssistantCard />
+      <PoolPrioritiesCard />
     </div>
   )
 }

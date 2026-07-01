@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { profile as profileApi } from '../lib/api'
 import { useNavigate } from 'react-router-dom'
+import { useWorkspace } from '../lib/workspace'
 import GoalsSection from './Goals'
 
 const DEFAULT_PRIORITY_ORDER = ['God', 'Family', 'Job', 'Personal Growth', 'Hobbies']
@@ -39,6 +40,7 @@ function Field({ label, children }) {
 
 export default function Profile() {
   const navigate = useNavigate()
+  const { workspace } = useWorkspace()
   const [data, setData] = useState({})
   const [loading, setLoading] = useState(true)
   const [savingSection, setSavingSection] = useState(null)
@@ -49,11 +51,13 @@ export default function Profile() {
   const [confirmDeleteCat, setConfirmDeleteCat] = useState(null)
 
   useEffect(() => {
+    setLoading(true)
+    setData({})
     profileApi.get()
       .then(d => setData(d || {}))
       .catch(() => setError('Could not load profile.'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [workspace])
 
   function set(key, value) {
     setData(prev => ({ ...prev, [key]: value }))
@@ -342,10 +346,12 @@ export default function Profile() {
         {saveBtn('values')}
       </Accordion>
 
-      {/* Life Priorities */}
-      <Accordion title="Life Priorities">
+      {/* Life / Business Priorities */}
+      <Accordion title={workspace === 'business' ? 'Business Priorities' : 'Life Priorities'}>
         <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-3">
-          Drag to reorder. This determines how tasks are scored and surfaced by the AI.
+          {workspace === 'business'
+            ? 'Drag to reorder. These business categories determine how your work tasks are scored and surfaced by the AI.'
+            : 'Drag to reorder. This determines how tasks are scored and surfaced by the AI.'}
         </p>
         <ul className="space-y-2 mb-3">
           {priorityOrder.map((cat, i) => (

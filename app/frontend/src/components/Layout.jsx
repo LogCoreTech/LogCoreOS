@@ -135,7 +135,7 @@ export default function Layout() {
   // Also redirect to dashboard if the current page is restricted to the other workspace.
   useEffect(() => {
     if (user) refreshUser()
-    const currentModule = ALL_MODULES.find(m => m.to && location.pathname.startsWith(m.to))
+    const currentModule = ALL_MODULES.find(m => m.to && (m.to === '/' ? location.pathname === '/' : location.pathname.startsWith(m.to)))
     if (currentModule?.workspace && currentModule.workspace !== workspace) {
       navigate('/')
     }
