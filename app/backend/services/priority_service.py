@@ -38,7 +38,7 @@ def score_task(task: dict, category_order: list[str], today_str: str) -> int:
 def get_top3(user_name: str, workspace: str = "personal") -> list[dict[str, Any]]:
     """Return top 3 scored pending tasks with score attached."""
     tasks_data = read_json(tasks_path(user_name, workspace), default={"tasks": []})
-    order = get_priority_order(user_name)
+    order = get_priority_order(user_name, workspace)
     today_str = today_for_user(user_name).isoformat()
     pending = [t for t in tasks_data.get("tasks", []) if t.get("status") == "pending"]
     for task in pending:
@@ -49,7 +49,7 @@ def get_top3(user_name: str, workspace: str = "personal") -> list[dict[str, Any]
 def get_all_scored(user_name: str, workspace: str = "personal") -> list[dict[str, Any]]:
     """Return all pending tasks sorted by score descending."""
     tasks_data = read_json(tasks_path(user_name, workspace), default={"tasks": []})
-    order = get_priority_order(user_name)
+    order = get_priority_order(user_name, workspace)
     today_str = today_for_user(user_name).isoformat()
     pending = [t for t in tasks_data.get("tasks", []) if t.get("status") == "pending"]
     for t in pending:

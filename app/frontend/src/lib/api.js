@@ -73,18 +73,21 @@ export const auth = {
 }
 
 export const tasks = {
-  list:    ()                             => get('/tasks'),
-  top3:    ()                             => get('/tasks/top3'),
-  scored:  ()                             => get('/tasks/scored'),
-  history: (limit = 50, offset = 0)       => get(`/tasks/history?limit=${limit}&offset=${offset}`),
-  add:     (task)                         => post('/tasks', task),
-  update:  (id, updates)                  => patch(`/tasks/${id}`, updates),
-  remove:  (id)                           => del(`/tasks/${id}`),
+  list:     ()                             => get('/tasks'),
+  top3:     ()                             => get('/tasks/top3'),
+  scored:   ()                             => get('/tasks/scored'),
+  assigned: ()                             => get('/tasks/assigned'),
+  history:  (limit = 50, offset = 0)       => get(`/tasks/history?limit=${limit}&offset=${offset}`),
+  add:      (task)                         => post('/tasks', task),
+  update:   (id, updates)                  => patch(`/tasks/${id}`, updates),
+  remove:   (id)                           => del(`/tasks/${id}`),
 }
 
 export const priorities = {
   get:          ()        => get('/priorities'),
   saveOverride: (order)   => post('/priorities/override', { order }),
+  getPool:      ()        => get('/priorities/pool'),
+  setPool:      (data)    => request('PUT', '/priorities/pool', data),
 }
 
 export const profile = {

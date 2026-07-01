@@ -3,59 +3,61 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services.file_service import read_json, user_path, write_json, write_markdown
+from services.file_service import read_json, user_path, ws_path, write_json, write_markdown
 
 DEFAULT_PRIORITY_ORDER = ["God", "Family", "Job", "Personal Growth", "Hobbies"]
 
 
-def _json_path(user_name: str) -> Path:
-    return user_path(user_name) / "profile.json"
+def _json_path(user_name: str, workspace: str = "personal") -> Path:
+    return ws_path(user_name, workspace) / "profile.json"
 
 
-def _md_path(user_name: str) -> Path:
-    return user_path(user_name) / "Profile.md"
+def _md_path(user_name: str, workspace: str = "personal") -> Path:
+    return ws_path(user_name, workspace) / "Profile.md"
 
 
-def load_profile(user_name: str) -> dict:
-    json_path = _json_path(user_name)
+def load_profile(user_name: str, workspace: str = "personal") -> dict:
+    json_path = _json_path(user_name, workspace)
     if json_path.exists():
         return read_json(json_path, default={})
-    # Seed priority_order from existing Profile.md for existing users.
+    # Legacy fallback: seed priority_order from Profile.md (personal workspace only)
     default: dict = {}
-    try:
-        from services.file_service import parse_priority_order
-        order = parse_priority_order(user_name)
-        if order:
-            default["priority_order"] = order
-    except Exception:
-        pass
+    if workspace == "personal":
+        try:
+            from services.file_service import parse_priority_order
+            order = parse_priority_order(user_name)
+            if order:
+                default["priority_order"] = order
+        except Exception:
+            pass
     return default
 
 
-def save_profile(user_name: str, data: dict) -> dict:
+def save_profile(user_name: str, data: dict, workspace: str = "personal") -> dict:
     if not data.get("priority_order"):
         data["priority_order"] = list(DEFAULT_PRIORITY_ORDER)
-    write_json(_json_path(user_name), data)
-    write_markdown(_md_path(user_name), generate_profile_md(user_name, data))
+    write_json(_json_path(user_name, workspace), data)
+    write_markdown(_md_path(user_name, workspace), generate_profile_md(user_name, data))
     return data
 
 
-def get_priority_order(user_name: str) -> list[str]:
+def get_priority_order(user_name: str, workspace: str = "personal") -> list[str]:
     """Return priority order from profile.json, falling back to Profile.md then defaults."""
-    json_path = _json_path(user_name)
+    json_path = _json_path(user_name, workspace)
     if json_path.exists():
         data = read_json(json_path, default={})
         order = data.get("priority_order")
         if order and isinstance(order, list):
             return order
-    # Legacy fallback: parse ## Life Priorities from Profile.md
-    try:
-        from services.file_service import parse_priority_order
-        order = parse_priority_order(user_name)
-        if order:
-            return order
-    except Exception:
-        pass
+    # Legacy fallback: parse ## Life Priorities from Profile.md (personal workspace only)
+    if workspace == "personal":
+        try:
+            from services.file_service import parse_priority_order
+            order = parse_priority_order(user_name)
+            if order:
+                return order
+        except Exception:
+            pass
     return list(DEFAULT_PRIORITY_ORDER)
 
 

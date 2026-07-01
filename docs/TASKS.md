@@ -12,6 +12,7 @@ Keep this up to date. Mark tasks done as they're completed. Add new tasks as the
 
 ## Backlog
 
+- [ ] **User-customizable Dashboard per workspace** — each user can choose which widgets appear on their personal and business dashboards and in what order; widget config stored per-workspace in `brain/USERS/{name}/Dashboard/personal.json` and `business.json`; available widgets: Top 3 Tasks, Streaks, Due Today, Smart Home (personal), Team Tasks (business) — more as modules are added
 - [ ] **Projects module** — project tracking with tasks, milestones, and status (deferred to Phase 3+)
 - [ ] **Multi-day calendar events** — calendar events currently support a single `date` field; true multi-day events (vacations, trips, blocks) need `start_date` / `end_date`, a backend schema update, and a calendar renderer that spans cells
 - [ ] **Household task assignment for non-admins** — only admins can currently assign tasks because `GET /auth/users` is admin-gated; a `/shared/members` endpoint could expose the member list to all household members, enabling peer assignment
@@ -22,6 +23,8 @@ Keep this up to date. Mark tasks done as they're completed. Add new tasks as the
 
 ## Done
 
+- [x] **Workspace-aware priorities + pool category lists + assigned task bleed-through** — `profile_service` and `priority_service` are now workspace-aware (business tasks scored by `Business/profile.json` priorities); `GET/PUT /priorities/pool` admin endpoints let admins set category order for `_household` and `_team` pools; `GET /tasks/assigned` returns pool tasks assigned to current user; Tasks.jsx shows assigned pool tasks with 🏠/🧑‍🤝‍🧑 badges and routes completions to the right pool; Profile.jsx reloads on workspace switch and re-labels priorities section; Admin page has new Pool Priorities card (2026-07-01)
+- [x] **Workspace-aware Dashboard** — personal workspace shows SmartHome widget; business workspace shows TeamWidget (pending team tasks + link to /team); `key={workspace}` on root div forces full remount on switch; HomeWidget gated to personal-only (2026-07-01)
 - [x] **Workspace mode switching fixes + chat workspace awareness** — Calendar/Tasks/Notes auto-refresh on switch; workspace-restricted modules (Journal, Household, Team) auto-redirect to dashboard; Calendar pools switch Household↔Teams with workspace; Chat saves/reads/searches workspace-specific Brain files; optional cross-workspace AI search toggle for dual-workspace users (2026-07-01)
 - [x] **Per-workspace shortcuts settings** — Settings page now shows separate Personal and Business shortcut panels; picker filters by disabled modules and workspace; `cleanShortcuts()` strips invalid IDs at init so slots are genuinely empty; both workspaces saved in one PATCH call (2026-06-30)
 - [x] **Shortcuts disabled-module leak fix** — shortcuts picker previously showed all modules regardless of `disabledModules` or workspace constraint; now correctly filtered (2026-06-30)
