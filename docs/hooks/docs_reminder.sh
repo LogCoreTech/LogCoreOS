@@ -26,7 +26,10 @@ fi
 # Check if any core docs were modified since the last stop
 DOCS_UPDATED=false
 if [ "$LAST_STOP" -gt 0 ]; then
-  for f in "$DOCS_DIR/TASKS.md" "$DOCS_DIR/MEMORY.md" "$DOCS_DIR/Daily Notes/$TODAY.md"; do
+  for f in "$DOCS_DIR/TASKS.md" "$DOCS_DIR/MEMORY.md" "$DOCS_DIR/AGENTS.md" \
+            "$DOCS_DIR/MAP.md" "$DOCS_DIR/API.md" "$DOCS_DIR/PROJECT.md" \
+            "$REPO_DIR/CHANGELOG.md" \
+            "$DOCS_DIR/Daily Notes/$TODAY.md"; do
     if [ -f "$f" ]; then
       FILE_MTIME=$(stat -c %Y "$f")
       if [ "$FILE_MTIME" -gt "$LAST_STOP" ]; then
@@ -51,7 +54,7 @@ CHANGED_FILES=""
 if [ "$LAST_STOP" -gt 0 ]; then
   REF_FILE=$(mktemp)
   python3 -c "import os; os.utime('$REF_FILE', ($LAST_STOP, $LAST_STOP))" 2>/dev/null
-  CHANGED_FILES=$(find "$REPO_DIR/app" "$REPO_DIR/brain" "$REPO_DIR/docs/hooks" \
+  CHANGED_FILES=$(find "$REPO_DIR/app" "$REPO_DIR/brain" "$REPO_DIR/docs/hooks" "$REPO_DIR/docker" \
     -newer "$REF_FILE" -type f 2>/dev/null \
     | grep -vE "__pycache__|\.pyc|node_modules|/dist/|\.min\.")
   rm -f "$REF_FILE"
@@ -126,6 +129,35 @@ ${ITEM_NUM}. docs/AGENTS.md (Dev Skills / hook workflow) — hook(s) changed: ${
   if [ -n "$SERVICE_CHANGES" ]; then
     EXTRA="${EXTRA}
 ${ITEM_NUM}. docs/MEMORY.md (Core Design Decisions) — service(s) changed: ${SERVICE_CHANGES} — update if any design decisions or invariants changed (atomic writes, auth, etc.)."
+    ITEM_NUM=$((ITEM_NUM + 1))
+  fi
+
+  # constants.js changes → AGENTS.md module IDs / workspace assignments
+  if echo "$CHANGED_FILES" | grep -q "app/frontend/src/lib/constants.js"; then
+    EXTRA="${EXTRA}
+${ITEM_NUM}. docs/AGENTS.md (Module System) — constants.js changed; update Valid module IDs list or workspace assignments table if modules were added, removed, or reassigned."
+    ITEM_NUM=$((ITEM_NUM + 1))
+  fi
+
+  # migrations/ changes → MEMORY.md + MAP.md
+  if echo "$CHANGED_FILES" | grep -q "app/backend/migrations/"; then
+    EXTRA="${EXTRA}
+${ITEM_NUM}. docs/MEMORY.md + docs/MAP.md — migration file(s) changed; note the schema change in MEMORY.md Known Gotchas and update MAP.md if new migration files were added."
+    ITEM_NUM=$((ITEM_NUM + 1))
+  fi
+
+  # docker-compose.yml changes → PROJECT.md Docker services table
+  if echo "$CHANGED_FILES" | grep -q "docker/docker-compose.yml"; then
+    EXTRA="${EXTRA}
+${ITEM_NUM}. docs/PROJECT.md (Docker services table) — docker-compose.yml changed; update the services list if a service was added, removed, or had its ports changed."
+    ITEM_NUM=$((ITEM_NUM + 1))
+  fi
+
+  # Any app/ code changes → suggest CHANGELOG.md
+  CODE_CHANGES=$(echo "$CHANGED_FILES" | grep "^$REPO_DIR/app/" | grep -vE "node_modules|/dist/" | head -1)
+  if [ -n "$CODE_CHANGES" ]; then
+    EXTRA="${EXTRA}
+${ITEM_NUM}. CHANGELOG.md — app code changed this turn; add an entry if this turn shipped a user-visible feature, fix, or breaking change."
     ITEM_NUM=$((ITEM_NUM + 1))
   fi
 fi

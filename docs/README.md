@@ -17,5 +17,6 @@ All documentation for AI agents and developers lives in `docs/`:
 | `docs/MEMORY.md` | Design decisions, security rules, and known gotchas |
 | `docs/MAP.md` | Full file navigation index |
 | `docs/API.md` | REST API endpoint reference |
+| `docs/TESTING.md` | Testing guide: brain fixture, patterns, coverage targets |
 | `docs/Daily Notes/` | Per-session work logs (YYYY-MM-DD.md) |
 | `docs/hooks/` | Claude Code hooks for auto-loading docs and safety checks |

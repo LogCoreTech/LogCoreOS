@@ -303,6 +303,17 @@ Return completed tasks (most recent first).
 - `limit` — integer 1–500, default 50
 - `offset` — integer ≥ 0, default 0
 
+### `GET /tasks/assigned`
+Return pending tasks from pool (household or team) that are assigned to the current user. Personal workspace returns tasks from the household pool; business workspace returns tasks from the team pool.
+
+**Response** — array of task objects. Each task has a `_source` field: `"household"` or `"team"`.
+
+```json
+[
+  { "id": "...", "title": "Grocery run", "_source": "household", ... }
+]
+```
+
 ### `POST /tasks`
 Create a task.
 
@@ -363,12 +374,32 @@ Set today's priority order override.
 
 **Body** `{ "order": ["Job", "God", "Family"] }`
 
+### `GET /priorities/pool`
+Get the category priority order for both pool pseudo-users (`_household` and `_team`). Admin only.
+
+**Response**
+```json
+{
+  "household": ["Family", "Home", "Errands", "Health", "Finance", "Other"],
+  "team": ["Client Delivery", "Revenue", "Operations", "Marketing", "HR & People", "Finance", "Product", "Strategy"]
+}
+```
+
+### `PUT /priorities/pool`
+Update the category priority order for a pool pseudo-user. Admin only.
+
+**Body** `{ "pool": "household", "order": ["Family", "Home", "Errands"] }`
+
+Valid `pool` values: `"household"`, `"team"`.
+
+**Response** `{ "ok": true }`
+
 ---
 
 ## Chat
 
 ### `POST /chat`
-Send a message to the AI with conversation history.
+Send a message to the AI. Returns a streaming response with step trace.
 
 **Body**
 ```json
@@ -377,13 +408,53 @@ Send a message to the AI with conversation history.
   "history": [
     { "role": "user", "content": "Hi" },
     { "role": "assistant", "content": "Hello! How can I help?" }
-  ]
+  ],
+  "mode": "auto",
+  "cross_workspace": false
 }
 ```
 
-**Response** `{ "response": "Based on your priorities..." }`
+- `mode`: `"auto"` (default) | `"plan"` | `"research"`. Plan mode proposes before executing. Research mode adds Tavily web search.
+- `cross_workspace`: when `true` and the user has both workspaces, the AI searches both personal and business Brain paths (results prefixed `personal/` or `business/`). Only available to dual-workspace users.
 
 Rate limited: 20 messages per minute per IP.
+
+### `POST /chat/save`
+Create or overwrite a chat archive file.
+
+**Body** `{ "history": [...], "name": "Optional title", "filename": "2026-07-02_12-00-00.md" }`
+
+- `filename`: if provided, overwrites that file (for continued chat edits). If omitted, creates a new timestamped file.
+- `name`: optional title override; auto-generated from the first user message if absent.
+
+**Response** `{ "filename": "2026-07-02_12-00-00.md", "title": "My chat title" }`
+
+### `GET /chat/saved`
+List all saved chat `.md` files for the current user in the active workspace, newest first.
+
+**Response** — array of `{ "filename": "...", "title": "..." }` objects.
+
+### `DELETE /chat/saved/{filename}`
+Delete a saved chat file.
+
+**Response** `{ "ok": true }`
+
+### `POST /chat/save-memory`
+Extract key facts from a conversation and append them to the user's long-term memory.
+
+**Body** `{ "history": [...] }`
+
+**Response** `{ "ok": true }`
+
+### `GET /chat/runs`
+List recent agent runs (tool-using runs only) for the current user.
+
+**Response** — array of run objects `{ "id": "...", "timestamp": "...", "steps": [...] }`.
+
+### `GET /chat/runs/{run_id}`
+Get a specific agent run by ID.
+
+**Response** — single run object. `404` if not found.
 
 ---
 
@@ -671,6 +742,159 @@ Remove the current push subscription.
 
 ### `POST /push/test`
 Send a test push notification to the current user.
+
+---
+
+## Automations (n8n)
+
+Router mounted at `/api/v1/automations`. Requires the `automations` module to be enabled (or `automations_business` for business-scope workflows).
+
+### Admin — n8n Config
+
+#### `GET /automations/n8n/status`
+Get n8n connection status and workflow count. Admin only.
+
+#### `POST /automations/n8n/config`
+Save n8n URL and API key. Admin only.
+
+**Body** `{ "url": "http://logcore-n8n:5678", "api_key": "n8n_api_..." }`
+
+#### `POST /automations/n8n/sync-workflows`
+Trigger an immediate business workflow sync from the remote stub source. Admin only.
+
+#### `POST /automations/n8n/sync-secrets`
+Re-pull Infisical secrets into `docker/n8n.env` and restart the n8n container. Admin only.
+
+### Workflow Management
+
+#### `GET /automations`
+List workflows for the current user. Returns personal or business workflows based on the active workspace.
+
+#### `POST /automations/import`
+Import a workflow JSON into n8n and record it in the workflow index.
+
+**Body** — `multipart/form-data` with `file` (workflow JSON) and optional `scope` (`"personal"` | `"business"`).
+
+#### `DELETE /automations/{record_id}`
+Delete a workflow record and remove it from n8n. Returns `204 No Content`.
+
+#### `POST /automations/{record_id}/run`
+Trigger a workflow execution.
+
+**Response** `{ "ok": true, "execution_id": "..." }`
+
+#### `POST /automations/{record_id}/activate`
+Activate a workflow in n8n.
+
+#### `POST /automations/{record_id}/deactivate`
+Deactivate a workflow in n8n.
+
+#### `GET /automations/{record_id}/logs`
+Get recent execution logs for a workflow.
+
+---
+
+## Smart Home (Home Assistant)
+
+Router mounted at `/api/v1/home`. Requires the `home` module to be enabled (personal workspace only).
+
+### Admin — HA Config
+
+#### `GET /home/status`
+Get Home Assistant connection status. Returns whether HA is configured and reachable.
+
+#### `POST /home/config`
+Save Home Assistant URL and long-lived token. Admin only. Config stored at `brain/_system/ha_config.json`.
+
+**Body** `{ "url": "http://homeassistant.local:8123", "token": "eyJ..." }`
+
+### Entities
+
+#### `GET /home/entities`
+List all entity states from Home Assistant.
+
+#### `GET /home/entities/{entity_id}`
+Get state of a single entity.
+
+#### `POST /home/entities/{entity_id}/call`
+Call a Home Assistant service on an entity (e.g., `light.turn_on`).
+
+**Body** `{ "service": "turn_on", "data": { "brightness": 200 } }`
+
+#### `GET /home/areas`
+List all areas defined in Home Assistant.
+
+### Scenes & Automations
+
+#### `GET /home/scenes`
+List all scenes.
+
+#### `POST /home/scenes/{entity_id}/activate`
+Activate a scene.
+
+#### `GET /home/automations`
+List all HA automations.
+
+#### `POST /home/automations/{entity_id}/trigger`
+Trigger a HA automation.
+
+### Favourites
+
+#### `GET /home/favourites`
+Get the current user's pinned favourite entity IDs.
+
+**Response** `{ "favourites": ["light.living_room", "switch.fan"] }`
+
+#### `PUT /home/favourites`
+Replace the current user's favourite entity list.
+
+**Body** `{ "favourites": ["light.living_room", "switch.fan"] }`
+
+---
+
+## Admin — Infisical
+
+These endpoints are mounted under `/api/v1/auth`. Admin only.
+
+### `GET /auth/admin/infisical-status`
+Get Infisical integration status (whether a token is configured and from which source).
+
+### `PATCH /auth/admin/infisical-token`
+Set or update the Infisical token.
+
+**Body** `{ "token": "st...." }`
+
+### `DELETE /auth/admin/infisical-token`
+Clear the file-stored Infisical token. Only file-sourced tokens can be cleared via UI; env-var tokens cannot.
+
+---
+
+## Admin — Feature Roles
+
+These endpoints are mounted under `/api/v1/auth`. Admin only.
+
+### `GET /auth/admin/features`
+Get all feature roles and their default disabled modules.
+
+**Response** `{ "roles": { "cleaner": { "disabled_modules": ["chat", "brain", ...] }, ... } }`
+
+### `POST /auth/admin/features/roles`
+Create a new custom feature role.
+
+**Body** `{ "name": "cleaner", "disabled_modules": ["chat", "brain", "notes"] }`
+
+### `PATCH /auth/admin/features/roles/{role_name}`
+Update a feature role's disabled module list.
+
+**Body** `{ "disabled_modules": ["chat"] }`
+
+### `DELETE /auth/admin/features/roles/{role_name}`
+Delete a custom feature role.
+
+### `PATCH /auth/admin/features/users/{user_id}/role`
+Assign a feature role to a user.
+
+**Body** `{ "feature_role": "cleaner" }`
 
 ---
 

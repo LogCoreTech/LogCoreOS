@@ -11,6 +11,10 @@ LogCoreOS/
 │
 ├── CLAUDE.md                     → thin pointer to docs/AGENTS.md
 ├── README.md                     → user-facing quick start (do not move — it's for humans)
+├── CHANGELOG.md                  → user-facing version history (Keep a Changelog format)
+├── SECURITY.md                   → vulnerability disclosure policy
+├── OWNER_SETUP.md                → LogCoreTech managed-service setup checklist (ops, not for AI agents)
+├── LICENSE                       → project license
 ├── launch.sh                     → one-command startup: builds frontend, generates .env, starts Docker
 ├── requirements-dev.txt          → dev/test deps (pytest, etc.)
 │
@@ -142,6 +146,7 @@ LogCoreOS/
     ├── MEMORY.md                  → design decisions, security rules, known gotchas
     ├── MAP.md                     → THIS FILE — navigation index
     ├── API.md                     → REST API endpoint reference
+    ├── TESTING.md                 → testing guide: brain fixture, patterns, coverage targets
     ├── Daily Notes/               → per-session work logs (YYYY-MM-DD.md)
     ├── skills/                    → dev tools for Claude Code sessions
     │   ├── README.md              → skill index and usage

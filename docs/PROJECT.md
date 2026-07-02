@@ -219,9 +219,12 @@ The `scheduler.py` background service handles all internal automation:
 | Job | Schedule | What it does |
 |-----|----------|--------------|
 | Recurring processor | Nightly 00:01 | Archives done non-recurring tasks to history; advances recurring due dates; resets broken streaks |
-| Morning digest | 06:00 | Sends top-3 tasks via ntfy |
-| Overdue check | 19:00 | Alerts on overdue tasks |
+| Morning digest | Configurable (default 06:00) | Runs `daily_digest` suggestion for each user |
+| Overdue check | Configurable (default 19:00) | Alerts on overdue tasks |
 | Weekly review | Sunday 19:00 | Summary of completed tasks by category |
+| Goal drift | Daily 19:30 | Checks progress against goals; surfaces goal drift suggestions |
+| JTI cleanup | Nightly 03:00 | Removes expired revoked JWT token IDs from `auth.json` |
+| Custom jobs | User-configured (daily/weekly/interval) | Per-user custom suggestion schedules registered dynamically |
 
 Scheduler timezone is configurable via `SCHEDULER_TIMEZONE` in `.env`.
 
@@ -260,6 +263,7 @@ Planned connectors:
 ```
 logcore-app    → FastAPI backend + React frontend (port 8000)
 logcore-ntfy   → ntfy push notification server (port 5680)
+logcore-n8n    → n8n workflow automation engine (internal; exposed via app proxy)
 ```
 
 The `brain/` folder and `auth.json` are mounted as volumes — all data persists outside the container.

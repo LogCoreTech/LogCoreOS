@@ -44,6 +44,9 @@ REQUIRED — before responding:
    - $DOCS_DIR/AGENTS.md
    - $DOCS_DIR/MEMORY.md
    - $DOCS_DIR/TASKS.md
+   - $DOCS_DIR/MAP.md
+   - $DOCS_DIR/API.md
+   - $DOCS_DIR/PROJECT.md
 $DAILY_READ${DOCS_UPDATE_STEP}
 
 Read all files, then respond to the user's message.
