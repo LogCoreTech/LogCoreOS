@@ -114,7 +114,7 @@ function NotifBell() {
 }
 
 export default function Layout() {
-  const { user, refreshUser } = useAuth()
+  const { user, logout, refreshUser } = useAuth()
   const { workspace, switchWorkspace } = useWorkspace()
   const navigate = useNavigate()
   const location = useLocation()
@@ -275,6 +275,14 @@ export default function Layout() {
             {!collapsed && 'Settings'}
           </NavLink>
           <button
+            onClick={logout}
+            title={collapsed ? 'Sign out' : undefined}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium transition-colors text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-r-lg border-l-2 border-transparent ${collapsed ? 'justify-center' : ''}`}
+          >
+            <span className="text-base shrink-0">→</span>
+            {!collapsed && 'Sign out'}
+          </button>
+          <button
             onClick={toggleSidebar}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             className="w-full flex items-center justify-center py-2 text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200 transition-colors text-xs"
@@ -292,7 +300,7 @@ export default function Layout() {
           <NotifBell />
         </header>
 
-        <main className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 flex flex-col">
+        <main className="flex-1 min-h-0 overflow-y-scroll overflow-x-hidden p-4 md:p-6 flex flex-col">
           <Outlet />
         </main>
 
@@ -398,6 +406,13 @@ export default function Layout() {
               >
                 <span className="text-base">⚙</span>
                 Settings
+              </button>
+              <button
+                onClick={() => { setShowDrawer(false); logout() }}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              >
+                <span className="text-base">→</span>
+                Sign out
               </button>
             </div>
           </div>

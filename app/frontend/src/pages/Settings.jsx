@@ -904,9 +904,6 @@ export default function Settings() {
           >
             {exporting ? 'Preparing download…' : '⬇ Export Brain (zip)'}
           </button>
-          <button onClick={handleLogout} className="text-red-500 hover:text-red-600 text-sm font-medium block">
-            Sign out
-          </button>
         </div>
       </div>
     </div>

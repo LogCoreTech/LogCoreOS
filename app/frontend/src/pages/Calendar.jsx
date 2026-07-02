@@ -110,7 +110,7 @@ export default function Calendar() {
   const isPoolEv = editEvent?._household === true
 
   return (
-    <div className="max-w-4xl mx-auto space-y-4">
+    <div className="w-full max-w-4xl mx-auto space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold">Calendar</h1>
