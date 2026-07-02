@@ -19,7 +19,7 @@ Before doing anything else, read in this order:
 
 Don't ask permission. Just do it.
 
-**For Claude Code:** `docs/hooks/docs_loader.sh` handles steps 1–3 + this file automatically via a UserPromptSubmit hook.
+**For Claude Code:** `docs/hooks/docs_loader.sh` handles all 5 steps + this file + `docs/API.md` automatically via a UserPromptSubmit hook.
 **For other AI providers:** Read the files above manually in order.
 
 ---
@@ -127,7 +127,7 @@ The module registry lives in `app/frontend/src/lib/constants.js` (`ALL_MODULES`)
 
 Backend enforcement: `require_module("module_id")` is a FastAPI dependency factory that returns 403 if the module is in `user["disabled_modules"]` for the current workspace.
 
-Valid module IDs: `dashboard`, `tasks`, `calendar`, `household`, `notes`, `journal`, `chat`, `automations`, `automations_business`, `home`, `team`
+Valid module IDs: `dashboard`, `tasks`, `goals`, `calendar`, `household`, `notes`, `journal`, `chat`, `automations`, `automations_business`, `home`, `team`
 
 ### Workspace Switching
 Users can have one or both of two workspaces: `personal` and `business`. The active workspace is stored in `localStorage('lc_ws')` and sent on every API call as the `X-Workspace: personal|business` request header.
@@ -192,6 +192,8 @@ The agent in `agent_service.py` runs a tool registry with safety guardrails. Too
 | `GET` | `/api/v1/chat/saved` | List all `.md` files in the user's Chats folder, newest first. |
 | `DELETE` | `/api/v1/chat/saved/{filename}` | Delete a saved chat. |
 | `POST` | `/api/v1/chat/save-memory` | Extract and save memory from a conversation |
+| `GET` | `/api/v1/chat/runs` | List recent agent runs (tool-using runs only) for the current user |
+| `GET` | `/api/v1/chat/runs/{run_id}` | Get a specific agent run by ID |
 
 ---
 
@@ -259,7 +261,7 @@ All API calls go through `lib/api.js`. The `request()` function handles 401 by c
 17 pages in `pages/`: `Dashboard.jsx`, `Tasks.jsx`, `Goals.jsx`, `Chat.jsx`, `Calendar.jsx`, `Household.jsx`, `Team.jsx`, `Notes.jsx`, `Journal.jsx`, `Brain.jsx`, `Profile.jsx`, `Admin.jsx`, `Settings.jsx`, `Login.jsx`, `Setup.jsx`, `Automations.jsx`, `Home.jsx`.
 
 ### Admin-Only Pages
-The `/admin` route is wrapped in `<AdminOnly>` which redirects non-admins to `/`. Admin UI lives in `pages/Admin.jsx`. Render order: UsersCard → RegistrationCard → RolesCard → AiProviderCard → WebSearchCard → HostingCard → InfisicalCard → N8nCard → HomeAssistantCard.
+The `/admin` route is wrapped in `<AdminOnly>` which redirects non-admins to `/`. Admin UI lives in `pages/Admin.jsx`. Render order: UsersCard → RegistrationCard → RolesCard → AiProviderCard → WebSearchCard → HostingCard → InfisicalCard → N8nCard → HomeAssistantCard → PoolPrioritiesCard.
 
 ### Styling
 Tailwind classes only. Custom classes (`btn-primary`, `btn-ghost`, `input`, `card`, `badge`) are defined in `src/index.css`. Design system:
@@ -286,15 +288,9 @@ All runtime theming is handled by `applyAccentColor()`, `applyDarkMode()`, `appl
 
 Tests live in `app/backend/tests/`. Run with `pytest tests/ -v` from `app/backend/`.
 
-The `brain` fixture in `conftest.py` patches `settings.brain_path` to an isolated temp directory. All tests that touch the filesystem must use this fixture.
+**Always run tests before committing any backend change.**
 
-Coverage targets:
-- `recurring_service._next_due` — exhaustive date arithmetic including leap years
-- `priority_service.score_task` — scoring formula
-- `auth_service` — user CRUD, token operations, revocation
-- `task_service` — task CRUD, pagination
-
-Run tests before committing any backend change.
+See `docs/TESTING.md` for the full guide: the `brain` fixture pattern, how to write tests for a new service, coverage targets, and why we use real filesystem integration (not mocks).
 
 ---
 
@@ -375,3 +371,20 @@ Skills used by the in-app LogCore AI agent live in `brain/skills/`. The in-app A
 | `life-priorities` | Scores tasks by the user's life priority hierarchy; surfaces top 3 most pressing tasks |
 
 See `agent/README.md` for the full in-app agent architecture and tool registry.
+
+---
+
+## Glossary
+
+| Term | Definition |
+|------|------------|
+| **Brain** | The user's data directory (`brain/USERS/{name}/`) — Markdown + JSON files. No database. The filesystem IS the database. |
+| **workspace** | A data context: `personal` or `business`. Each user can have one or both. Data paths, module visibility, and notification jobs are all workspace-scoped. |
+| **module** | A named feature area (e.g. `tasks`, `chat`, `home`). Each maps to a frontend page and a backend router. Can be enabled/disabled per user per workspace. |
+| **feature role** | A custom role (e.g. `cleaner`, `nanny`) that controls which modules are visible. Separate from auth role (`admin` / `member` / `guest`). Stored in `brain/_system/features.json`. |
+| **pool** | A shared task/event store for a group. Two pools exist: `_household` (personal workspace) and `_team` (business workspace). Each is a pseudo-user directory in `brain/USERS/`. |
+| **pseudo-user** | A `brain/USERS/` directory that isn't a real user account — used for shared pools (`_household`, `_team`) and the `_template` directory. |
+| **stub file** | A `*.stub.json` in `app/backend/automations_stubs/` that describes a business workflow (name, key, tags) without containing the workflow logic. Drives auto-sync against n8n. |
+| **workspace-keyed dict** | A JSON object shaped `{"personal": [...], "business": [...]}`. Used for `disabled_modules` and `shortcuts` on user records to hold per-workspace values. |
+| **JTI** | JWT ID — a unique identifier on each token. Revoked JTIs are blacklisted in `auth.json` so logout is immediate and stateless JWTs can be invalidated. |
+| **ws_path()** | Helper in `file_service.py` that returns the filesystem base path for a given user + workspace. Always use this — never hardcode `Business/` paths. |
