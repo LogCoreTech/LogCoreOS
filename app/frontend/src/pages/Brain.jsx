@@ -107,6 +107,7 @@ export default function Brain() {
   return (
     <div className="max-w-2xl mx-auto space-y-4">
       <div>
+        <button onClick={() => navigate('/settings')} className="btn-ghost text-sm mb-2">← Settings</button>
         <h1 className="text-2xl font-bold">Brain</h1>
         <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mt-0.5">
           Your personal AI context files. Changes here are read by the AI.
