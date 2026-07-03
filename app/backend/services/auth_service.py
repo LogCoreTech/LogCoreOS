@@ -116,6 +116,17 @@ def update_system_settings(updates: dict) -> dict:
         return data["settings"]
 
 
+def enabled_workspaces() -> list[str]:
+    """Instance-wide list of workspaces available on this install.
+
+    Defaults to both. Always returns at least one valid workspace so an empty
+    or malformed setting can never lock everyone out.
+    """
+    raw = get_system_settings().get("enabled_workspaces")
+    valid = [w for w in (raw or []) if w in ("personal", "business")]
+    return valid or ["personal", "business"]
+
+
 def get_user_timezone(user_name: str) -> str:
     user = get_user_by_name(user_name)
     return (user or {}).get("timezone", "UTC")

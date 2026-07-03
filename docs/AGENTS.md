@@ -261,7 +261,7 @@ All API calls go through `lib/api.js`. The `request()` function handles 401 by c
 17 pages in `pages/`: `Dashboard.jsx`, `Tasks.jsx`, `Goals.jsx`, `Chat.jsx`, `Calendar.jsx`, `Household.jsx`, `Team.jsx`, `Notes.jsx`, `Journal.jsx`, `Brain.jsx`, `Profile.jsx`, `Admin.jsx`, `Settings.jsx`, `Login.jsx`, `Setup.jsx`, `Automations.jsx`, `Home.jsx`.
 
 ### Admin-Only Pages
-The `/admin` route is wrapped in `<AdminOnly>` which redirects non-admins to `/`. Admin UI lives in `pages/Admin.jsx`. Render order: UsersCard → RegistrationCard → RolesCard → AiProviderCard → WebSearchCard → HostingCard → InfisicalCard → N8nCard → HomeAssistantCard → PoolPrioritiesCard.
+The `/admin` route is wrapped in `<AdminOnly>` which redirects non-admins to `/`. Admin UI lives in `pages/Admin.jsx`. Render order: UsersCard → RegistrationCard → WorkspaceVisibilityCard → RolesCard → AiProviderCard → WebSearchCard → HostingCard → InfisicalCard → N8nCard → HomeAssistantCard → PoolPrioritiesCard.
 
 ### Styling
 Tailwind classes only. Custom classes (`btn-primary`, `btn-ghost`, `input`, `card`, `badge`) are defined in `src/index.css`. Design system:
@@ -334,13 +334,13 @@ Recurring tasks are **never** archived — they stay in `tasks.json` and have th
 
 ## Household Module
 
-The Household module (`pages/Household.jsx`) is personal-workspace-only. All data lives in `brain/USERS/_household/`. Any member with the `household` module enabled can create/complete tasks; only admins can edit/delete events. Task assignment: admin creates with optional `assigned_to` field; assigned users see task with a 🏠 badge.
+The Household module (`pages/Household.jsx`) is personal-workspace-only. All data lives in `brain/USERS/_household/`. Any member with the `household` module enabled can **read** and complete/uncomplete tasks. **Managing the pool** — adding/editing/deleting events and adding/editing/deleting/assigning tasks — requires admin role or the `household` grant in the user's `pool_edit` list (set via Admin → Users → "Can manage"). Assigned users see the task with a 🏠 badge. Enforced by `require_pool_edit("household")` on every write endpoint in `routers/shared.py`; the frontend `canEdit = isAdmin || user.poolEdit.includes('household')` hides write UI. See the `pool_edit` decision in MEMORY.md for why this is a dedicated grant, not a `disabled_modules` module.
 
 **To add a new household section:** add to the `TABS` array in `Household.jsx`, add a conditional content block, add backend endpoints to `routers/shared.py` and `lib/api.js`.
 
 ## Team Module
 
-The Team module (`pages/Team.jsx`) is the business-workspace equivalent of Household. It uses a completely separate pool (`brain/USERS/_team/`) and a separate router (`routers/team.py`) — never shares code paths with Household. Module ID: `team`; defaults `True` for business members, `False` for personal. Admin can edit/delete events; any team member can create/complete tasks.
+The Team module (`pages/Team.jsx`) is the business-workspace equivalent of Household. It uses a completely separate pool (`brain/USERS/_team/`) and a separate router (`routers/team.py`) — never shares code paths with Household. Module ID: `team`; defaults `True` for business members, `False` for personal. Read/complete is open to team members; **managing the pool** (add/edit/delete events + tasks + assign) requires admin or the `team` grant in `pool_edit`, enforced by `require_pool_edit("team")`. Mirrors Household's permission model exactly.
 
 ## Notes Module
 

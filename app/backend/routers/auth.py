@@ -85,10 +85,24 @@ def get_current_user(
     # Attach jti and exp so logout can revoke with persistence
     user["_jti"] = payload.get("jti")
     user["_exp"] = payload.get("exp")
-    # Lazy migration: ensure admin always has both workspaces
-    if user.get("role") == "admin" and "business" not in user.get("workspaces", []):
-        auth_service.update_user(user["id"], {"workspaces": ["personal", "business"]})
-        user["workspaces"] = ["personal", "business"]
+    enabled_ws = auth_service.enabled_workspaces()
+    # Lazy migration: admins get every instance-enabled workspace (persisted so
+    # access is restored automatically if a hidden workspace is re-enabled).
+    if user.get("role") == "admin":
+        want = [w for w in ("personal", "business") if w in enabled_ws]
+        have = user.get("workspaces", [])
+        if not set(want).issubset(set(have)):
+            merged = sorted(set(have) | set(want))
+            auth_service.update_user(user["id"], {"workspaces": merged})
+            user["workspaces"] = merged
+    # Hide instance-disabled workspaces from what the frontend sees (never empty).
+    effective_ws = [w for w in user.get("workspaces", ["personal"]) if w in enabled_ws]
+    if not effective_ws:
+        effective_ws = [enabled_ws[0]]
+    user["workspaces"] = effective_ws
+    # Coerce a disabled/invalid active workspace to an enabled one before use.
+    if workspace not in effective_ws:
+        workspace = effective_ws[0]
     # Compute effective disabled modules for the current workspace
     user["disabled_modules"] = get_effective_disabled(
         user.get("feature_role", "member"),
@@ -114,6 +128,27 @@ def require_module(module_id: str):
                 detail=f"Module '{module_id}' has been disabled for your account.",
             )
         return current_user
+    return check
+
+
+def require_pool_edit(pool: str):
+    """Dependency factory for pool (household/team) write access.
+
+    Admins always pass. Otherwise the user must have been granted management
+    rights for this pool — i.e. `pool` is in their per-user `pool_edit` list.
+    Grants full pool-manager parity (add/edit/delete events + tasks + assign).
+    A grant is default-off, so this cannot use the disabled_modules union model
+    (which only ever adds restrictions); it is a dedicated per-user grant.
+    """
+    def check(current_user: dict = Depends(get_current_user)) -> dict:
+        if current_user.get("role") == "admin":
+            return current_user
+        if pool in (current_user.get("pool_edit") or []):
+            return current_user
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to make changes here.",
+        )
     return check
 
 
@@ -349,6 +384,7 @@ def me(current_user: dict = Depends(get_current_user), _rl: None = Depends(_get_
         "timezone":             current_user.get("timezone", "UTC"),
         "feature_role":         current_user.get("feature_role", "member"),
         "disabled_modules":     current_user.get("disabled_modules", []),
+        "pool_edit":            current_user.get("pool_edit", []),
         "workspaces":           current_user.get("workspaces", ["personal"]),
         "accent_color":         current_user.get("accent_color"),
         "dark_mode":            current_user.get("dark_mode", "system"),
@@ -484,10 +520,45 @@ def update_user_workspaces(
     _rl: None = Depends(_admin_limit),
 ):
     """Set which workspaces a user can access (admin only)."""
+    disabled = [w for w in req.workspaces if w not in auth_service.enabled_workspaces()]
+    if disabled:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Workspace(s) disabled for this instance: {disabled}",
+        )
     user = auth_service.update_user(user_id, {"workspaces": req.workspaces})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return {"ok": True, "workspaces": req.workspaces}
+
+
+_VALID_POOLS = {"household", "team"}
+
+
+class PoolEditRequest(BaseModel):
+    pool_edit: list[str]
+
+    @field_validator("pool_edit")
+    @classmethod
+    def validate_pools(cls, v: list[str]) -> list[str]:
+        invalid = [p for p in v if p not in _VALID_POOLS]
+        if invalid:
+            raise ValueError(f"Unknown pool(s): {invalid}")
+        return sorted(set(v))
+
+
+@router.patch("/admin/users/{user_id}/pool-edit")
+def update_user_pool_edit(
+    user_id: str,
+    req: PoolEditRequest,
+    current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_admin_limit),
+):
+    """Grant/revoke household & team pool-management rights for a user (admin only)."""
+    user = auth_service.update_user(user_id, {"pool_edit": req.pool_edit})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"ok": True, "pool_edit": req.pool_edit}
 
 
 class WorkspaceModulesRequest(BaseModel):
@@ -771,7 +842,7 @@ def admin_create_user(req: CreateUserRequest, current_user: dict = Depends(requi
     return {k: v for k, v in user.items() if k in {"id", "email", "name", "role", "created_at"}}
 
 
-_ADMIN_USER_FIELDS = {"id", "email", "name", "role", "created_at", "feature_role", "disabled_modules", "workspaces", "timezone"}
+_ADMIN_USER_FIELDS = {"id", "email", "name", "role", "created_at", "feature_role", "disabled_modules", "workspaces", "pool_edit", "timezone"}
 
 
 @router.get("/admin/users")
@@ -813,7 +884,20 @@ def admin_delete_user(user_id: str, current_user: dict = Depends(require_admin))
 # ---------------------------------------------------------------------------
 
 class AdminSettingsRequest(BaseModel):
-    allow_open_registration: bool
+    allow_open_registration: bool | None = None
+    enabled_workspaces: list[str] | None = None
+
+    @field_validator("enabled_workspaces")
+    @classmethod
+    def _validate_workspaces(cls, v):
+        if v is None:
+            return v
+        invalid = [w for w in v if w not in _VALID_WORKSPACES]
+        if invalid:
+            raise ValueError(f"Invalid workspace(s): {invalid}")
+        if not v:
+            raise ValueError("At least one workspace must remain enabled")
+        return v
 
 
 @router.get("/admin/settings")
@@ -822,7 +906,8 @@ def get_admin_settings(current_user: dict = Depends(require_admin)):
     return {
         "allow_open_registration": runtime.get(
             "allow_open_registration", settings.allow_open_registration
-        )
+        ),
+        "enabled_workspaces": auth_service.enabled_workspaces(),
     }
 
 
@@ -831,5 +916,8 @@ def update_admin_settings(
     req: AdminSettingsRequest,
     current_user: dict = Depends(require_admin),
 ):
-    updated = auth_service.update_system_settings(req.model_dump())
-    return {"allow_open_registration": updated.get("allow_open_registration")}
+    updated = auth_service.update_system_settings(req.model_dump(exclude_none=True))
+    return {
+        "allow_open_registration": updated.get("allow_open_registration"),
+        "enabled_workspaces": auth_service.enabled_workspaces(),
+    }

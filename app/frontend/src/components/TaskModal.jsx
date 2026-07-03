@@ -7,6 +7,9 @@ const RECURRENCES = ['daily', 'weekly', 'monthly']
 
 export default function TaskModal({ task, categories: propCategories, defaultType, saveApi, users, onClose, onSave, onDelete }) {
   const editing = !!task
+  // Assigned pool tasks (household/team) live in another store — open them view-only.
+  // Tasks page tags them with `_source`; Calendar tags them with `_household`.
+  const readOnly = editing && (task._source === 'household' || task._source === 'team' || task._household === true)
   const [categories, setCategories] = useState(propCategories || [])
   const [form, setForm] = useState({
     title:       task?.title       || '',
@@ -100,11 +103,12 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
     <div className="fixed inset-0 bg-black/60 z-50 flex items-end md:items-center justify-center p-4">
       <div className="card p-5 w-full max-w-sm max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold">{editing ? 'Edit Task' : 'Add Task'}</h2>
+          <h2 className="font-semibold">{readOnly ? 'View Task' : editing ? 'Edit Task' : 'Add Task'}</h2>
           <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
         </div>
 
         <form onSubmit={submit} className="space-y-4">
+          <fieldset disabled={readOnly} className="space-y-4 border-0 p-0 m-0 min-w-0 disabled:opacity-70">
           {/* Title */}
           <div>
             <label className="block text-sm font-medium mb-1">Task</label>
@@ -257,19 +261,27 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
             </div>
           )}
 
+          </fieldset>
+
           {error && <p className="text-red-500 text-sm">{error}</p>}
 
           <div className="flex gap-2 pt-1">
-            {editing && onDelete && (
-              <button type="button" onClick={handleDelete} disabled={loading}
-                className="px-3 py-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                Delete
-              </button>
+            {readOnly ? (
+              <button type="button" onClick={onClose} className="btn-ghost flex-1">Close</button>
+            ) : (
+              <>
+                {editing && onDelete && (
+                  <button type="button" onClick={handleDelete} disabled={loading}
+                    className="px-3 py-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                    Delete
+                  </button>
+                )}
+                <button type="button" onClick={onClose} className="btn-ghost flex-1">Cancel</button>
+                <button type="submit" disabled={loading} className="btn-primary flex-1">
+                  {loading ? 'Saving…' : editing ? 'Save Changes' : 'Add Task'}
+                </button>
+              </>
             )}
-            <button type="button" onClick={onClose} className="btn-ghost flex-1">Cancel</button>
-            <button type="submit" disabled={loading} className="btn-primary flex-1">
-              {loading ? 'Saving…' : editing ? 'Save Changes' : 'Add Task'}
-            </button>
           </div>
         </form>
       </div>
