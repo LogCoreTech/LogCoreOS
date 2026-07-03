@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { shared as sharedApi, admin as adminApi } from '../lib/api'
+import { shared as sharedApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import TaskModal from '../components/TaskModal'
 import EventModal from '../components/EventModal'
@@ -34,6 +34,8 @@ function todayStr() {
 export default function Household() {
   const { user } = useAuth()
   const isAdmin  = user?.role === 'admin'
+  // Pool-manager rights: admins always; others need an explicit household grant.
+  const canEdit  = isAdmin || (user?.poolEdit || []).includes('household')
   const today    = new Date()
 
   const [view, setView]     = useState('calendar')
@@ -58,8 +60,8 @@ export default function Household() {
 
   useEffect(() => { load() }, [])
   useEffect(() => {
-    if (isAdmin) adminApi.users().then(setUsers).catch(() => {})
-  }, [isAdmin])
+    if (canEdit) sharedApi.members().then(setUsers).catch(() => {})
+  }, [canEdit])
 
   function prev() {
     if (month === 0) { setYear(y => y - 1); setMonth(11) }
@@ -162,7 +164,7 @@ export default function Household() {
                 </button>
               ))}
             </div>
-            {isAdmin && (
+            {canEdit && (
               <div className="flex gap-2 ml-auto">
                 <button
                   onClick={() => { setEditEvent(null); setShowEventModal(true) }}
@@ -190,7 +192,7 @@ export default function Household() {
               month={month}
               selectedDay={selected}
               onSelectDay={ds => setSelected(ds ?? todayStr())}
-              readOnly={!isAdmin}
+              readOnly={!canEdit}
               onEditTask={task => { setEditTask(task); setShowTaskModal(true) }}
               onEditEvent={ev  => { setEditEvent(ev);  setShowEventModal(true) }}
               onAddTask={() => { setEditTask(null); setShowTaskModal(true) }}
@@ -220,7 +222,7 @@ export default function Household() {
                 </button>
               ))}
             </div>
-            {isAdmin && (
+            {canEdit && (
               <button
                 onClick={() => { setEditTask(null); setShowTaskModal(true) }}
                 className="btn-primary text-sm px-3 py-1.5 shrink-0"
@@ -242,7 +244,7 @@ export default function Household() {
                 <HouseholdTaskCard
                   key={task.id}
                   task={task}
-                  isAdmin={isAdmin}
+                  canEdit={canEdit}
                   today={_today}
                   onDone={() => toggleDone(task)}
                   onEdit={() => { setEditTask(task); setShowTaskModal(true) }}
@@ -258,7 +260,7 @@ export default function Household() {
         <TaskModal
           task={editTask}
           saveApi={sharedApi}
-          users={isAdmin ? users : undefined}
+          users={canEdit ? users : undefined}
           onClose={() => { setShowTaskModal(false); setEditTask(null) }}
           onSave={() => { setShowTaskModal(false); setEditTask(null); load() }}
           onDelete={() => { setShowTaskModal(false); setEditTask(null); load() }}
@@ -277,7 +279,7 @@ export default function Household() {
   )
 }
 
-function HouseholdTaskCard({ task, isAdmin, today, onDone, onEdit }) {
+function HouseholdTaskCard({ task, canEdit, today, onDone, onEdit }) {
   const overdue = task.status === 'pending' && task.due_date && task.due_date < today
 
   return (
@@ -321,8 +323,8 @@ function HouseholdTaskCard({ task, isAdmin, today, onDone, onEdit }) {
         )}
       </div>
 
-      {/* Edit — admin only */}
-      {isAdmin && (
+      {/* Edit — pool managers only */}
+      {canEdit && (
         <button onClick={onEdit} className="text-charcoal-400 hover:text-orange-500 p-1 text-xs shrink-0">✎</button>
       )}
     </div>

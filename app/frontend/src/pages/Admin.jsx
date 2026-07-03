@@ -75,6 +75,10 @@ function UsersCard({ currentUserId, roles, onRolesLoaded }) {
   // Workspace access
   const [userWorkspaces, setUserWorkspaces] = useState({})
   const [wsSaving, setWsSaving]             = useState(null)
+  const [enabledWs, setEnabledWs]           = useState(['personal', 'business'])
+  // Pool management grants (household/team)
+  const [userPoolEdit, setUserPoolEdit]     = useState({})
+  const [poolEditSaving, setPoolEditSaving] = useState(null)
   // Feature role assignment
   const [pendingFRole, setPendingFRole]     = useState({})
   const [fRoleSaving, setFRoleSaving]       = useState(null)
@@ -85,11 +89,17 @@ function UsersCard({ currentUserId, roles, onRolesLoaded }) {
   }
 
   async function loadUsers() {
-    const [d, fd] = await Promise.all([adminApi.listUsers(), featuresApi.get()])
+    const [d, fd, settings] = await Promise.all([
+      adminApi.listUsers(),
+      featuresApi.get(),
+      adminApi.getSettings().catch(() => null),
+    ])
+    if (settings?.enabled_workspaces) setEnabledWs(settings.enabled_workspaces)
     const list = d.users || d
     setUsers(list)
     const modMap = {}
     const wsMap = {}
+    const peMap = {}
     list.forEach(u => {
       const raw = u.disabled_modules
       if (Array.isArray(raw)) {
@@ -100,9 +110,11 @@ function UsersCard({ currentUserId, roles, onRolesLoaded }) {
         modMap[u.id] = { personal: [], business: [] }
       }
       wsMap[u.id] = u.workspaces || ['personal']
+      peMap[u.id] = u.pool_edit || []
     })
     setUserModules(modMap)
     setUserWorkspaces(wsMap)
+    setUserPoolEdit(peMap)
     onRolesLoaded(Object.keys(fd.roles || { member: {} }))
   }
 
@@ -209,6 +221,26 @@ function UsersCard({ currentUserId, roles, onRolesLoaded }) {
       flash(false, err.message || 'Failed to save workspace access')
     } finally {
       setWsSaving(null)
+    }
+  }
+
+  function toggleUserPoolEdit(userId, pool) {
+    setUserPoolEdit(prev => {
+      const cur = prev[userId] || []
+      const next = cur.includes(pool) ? cur.filter(p => p !== pool) : [...cur, pool]
+      return { ...prev, [userId]: next }
+    })
+  }
+
+  async function saveUserPoolEdit(userId) {
+    setPoolEditSaving(userId)
+    try {
+      await adminApi.updatePoolEdit(userId, userPoolEdit[userId] || [])
+      flash(true, 'Pool management access saved.')
+    } catch (err) {
+      flash(false, err.message || 'Failed to save pool access')
+    } finally {
+      setPoolEditSaving(null)
     }
   }
 
@@ -355,7 +387,7 @@ function UsersCard({ currentUserId, roles, onRolesLoaded }) {
                 key={user.id}
                 className="rounded-lg border border-charcoal-100 dark:border-charcoal-800"
               >
-                <div className="flex items-center gap-3 p-3">
+                <div className="flex items-center gap-3 p-3 flex-wrap">
                   <div className="w-9 h-9 rounded-full bg-orange-500 text-white flex items-center justify-center text-sm font-semibold shrink-0">
                     {initials(user.name)}
                   </div>
@@ -406,8 +438,8 @@ function UsersCard({ currentUserId, roles, onRolesLoaded }) {
                     {/* Workspace access — always visible */}
                     <div className="border-t border-charcoal-100 dark:border-charcoal-800 px-3 py-2 flex items-center gap-3 flex-wrap">
                       <span className="text-xs text-charcoal-500 dark:text-charcoal-400 shrink-0">Workspaces</span>
-                      <div className="flex items-center gap-3">
-                        {['personal', 'business'].map(ws => (
+                      <div className="flex items-center gap-3 flex-wrap">
+                        {['personal', 'business'].filter(ws => enabledWs.includes(ws)).map(ws => (
                           <label key={ws} className="flex items-center gap-1.5 cursor-pointer">
                             <input
                               type="checkbox"
@@ -425,6 +457,34 @@ function UsersCard({ currentUserId, roles, onRolesLoaded }) {
                         className="btn-primary text-xs px-3 py-1 shrink-0 disabled:opacity-30"
                       >
                         {wsSaving === user.id ? '…' : 'Save'}
+                      </button>
+                    </div>
+
+                    {/* Pool management — grant add/edit/assign on Household & Team */}
+                    <div className="border-t border-charcoal-100 dark:border-charcoal-800 px-3 py-2 flex items-center gap-3 flex-wrap">
+                      <span className="text-xs text-charcoal-500 dark:text-charcoal-400 shrink-0" title="Allow this user to add & edit events and add & assign tasks in the shared pool">Can manage</span>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        {[
+                          { pool: 'household', label: 'Household', ws: 'personal' },
+                          { pool: 'team',      label: 'Team',      ws: 'business' },
+                        ].filter(p => enabledWs.includes(p.ws)).map(p => (
+                          <label key={p.pool} className="flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={(userPoolEdit[user.id] || []).includes(p.pool)}
+                              onChange={() => toggleUserPoolEdit(user.id, p.pool)}
+                              className="accent-orange-500 w-3.5 h-3.5"
+                            />
+                            <span className="text-xs">{p.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => saveUserPoolEdit(user.id)}
+                        disabled={poolEditSaving === user.id}
+                        className="btn-primary text-xs px-3 py-1 shrink-0 disabled:opacity-30"
+                      >
+                        {poolEditSaving === user.id ? '…' : 'Save'}
                       </button>
                     </div>
 
@@ -587,6 +647,93 @@ function RegistrationCard() {
             }`}
           />
         </button>
+      </div>
+
+      {msg && (
+        <p className={`text-sm mt-3 ${msg.ok ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+          {msg.text}
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Workspace visibility card
+// ---------------------------------------------------------------------------
+
+const WORKSPACES = [
+  { id: 'personal', label: 'Personal', desc: 'Personal life OS: household, journal, smart home.' },
+  { id: 'business', label: 'Business', desc: 'Business workspace: team pool, business automations.' },
+]
+
+function WorkspaceVisibilityCard() {
+  const [enabled, setEnabled] = useState(['personal', 'business'])
+  const [saving, setSaving]   = useState(false)
+  const [msg, setMsg]         = useState(null)
+
+  useEffect(() => {
+    adminApi.getSettings()
+      .then(d => setEnabled(d.enabled_workspaces || ['personal', 'business']))
+      .catch(() => {})
+  }, [])
+
+  async function toggle(ws) {
+    const next = enabled.includes(ws) ? enabled.filter(w => w !== ws) : [...enabled, ws]
+    if (next.length === 0) {
+      setMsg({ ok: false, text: 'At least one workspace must stay enabled.' })
+      setTimeout(() => setMsg(null), 4000)
+      return
+    }
+    setSaving(true)
+    setMsg(null)
+    try {
+      const updated = await adminApi.updateSettings({ enabled_workspaces: next })
+      setEnabled(updated.enabled_workspaces || next)
+      setMsg({ ok: true, text: 'Workspace visibility updated.' })
+    } catch (err) {
+      setMsg({ ok: false, text: err.message || 'Failed to save' })
+    } finally {
+      setSaving(false)
+      setTimeout(() => setMsg(null), 4000)
+    }
+  }
+
+  return (
+    <div className="card p-5">
+      <h2 className="font-semibold mb-1">Workspaces</h2>
+      <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-4">
+        Hide a workspace across the whole instance — even for admins. Use this for a
+        personal-only or business-only install.
+      </p>
+
+      <div className="space-y-3">
+        {WORKSPACES.map(ws => {
+          const on = enabled.includes(ws.id)
+          return (
+            <div key={ws.id} className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{ws.label}</p>
+                <p className="text-xs text-charcoal-400">{ws.desc}</p>
+              </div>
+              <button
+                onClick={() => toggle(ws.id)}
+                disabled={saving}
+                className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                  on ? 'bg-orange-500' : 'bg-charcoal-300 dark:bg-charcoal-700'
+                } disabled:opacity-50`}
+                role="switch"
+                aria-checked={on}
+              >
+                <span
+                  className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${
+                    on ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+          )
+        })}
       </div>
 
       {msg && (
@@ -1344,10 +1491,10 @@ function RolesCard({ roles, onRolesChange }) {
               <div className="flex items-center gap-3 px-4 py-3">
                 <button
                   onClick={() => setExpandedRole(open ? null : name)}
-                  className="flex-1 flex items-center gap-2 text-left"
+                  className="flex-1 min-w-0 flex items-center gap-2 text-left"
                 >
-                  <span className="text-xs text-charcoal-400">{open ? '▾' : '▸'}</span>
-                  <span className="font-medium text-sm">{name}</span>
+                  <span className="text-xs text-charcoal-400 shrink-0">{open ? '▾' : '▸'}</span>
+                  <span className="font-medium text-sm truncate">{name}</span>
                   {isBuiltIn && (
                     <span className="text-xs text-charcoal-400">
                       {name === 'guest' ? 'built-in · default' : 'built-in'}
@@ -1805,10 +1952,11 @@ export default function Admin() {
   const [roles, setRoles] = useState(['member'])
 
   return (
-    <div className="max-w-lg mx-auto space-y-6">
+    <div className="w-full max-w-lg mx-auto space-y-6">
       <h1 className="text-2xl font-bold">Admin</h1>
       <UsersCard currentUserId={user?.id || ''} roles={roles} onRolesLoaded={setRoles} />
       <RegistrationCard />
+      <WorkspaceVisibilityCard />
       <RolesCard roles={roles} onRolesChange={setRoles} />
       <AiProviderCard />
       <WebSearchCard />

@@ -83,6 +83,7 @@ Returns current user's profile.
   "timezone": "America/Chicago",
   "workspaces": ["personal"],
   "disabled_modules": [],
+  "pool_edit": [],
   "accent_color": "#f97316",
   "dark_mode": "system",
   "background": "gradient:midnight",
@@ -201,12 +202,14 @@ Set which modules are disabled for a user.
 ### `GET /auth/admin/settings`
 Get runtime admin settings.
 
-**Response** `{ "allow_open_registration": false }`
+**Response** `{ "allow_open_registration": false, "enabled_workspaces": ["personal", "business"] }`
 
 ### `PATCH /auth/admin/settings`
-Update runtime admin settings.
+Update runtime admin settings. All fields optional — only send what changes.
 
-**Body** `{ "allow_open_registration": true }`
+**Body** `{ "allow_open_registration": true }` and/or `{ "enabled_workspaces": ["personal"] }`
+
+`enabled_workspaces` — instance-wide list of workspaces available on this install (subset of `["personal", "business"]`, never empty). Hiding a workspace removes it for **everyone, including admins**: `get_current_user()` intersects each user's `workspaces` with this list. Used for personal-only or business-only deployments.
 
 ### `GET /auth/admin/ai-settings`
 Get AI provider configuration.
@@ -259,9 +262,18 @@ Set which workspaces a user can access. Admin only.
 
 **Body** `{ "workspaces": ["personal", "business"] }`
 
-Valid workspace values: `"personal"`, `"business"`. At least one workspace must remain enabled.
+Valid workspace values: `"personal"`, `"business"`. At least one workspace must remain enabled. Workspaces disabled instance-wide (see `enabled_workspaces`) are rejected with 400.
 
 **Response** `{ "ok": true, "workspaces": ["personal", "business"] }`
+
+### `PATCH /auth/admin/users/{user_id}/pool-edit`
+Grant or revoke pool-management rights for a user. Admin only.
+
+**Body** `{ "pool_edit": ["household", "team"] }`
+
+Valid pool values: `"household"`, `"team"`. A grant lets the user add/edit/delete events and add/edit/delete/assign tasks in that shared pool — full parity with an admin. Default is `[]` (no grant); admins always have full access regardless. This is a dedicated per-user grant, **not** part of `disabled_modules` (that union model can only remove access, never grant it).
+
+**Response** `{ "ok": true, "pool_edit": ["household"] }`
 
 ### `PATCH /auth/admin/users/{user_id}/workspace-modules`
 Set which modules are disabled for a specific workspace. Admin only.
@@ -637,7 +649,12 @@ Clear all notifications.
 
 Endpoints for the household pool — tasks and events shared across all household members. Router mounted at `/api/v1/shared`.
 
-Any authenticated household member may read and write tasks and create events. Event edit/delete operations require admin role.
+Any authenticated household member may **read** tasks and events. **All writes** (create/update/delete tasks and events, assign) require pool-management rights: admin role, or the `household` grant in the user's `pool_edit`. See `PATCH /auth/admin/users/{id}/pool-edit`.
+
+### `GET /shared/members`
+Member names for the assignment dropdown. Requires household pool-management rights (admin or `household` grant).
+
+**Response** — `[{ "name": "Alice" }, ...]`
 
 ### `GET /shared/tasks`
 List all shared tasks. Returns all tasks regardless of due date or status.
@@ -669,15 +686,15 @@ Delete a shared task.
 List shared calendar events (household pool). Visible on every member's personal calendar when the 🏠 toggle is on.
 
 ### `POST /shared/events`
-Create a shared calendar event. Any household member. `created_by` set automatically.
+Create a shared calendar event. Requires household pool-management rights (admin or `household` grant). `created_by` set automatically.
 
-Household events are also created indirectly by the **"Add to Household"** toggle in the personal calendar's EventModal — this deletes the personal event and creates a household event in one operation.
+Household events are also created indirectly by the **"Add to Household"** toggle in the personal calendar's EventModal — this deletes the personal event and creates a household event in one operation. The toggle is only shown to users with pool-management rights.
 
 ### `PATCH /shared/events/{event_id}`
-Update a shared event. **Admin only.**
+Update a shared event. **Pool managers only** (admin or `household` grant).
 
 ### `DELETE /shared/events/{event_id}`
-Delete a shared event. **Admin only.** Returns `204 No Content`.
+Delete a shared event. **Pool managers only** (admin or `household` grant). Returns `204 No Content`.
 
 ---
 
@@ -687,7 +704,12 @@ Endpoints for the business team pool — tasks and events shared across all busi
 
 The team pool is completely isolated from the household pool (`/shared`). They share the same task/event shape but use separate pseudo-user stores (`_team` vs `_household`) and separate router code — there is no code path that can cross-contaminate the two pools.
 
-Any authenticated team member may read and write tasks and create events. Event edit/delete operations require admin role.
+Any authenticated team member may **read** tasks and events. **All writes** require pool-management rights: admin role, or the `team` grant in the user's `pool_edit`.
+
+### `GET /team/members`
+Member names for the assignment dropdown. Requires team pool-management rights (admin or `team` grant).
+
+**Response** — `[{ "name": "Bob" }, ...]`
 
 ### `GET /team/tasks`
 List all team tasks.
@@ -717,13 +739,13 @@ Delete a team task.
 List team calendar events.
 
 ### `POST /team/events`
-Create a team calendar event. Any team member.
+Create a team calendar event. Requires team pool-management rights (admin or `team` grant).
 
 ### `PATCH /team/events/{event_id}`
-Update a team event. **Admin only.**
+Update a team event. **Pool managers only** (admin or `team` grant).
 
 ### `DELETE /team/events/{event_id}`
-Delete a team event. **Admin only.** Returns `204 No Content`.
+Delete a team event. **Pool managers only** (admin or `team` grant). Returns `204 No Content`.
 
 ---
 

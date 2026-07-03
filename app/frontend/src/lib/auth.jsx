@@ -23,6 +23,7 @@ export function AuthProvider({ children }) {
         name:            me.name,
         role:            me.role,
         disabledModules: me.disabled_modules || [],
+        poolEdit:        me.pool_edit     || [],
         timezone:        me.timezone     || 'UTC',
         workspaces:      me.workspaces   || ['personal'],
         accentColor:     me.accent_color || null,

@@ -287,6 +287,7 @@ function WeekRow({ dates, events, visibleTasks, year, month, selectedDay, onSele
                       }
                     }}
                   >
+                    {t._household && `${t._poolEmoji || '🏠'} `}
                     {t.recurrence && '↻ '}
                     {t.type === 'appointment' ? '📅 ' : ''}
                     {t.title}
@@ -453,6 +454,7 @@ export default function CalendarGrid({
                       task.priority === 'Medium' ? 'bg-yellow-400' :
                                                    'bg-charcoal-300 dark:bg-charcoal-600'
                     }`} />
+                    {task._household && <span className="text-xs shrink-0">{task._poolEmoji || '🏠'}</span>}
                     <span className={`flex-1 text-sm ${task.status !== 'pending' ? 'line-through text-charcoal-400' : ''}`}>
                       {task.recurrence && '↻ '}{task.title}
                     </span>

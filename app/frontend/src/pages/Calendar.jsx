@@ -31,6 +31,9 @@ export default function Calendar() {
   const poolApi  = isPersonal ? sharedApi : teamApi
   const poolEmoji = isPersonal ? '🏠' : '🧑‍🤝‍🧑'
   const poolLabel = isPersonal ? 'Household' : 'Teams'
+  // Can this user push events into / edit the active workspace's pool?
+  const poolKey = isPersonal ? 'household' : 'team'
+  const canEditPool = isAdmin || (user?.poolEdit || []).includes(poolKey)
 
   const today = new Date()
   const [year, setYear]   = useState(today.getFullYear())
@@ -97,7 +100,9 @@ export default function Calendar() {
 
   const allCalendarTasks = [
     ...tasks.filter(t => t.status !== 'done'),
-    ...assignedPoolTasks.filter(t => t.status !== 'done').map(t => ({ ...t, _household: true, _poolEmoji: poolEmoji })),
+    ...(showPool
+      ? assignedPoolTasks.filter(t => t.status !== 'done').map(t => ({ ...t, _household: true, _poolEmoji: poolEmoji }))
+      : []),
   ]
   const visibleTasks = allCalendarTasks.filter(t => shownPriorities.includes(t.priority))
 
@@ -178,7 +183,7 @@ export default function Calendar() {
           onSelectDay={ds => setSelected(ds ?? todayStr())}
           onEditTask={task => { setEditTask(task); setShowModal(true) }}
           onEditEvent={ev => {
-            if (ev._household && !isAdmin) return
+            if (ev._household && !canEditPool) return
             setEditEvent(ev)
             setShowEventModal(true)
           }}
@@ -200,7 +205,7 @@ export default function Calendar() {
           event={editEvent}
           defaultDate={selected || undefined}
           saveApi={isPoolEv ? poolEventApi : undefined}
-          poolSaveApi={!isPoolEv ? poolEventApi : undefined}
+          poolSaveApi={!isPoolEv && canEditPool ? poolEventApi : undefined}
           poolLabel={poolLabel}
           isHouseholdEvent={isPoolEv}
           onClose={() => { setShowEventModal(false); setEditEvent(null) }}
