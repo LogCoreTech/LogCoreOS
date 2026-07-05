@@ -1,7 +1,7 @@
 """update.py — update status check and trigger. Admin only."""
 from fastapi import APIRouter, Depends, HTTPException
 
-from services.auth_service import get_current_user
+from routers.auth import get_current_user
 
 router = APIRouter()
 
