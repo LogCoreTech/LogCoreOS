@@ -6,6 +6,7 @@ import { applyAccentColor, applyDarkMode, applyBackground, applyDensity, applyCo
 
 // Apply stored theme before React renders to prevent FOUC
 ;(function initTheme() {
+  const isAuthPage = window.location.pathname === '/login' || window.location.pathname === '/setup'
   let accentColor = null, darkMode = 'system', background = null, density = 'comfortable', cornerStyle = 'rounded'
   try {
     const cached = JSON.parse(localStorage.getItem('lc_user'))
@@ -17,9 +18,10 @@ import { applyAccentColor, applyDarkMode, applyBackground, applyDensity, applyCo
       cornerStyle = cached.cornerStyle  || 'rounded'
     }
   } catch {}
-  applyAccentColor(accentColor)
+  // Skip accent color on auth pages so the brand orange always matches the logo
+  if (!isAuthPage) applyAccentColor(accentColor)
   applyDarkMode(darkMode, getSystemDarkPreference())
-  applyBackground(background)
+  if (!isAuthPage) applyBackground(background)
   applyDensity(density)
   applyCornerStyle(cornerStyle)
 })()

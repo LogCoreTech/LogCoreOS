@@ -76,7 +76,7 @@ function NotifBell() {
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-2 w-80 max-h-[420px] bg-white dark:bg-charcoal-900 border border-charcoal-200 dark:border-charcoal-700 rounded-2xl shadow-xl z-50 flex flex-col">
+        <div className="absolute right-0 md:right-auto md:left-0 top-full mt-2 w-80 max-h-[420px] bg-white dark:bg-charcoal-900 border border-charcoal-200 dark:border-charcoal-700 rounded-2xl shadow-xl z-50 flex flex-col">
           <div className="flex items-center justify-between px-4 py-3 border-b border-charcoal-200 dark:border-charcoal-700">
             <span className="text-sm font-semibold">Notifications</span>
             {notifs.some(n => !n.read) && (
