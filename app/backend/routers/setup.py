@@ -62,6 +62,7 @@ def setup_status(current_user: dict = Depends(get_current_user), _rl: None = Dep
     return {
         "setup_complete": user_path(current_user["name"]).exists(),
         "show_profile_type": not features_chosen,
+        "enabled_workspaces": auth_service.enabled_workspaces(),
     }
 
 

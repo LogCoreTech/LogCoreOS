@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { setup as setupApi } from '../lib/api'
 
 const BASE_CATEGORIES = ['God', 'Family', 'Job', 'Personal Growth', 'Hobbies']
+const BASE_CATEGORIES_BUSINESS = ['Revenue', 'Team', 'Clients', 'Operations', 'Growth']
 
 export default function Setup() {
   const [step, setStep] = useState(1)
   const [profile, setProfile] = useState('personal')
-  const [role, setRole] = useState('')
   const [timezone, setTimezone] = useState(() => {
     try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Chicago' } catch { return 'America/Chicago' }
   })
@@ -15,12 +15,22 @@ export default function Setup() {
   const [customCat, setCustomCat] = useState('')
   const [dragIdx, setDragIdx] = useState(null)
   const [showProfileType, setShowProfileType] = useState(false)
+  const [enabledWorkspaces, setEnabledWorkspaces] = useState(['personal', 'business'])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const navigate = useNavigate()
 
+  const isBusinessOnly = enabledWorkspaces.length === 1 && enabledWorkspaces[0] === 'business'
+
   useEffect(() => {
-    setupApi.status().then(s => setShowProfileType(s.show_profile_type ?? false)).catch(() => {})
+    setupApi.status().then(s => {
+      setShowProfileType(s.show_profile_type ?? false)
+      const ws = s.enabled_workspaces || ['personal', 'business']
+      setEnabledWorkspaces(ws)
+      if (ws.length === 1 && ws[0] === 'business') {
+        setCategories([...BASE_CATEGORIES_BUSINESS])
+      }
+    }).catch(() => {})
   }, [])
 
   function addCustom() {
@@ -32,7 +42,8 @@ export default function Setup() {
   }
 
   function removeCategory(cat) {
-    if (BASE_CATEGORIES.includes(cat)) return // can't remove base
+    const baseCats = isBusinessOnly ? BASE_CATEGORIES_BUSINESS : BASE_CATEGORIES
+    if (baseCats.includes(cat)) return
     setCategories(categories.filter(c => c !== cat))
   }
 
@@ -53,10 +64,10 @@ export default function Setup() {
     setLoading(true)
     setError('')
     try {
+      const baseCats = isBusinessOnly ? BASE_CATEGORIES_BUSINESS : BASE_CATEGORIES
       await setupApi.create({
         priority_order: categories,
-        custom_categories: categories.filter(c => !BASE_CATEGORIES.includes(c)),
-        role,
+        custom_categories: categories.filter(c => !baseCats.includes(c)),
         timezone,
         profile,
       })
@@ -124,18 +135,6 @@ export default function Setup() {
 
               <div>
                 <label className="block text-sm font-medium mb-1 text-charcoal-700 dark:text-charcoal-300">
-                  Your Role / Occupation
-                </label>
-                <input
-                  type="text"
-                  value={role}
-                  onChange={e => setRole(e.target.value)}
-                  placeholder="e.g. Electrician, Teacher, Business Owner"
-                  className="input"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-charcoal-700 dark:text-charcoal-300">
                   Timezone
                 </label>
                 <div className="flex gap-2">
@@ -166,7 +165,7 @@ export default function Setup() {
                   >IANA timezone name</a>.
                 </p>
               </div>
-              <button onClick={() => setStep(2)} className="btn-primary w-full mt-2">
+              <button onClick={() => setStep(isBusinessOnly ? 3 : 2)} className="btn-primary w-full mt-2">
                 Next →
               </button>
             </div>
@@ -238,20 +237,23 @@ export default function Setup() {
                 {showProfileType && (
                   <p className="text-sm"><span className="text-charcoal-500">Profile:</span> {profile === 'business' ? 'Business' : 'Personal'}</p>
                 )}
-                {role && <p className="text-sm"><span className="text-charcoal-500">Occupation:</span> {role}</p>}
                 <p className="text-sm"><span className="text-charcoal-500">Timezone:</span> {timezone}</p>
-                <p className="text-sm font-medium mt-2">Priority order:</p>
-                {categories.map((cat, i) => (
-                  <p key={cat} className="text-sm text-charcoal-600 dark:text-charcoal-300">
-                    {i + 1}. {cat}
-                  </p>
-                ))}
+                {!isBusinessOnly && (
+                  <>
+                    <p className="text-sm font-medium mt-2">Priority order:</p>
+                    {categories.map((cat, i) => (
+                      <p key={cat} className="text-sm text-charcoal-600 dark:text-charcoal-300">
+                        {i + 1}. {cat}
+                      </p>
+                    ))}
+                  </>
+                )}
               </div>
 
               {error && <p className="text-red-500 text-sm">{error}</p>}
 
               <div className="flex gap-2">
-                <button onClick={() => setStep(2)} className="btn-ghost flex-1">← Back</button>
+                <button onClick={() => setStep(isBusinessOnly ? 1 : 2)} className="btn-ghost flex-1">← Back</button>
                 <button onClick={finish} disabled={loading} className="btn-primary flex-1">
                   {loading ? 'Setting up…' : 'Launch LogCore'}
                 </button>
