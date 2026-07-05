@@ -1,4 +1,5 @@
 import re
+import shutil
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, Response, UploadFile, status
@@ -873,10 +874,13 @@ def admin_update_user_role(
 def admin_delete_user(user_id: str, current_user: dict = Depends(require_admin)):
     if user_id == current_user["id"]:
         raise HTTPException(status_code=400, detail="Cannot delete your own account")
-    try:
-        auth_service.delete_user(user_id)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    target = auth_service.get_user_by_id(user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    auth_service.delete_user(user_id)
+    brain_dir = user_path(target["name"])
+    if brain_dir.exists():
+        shutil.rmtree(brain_dir)
 
 
 # ---------------------------------------------------------------------------
