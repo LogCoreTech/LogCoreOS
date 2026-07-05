@@ -44,12 +44,15 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-charcoal-50 dark:bg-charcoal-900 p-4">
+    <div
+      className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat"
+      style={{ backgroundImage: 'url(/login-banner.PNG)' }}
+    >
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
-          <span className="text-orange-500 font-bold text-3xl">LogCore</span>
-          <p className="text-charcoal-500 dark:text-charcoal-400 text-sm mt-1">
+          <img src="/icon-192.png" alt="LogCore" className="h-20 w-20 mx-auto" />
+          <p className="text-white/70 text-sm mt-3">
             Your life, organized by what matters most.
           </p>
         </div>

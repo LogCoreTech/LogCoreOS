@@ -10,6 +10,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+**Branding on login page**
+- Login page now shows the LogCoreTech banner as a full-bleed background
+- LC logo icon replaces the plain text "LogCore" on Login and Setup pages
+- Accent color and background are no longer applied on `/login` and `/setup` — brand orange is always shown on auth pages regardless of user theme settings
+
+### Fixed
+
+- Notifications dropdown now opens to the left on mobile (was opening off-screen to the right when the bell is in the top-right corner)
+- Admin user delete now removes the user's Brain folder (`brain/USERS/{name}/`) in addition to the auth record — previously the Brain data was orphaned on disk
+- Setup wizard name placeholder changed from a developer's name to "First and Last Name"
+- Setup wizard no longer asks for role/occupation (timezone only in step 1)
+- Setup wizard skips the life priorities step for business-only instances; business instances get distinct default priorities (Revenue, Team, Clients, Operations, Growth)
+- Fixed crash on startup caused by wrong import in `update.py` (`get_current_user` lives in `routers/auth`, not `services/auth_service`)
+
+
+
 **Workspace switching (personal / business)**
 - Users can be granted access to one or both workspaces (`personal`, `business`) by an admin
 - Active workspace persists in `localStorage` and is sent on every API call as `X-Workspace` header

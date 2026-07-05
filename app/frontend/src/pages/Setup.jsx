@@ -83,8 +83,8 @@ export default function Setup() {
     <div className="min-h-screen bg-charcoal-50 dark:bg-charcoal-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
-          <span className="text-orange-500 font-bold text-2xl">LogCore</span>
-          <p className="text-charcoal-500 dark:text-charcoal-400 text-sm mt-1">Let's set up your Brain</p>
+          <img src="/icon-192.png" alt="LogCore" className="h-16 w-16 mx-auto" />
+          <p className="text-charcoal-500 dark:text-charcoal-400 text-sm mt-2">Let's set up your Brain</p>
         </div>
 
         {/* Step indicators */}
