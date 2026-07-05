@@ -296,7 +296,7 @@ See `docs/TESTING.md` for the full guide: the `brain` fixture pattern, how to wr
 
 ## Scheduler
 
-APScheduler runs 7 fixed jobs plus dynamic per-user custom jobs (all times in `settings.scheduler_timezone`):
+APScheduler runs 8 fixed jobs plus dynamic per-user custom jobs (all times in `settings.scheduler_timezone`):
 
 | Job | Schedule | What it does |
 |-----|----------|--------------|
@@ -306,6 +306,7 @@ APScheduler runs 7 fixed jobs plus dynamic per-user custom jobs (all times in `s
 | Weekly review | Sunday 19:00 | Runs `weekly_review` suggestion for each user |
 | Goal drift | Daily 19:30 | Runs `goal_drift` suggestion for each user |
 | JTI cleanup | Nightly 03:00 | Removes expired revoked JWT token IDs from `auth.json` |
+| Update check | Daily 12:00 | Refreshes GitHub release cache → Admin → Updates card reads result |
 | Custom jobs | User-configured (daily/weekly/interval) | Per-user custom suggestion schedules registered dynamically via `add_custom_job()` |
 
 Custom jobs are registered at startup via `_load_custom_jobs()` (reads all enabled custom suggestions across all users) and dynamically via `add_custom_job(user_name, suggestion)` / `remove_custom_job(user_name, suggestion_id)` when the user adds or deletes a custom suggestion.

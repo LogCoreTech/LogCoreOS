@@ -111,6 +111,24 @@ def job_cleanup_revoked_jtis():
         logger.exception("revoked JTI cleanup failed")
 
 
+def job_update_check():
+    """Daily: refresh GitHub version cache. Auto-trigger update if admin has enabled it."""
+    try:
+        from services.update_service import (
+            refresh_version_cache, get_update_status,
+            get_auto_update_enabled, trigger_update,
+        )
+        refresh_version_cache()
+        if not get_auto_update_enabled():
+            return
+        status = get_update_status()
+        if status.get("update_available") and not status.get("update_pending") and not status.get("update_running"):
+            logger.info("auto-update: new version %s available — queuing update", status.get("latest_version"))
+            trigger_update()
+    except Exception:
+        logger.exception("update check failed")
+
+
 def job_workflow_sync():
     try:
         from services.n8n_service import sync_business_workflows
@@ -193,8 +211,9 @@ def start():
     scheduler.add_job(job_goal_drift,            CronTrigger(hour=settings.overdue_check_hour, minute=30),                  id="goal_drift")
     scheduler.add_job(job_cleanup_revoked_jtis,  CronTrigger(hour=3, minute=0),                                             id="jti_cleanup")
     # Workflow sync: 90s after boot (wait for n8n), then every 6 hours
-    scheduler.add_job(job_workflow_sync, "date",     run_date=_dt.now() + _td(seconds=90), id="workflow_sync_boot")
-    scheduler.add_job(job_workflow_sync, IntervalTrigger(hours=6),                          id="workflow_sync_periodic")
+    scheduler.add_job(job_workflow_sync,  "date",                  run_date=_dt.now() + _td(seconds=90), id="workflow_sync_boot")
+    scheduler.add_job(job_workflow_sync,  IntervalTrigger(hours=6),                                        id="workflow_sync_periodic")
+    scheduler.add_job(job_update_check,   CronTrigger(hour=12, minute=0),                                  id="update_check")
     scheduler.start()
     _load_custom_jobs()
     logger.info(

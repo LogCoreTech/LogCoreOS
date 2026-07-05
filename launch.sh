@@ -8,6 +8,9 @@
 #   bash launch.sh --reconfigure    # re-run setup even if docker/.env already exists
 #   bash launch.sh --skip-build     # skip npm build (requires app/frontend/dist/ to exist)
 #
+# Updates are managed from Admin → Updates in the app. launch.sh installs the update
+# cron daemon automatically on every run. Toggle auto-update on/off from the Admin panel.
+#
 # Requirements: Docker (with Compose plugin v2), Node.js 20+, curl
 # On Linux, pass --install-deps to have the script install these automatically.
 
@@ -357,6 +360,44 @@ wait_for_health() {
   log_warn "  docker compose -f docker/docker-compose.yml logs app"
 }
 
+# ── Version stamp ─────────────────────────────────────────────────────────────
+
+write_installed_version() {
+  [[ -f "$REPO_ROOT/VERSION" ]] || return 0
+  local version brain_sys
+  version="$(tr -d '[:space:]' < "$REPO_ROOT/VERSION")"
+  brain_sys="$REPO_ROOT/brain/_system"
+  mkdir -p "$brain_sys"
+  if command -v python3 &>/dev/null; then
+    python3 -c "import json; print(json.dumps({'version': '$version'}))" \
+      > "$brain_sys/installed_version.json"
+    log_info "Installed version stamped: $version"
+  fi
+}
+
+# ── Auto-update watcher ───────────────────────────────────────────────────────
+
+install_update_cron() {
+  if [[ ! -f "$DOCKER_DIR/update.sh" ]]; then
+    log_warn "docker/update.sh not found — skipping update cron setup."
+    return 0
+  fi
+
+  if ! command -v crontab &>/dev/null; then
+    log_warn "crontab not available — update cron not installed. Run update.sh manually to apply updates."
+    return 0
+  fi
+
+  # Idempotent: remove existing logcore-auto-update line, then re-add.
+  local marker="# logcore-auto-update"
+  local cron_line="* * * * * bash \"$DOCKER_DIR/update.sh\" --cron $marker"
+  local existing
+  existing="$(crontab -l 2>/dev/null | grep -v "$marker" || true)"
+  printf '%s\n%s\n' "$existing" "$cron_line" | crontab -
+  log_info "Update cron installed — daemon polls every minute for queued updates."
+  log_info "Toggle auto-update on/off from Admin → Updates. Remove with: crontab -e"
+}
+
 # ── Success ───────────────────────────────────────────────────────────────────
 
 print_success() {
@@ -417,6 +458,8 @@ main() {
   build_frontend
   launch_containers
   wait_for_health
+  write_installed_version
+  install_update_cron
   print_success
 }
 

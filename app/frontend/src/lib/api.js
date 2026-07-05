@@ -275,6 +275,13 @@ export const home = {
   saveFavourites:    (entity_ids)      => request('PUT', '/home/favourites', { entity_ids }),
 }
 
+export const update = {
+  status:        ()           => get('/update/status'),
+  apply:         ()           => post('/update/apply', {}),
+  log:           (lines = 100) => get(`/update/log?lines=${lines}`),
+  patchSettings: (body)       => patch('/update/settings', body),
+}
+
 export const user = {
   async export() {
     const res = await fetch(`${BASE}/user/export`, { headers: headers(), credentials: 'include' })

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { admin as adminApi, features as featuresApi, infisical as infisicalApi, automations as automationsApi, home as homeApi, priorities as prioritiesApi } from '../lib/api'
+import { useEffect, useRef, useState } from 'react'
+import { admin as adminApi, features as featuresApi, infisical as infisicalApi, automations as automationsApi, home as homeApi, priorities as prioritiesApi, update as updateApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { ALL_MODULES } from '../lib/constants'
 
@@ -1947,6 +1947,213 @@ function PoolPrioritiesCard() {
   )
 }
 
+function UpdateCard() {
+  const [status, setStatus]         = useState(null)
+  const [log, setLog]               = useState([])
+  const [showLog, setShowLog]       = useState(false)
+  const [applying, setApplying]     = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [togglingAuto, setTogglingAuto] = useState(false)
+  const [msg, setMsg]               = useState(null)
+  const pollRef                     = useRef(null)
+
+  function flash(ok, text) {
+    setMsg({ ok, text })
+    setTimeout(() => setMsg(null), 6000)
+  }
+
+  async function loadStatus() {
+    try {
+      setStatus(await updateApi.status())
+    } catch { /* silent — backend may be restarting */ }
+  }
+
+  async function loadLog() {
+    try {
+      const r = await updateApi.log(120)
+      setLog(r.lines || [])
+    } catch {}
+  }
+
+  useEffect(() => { loadStatus() }, [])
+
+  // Poll every 8 s while an update is pending or running
+  useEffect(() => {
+    clearInterval(pollRef.current)
+    if (status?.update_pending || status?.update_running) {
+      pollRef.current = setInterval(() => { loadStatus(); if (showLog) loadLog() }, 8000)
+    }
+    return () => clearInterval(pollRef.current)
+  }, [status?.update_pending, status?.update_running, showLog])
+
+  async function applyUpdate() {
+    if (!status?.daemon_active) {
+      flash(false, 'Update daemon is not running. The update cannot be applied. See setup instructions below.')
+      return
+    }
+    if (!confirm('Apply update now?\n\nThe daemon will back up your Brain, pull the latest code, rebuild, and restart. Rolls back automatically if anything fails.')) return
+    setApplying(true)
+    try {
+      await updateApi.apply()
+      flash(true, 'Update queued — the daemon will apply it within 60 seconds.')
+      loadStatus()
+    } catch (e) {
+      flash(false, e.message || 'Failed to queue update')
+    } finally {
+      setApplying(false)
+    }
+  }
+
+  async function toggleAutoUpdate() {
+    if (!status) return
+    const newVal = !status.auto_update_enabled
+    setTogglingAuto(true)
+    try {
+      await updateApi.patchSettings({ auto_update: newVal })
+      setStatus(s => ({ ...s, auto_update_enabled: newVal }))
+    } catch (e) {
+      flash(false, e.message || 'Failed to save setting')
+    } finally {
+      setTogglingAuto(false)
+    }
+  }
+
+  const isWorking = status?.update_pending || status?.update_running
+
+  return (
+    <div className="card p-5 space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="font-semibold">Updates</h2>
+        {status?.update_available && !isWorking && (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 font-medium">
+            Update available
+          </span>
+        )}
+        {!status?.update_available && !isWorking && status && (
+          <span className="text-xs text-green-600 dark:text-green-400">✓ Up to date</span>
+        )}
+      </div>
+
+      {!status ? (
+        <p className="text-sm text-charcoal-500">Loading…</p>
+      ) : (
+        <>
+          {/* Version info */}
+          <div className="text-sm space-y-1.5">
+            <div className="flex justify-between">
+              <span className="text-charcoal-500 dark:text-charcoal-400">Installed</span>
+              <span className="font-mono">{status.current_version}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-charcoal-500 dark:text-charcoal-400">Latest</span>
+              <span className="font-mono">
+                {status.latest_version
+                  ? <a href={status.release_url} target="_blank" rel="noreferrer" className="hover:text-orange-500 transition-colors">{status.latest_version}</a>
+                  : (status.check_error ? 'unavailable' : '—')}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-charcoal-500 dark:text-charcoal-400">Daemon</span>
+              <span className={`text-xs font-medium ${status.daemon_active ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+                {status.daemon_active ? '● active' : '○ not running'}
+              </span>
+            </div>
+          </div>
+
+          {/* Daemon not running warning */}
+          {!status.daemon_active && (
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 text-xs text-yellow-800 dark:text-yellow-300 space-y-1">
+              <p className="font-medium">Update daemon not running</p>
+              <p>Updates can't be applied without it. Start it on the host:</p>
+              <code className="block bg-yellow-100 dark:bg-yellow-900/40 px-2 py-1 rounded mt-1">bash launch.sh</code>
+              <p className="text-yellow-600 dark:text-yellow-400">launch.sh installs the update cron automatically on every run.</p>
+            </div>
+          )}
+
+          {/* Auto-update toggle */}
+          <div className="flex items-center justify-between py-1 border-t border-charcoal-100 dark:border-charcoal-800">
+            <div>
+              <p className="text-sm font-medium">Auto-update</p>
+              <p className="text-xs text-charcoal-500 dark:text-charcoal-400">
+                Apply new versions automatically when detected
+              </p>
+            </div>
+            <button
+              onClick={toggleAutoUpdate}
+              disabled={togglingAuto}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${
+                status.auto_update_enabled ? 'bg-orange-500' : 'bg-charcoal-300 dark:bg-charcoal-600'
+              }`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                status.auto_update_enabled ? 'translate-x-6' : 'translate-x-1'
+              }`} />
+            </button>
+          </div>
+
+          {status.check_error && (
+            <p className="text-xs text-charcoal-400">Check error: {status.check_error}</p>
+          )}
+
+          {isWorking && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-sm text-blue-700 dark:text-blue-300">
+              {status.update_running
+                ? '⟳ Update in progress — app will restart momentarily.'
+                : '⏳ Update queued — daemon will apply it within 60 seconds.'}
+            </div>
+          )}
+
+          {status.last_update?.result === 'rollback' && !isWorking && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-700 dark:text-red-300">
+              ⚠ Last update failed and was rolled back automatically. Check the log below.
+            </div>
+          )}
+
+          {msg && (
+            <p className={`text-sm ${msg.ok ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>{msg.text}</p>
+          )}
+
+          <div className="flex gap-2 flex-wrap">
+            {status.update_available && !isWorking && (
+              <button
+                onClick={applyUpdate}
+                disabled={applying || !status.daemon_active}
+                className="btn-primary text-sm flex-1 disabled:opacity-50"
+                title={!status.daemon_active ? 'Daemon not running' : ''}
+              >
+                {applying ? 'Queuing…' : 'Apply Update'}
+              </button>
+            )}
+            <button
+              onClick={() => { setShowLog(v => !v); if (!showLog) loadLog() }}
+              className="btn-ghost text-sm"
+            >
+              {showLog ? 'Hide Log' : 'View Log'}
+            </button>
+            <button
+              onClick={async () => { setRefreshing(true); await loadStatus(); setRefreshing(false) }}
+              disabled={refreshing}
+              className="text-sm text-charcoal-500 hover:text-orange-500 transition-colors disabled:opacity-50 px-2"
+              title="Refresh"
+            >
+              {refreshing ? '…' : '↺'}
+            </button>
+          </div>
+
+          {showLog && (
+            <div className="bg-charcoal-900 dark:bg-black rounded-lg p-3 text-xs font-mono text-charcoal-100 max-h-56 overflow-y-auto space-y-0.5">
+              {log.length === 0
+                ? <span className="text-charcoal-500">No update log yet.</span>
+                : log.map((line, i) => <div key={i}>{line}</div>)
+              }
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function Admin() {
   const { user } = useAuth()
   const [roles, setRoles] = useState(['member'])
@@ -1965,6 +2172,7 @@ export default function Admin() {
       <N8nCard />
       <HomeAssistantCard />
       <PoolPrioritiesCard />
+      <UpdateCard />
     </div>
   )
 }
