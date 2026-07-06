@@ -4,7 +4,7 @@
 
 If you discover a security vulnerability in LogCoreOS, please **do not open a public GitHub issue**.
 
-Report it privately by emailing: **logcoretechnology@gmail.com**
+Report it privately by emailing: **support@logcoretech.com**
 
 Include:
 - A description of the vulnerability and its potential impact
