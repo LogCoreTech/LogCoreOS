@@ -2,93 +2,128 @@
 
 Keep this up to date. Mark tasks done as they're completed. Add new tasks as they surface. This is the single source of truth for what's being worked on.
 
----
-
-## Active Tasks
-
-*Revenue target: first client within one month. Critical path goes through the land investor — he's a warm lead already waiting.*
-
-- [ ] **Get Anthropic API key** — takes 5 minutes at console.anthropic.com; use Haiku model for demo cost control; without this the demo has no AI and the client pitch has no demo; do this first
-- [ ] **Define pricing tiers with specific numbers** — need dollar amounts before closing the land investor or anyone else; decide: bare bones hosting (setup fee + monthly) vs. managed + custom APIs (higher both); can't say yes to a client without a price
-- [ ] **Automation Inbox / results dashboard** — workflows write structured output to Brain JSON; users see results with per-item actions (Interested / Pass / Offer Made / Closed); workflow skips already-reviewed items; land investor needs this to see the value loop
-- [ ] **Land lead search & qualify workflow** — n8n workflow pulling land listings (LandWatch, Land.com, county records) and AI-qualifying by investor's criteria (price, acreage, location, zoning); stub file in `automations_stubs/`; Brain JSON output schema; depends on Automation Inbox being live
-- [ ] **Close land investor as first client** — once Automation Inbox + workflow are live, demo it to him directly and close; he already asked for this
+**Structure:** phases ordered by dependency (not time), from `docs/BLUEPRINT.md` — the strategy, revenue math, and reasoning live there. Work top-down; a phase's tasks unblock the next phase.
 
 ---
 
-## Backlog
+## Phase 0a — Unblock now (mortgage-safe: no credit pulls, no new financial accounts)
 
-### Launch Prep — do in order before going public
+- [ ] **Get Anthropic API key** — console.anthropic.com, 5 min; Haiku for demo cost control; nothing AI works without it; do this first
+- [ ] **Commit pending change + push** — 1 uncommitted change sitting since the session-5 work on the dev machine; verify, commit, push
+- [ ] **Write the pricing sheet with real numbers** — starting tiers (market-validated, see BLUEPRINT.md): Hosted $200–500 setup + $50–100/mo · Automation $1,000–1,500 setup + $1,000–1,500/mo · Ops Partner $2,500 setup + $2,500–3,500/mo
+- [ ] **Branded email** — `hello@logcoretech.com` via Cloudflare Email Routing (free)
+- [ ] **Bitwarden vault** — all business credentials (VPS, Cloudflare, GitHub, registrar) in one place
+- [ ] **2FA on all critical accounts** — Cloudflare, GitHub, Hetzner, registrar (Stripe when it exists)
+- [ ] **Ask the loan officer** — "Does filing an LLC or receiving small side-business income before closing affect my underwriting?" — answer gates Phase 0b timing
+- [ ] **Name check** — 15 min: USPTO trademark search + Google "LogCore" for conflicts
 
-- [ ] **Commit pending change + push** — 1 uncommitted change has been sitting since the session 5 work; verify, commit, push to GitHub before deploying anywhere
-- [ ] **Verify GitHub repo is public + README is solid** — Reddit and Discord will link straight to the repo; README needs to be good enough for a first impression
-- [ ] **Provision Hetzner CX22 for demo instance** — separate VPS from personal; ~€4.50/mo
-- [ ] **Create new Cloudflare Tunnel token for demo VPS** — current token is set to dev instance and stays there; new token gets set to `demo.logcoretech.com`; do before provisioning the VPS
-- [ ] **Wire demo.logcoretech.com in Cloudflare** — subdomain → Cloudflare Tunnel token for the demo VPS
-- [ ] **Deploy LogCore on demo VPS** — full stack (app + ntfy + n8n + tunnel), open registration on, `demo.logcoretech.com`
-- [ ] **Privacy policy page on logcoretech.com** — required before demo goes public; users put personal data in the app, GDPR/CCPA compliance is not optional
-- [ ] **Terms of service page on logcoretech.com** — needed for demo and managed hosting before anyone signs up
-- [ ] **OG/social preview image for logcoretech.com** — when the link is shared on Reddit/Discord, a good preview card dramatically increases clicks; add `<meta og:image>` to index.html with a branded screenshot or graphic
-- [ ] **Screenshots in README** — at least 2–3 static images of the actual app UI; people decide whether to try it based on screenshots alone
-- [ ] **CONTRIBUTING.md** — expected by open source community before a Reddit post; basic "how to run locally and submit a PR" guide
-- [ ] **GitHub issue templates** — bug report + feature request templates; structures incoming issues so they're useful instead of vague
-- [ ] **GitHub Release tag** — tag the current version (v0.1 or v1.0); users and GitHub stars page both expect this; pairs with existing CHANGELOG.md
-- [ ] **2FA on all critical accounts** — Cloudflare, Hetzner, GitHub, Stripe, domain registrar; one compromised account takes everything down
-- [ ] **Cloudflare Analytics enabled** — already in Cloudflare dashboard, one toggle; free website traffic visibility with no tracking script on the site
-- [ ] **Update website copy for business-first positioning** — current site likely leads with personal/family angle; target customer is businesses; update hero copy, features section, and pitch to lead with team, automations, and managed workflows
-- [ ] **Add "Try the Demo" CTA to logcoretech.com** — button pointing at `demo.logcoretech.com`; users need a clear path from website to demo
+## Phase 0b — After the house closes (or lender clears it)
 
-### Business — Legal
+- [ ] **File Arkansas LLC** — standard $45 at sos.arkansas.gov (expedited $300 only if a full-price client's payment is waiting on it)
+- [ ] **Get EIN** — irs.gov, free, ~5 min; required for business bank account
+- [ ] **Open business bank account** — after LLC + EIN; business money separate from day one
+- [ ] **Set up Stripe** — invoicing + payment links
+- [ ] **Set up Wave accounting** — connected to the business bank account; set aside 25–30% of income for quarterly estimated taxes
+- [ ] **Business credit card** — only after closing, never during underwriting (hard credit pull)
 
-- [ ] **File LLC** — Arkansas; file online at sos.arkansas.gov; $45 standard (~4–6 weeks) or $300 expedited (~3–5 days); pay expedited if you need the bank account open within the month
-- [ ] **Get EIN from IRS** — free, ~5 minutes at irs.gov; required to open a business bank account
-- [ ] **Open business bank account** — keep business money separate from personal from day one; do after LLC + EIN
-- [ ] **Set up accounting** — Wave (free) is sufficient to start; track income and expenses from day one, not retroactively
-- [ ] **Business credit card** — separate card for business expenses; do after bank account is open
-- [ ] **Password manager for business credentials** — Bitwarden free tier; VPS, Cloudflare, GitHub, Stripe, domain registrar passwords all in one secure place; don't manage these in your head
+*Interim invoicing before 0b is done: sole proprietor via Wave (free), paid into a separate personal savings account — small, documented amounts.*
 
-### Business — Go-to-Market
+## Phase 1 — Pilot client (land investor as design partner)
 
-- [ ] **Define managed hosting pricing** — decide the model (monthly flat fee per instance? per user?) before saying yes to any client; need a number to close deals
-- [ ] **Set up Stripe** — payment processing ready before the first client; don't invoice manually
-- [ ] **Set up branded email** — `hello@logcoretech.com` or `support@logcoretech.com` via Cloudflare Email Routing (free); `logcoretech@gmail.com` looks unprofessional to business clients
-- [ ] **Managed hosting waitlist form** — before Stripe is ready, capture emails of interested people via Formspree (already used on contact form); don't lose leads because payment isn't wired up yet
-- [ ] **Client onboarding process doc** — when someone says yes to managed hosting, what are the exact steps? Write it before you need it under pressure; VPS provisioning, DNS, tunnel token, first login handoff
-- [ ] **LinkedIn company page** — B2B clients will search for it; basic page with logo, description, link to logcoretech.com
+- [ ] **Write the pilot agreement (one page)** — discounted rate (e.g., token setup + $250–500/mo, or 60 days free then Automation tier) in exchange for: written testimonial, publishable case study with real numbers, 2 warm referral intros, 15-min weekly feedback call; converts to full Automation tier at a named end date
+- [ ] **Automation Inbox** — workflows write structured output to Brain JSON; users see results with per-item actions (Interested / Pass / Offer Made / Closed); workflow skips already-reviewed items
+- [ ] **Land lead search & qualify workflow** — n8n pulling land listings (LandWatch, Land.com, county records — build a fallback source from day one) and AI-qualifying by investor's criteria; stub file in `automations_stubs/`; Brain JSON output schema; depends on Automation Inbox
+- [ ] **Client onboarding runbook** — exact steps: VPS provision → tunnel → Infisical → first login handoff; includes off-site backups; write before deploying, not during
+- [ ] **Demo + sign the pilot** — demo with his actual criteria loaded, get the agreement signed
+- [ ] **Deploy his full instance** — follow the runbook (this validates it)
+- [ ] **Weekly feedback loop** — log every piece of his feedback here as tasks; his polish list is the vertical's roadmap
+- [ ] **Case study + referrals** — after 2–4 weeks of results: publish case study, collect the 2 referral intros
+- [ ] **Convert pilot to paid** — at the named end date: full Automation tier or amicable exit with case study in hand
 
-### Demo Instance — features to build
+## Phase 2 — Public launch surface (do in order)
 
-- [ ] **Daily demo reset script** — cron job that wipes all non-admin user Brain folders + auth entries nightly, resets to clean template state; keeps the demo box from filling with stale data
-- [ ] **Demo banner in UI** — in-app notice explaining this is a demo and data resets daily; prevents confused support requests
-- [ ] **AI cost protection for demo** — switch demo instance to `claude-haiku-4-5-20251001` (much cheaper) OR add a per-user daily message cap in the chat router; demo users will burn the Anthropic budget without this
-- [ ] **UptimeRobot monitoring on demo URL** — free tier monitors uptime every 5 min and sends email/SMS alert when it goes down; know before users do; set up immediately after demo deploys
+- [ ] **Privacy policy page on logcoretech.com** — blocker before demo goes public (GDPR/CCPA)
+- [ ] **Terms of service page on logcoretech.com** — needed for demo and managed hosting
+- [ ] **New Cloudflare Tunnel token for demo VPS** — set to `demo.logcoretech.com`; do before provisioning
+- [ ] **Provision Hetzner CX22 for demo instance** — ~€4.50/mo, separate from personal
+- [ ] **Deploy LogCore on demo VPS** — full stack (app + ntfy + n8n + tunnel), open registration on
+- [ ] **AI cost protection for demo** — Haiku model AND a per-user daily message cap in the chat router; the cap is non-negotiable before any Reddit post
+- [ ] **Daily demo reset script** — cron wipe of non-admin Brain folders + auth entries nightly
+- [ ] **Demo banner in UI** — "this is a demo, data resets nightly"
+- [ ] **UptimeRobot monitoring on demo URL** — free tier, set up immediately after deploy
+- [ ] **Off-site backups for demo VPS** — Hetzner snapshots or object storage; on-box backup.sh alone is not a backup; same pattern goes into the client runbook
+- [ ] **Screenshots in README** — 3+ images + a 30-second GIF of the AI using its memory
+- [ ] **CONTRIBUTING.md** — how to run locally and submit a PR
+- [ ] **GitHub issue templates** — bug report + feature request
+- [ ] **GitHub Discussions** — one toggle in repo settings
+- [ ] **GitHub Release tag v0.1.0** — also activates the built-in updater (GITHUB_REPO already wired)
+- [ ] **Website: business-first copy + Try the Demo CTA** — hero leads with team/automations/managed workflows; CTA → demo.logcoretech.com
+- [ ] **OG/social preview image for logcoretech.com** — `<meta og:image>` with branded screenshot
+- [ ] **Managed hosting waitlist form** — Formspree, capture leads before Stripe checkout exists
+- [ ] **Cloudflare Analytics enabled** — one toggle, free
+- [ ] **LinkedIn company page** — logo, description, link
 
-### Community
+## Phase 3 — Client acquisition (clients #2–6 → $10k/mo)
 
-- [ ] **Reddit post** — post to r/selfhosted, r/productivity, r/homelab once demo is live
-- [ ] **Discord server** — create and link from website + GitHub README
-- [ ] **GitHub Discussions** — one toggle in repo settings; gives community a place to ask questions
-- [ ] **Facebook page post** — announce to existing followers once demo is live
-- [ ] **Demo video or GIF** — screen recording of the app in action; single biggest missing piece for Reddit posts and README; people decide whether to click through based on this alone
+- [ ] **Vertical offer #1: RE / property management** — "deal flow on autopilot"; land-lead workflow re-skinned for wholesalers, agents, property managers
+- [ ] **Vertical offer #2: contractors & trades** — lead intake + quote follow-up + scheduling reminders, sold through the electrician network
+- [ ] **Service agreement template** — liability cap, data-handling terms, "async support, 24–48h response"; required before client #2 signs
+- [ ] **One-page offer PDF per vertical + 15-min demo call script**
+- [ ] **List 50 prospects** — RE investors/property managers (Facebook groups, BiggerPockets, pilot's referrals) + contractors/GCs known by name
+- [ ] **Outreach cadence** — 10 personal messages/week minimum (~2 hrs); track in LogCore's own Business workspace
+- [ ] **Publish pilot case study** — website + Facebook page, cross-post to LinkedIn
+- [ ] **Collect the 2 referral intros** — prospects #1 and #2
+- [ ] **Close clients #2–#3 at full price** — never repeat the pilot discount; raise prices if closing >50%
+- [ ] **Close clients #4–#6** — $10k/mo checkpoint: ~6 full-price clients averaging $1,700/mo
+- [ ] **Weekly revenue tracker** — MRR, pipeline count, churn; review every week
 
-### Workflows — managed automation business
+## Phase 4 — Community & following (starts once Phase 2 ships; write once, cross-post everywhere)
 
-*(Automation Inbox and land lead workflow moved to Active Tasks — time-sensitive, first client depends on them)*
+- [ ] **Demo video/GIF** — 2–3 min unedited screen recording; biggest conversion asset
+- [ ] **Facebook page announcement** — existing followers first
+- [ ] **n8n cross-posting workflow** — one post → auto-publish Facebook + LinkedIn (doubles as a sellable case study)
+- [ ] **Build-in-public cadence** — 1 post/week on Facebook, cross-posted; revenue milestones, feature ships, lessons
+- [ ] **Discord server** — linked from README + website
+- [ ] **Reddit launch** — r/selfhosted first (data ownership + AI memory + local-first, NOT the business pitch), then r/n8n, r/productivity, r/homelab; one evening each, spaced out
+- [ ] **Show HN post** — after Reddit feedback is folded in
+- [ ] **Community responsiveness** — reply to issues/Discussions/Discord within 24 hrs for the first 90 days (one daily 30-min slot)
+- [ ] *Deferred until time bought back:* YouTube videos on the existing channel
 
-### Product Backlog
+## Phase 5 — Product features that unblock scale (build when a phase above demands it)
 
-- [x] **Self-hoster update flow** — `docker/update.sh` handles in-place updates with auto-rollback; Admin → Updates card shows current vs latest version; `launch.sh --auto-update` installs cron for hands-free updates; daily scheduler job refreshes version cache (2026-07-05)
-- [ ] **User-customizable Dashboard per workspace** — each user can choose which widgets appear on their personal and business dashboards and in what order; widget config stored per-workspace in `brain/USERS/{name}/Dashboard/personal.json` and `business.json`; available widgets: Top 3 Tasks, Streaks, Due Today, Smart Home (personal), Team Tasks (business) — more as modules are added
-- [ ] **Projects module** — project tracking with tasks, milestones, and status (deferred to Phase 3+)
-- [ ] **Multi-day calendar events** — calendar events currently support a single `date` field; true multi-day events (vacations, trips, blocks) need `start_date` / `end_date`, a backend schema update, and a calendar renderer that spans cells
-- [x] **Household task assignment for non-admins** — resolved 2026-07-02: `GET /shared/members` + `GET /team/members` expose the member list to admins and users with the `pool_edit` grant, feeding the assign dropdown for granted non-admins
-- [ ] **Personal calendar task completion toggle** — tasks shown in CalendarGrid day detail panel have no done/undo button; must navigate to Tasks page to un-mark done
-- [ ] **Projects / chat system evolution** — evolve chat into a ChatGPT/Claude-style Projects feature: named projects with custom context, per-project chat archives, optional agent usage within each project
+- [ ] **Ollama / local LLM support** — pulled forward from roadmap Phase 6; #1 r/selfhosted credibility feature; ship before/with the Reddit launch
+- [ ] **Automation Inbox generalization** — from land-leads-specific to any workflow writing reviewable results
+- [ ] **Instance provisioning script** — one command: VPS → tunnel → Infisical → configured instance; prerequisite for >5 clients
+- [ ] **Importers: Todoist / Notion / Obsidian → Brain** — "import my digital life"
+- [ ] **Stripe billing portal** — self-serve paid signup for hosted plans
+- [ ] **Monthly value report per client** — auto-generated from Automation Inbox data (leads found, actions taken, hours saved); anti-churn tool + sales asset
+- [ ] **Email digests** — ntfy is a barrier for normal business users; notifications block already designed in PROJECT.md
+
+## Phase 6 — Second revenue stream (needs Phase 4 traction + provisioning + billing)
+
+- [ ] **Launch hosted plans to the waitlist** — $15–30/mo personal, $50+/mo business
+- [ ] **Hosted tier on website** — self-serve Stripe checkout
+- [ ] **Demo → hosted conversion** — post-signup email/banner → hosted plan or self-host guide
+- [ ] **At 5+ retainer clients: contract out routine maintenance** — owner time goes to sales + product
+- [ ] **Revisit revenue mix** — hosting MRR > $1k/mo → invest in funnel; otherwise double down on retainers
+
+---
+
+## Product Backlog (pull in when a sales call or phase demands it)
+
+- [ ] **User-customizable Dashboard per workspace** — widget config per-workspace in `brain/USERS/{name}/Dashboard/personal.json` and `business.json`; widgets: Top 3 Tasks, Streaks, Due Today, Smart Home (personal), Team Tasks (business)
+- [ ] **Projects module** — project tracking with tasks, milestones, and status
+- [ ] **Multi-day calendar events** — `start_date` / `end_date` schema + calendar renderer that spans cells
+- [ ] **Personal calendar task completion toggle** — tasks in CalendarGrid day detail panel need a done/undo button
+- [ ] **Projects / chat system evolution** — ChatGPT/Claude-style Projects: named projects with custom context, per-project chat archives, optional agent usage
 
 ---
 
 ## Done
 
+- [x] **Business blueprint written** — `docs/BLUEPRINT.md`: $10k/mo in 6 months plan; retainers primary / hosting secondary; TASKS.md restructured around its phases (2026-07-06)
+- [x] **Self-hoster update flow** — `docker/update.sh` handles in-place updates with auto-rollback; Admin → Updates card shows current vs latest version; `launch.sh --auto-update` installs cron for hands-free updates; daily scheduler job refreshes version cache (2026-07-05)
+- [x] **Household task assignment for non-admins** — resolved 2026-07-02: `GET /shared/members` + `GET /team/members` expose the member list to admins and users with the `pool_edit` grant, feeding the assign dropdown for granted non-admins
 - [x] **Pool permissions + workspace visibility + calendar/admin fixes** — (1) Admin page mobile overflow fixed (`w-full` root, `flex-wrap`+`min-w-0`/`truncate` on UsersCard/RolesCard rows); (2) household/team tasks on the personal calendar now carry the 🏠/🧑‍🤝‍🧑 badge and hide/show with the pool toggle pill (matching events); (3) assigned pool tasks open TaskModal read-only (no Save/Delete, Cancel→"Close") — was 404'ing on save; (4) instance-wide **Workspaces** admin card hides a whole workspace for everyone incl. admins via `enabled_workspaces`; (5) per-user **pool_edit** grant (`household`/`team`) gives full pool-manager parity (add/edit/delete events + tasks + assign), default off, admins always; new `/shared/members` + `/team/members` feed the assign dropdown (2026-07-02)
 - [x] **UI bug fixes — sign-out, Brain back button, pool priorities keyboard, horizontal scroll** — sign-out moved to sidebar (desktop) and mobile drawer footer; Brain file list view now has ← Settings back button; PriorityList extracted to module level (was defined inside PoolPrioritiesCard causing keyboard dismissal on every keystroke); overflow-y-scroll on Layout main fixes scrollbar-induced layout shift; Admin feature-role row gets flex-wrap; Calendar wrapper gets w-full; POOL_DEFAULT_TEAM updated with business-relevant defaults (2026-07-01)
 - [x] **Workspace-aware priorities + pool category lists + assigned task bleed-through** — `profile_service` and `priority_service` are now workspace-aware (business tasks scored by `Business/profile.json` priorities); `GET/PUT /priorities/pool` admin endpoints let admins set category order for `_household` and `_team` pools; `GET /tasks/assigned` returns pool tasks assigned to current user; Tasks.jsx shows assigned pool tasks with 🏠/🧑‍🤝‍🧑 badges and routes completions to the right pool; Profile.jsx reloads on workspace switch and re-labels priorities section; Admin page has new Pool Priorities card (2026-07-01)
