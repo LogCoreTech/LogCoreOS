@@ -1,4 +1,5 @@
 """Notes module — markdown notes with folder support, stored in Brain/Notes/."""
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -143,5 +144,7 @@ def move_item(
             current_user["name"], req.from_path, req.to_path, req.type, workspace
         )
     except ValueError as e:
-        status = 409 if "already exists" in str(e) else 404 if "not found" in str(e).lower() else 400
+        status = (
+            409 if "already exists" in str(e) else 404 if "not found" in str(e).lower() else 400
+        )
         raise HTTPException(status_code=status, detail=str(e))

@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+import services.suggestions_service as svc
 from routers.auth import get_current_user, require_module
 from services.rate_limiter import rate_limit
-import services.suggestions_service as svc
 
 router = APIRouter()
 
@@ -21,6 +21,7 @@ class SuggestionUpdate(BaseModel):
 # ---------------------------------------------------------------------------
 # Suggestion config
 # ---------------------------------------------------------------------------
+
 
 @router.get("")
 def get_suggestions(current_user: dict = Depends(get_current_user)):
@@ -58,6 +59,7 @@ def delete_custom_suggestion(
 ):
     try:
         import scheduler as sched_mod
+
         sched_mod.remove_custom_job(current_user["name"], suggestion_id)
     except Exception:
         pass
@@ -70,6 +72,7 @@ def delete_custom_suggestion(
 # ---------------------------------------------------------------------------
 # Notification inbox
 # ---------------------------------------------------------------------------
+
 
 @router.get("/notifications")
 def get_notifications(

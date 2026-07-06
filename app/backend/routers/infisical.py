@@ -20,7 +20,9 @@ def get_infisical_status(_: dict = Depends(require_admin)):
 def update_infisical_token(req: TokenRequest, _: dict = Depends(require_admin)):
     token = req.token.strip()
     if not token:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token cannot be empty.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Token cannot be empty."
+        )
 
     if not infisical_loader.validate_token(token):
         raise HTTPException(
@@ -45,7 +47,13 @@ def clear_infisical_token(_: dict = Depends(require_admin)):
             detail="Token is set via environment variable and cannot be cleared from the UI. Remove INFISICAL_TOKEN from your deploy config and restart.",
         )
     if not current["configured"]:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No token is configured.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="No token is configured."
+        )
 
     infisical_loader.clear_token_file()
-    return {"configured": False, "source": None, "message": "Token cleared. App will use local .env on next restart."}
+    return {
+        "configured": False,
+        "source": None,
+        "message": "Token cleared. App will use local .env on next restart.",
+    }

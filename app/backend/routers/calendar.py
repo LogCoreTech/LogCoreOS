@@ -1,4 +1,5 @@
 """Calendar module — personal tasks and events with calendar module guard."""
+
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status

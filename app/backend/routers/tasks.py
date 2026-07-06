@@ -2,9 +2,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from routers.auth import get_current_user, get_workspace, require_module
 from routers._task_models import TaskCreateBase, TaskUpdateBase
-from services import task_service, priority_service
+from routers.auth import get_current_user, get_workspace, require_module
+from services import priority_service, task_service
 from services.file_service import read_json, tasks_path
 
 _require_tasks = require_module("tasks")
@@ -76,7 +76,9 @@ def history(
     current_user: dict = Depends(_require_tasks),
     workspace: str = Depends(get_workspace),
 ):
-    return task_service.list_history(current_user["name"], limit=limit, offset=offset, workspace=workspace)
+    return task_service.list_history(
+        current_user["name"], limit=limit, offset=offset, workspace=workspace
+    )
 
 
 @router.post("")

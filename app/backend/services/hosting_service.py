@@ -1,4 +1,5 @@
 """Runtime hosting settings — reads from brain/hosting.json, falls back to env config."""
+
 from config import settings
 from services.file_service import brain_path, read_json
 

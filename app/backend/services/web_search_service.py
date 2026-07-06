@@ -1,5 +1,7 @@
 """Web search via Tavily API — used by the AI agent in research mode."""
+
 import httpx
+
 from config import settings
 from services.file_service import brain_path, read_json
 
@@ -39,8 +41,8 @@ def search(query: str, max_results: int = 5) -> list | dict:
         data = r.json()
         return [
             {
-                "title":   x.get("title", ""),
-                "url":     x.get("url", ""),
+                "title": x.get("title", ""),
+                "url": x.get("url", ""),
                 "content": (x.get("content") or x.get("snippet") or "")[:600],
             }
             for x in data.get("results", [])

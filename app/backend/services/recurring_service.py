@@ -1,13 +1,15 @@
 """Nightly recurring task processor — advances due dates and manages streaks."""
+
 import calendar
 from datetime import timedelta
 
 from services.auth_service import today_for_user
-from services.file_service import read_json, write_json, tasks_path, history_path, brain_path
+from services.file_service import brain_path, history_path, read_json, tasks_path, write_json
 
 
 def _next_due(due: str, recurrence: str) -> str:
     from datetime import date
+
     d = date.fromisoformat(due)
     if recurrence == "daily":
         return (d + timedelta(days=1)).isoformat()
@@ -50,7 +52,11 @@ def process_user(user_name: str) -> dict:
         due = task.get("due_date") or today
         recurrence = task.get("recurrence", "daily")
 
-        if task.get("status") == "done" and task.get("last_completed_date") and task.get("last_completed_date") < today:
+        if (
+            task.get("status") == "done"
+            and task.get("last_completed_date")
+            and task.get("last_completed_date") < today
+        ):
             task["due_date"] = _next_due(due, recurrence)
             task["status"] = "pending"
             advanced += 1

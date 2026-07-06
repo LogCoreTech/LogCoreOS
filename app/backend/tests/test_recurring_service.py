@@ -1,4 +1,5 @@
 """Tests for recurring task date arithmetic and the nightly processor."""
+
 import sys
 from pathlib import Path
 
@@ -7,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import pytest
 
 from services import auth_service
-from services.file_service import write_json, read_json, tasks_path, user_path
+from services.file_service import read_json, tasks_path, user_path, write_json
 from services.recurring_service import _next_due, process_user
 
 
@@ -74,7 +75,9 @@ def _seed_recurring(brain, tasks: list[dict]) -> None:
     write_json(tasks_path(REC_USER), {"tasks": tasks})
 
 
-def _task_row(title: str, status: str, due: str, last_completed: str | None = None, streak: int = 0) -> dict:
+def _task_row(
+    title: str, status: str, due: str, last_completed: str | None = None, streak: int = 0
+) -> dict:
     return {
         "id": title,
         "title": title,
@@ -95,9 +98,12 @@ def rec_brain(brain):
 
 def test_process_user_advances_done_task(rec_brain):
     today = auth_service.today_for_user(REC_USER).isoformat()
-    _seed_recurring(rec_brain, [
-        _task_row("Daily", "done", today, last_completed=today),
-    ])
+    _seed_recurring(
+        rec_brain,
+        [
+            _task_row("Daily", "done", today, last_completed=today),
+        ],
+    )
     result = process_user(REC_USER)
     assert result["advanced"] == 1
     tasks = read_json(tasks_path(REC_USER))["tasks"]
@@ -109,9 +115,12 @@ def test_process_user_breaks_streak_on_missed_task(rec_brain):
     today = auth_service.today_for_user(REC_USER).isoformat()
     yesterday = _next_due(today, "daily")  # one day ahead; use a past date instead
     past_due = "2020-01-01"
-    _seed_recurring(rec_brain, [
-        _task_row("Missed", "pending", past_due, streak=5),
-    ])
+    _seed_recurring(
+        rec_brain,
+        [
+            _task_row("Missed", "pending", past_due, streak=5),
+        ],
+    )
     result = process_user(REC_USER)
     assert result["broken_streaks"] == 1
     tasks = read_json(tasks_path(REC_USER))["tasks"]
@@ -122,16 +131,23 @@ def test_process_user_ignores_non_recurring_tasks(rec_brain):
     today = auth_service.today_for_user(REC_USER).isoformat()
     user_dir = rec_brain / "USERS" / REC_USER / "Tasks"
     user_dir.mkdir(parents=True, exist_ok=True)
-    write_json(tasks_path(REC_USER), {"tasks": [{
-        "id": "todo-1",
-        "title": "Regular todo",
-        "type": "todo",
-        "status": "pending",
-        "due_date": "2020-01-01",
-        "recurrence": None,
-        "streak_count": 0,
-        "last_completed_date": None,
-    }]})
+    write_json(
+        tasks_path(REC_USER),
+        {
+            "tasks": [
+                {
+                    "id": "todo-1",
+                    "title": "Regular todo",
+                    "type": "todo",
+                    "status": "pending",
+                    "due_date": "2020-01-01",
+                    "recurrence": None,
+                    "streak_count": 0,
+                    "last_completed_date": None,
+                }
+            ]
+        },
+    )
     result = process_user(REC_USER)
     assert result["advanced"] == 0
     assert result["broken_streaks"] == 0

@@ -1,4 +1,5 @@
 """Journal module — daily entries stored as YYYY-MM-DD.md in Brain/Journal/."""
+
 import re
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -13,7 +14,7 @@ _write_limit = rate_limit(30, 60)
 
 router = APIRouter()
 
-_DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _MAX_CONTENT = 512_000
 
 

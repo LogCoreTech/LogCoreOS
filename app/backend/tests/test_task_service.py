@@ -1,12 +1,13 @@
 """Tests for task CRUD operations."""
+
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
-from services import auth_service, task_service
 
+from services import auth_service, task_service
 
 USER = "TestUser"
 
@@ -115,21 +116,27 @@ def test_add_task_with_notes(user_brain):
 
 
 def test_recurring_task_done_stays_in_active_list(user_brain):
-    task = task_service.add_task(USER, {**_make_task("Daily"), "type": "recurring", "recurrence": "daily"})
+    task = task_service.add_task(
+        USER, {**_make_task("Daily"), "type": "recurring", "recurrence": "daily"}
+    )
     task_service.update_task(USER, task["id"], {"status": "done"})
     active_ids = [t["id"] for t in task_service.list_tasks(USER)]
     assert task["id"] in active_ids
 
 
 def test_recurring_task_done_not_moved_to_history(user_brain):
-    task = task_service.add_task(USER, {**_make_task("Daily"), "type": "recurring", "recurrence": "daily"})
+    task = task_service.add_task(
+        USER, {**_make_task("Daily"), "type": "recurring", "recurrence": "daily"}
+    )
     task_service.update_task(USER, task["id"], {"status": "done"})
     history_ids = [t["id"] for t in task_service.list_history(USER)]
     assert task["id"] not in history_ids
 
 
 def test_recurring_task_increments_streak(user_brain):
-    task = task_service.add_task(USER, {**_make_task("Streak"), "type": "recurring", "recurrence": "daily"})
+    task = task_service.add_task(
+        USER, {**_make_task("Streak"), "type": "recurring", "recurrence": "daily"}
+    )
     updated = task_service.update_task(USER, task["id"], {"status": "done"})
     assert updated["streak_count"] == 1
 

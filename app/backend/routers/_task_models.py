@@ -1,4 +1,5 @@
 """Shared Pydantic models for task create/update — used by tasks.py and shared.py."""
+
 import re
 from datetime import date
 from typing import Literal
@@ -46,7 +47,7 @@ class TaskCreateBase(BaseModel):
     def validate_due_time(cls, v: str | None) -> str | None:
         return _validate_due_time_value(v)
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def due_time_requires_due_date(self):
         if self.due_time and not self.due_date:
             raise ValueError("due_time can only be set when due_date is also provided")
@@ -73,7 +74,7 @@ class TaskUpdateBase(BaseModel):
     def validate_due_time(cls, v: str | None) -> str | None:
         return _validate_due_time_value(v)
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def due_time_requires_due_date(self):
         if self.due_time and not self.due_date:
             raise ValueError("due_time can only be set when due_date is also provided")

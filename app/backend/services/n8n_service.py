@@ -1,4 +1,5 @@
 """n8n service — API client and Brain metadata management for the Automations module."""
+
 import hashlib
 import json
 import logging
@@ -214,6 +215,7 @@ def restart_n8n() -> None:
 
 # ── Business workflow auto-sync ────────────────────────────────────────────────
 
+
 def _content_hash(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
@@ -246,7 +248,9 @@ def sync_business_workflows() -> dict:
     token = secrets.get("WORKFLOWS_TOKEN", "")
 
     if not base_url or not token:
-        logger.debug("Workflow auto-sync skipped: WORKFLOWS_BASE_URL/WORKFLOWS_TOKEN absent from Infisical cache")
+        logger.debug(
+            "Workflow auto-sync skipped: WORKFLOWS_BASE_URL/WORKFLOWS_TOKEN absent from Infisical cache"
+        )
         return result
 
     # 2. Read stub files — keys drive what SHOULD exist
@@ -336,7 +340,9 @@ def sync_business_workflows() -> dict:
                 with _client() as c:
                     c.delete(f"/api/v1/workflows/{n8n_id}")
             except Exception as exc:
-                logger.warning("Failed to delete orphaned workflow '%s' from n8n: %s", rec.get("name"), exc)
+                logger.warning(
+                    "Failed to delete orphaned workflow '%s' from n8n: %s", rec.get("name"), exc
+                )
         records = [r for r in records if r["id"] != rec["id"]]
         result["deleted"] += 1
         logger.info("Deleted removed business workflow '%s'", rec.get("name"))
@@ -347,6 +353,7 @@ def sync_business_workflows() -> dict:
 
 
 # ── Internal helpers ───────────────────────────────────────────────────────────
+
 
 def _add_user_record(user_name: str, record: dict) -> None:
     path = automations_path(user_name)

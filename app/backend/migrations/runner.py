@@ -4,6 +4,7 @@ Schema migration runner for the LogCore Brain file store.
 Migrations are plain functions registered in MIGRATIONS below.
 Each runs exactly once; completion is tracked in brain/_system/migrations.json.
 """
+
 import fcntl
 import logging
 from pathlib import Path
@@ -16,6 +17,7 @@ logger = logging.getLogger("logcore.migrations")
 MigrationFn = Callable[[Path], None]
 
 # ── Migration definitions ──────────────────────────────────────────────────────
+
 
 def m001_task_type_field(brain: Path) -> None:
     """Ensure every active task has a `type` field (default: 'todo')."""
@@ -99,13 +101,14 @@ def m004_task_due_time_field(brain: Path) -> None:
 
 # Ordered list — append new migrations here; never reorder or remove
 MIGRATIONS: list[tuple[str, MigrationFn]] = [
-    ("m001_task_type_field",        m001_task_type_field),
-    ("m002_task_notes_field",       m002_task_notes_field),
-    ("m003_user_disabled_modules",  m003_user_disabled_modules),
-    ("m004_task_due_time_field",    m004_task_due_time_field),
+    ("m001_task_type_field", m001_task_type_field),
+    ("m002_task_notes_field", m002_task_notes_field),
+    ("m003_user_disabled_modules", m003_user_disabled_modules),
+    ("m004_task_due_time_field", m004_task_due_time_field),
 ]
 
 # ── Runner ─────────────────────────────────────────────────────────────────────
+
 
 def _state_path(brain: Path) -> Path:
     p = brain / "_system" / "migrations.json"
@@ -148,7 +151,9 @@ def _run_pending_locked(brain: Path) -> int:
             count += 1
             logger.info("Migration completed: %s", name)
         except Exception as exc:
-            logger.error("Migration %s FAILED: %s — skipping and continuing", name, exc, exc_info=True)
+            logger.error(
+                "Migration %s FAILED: %s — skipping and continuing", name, exc, exc_info=True
+            )
 
     if count:
         logger.info("Applied %d migration(s).", count)

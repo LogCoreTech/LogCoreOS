@@ -1,8 +1,8 @@
 """Tests for services/notes_service.py."""
+
 import pytest
 
 import services.notes_service as svc
-
 
 USER = "TestUser"
 

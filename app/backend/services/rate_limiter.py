@@ -1,4 +1,5 @@
 """Simple in-memory IP-based rate limiter — no external dependency needed."""
+
 import time
 
 from fastapi import HTTPException, Request
@@ -34,6 +35,7 @@ def _client_ip(request: Request) -> str:
 
 def rate_limit(max_calls: int, window_seconds: int):
     """Returns a FastAPI dependency that enforces max_calls per window per IP."""
+
     def dependency(request: Request) -> None:
         global _sweep_n
         ip = _client_ip(request)
@@ -53,4 +55,5 @@ def rate_limit(max_calls: int, window_seconds: int):
             )
         recent.append(now)
         _hits[key] = recent
+
     return dependency

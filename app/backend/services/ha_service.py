@@ -1,4 +1,5 @@
 """Home Assistant service — REST API client and Brain config management."""
+
 import logging
 
 import httpx
@@ -15,8 +16,9 @@ def get_config() -> dict:
     """Read HA config from Brain; fall back to env vars."""
     cfg = read_json(_CONFIG_PATH(), default={})
     from config import settings
+
     return {
-        "url":   cfg.get("url")   or getattr(settings, "ha_url",   ""),
+        "url": cfg.get("url") or getattr(settings, "ha_url", ""),
         "token": cfg.get("token") or getattr(settings, "ha_token", ""),
     }
 
@@ -104,6 +106,7 @@ def get_areas() -> list:
             r = c.post("/api/template", json={"template": "{{ areas() | list }}"})
             if r.status_code == 200:
                 import json as _json
+
                 raw = r.text.strip()
                 return _json.loads(raw) if raw.startswith("[") else []
     except Exception:

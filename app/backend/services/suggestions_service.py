@@ -1,14 +1,13 @@
 """Proactive suggestions — per-user config, notification inbox, and suggestion dispatch."""
-import uuid
+
 import logging
-from datetime import datetime, timezone, timedelta
+import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from config import settings
-from services.file_service import (
-    user_path, read_json, write_json, tasks_path, history_path,
-)
 from services.auth_service import get_user_by_name, today_for_user
+from services.file_service import history_path, read_json, tasks_path, user_path, write_json
 
 logger = logging.getLogger("logcore.suggestions")
 
@@ -17,12 +16,12 @@ _NOTIF_CAP = 50
 _BUILTIN_DEFAULTS: dict[str, dict] = {
     "daily_digest": {
         "enabled": True,
-        "hour": None,   # None → settings.morning_digest_hour
+        "hour": None,  # None → settings.morning_digest_hour
         "delivery": ["push"],
     },
     "overdue_alert": {
         "enabled": True,
-        "hour": None,   # None → settings.overdue_check_hour
+        "hour": None,  # None → settings.overdue_check_hour
         "delivery": ["push"],
     },
     "weekly_review": {
@@ -40,6 +39,7 @@ _BUILTIN_DEFAULTS: dict[str, dict] = {
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
+
 
 def _suggestions_path(user_name: str):
     return user_path(user_name) / "suggestions.json"
@@ -59,6 +59,7 @@ def _ntfy_channel(user_name: str) -> str:
 # ---------------------------------------------------------------------------
 # Config CRUD
 # ---------------------------------------------------------------------------
+
 
 def get_config(user_name: str) -> dict:
     """Get per-user suggestion config merged with defaults."""
@@ -128,6 +129,7 @@ def delete_custom(user_name: str, suggestion_id: str) -> bool:
 # Notification inbox
 # ---------------------------------------------------------------------------
 
+
 def get_notifications(user_name: str, limit: int = 20, delivery: str | None = None) -> list:
     data = read_json(_notifications_path(user_name), default={"notifications": []})
     notifs = data.get("notifications", [])
@@ -177,10 +179,14 @@ def clear_notifications(user_name: str) -> None:
 # Delivery
 # ---------------------------------------------------------------------------
 
-def _deliver(user_name: str, title: str, body: str, source: str, delivery: list, url: str = "/") -> None:
+
+def _deliver(
+    user_name: str, title: str, body: str, source: str, delivery: list, url: str = "/"
+) -> None:
     """Send via all configured delivery channels."""
     from services.notification_service import send
-    from services.push_service import send_push, get_subscription
+    from services.push_service import get_subscription, send_push
+
     if "push" in delivery:
         send(channel=_ntfy_channel(user_name), title=title, message=body, priority="default")
         if get_subscription(user_name):
@@ -195,8 +201,10 @@ def _deliver(user_name: str, title: str, body: str, source: str, delivery: list,
 # Per-user suggestion runners (sync — safe for scheduler + run-now)
 # ---------------------------------------------------------------------------
 
+
 def _run_daily_digest(user_name: str, cfg: dict, workspace: str = "personal") -> dict:
     from services.priority_service import get_top3
+
     today = today_for_user(user_name)
     top3 = get_top3(user_name, workspace)
     if not top3:
@@ -214,7 +222,8 @@ def _run_overdue_alert(user_name: str, cfg: dict, workspace: str = "personal") -
     today_iso = today_for_user(user_name).isoformat()
     data = read_json(tasks_path(user_name, workspace), default={"tasks": []})
     overdue = [
-        t for t in data.get("tasks", [])
+        t
+        for t in data.get("tasks", [])
         if t.get("status") == "pending" and t.get("due_date") and t["due_date"] < today_iso
     ]
     if not overdue:
@@ -255,8 +264,10 @@ def _run_goal_drift(user_name: str, cfg: dict, workspace: str = "personal") -> d
     cutoff = (today - timedelta(days=days_threshold)).isoformat()
     data = read_json(tasks_path(user_name, workspace), default={"tasks": []})
     drifting = [
-        t for t in data.get("tasks", [])
-        if t.get("type") == "goal" and t.get("status") == "pending"
+        t
+        for t in data.get("tasks", [])
+        if t.get("type") == "goal"
+        and t.get("status") == "pending"
         and (
             (not t.get("last_completed_date") and (t.get("created_at") or "")[:10] <= cutoff)
             or (t.get("last_completed_date") and t["last_completed_date"] <= cutoff)
@@ -270,13 +281,16 @@ def _run_goal_drift(user_name: str, cfg: dict, workspace: str = "personal") -> d
     ws_label = f" [{workspace}]" if workspace != "personal" else ""
     title = f"{len(drifting)} goal{'s' if len(drifting) > 1 else ''}{ws_label} need{'s' if len(drifting) == 1 else ''} attention"
     body = f"You haven't made progress on: {names}"
-    _deliver(user_name, title, body, "goal_drift", cfg.get("delivery", ["push", "in_app"]), url="/tasks")
+    _deliver(
+        user_name, title, body, "goal_drift", cfg.get("delivery", ["push", "in_app"]), url="/tasks"
+    )
     return {"ok": True, "fired": "goal_drift", "count": len(drifting)}
 
 
 def _run_custom_sync(user_name: str, suggestion: dict) -> dict:
     """Run a custom AI-powered suggestion (sync wrapper — safe for scheduler threads)."""
     import asyncio
+
     try:
         return asyncio.run(_run_custom_async(user_name, suggestion))
     except Exception as e:
@@ -286,8 +300,10 @@ def _run_custom_sync(user_name: str, suggestion: dict) -> dict:
 
 async def _run_custom_async(user_name: str, suggestion: dict) -> dict:
     """Run a custom AI-powered suggestion (async — for API endpoints)."""
-    from services.ai_provider import chat_completion
     from zoneinfo import ZoneInfo
+
+    from services.ai_provider import chat_completion
+
     user = get_user_by_name(user_name)
     tz = user.get("timezone", "UTC") if user else "UTC"
     try:
@@ -304,7 +320,13 @@ async def _run_custom_async(user_name: str, suggestion: dict) -> dict:
     except Exception as e:
         return {"ok": False, "reason": str(e)}
     title = suggestion["name"]
-    _deliver(user_name, title, result.strip(), f"custom:{suggestion['id']}", suggestion.get("delivery", ["in_app"]))
+    _deliver(
+        user_name,
+        title,
+        result.strip(),
+        f"custom:{suggestion['id']}",
+        suggestion.get("delivery", ["in_app"]),
+    )
     return {"ok": True, "fired": suggestion["id"]}
 
 
@@ -339,7 +361,9 @@ def run_suggestion_sync(user_name: str, suggestion_id: str, workspace: str = "pe
     return {"error": f"Suggestion {suggestion_id!r} not found"}
 
 
-async def run_suggestion_async(user_name: str, suggestion_id: str, workspace: str = "personal") -> dict:
+async def run_suggestion_async(
+    user_name: str, suggestion_id: str, workspace: str = "personal"
+) -> dict:
     """Dispatch and run a suggestion asynchronously (API endpoints)."""
     cfg = get_config(user_name)
     if suggestion_id == "daily_digest":

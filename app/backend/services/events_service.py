@@ -1,11 +1,12 @@
 """CRUD operations on Calendar/events.json."""
+
 import uuid
 from datetime import datetime
-from zoneinfo import ZoneInfo
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from services.auth_service import get_user_timezone
-from services.file_service import read_json, write_json, events_path
+from services.file_service import events_path, read_json, write_json
 
 
 def list_events(user_name: str, workspace: str = "personal") -> list[dict]:
@@ -39,7 +40,9 @@ def add_event(user_name: str, event_data: dict, workspace: str = "personal") -> 
     return event
 
 
-def update_event(user_name: str, event_id: str, updates: dict, workspace: str = "personal") -> dict | None:
+def update_event(
+    user_name: str, event_id: str, updates: dict, workspace: str = "personal"
+) -> dict | None:
     data = read_json(events_path(user_name, workspace), default={"events": []})
     for i, event in enumerate(data["events"]):
         if event["id"] == event_id:

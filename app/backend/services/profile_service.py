@@ -1,9 +1,10 @@
 """Profile storage — reads/writes profile.json and regenerates Profile.md."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
-from services.file_service import read_json, user_path, ws_path, write_json, write_markdown
+from services.file_service import read_json, user_path, write_json, write_markdown, ws_path
 
 DEFAULT_PRIORITY_ORDER = ["God", "Family", "Job", "Personal Growth", "Hobbies"]
 
@@ -25,6 +26,7 @@ def load_profile(user_name: str, workspace: str = "personal") -> dict:
     if workspace == "personal":
         try:
             from services.file_service import parse_priority_order
+
             order = parse_priority_order(user_name)
             if order:
                 default["priority_order"] = order
@@ -53,6 +55,7 @@ def get_priority_order(user_name: str, workspace: str = "personal") -> list[str]
     if workspace == "personal":
         try:
             from services.file_service import parse_priority_order
+
             order = parse_priority_order(user_name)
             if order:
                 return order
@@ -76,12 +79,16 @@ def generate_profile_md(user_name: str, data: dict) -> str:
     if basics:
         lines.append("")
 
-    routine = [(lbl, data[k]) for k, lbl in [
-        ("wake_weekday", "Wake (weekdays)"),
-        ("wake_weekend", "Wake (weekends)"),
-        ("bedtime", "Bedtime"),
-        ("work_hours", "Work hours"),
-    ] if data.get(k)]
+    routine = [
+        (lbl, data[k])
+        for k, lbl in [
+            ("wake_weekday", "Wake (weekdays)"),
+            ("wake_weekend", "Wake (weekends)"),
+            ("bedtime", "Bedtime"),
+            ("work_hours", "Work hours"),
+        ]
+        if data.get(k)
+    ]
     if routine:
         lines.append("## Daily Routine")
         lines.extend(f"- {lbl}: {v}" for lbl, v in routine)
@@ -91,7 +98,13 @@ def generate_profile_md(user_name: str, data: dict) -> str:
     hw = " · ".join(x for x in [data.get("height"), data.get("weight")] if x)
     if hw:
         health.append(("Height/Weight", hw))
-    for k, lbl in [("blood_type", "Blood type"), ("diet", "Dietary restrictions"), ("exercise", "Exercise"), ("conditions", "Conditions"), ("medications", "Medications")]:
+    for k, lbl in [
+        ("blood_type", "Blood type"),
+        ("diet", "Dietary restrictions"),
+        ("exercise", "Exercise"),
+        ("conditions", "Conditions"),
+        ("medications", "Medications"),
+    ]:
         if data.get(k):
             health.append((lbl, data[k]))
     if health:
@@ -99,10 +112,17 @@ def generate_profile_md(user_name: str, data: dict) -> str:
         lines.extend(f"- {lbl}: {v}" for lbl, v in health)
         lines.append("")
 
-    work = [(lbl, data[k]) for k, lbl in [
-        ("employer", "Employer"), ("industry", "Industry"), ("education", "Education"),
-        ("years_experience", "Experience"), ("skills", "Key skills"),
-    ] if data.get(k)]
+    work = [
+        (lbl, data[k])
+        for k, lbl in [
+            ("employer", "Employer"),
+            ("industry", "Industry"),
+            ("education", "Education"),
+            ("years_experience", "Experience"),
+            ("skills", "Key skills"),
+        ]
+        if data.get(k)
+    ]
     if work:
         lines.append("## Work & Career")
         lines.extend(f"- {lbl}: {v}" for lbl, v in work)
@@ -117,8 +137,7 @@ def generate_profile_md(user_name: str, data: dict) -> str:
     children = data.get("children", [])
     if children:
         cs = ", ".join(
-            f"{c.get('name', '?')} ({c.get('age', '?')})"
-            for c in children if isinstance(c, dict)
+            f"{c.get('name', '?')} ({c.get('age', '?')})" for c in children if isinstance(c, dict)
         )
         if cs:
             family_lines.append(f"- Children: {cs}")
@@ -129,18 +148,30 @@ def generate_profile_md(user_name: str, data: dict) -> str:
         lines.extend(family_lines)
         lines.append("")
 
-    finances = [(lbl, data[k]) for k, lbl in [
-        ("income_range", "Income range"), ("savings_goal", "Savings goal"), ("budget_style", "Budget style"),
-    ] if data.get(k)]
+    finances = [
+        (lbl, data[k])
+        for k, lbl in [
+            ("income_range", "Income range"),
+            ("savings_goal", "Savings goal"),
+            ("budget_style", "Budget style"),
+        ]
+        if data.get(k)
+    ]
     if finances:
         lines.append("## Finances")
         lines.extend(f"- {lbl}: {v}" for lbl, v in finances)
         lines.append("")
 
-    gv = [(lbl, data[k]) for k, lbl in [
-        ("life_mission", "Life mission"), ("big_goal", "Big long-term goal"),
-        ("core_values", "Core values"), ("key_constraints", "Key constraints"),
-    ] if data.get(k)]
+    gv = [
+        (lbl, data[k])
+        for k, lbl in [
+            ("life_mission", "Life mission"),
+            ("big_goal", "Big long-term goal"),
+            ("core_values", "Core values"),
+            ("key_constraints", "Key constraints"),
+        ]
+        if data.get(k)
+    ]
     if gv:
         lines.append("## Values & Principles")
         lines.extend(f"- {lbl}: {v}" for lbl, v in gv)
@@ -151,11 +182,17 @@ def generate_profile_md(user_name: str, data: dict) -> str:
     lines.extend(f"{i}. {cat}" for i, cat in enumerate(priority_order, 1))
     lines.append("")
 
-    ai = [(lbl, data[k]) for k, lbl in [
-        ("communication_style", "Communication style"), ("tone", "Tone"),
-        ("response_language", "Response language"), ("topics_to_emphasize", "Emphasize"),
-        ("topics_to_avoid", "Avoid"),
-    ] if data.get(k)]
+    ai = [
+        (lbl, data[k])
+        for k, lbl in [
+            ("communication_style", "Communication style"),
+            ("tone", "Tone"),
+            ("response_language", "Response language"),
+            ("topics_to_emphasize", "Emphasize"),
+            ("topics_to_avoid", "Avoid"),
+        ]
+        if data.get(k)
+    ]
     if ai:
         lines.append("## AI Preferences")
         lines.extend(f"- {lbl}: {v}" for lbl, v in ai)

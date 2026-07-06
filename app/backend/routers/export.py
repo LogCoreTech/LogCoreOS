@@ -1,4 +1,5 @@
 """Brain export — lets a user download their entire brain folder as a zip."""
+
 import io
 import zipfile
 from pathlib import Path
@@ -16,7 +17,9 @@ _export_limit = rate_limit(2, 3600)  # 2 exports per hour — zip is CPU-intensi
 
 
 @router.get("/export")
-def export_brain(current_user: dict = Depends(get_current_user), _rl: None = Depends(_export_limit)):
+def export_brain(
+    current_user: dict = Depends(get_current_user), _rl: None = Depends(_export_limit)
+):
     """Stream the current user's brain folder as a zip archive."""
     folder: Path = user_path(current_user["name"])
     buf = io.BytesIO()

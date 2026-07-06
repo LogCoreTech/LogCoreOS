@@ -1,21 +1,29 @@
 """Agent loop — wraps tool-enabled AI completions over user data."""
+
 import json
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from services import task_service, priority_service, journal_service, notes_service
-from services import profile_service, push_service, auth_service
+from services import (
+    auth_service,
+    journal_service,
+    notes_service,
+    priority_service,
+    profile_service,
+    push_service,
+    task_service,
+)
 from services.ai_provider import agent_completion
 from services.file_service import (
-    user_path,
-    ws_path,
     brain_path,
     read_json,
-    write_json,
     read_markdown,
-    write_markdown,
     resolve_user_md_path,
+    user_path,
+    write_json,
+    write_markdown,
+    ws_path,
 )
 
 MAX_STEPS = 10
@@ -24,17 +32,23 @@ _BRAIN_SKIP = {"Tasks"}
 
 # Tools available in research mode — read-only access only
 _RESEARCH_TOOLS = {
-    "list_tasks", "get_top3_tasks", "get_scored_tasks",
-    "list_brain_files", "read_brain_file",
+    "list_tasks",
+    "get_top3_tasks",
+    "get_scored_tasks",
+    "list_brain_files",
+    "read_brain_file",
     "get_profile",
-    "read_journal_entry", "list_journal_entries",
+    "read_journal_entry",
+    "list_journal_entries",
     "list_notes",
     "get_task_history",
     "search_brain",
     "get_week_snapshot",
     "search_web",
     # admin read-only
-    "list_users", "list_shared_tasks", "read_system_file",
+    "list_users",
+    "list_shared_tasks",
+    "read_system_file",
 }
 
 # ---------------------------------------------------------------------------
@@ -53,14 +67,17 @@ _USER_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "title":      {"type": "string", "description": "Task title"},
-                "category":   {"type": "string", "description": "Category (e.g. Health, Work, Personal)"},
-                "priority":   {"type": "string", "enum": ["High", "Medium", "Low"]},
-                "type":       {"type": "string", "enum": ["todo", "recurring", "goal", "appointment"]},
+                "title": {"type": "string", "description": "Task title"},
+                "category": {
+                    "type": "string",
+                    "description": "Category (e.g. Health, Work, Personal)",
+                },
+                "priority": {"type": "string", "enum": ["High", "Medium", "Low"]},
+                "type": {"type": "string", "enum": ["todo", "recurring", "goal", "appointment"]},
                 "recurrence": {"type": "string", "enum": ["daily", "weekly", "monthly"]},
-                "due_date":   {"type": "string", "description": "Due date YYYY-MM-DD"},
-                "due_time":   {"type": "string", "description": "Due time HH:MM (requires due_date)"},
-                "notes":      {"type": "string"},
+                "due_date": {"type": "string", "description": "Due date YYYY-MM-DD"},
+                "due_time": {"type": "string", "description": "Due time HH:MM (requires due_date)"},
+                "notes": {"type": "string"},
             },
             "required": ["title", "category"],
         },
@@ -71,14 +88,14 @@ _USER_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "task_id":  {"type": "string", "description": "Task ID to update"},
-                "title":    {"type": "string"},
+                "task_id": {"type": "string", "description": "Task ID to update"},
+                "title": {"type": "string"},
                 "category": {"type": "string"},
                 "priority": {"type": "string", "enum": ["High", "Medium", "Low"]},
-                "status":   {"type": "string", "enum": ["pending", "done", "skipped"]},
+                "status": {"type": "string", "enum": ["pending", "done", "skipped"]},
                 "due_date": {"type": "string"},
                 "due_time": {"type": "string"},
-                "notes":    {"type": "string"},
+                "notes": {"type": "string"},
             },
             "required": ["task_id"],
         },
@@ -129,7 +146,7 @@ _USER_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "path":    {"type": "string", "description": "Relative path to an existing .md file"},
+                "path": {"type": "string", "description": "Relative path to an existing .md file"},
                 "content": {"type": "string", "description": "New full content of the file"},
             },
             "required": ["path", "content"],
@@ -141,7 +158,10 @@ _USER_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "path":    {"type": "string", "description": "Relative path for the new .md file, e.g. 'Notes/MyNote.md'"},
+                "path": {
+                    "type": "string",
+                    "description": "Relative path for the new .md file, e.g. 'Notes/MyNote.md'",
+                },
                 "content": {"type": "string", "description": "Initial content (defaults to empty)"},
             },
             "required": ["path"],
@@ -164,7 +184,7 @@ _USER_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "date":    {"type": "string", "description": "Date in YYYY-MM-DD format"},
+                "date": {"type": "string", "description": "Date in YYYY-MM-DD format"},
                 "content": {"type": "string", "description": "Full markdown content of the entry"},
             },
             "required": ["date", "content"],
@@ -181,8 +201,14 @@ _USER_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "path":    {"type": "string", "description": "Relative note path, e.g. 'Work/Meeting Notes'"},
-                "content": {"type": "string", "description": "Initial markdown content (defaults to empty)"},
+                "path": {
+                    "type": "string",
+                    "description": "Relative note path, e.g. 'Work/Meeting Notes'",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Initial markdown content (defaults to empty)",
+                },
             },
             "required": ["path"],
         },
@@ -193,7 +219,10 @@ _USER_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "path":    {"type": "string", "description": "Relative note path, e.g. 'Work/Meeting Notes'"},
+                "path": {
+                    "type": "string",
+                    "description": "Relative note path, e.g. 'Work/Meeting Notes'",
+                },
                 "content": {"type": "string", "description": "New full markdown content"},
             },
             "required": ["path", "content"],
@@ -205,7 +234,10 @@ _USER_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Relative note path, e.g. 'Work/Meeting Notes'"},
+                "path": {
+                    "type": "string",
+                    "description": "Relative note path, e.g. 'Work/Meeting Notes'",
+                },
             },
             "required": ["path"],
         },
@@ -236,7 +268,7 @@ _USER_TOOLS: list[dict] = [
             "properties": {
                 "fields": {
                     "type": "object",
-                    "description": "Dict of profile fields to update, e.g. {\"big_goal\": \"Run a marathon\", \"occupation\": \"Engineer\"}",
+                    "description": 'Dict of profile fields to update, e.g. {"big_goal": "Run a marathon", "occupation": "Engineer"}',
                 },
             },
             "required": ["fields"],
@@ -249,7 +281,11 @@ _USER_TOOLS: list[dict] = [
             "type": "object",
             "properties": {
                 "content": {"type": "string", "description": "Markdown text to append"},
-                "target":  {"type": "string", "enum": ["short", "long"], "description": "Which memory file to append to (default: short)"},
+                "target": {
+                    "type": "string",
+                    "enum": ["short", "long"],
+                    "description": "Which memory file to append to (default: short)",
+                },
             },
             "required": ["content"],
         },
@@ -260,8 +296,15 @@ _USER_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "content": {"type": "string", "description": "Full new markdown content for the memory file"},
-                "target":  {"type": "string", "enum": ["short", "long"], "description": "Which memory file to rewrite (default: short)"},
+                "content": {
+                    "type": "string",
+                    "description": "Full new markdown content for the memory file",
+                },
+                "target": {
+                    "type": "string",
+                    "enum": ["short", "long"],
+                    "description": "Which memory file to rewrite (default: short)",
+                },
             },
             "required": ["content"],
         },
@@ -272,8 +315,14 @@ _USER_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "limit":      {"type": "integer", "description": "Max number of tasks to return (default 20)"},
-                "since_date": {"type": "string", "description": "Only return tasks completed on or after this date (YYYY-MM-DD)"},
+                "limit": {
+                    "type": "integer",
+                    "description": "Max number of tasks to return (default 20)",
+                },
+                "since_date": {
+                    "type": "string",
+                    "description": "Only return tasks completed on or after this date (YYYY-MM-DD)",
+                },
             },
             "required": [],
         },
@@ -296,7 +345,10 @@ _USER_TOOLS: list[dict] = [
             "type": "object",
             "properties": {
                 "from_path": {"type": "string", "description": "Current note path, e.g. 'Ideas'"},
-                "to_path":   {"type": "string", "description": "New note path, e.g. 'Brainstorms/Ideas'"},
+                "to_path": {
+                    "type": "string",
+                    "description": "New note path, e.g. 'Brainstorms/Ideas'",
+                },
             },
             "required": ["from_path", "to_path"],
         },
@@ -307,7 +359,10 @@ _USER_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Folder path relative to Notes/, e.g. 'Projects' or 'Projects/Work'"},
+                "path": {
+                    "type": "string",
+                    "description": "Folder path relative to Notes/, e.g. 'Projects' or 'Projects/Work'",
+                },
             },
             "required": ["path"],
         },
@@ -324,13 +379,16 @@ _USER_TOOLS: list[dict] = [
                     "items": {
                         "type": "object",
                         "properties": {
-                            "title":      {"type": "string"},
-                            "category":   {"type": "string"},
-                            "priority":   {"type": "string", "enum": ["High", "Medium", "Low"]},
-                            "type":       {"type": "string", "enum": ["todo", "recurring", "goal", "appointment"]},
-                            "due_date":   {"type": "string"},
-                            "due_time":   {"type": "string"},
-                            "notes":      {"type": "string"},
+                            "title": {"type": "string"},
+                            "category": {"type": "string"},
+                            "priority": {"type": "string", "enum": ["High", "Medium", "Low"]},
+                            "type": {
+                                "type": "string",
+                                "enum": ["todo", "recurring", "goal", "appointment"],
+                            },
+                            "due_date": {"type": "string"},
+                            "due_time": {"type": "string"},
+                            "notes": {"type": "string"},
                         },
                         "required": ["title", "category"],
                     },
@@ -346,7 +404,7 @@ _USER_TOOLS: list[dict] = [
             "type": "object",
             "properties": {
                 "title": {"type": "string", "description": "Notification title"},
-                "body":  {"type": "string", "description": "Notification body text"},
+                "body": {"type": "string", "description": "Notification body text"},
             },
             "required": ["title", "body"],
         },
@@ -368,7 +426,10 @@ _USER_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "task_id": {"type": "string", "description": "ID of the shared task to mark complete"},
+                "task_id": {
+                    "type": "string",
+                    "description": "ID of the shared task to mark complete",
+                },
             },
             "required": ["task_id"],
         },
@@ -383,7 +444,10 @@ _USER_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "summary": {"type": "string", "description": "Plain-English summary of what you're about to do"},
+                "summary": {
+                    "type": "string",
+                    "description": "Plain-English summary of what you're about to do",
+                },
                 "actions": {
                     "type": "array",
                     "items": {"type": "string"},
@@ -404,8 +468,14 @@ _USER_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "since": {"type": "string", "description": "Only return entries on or after this date (YYYY-MM-DD)"},
-                "until": {"type": "string", "description": "Only return entries on or before this date (YYYY-MM-DD)"},
+                "since": {
+                    "type": "string",
+                    "description": "Only return entries on or after this date (YYYY-MM-DD)",
+                },
+                "until": {
+                    "type": "string",
+                    "description": "Only return entries on or before this date (YYYY-MM-DD)",
+                },
                 "limit": {"type": "integer", "description": "Max entries to return (default 7)"},
             },
             "required": [],
@@ -417,7 +487,10 @@ _USER_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "suggestion_id": {"type": "string", "description": "Built-in name or custom UUID of the suggestion to run"},
+                "suggestion_id": {
+                    "type": "string",
+                    "description": "Built-in name or custom UUID of the suggestion to run",
+                },
             },
             "required": ["suggestion_id"],
         },
@@ -428,11 +501,21 @@ _USER_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "suggestion_id":  {"type": "string", "description": "Built-in name or custom UUID"},
-                "enabled":        {"type": "boolean", "description": "Enable or disable this suggestion"},
-                "delivery":       {"type": "array", "items": {"type": "string", "enum": ["push", "in_app", "chat"]}, "description": "Delivery channels"},
-                "hour":           {"type": "integer", "description": "Hour to fire (0-23, null = system default for built-ins)"},
-                "days_threshold": {"type": "integer", "description": "Days without progress before goal_drift fires (goal_drift only)"},
+                "suggestion_id": {"type": "string", "description": "Built-in name or custom UUID"},
+                "enabled": {"type": "boolean", "description": "Enable or disable this suggestion"},
+                "delivery": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": ["push", "in_app", "chat"]},
+                    "description": "Delivery channels",
+                },
+                "hour": {
+                    "type": "integer",
+                    "description": "Hour to fire (0-23, null = system default for built-ins)",
+                },
+                "days_threshold": {
+                    "type": "integer",
+                    "description": "Days without progress before goal_drift fires (goal_drift only)",
+                },
             },
             "required": ["suggestion_id"],
         },
@@ -447,13 +530,33 @@ _USER_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "name":          {"type": "string", "description": "Short display name, e.g. 'Evening wind-down'"},
-                "prompt":        {"type": "string", "description": "Prompt sent to the AI when this suggestion fires"},
-                "hour":          {"type": "integer", "description": "Hour to fire (0-23)"},
-                "delivery":      {"type": "array", "items": {"type": "string", "enum": ["push", "in_app", "chat"]}, "description": "Delivery channels (default: ['in_app'])"},
-                "schedule":      {"type": "string", "enum": ["daily", "interval", "weekly"], "description": "Schedule type (default: 'daily')"},
-                "interval_days": {"type": "integer", "description": "Required when schedule='interval': fire every N days"},
-                "day_of_week":   {"type": "string", "description": "Required when schedule='weekly': 'mon', 'tue', 'wed', 'thu', 'fri', 'sat', or 'sun'"},
+                "name": {
+                    "type": "string",
+                    "description": "Short display name, e.g. 'Evening wind-down'",
+                },
+                "prompt": {
+                    "type": "string",
+                    "description": "Prompt sent to the AI when this suggestion fires",
+                },
+                "hour": {"type": "integer", "description": "Hour to fire (0-23)"},
+                "delivery": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": ["push", "in_app", "chat"]},
+                    "description": "Delivery channels (default: ['in_app'])",
+                },
+                "schedule": {
+                    "type": "string",
+                    "enum": ["daily", "interval", "weekly"],
+                    "description": "Schedule type (default: 'daily')",
+                },
+                "interval_days": {
+                    "type": "integer",
+                    "description": "Required when schedule='interval': fire every N days",
+                },
+                "day_of_week": {
+                    "type": "string",
+                    "description": "Required when schedule='weekly': 'mon', 'tue', 'wed', 'thu', 'fri', 'sat', or 'sun'",
+                },
             },
             "required": ["name", "prompt", "hour"],
         },
@@ -467,8 +570,11 @@ _USER_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "query":       {"type": "string",  "description": "Search query"},
-                "max_results": {"type": "integer", "description": "Max results (default 5, max 10)"},
+                "query": {"type": "string", "description": "Search query"},
+                "max_results": {
+                    "type": "integer",
+                    "description": "Max results (default 5, max 10)",
+                },
             },
             "required": ["query"],
         },
@@ -501,10 +607,19 @@ _USER_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "entity_id": {"type": "string",  "description": "HA entity_id to control"},
-                "domain":    {"type": "string",  "description": "HA service domain, e.g. 'light', 'switch', 'climate'"},
-                "service":   {"type": "string",  "description": "HA service name, e.g. 'turn_on', 'turn_off', 'set_temperature'"},
-                "data":      {"type": "object",  "description": "Optional service data, e.g. {brightness_pct: 80, temperature: 72}"},
+                "entity_id": {"type": "string", "description": "HA entity_id to control"},
+                "domain": {
+                    "type": "string",
+                    "description": "HA service domain, e.g. 'light', 'switch', 'climate'",
+                },
+                "service": {
+                    "type": "string",
+                    "description": "HA service name, e.g. 'turn_on', 'turn_off', 'set_temperature'",
+                },
+                "data": {
+                    "type": "object",
+                    "description": "Optional service data, e.g. {brightness_pct: 80, temperature: 72}",
+                },
             },
             "required": ["entity_id", "domain", "service"],
         },
@@ -515,7 +630,10 @@ _USER_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "entity_id": {"type": "string", "description": "Scene entity_id, e.g. 'scene.movie_time'"},
+                "entity_id": {
+                    "type": "string",
+                    "description": "Scene entity_id, e.g. 'scene.movie_time'",
+                },
             },
             "required": ["entity_id"],
         },
@@ -526,7 +644,10 @@ _USER_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "entity_id": {"type": "string", "description": "Automation entity_id, e.g. 'automation.morning_routine'"},
+                "entity_id": {
+                    "type": "string",
+                    "description": "Automation entity_id, e.g. 'automation.morning_routine'",
+                },
             },
             "required": ["entity_id"],
         },
@@ -550,12 +671,15 @@ _ADMIN_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "title":       {"type": "string"},
-                "category":    {"type": "string"},
-                "priority":    {"type": "string", "enum": ["High", "Medium", "Low"]},
-                "due_date":    {"type": "string"},
-                "notes":       {"type": "string"},
-                "assigned_to": {"type": "string", "description": "Username of the member responsible for this task"},
+                "title": {"type": "string"},
+                "category": {"type": "string"},
+                "priority": {"type": "string", "enum": ["High", "Medium", "Low"]},
+                "due_date": {"type": "string"},
+                "notes": {"type": "string"},
+                "assigned_to": {
+                    "type": "string",
+                    "description": "Username of the member responsible for this task",
+                },
             },
             "required": ["title", "category"],
         },
@@ -566,13 +690,13 @@ _ADMIN_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "task_id":     {"type": "string", "description": "Task ID to update"},
-                "title":       {"type": "string"},
-                "category":    {"type": "string"},
-                "priority":    {"type": "string", "enum": ["High", "Medium", "Low"]},
-                "due_date":    {"type": "string"},
-                "due_time":    {"type": "string"},
-                "notes":       {"type": "string"},
+                "task_id": {"type": "string", "description": "Task ID to update"},
+                "title": {"type": "string"},
+                "category": {"type": "string"},
+                "priority": {"type": "string", "enum": ["High", "Medium", "Low"]},
+                "due_date": {"type": "string"},
+                "due_time": {"type": "string"},
+                "notes": {"type": "string"},
                 "assigned_to": {"type": "string", "description": "Reassign to a different member"},
             },
             "required": ["task_id"],
@@ -630,7 +754,13 @@ _ADMIN_TOOLS: list[dict] = [
 
 def _get_tools(user: dict) -> list[dict]:
     from services.ha_service import is_configured as _ha_configured
-    _HA_TOOL_NAMES = {"get_home_state", "control_home_device", "activate_scene", "trigger_home_automation"}
+
+    _HA_TOOL_NAMES = {
+        "get_home_state",
+        "control_home_device",
+        "activate_scene",
+        "trigger_home_automation",
+    }
     ha_ok = _ha_configured()
     tools = [t for t in _USER_TOOLS if ha_ok or t["name"] not in _HA_TOOL_NAMES]
     if user.get("role") == "admin":
@@ -642,9 +772,13 @@ def _get_tools(user: dict) -> list[dict]:
 # Tool executor
 # ---------------------------------------------------------------------------
 
+
 def _execute_tool(
-    name: str, inputs: dict, user: dict,
-    workspace: str = "personal", cross_workspace: bool = False,
+    name: str,
+    inputs: dict,
+    user: dict,
+    workspace: str = "personal",
+    cross_workspace: bool = False,
 ) -> Any:
     """Run one tool; return result or an error dict — never raises."""
     try:
@@ -700,14 +834,18 @@ def _execute_tool(
             case "write_brain_file":
                 path = resolve_user_md_path(user["name"], inputs["path"])
                 if not path.exists():
-                    return {"error": f"File not found: {inputs['path']!r}. Use create_brain_file for new files."}
+                    return {
+                        "error": f"File not found: {inputs['path']!r}. Use create_brain_file for new files."
+                    }
                 write_markdown(path, inputs["content"])
                 return {"ok": True}
 
             case "create_brain_file":
                 path = resolve_user_md_path(user["name"], inputs["path"])
                 if path.exists():
-                    return {"error": f"File already exists: {inputs['path']!r}. Use write_brain_file to edit it."}
+                    return {
+                        "error": f"File already exists: {inputs['path']!r}. Use write_brain_file to edit it."
+                    }
                 write_markdown(path, inputs.get("content", ""))
                 return {"ok": True, "created": inputs["path"]}
 
@@ -724,12 +862,16 @@ def _execute_tool(
                 return notes_service.list_notes(user["name"])
 
             case "create_note":
-                return notes_service.create_note(user["name"], inputs["path"], inputs.get("content", ""))
+                return notes_service.create_note(
+                    user["name"], inputs["path"], inputs.get("content", "")
+                )
 
             case "update_note":
                 result = notes_service.update_note(user["name"], inputs["path"], inputs["content"])
                 if result is None:
-                    return {"error": f"Note not found: {inputs['path']!r}. Use create_note to make a new one."}
+                    return {
+                        "error": f"Note not found: {inputs['path']!r}. Use create_note to make a new one."
+                    }
                 return result
 
             case "delete_note":
@@ -746,6 +888,7 @@ def _execute_tool(
 
             case "append_memory":
                 from datetime import date
+
                 target = inputs.get("target", "short")
                 fname = "Long_Term_Memory.md" if target == "long" else "Short_Term_Memory.md"
                 mem_path = ws_path(user["name"], workspace) / fname
@@ -806,7 +949,9 @@ def _execute_tool(
                 return results
 
             case "move_note":
-                return notes_service.move_item(user["name"], inputs["from_path"], inputs["to_path"], "note")
+                return notes_service.move_item(
+                    user["name"], inputs["from_path"], inputs["to_path"], "note"
+                )
 
             case "create_note_folder":
                 return notes_service.create_folder(user["name"], inputs["path"])
@@ -823,6 +968,7 @@ def _execute_tool(
 
             case "update_timezone":
                 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
                 try:
                     ZoneInfo(inputs["timezone"])
                 except (ZoneInfoNotFoundError, KeyError):
@@ -850,10 +996,14 @@ def _execute_tool(
                 return {
                     "week_start": ws,
                     "week_end": we,
-                    "due_this_week": [t for t in all_tasks if ws <= (t.get("due_date") or "") <= we],
+                    "due_this_week": [
+                        t for t in all_tasks if ws <= (t.get("due_date") or "") <= we
+                    ],
                     "overdue": [t for t in all_tasks if t.get("due_date") and t["due_date"] < ts],
                     "no_date": [t for t in all_tasks if not t.get("due_date")],
-                    "completed_this_week": [t for t in completed if ws <= (t.get("completed_at") or "")[:10] <= we],
+                    "completed_this_week": [
+                        t for t in completed if ws <= (t.get("completed_at") or "")[:10] <= we
+                    ],
                 }
 
             case "list_journal_entries":
@@ -878,16 +1028,21 @@ def _execute_tool(
                     return {"error": f"Shared task {inputs['task_id']!r} not found"}
                 if user.get("role") != "admin" and task.get("assigned_to") != user["name"]:
                     return {"error": "Not authorized — you can only complete tasks assigned to you"}
-                result = task_service.update_task("_household", inputs["task_id"], {
-                    "status": "done",
-                    "completed_by": user["name"],
-                })
+                result = task_service.update_task(
+                    "_household",
+                    inputs["task_id"],
+                    {
+                        "status": "done",
+                        "completed_by": user["name"],
+                    },
+                )
                 return result or {"error": "Update failed"}
 
             case "list_users":
                 if user.get("role") != "admin":
                     return {"error": "Admin access required"}
                 from services.auth_service import _load_auth
+
                 safe = {"id", "name", "email", "role", "timezone"}
                 return [{k: v for k, v in u.items() if k in safe} for u in _load_auth()["users"]]
 
@@ -943,8 +1098,10 @@ def _execute_tool(
             case "run_suggestion":
                 # This tool executor is called synchronously inside the agent loop.
                 # For custom suggestions (which need async AI calls), we use a thread pool to run asyncio.
-                from services import suggestions_service as sug_svc
                 import concurrent.futures
+
+                from services import suggestions_service as sug_svc
+
                 sid = inputs["suggestion_id"]
                 cfg = sug_svc.get_config(user["name"])
                 is_custom = any(c["id"] == sid for c in cfg.get("custom", []))
@@ -956,6 +1113,7 @@ def _execute_tool(
 
             case "update_suggestion":
                 from services import suggestions_service as sug_svc
+
                 sid = inputs["suggestion_id"]
                 updates = {k: v for k, v in inputs.items() if k != "suggestion_id"}
                 if not updates:
@@ -963,8 +1121,9 @@ def _execute_tool(
                 return sug_svc.update_config(user["name"], sid, updates)
 
             case "create_suggestion":
-                from services import suggestions_service as sug_svc
                 import scheduler as sched_mod  # noqa: PLC0415
+                from services import suggestions_service as sug_svc
+
                 new_s = sug_svc.create_custom(user["name"], inputs)
                 if new_s.get("enabled", True):
                     try:
@@ -978,6 +1137,7 @@ def _execute_tool(
                     return {"error": "Admin access required"}
                 import subprocess
                 from pathlib import Path as _Path
+
                 backend_dir = _Path(__file__).parent.parent
                 result = subprocess.run(
                     ["python3", "-m", "pytest", "tests/", "-v", "--tb=short"],
@@ -994,26 +1154,31 @@ def _execute_tool(
 
             case "search_web":
                 from services.web_search_service import search as _web_search
+
                 q = inputs["query"]
                 n = int(inputs.get("max_results", 5))
                 return _web_search(q, n)
 
             case "get_home_state":
                 from services.ha_service import get_state as _ha_get_state
+
                 return [_ha_get_state(eid) for eid in inputs["entity_ids"]]
 
             case "control_home_device":
                 from services.ha_service import call_service as _ha_call
+
                 data = dict(inputs.get("data") or {})
                 data["entity_id"] = inputs["entity_id"]
                 return _ha_call(inputs["domain"], inputs["service"], data)
 
             case "activate_scene":
                 from services.ha_service import call_service as _ha_call
+
                 return _ha_call("scene", "turn_on", {"entity_id": inputs["entity_id"]})
 
             case "trigger_home_automation":
                 from services.ha_service import trigger_automation as _ha_trigger
+
                 return _ha_trigger(inputs["entity_id"])
 
             case _:
@@ -1029,9 +1194,15 @@ def _execute_tool(
 # Agent loop
 # ---------------------------------------------------------------------------
 
+
 async def run_agent(
-    user: dict, goal: str, history: list[dict], system: str,
-    mode: str = "plan", workspace: str = "personal", cross_workspace: bool = False,
+    user: dict,
+    goal: str,
+    history: list[dict],
+    system: str,
+    mode: str = "plan",
+    workspace: str = "personal",
+    cross_workspace: bool = False,
 ) -> dict:
     """Run the agent loop and return a run record."""
     run_id = str(uuid.uuid4())
@@ -1078,15 +1249,19 @@ async def run_agent(
             }
             steps.append(step_entry)
 
-            result = _execute_tool(tc.name, tc.input, user, workspace=workspace, cross_workspace=cross_workspace)
+            result = _execute_tool(
+                tc.name, tc.input, user, workspace=workspace, cross_workspace=cross_workspace
+            )
             step_entry["output"] = result
 
             result_str = json.dumps(result) if not isinstance(result, str) else result
-            tool_results.append({
-                "type": "tool_result",
-                "tool_use_id": tc.id,
-                "content": result_str,
-            })
+            tool_results.append(
+                {
+                    "type": "tool_result",
+                    "tool_use_id": tc.id,
+                    "content": result_str,
+                }
+            )
 
         messages.append({"role": "user", "content": tool_results})
 

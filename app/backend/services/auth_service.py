@@ -1,4 +1,5 @@
 """User authentication — JWT tokens, password hashing, user registry."""
+
 import json
 import logging
 import re
@@ -78,9 +79,7 @@ def user_count() -> int:
 
 
 def get_user_by_email(email: str) -> dict | None:
-    return next(
-        (u for u in _load_auth()["users"] if u["email"] == email.lower()), None
-    )
+    return next((u for u in _load_auth()["users"] if u["email"] == email.lower()), None)
 
 
 def get_user_by_id(user_id: str) -> dict | None:
@@ -140,7 +139,8 @@ def today_for_user(user_name: str) -> date:
     except (ZoneInfoNotFoundError, Exception):
         logger.warning(
             "Invalid timezone '%s' for user '%s', falling back to UTC",
-            tz_str, user_name,
+            tz_str,
+            user_name,
         )
         return datetime.now(timezone.utc).date()
 
@@ -263,8 +263,7 @@ def revoke_token(jti: str, exp: int | None = None) -> None:
                 revoked[jti] = exp_dt.isoformat()
                 now = datetime.now(timezone.utc)
                 data["revoked_jtis"] = {
-                    k: v for k, v in revoked.items()
-                    if datetime.fromisoformat(v) > now
+                    k: v for k, v in revoked.items() if datetime.fromisoformat(v) > now
                 }
                 _save_auth(data)
         except Exception as exc:

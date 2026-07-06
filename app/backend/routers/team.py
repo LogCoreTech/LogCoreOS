@@ -1,13 +1,14 @@
 """Team module — shared business task and event pool for all users with the 'team' module."""
+
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from routers.auth import require_module, require_pool_edit
-from routers._task_models import TaskCreateBase, TaskUpdateBase
 from routers._event_models import EventCreate, EventUpdate
-from services import task_service, events_service, auth_service
-from services.file_service import tasks_path, events_path, write_json
+from routers._task_models import TaskCreateBase, TaskUpdateBase
+from routers.auth import require_module, require_pool_edit
+from services import auth_service, events_service, task_service
+from services.file_service import events_path, tasks_path, write_json
 from services.rate_limiter import rate_limit
 
 _require_team = require_module("team")

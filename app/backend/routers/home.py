@@ -1,4 +1,5 @@
 """Home module — Home Assistant device control and monitoring."""
+
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,7 +12,7 @@ from services.rate_limiter import rate_limit
 logger = logging.getLogger("logcore.home")
 
 _require_home = require_module("home")
-_read_limit  = rate_limit(60, 60)
+_read_limit = rate_limit(60, 60)
 _write_limit = rate_limit(20, 60)
 
 router = APIRouter()
@@ -33,6 +34,7 @@ class FavouritesRequest(BaseModel):
 
 # ── Admin config endpoints ─────────────────────────────────────────────────────
 
+
 @router.get("/status")
 def ha_status(
     current_user: dict = Depends(require_admin),
@@ -52,6 +54,7 @@ def save_ha_config(
 
 
 # ── Entity endpoints ──────────────────────────────────────────────────────────
+
 
 @router.get("/entities")
 def list_entities(
@@ -100,6 +103,7 @@ def call_entity_service(
 
 # ── Areas ─────────────────────────────────────────────────────────────────────
 
+
 @router.get("/areas")
 def list_areas(
     current_user: dict = Depends(_require_home),
@@ -114,6 +118,7 @@ def list_areas(
 
 
 # ── Scenes ────────────────────────────────────────────────────────────────────
+
 
 @router.get("/scenes")
 def list_scenes(
@@ -144,6 +149,7 @@ def activate_scene(
 
 # ── Automations ───────────────────────────────────────────────────────────────
 
+
 @router.get("/automations")
 def list_ha_automations(
     current_user: dict = Depends(_require_home),
@@ -172,6 +178,7 @@ def trigger_ha_automation(
 
 
 # ── Favourites ────────────────────────────────────────────────────────────────
+
 
 @router.get("/favourites")
 def get_favourites(

@@ -1,16 +1,12 @@
 """CRUD operations on tasks.json and tasks_history.json."""
+
 import uuid
 from datetime import datetime
-from zoneinfo import ZoneInfo
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from services.auth_service import get_user_timezone, today_for_user
-from services.file_service import (
-    read_json,
-    write_json,
-    tasks_path,
-    history_path,
-)
+from services.file_service import history_path, read_json, tasks_path, write_json
 
 
 def list_tasks(user_name: str, workspace: str = "personal") -> list[dict]:
@@ -49,7 +45,9 @@ def add_task(user_name: str, task_data: dict, workspace: str = "personal") -> di
     return task
 
 
-def update_task(user_name: str, task_id: str, updates: dict, workspace: str = "personal") -> dict | None:
+def update_task(
+    user_name: str, task_id: str, updates: dict, workspace: str = "personal"
+) -> dict | None:
     data = read_json(tasks_path(user_name, workspace), default={"tasks": []})
     tasks = data["tasks"]
     tz = ZoneInfo(get_user_timezone(user_name))
@@ -86,6 +84,10 @@ def delete_task(user_name: str, task_id: str, workspace: str = "personal") -> bo
     return True
 
 
-def list_history(user_name: str, limit: int = 50, offset: int = 0, workspace: str = "personal") -> list[dict]:
-    all_tasks = read_json(history_path(user_name, workspace), default={"tasks": []}).get("tasks", [])
-    return list(reversed(all_tasks))[offset:offset + limit]
+def list_history(
+    user_name: str, limit: int = 50, offset: int = 0, workspace: str = "personal"
+) -> list[dict]:
+    all_tasks = read_json(history_path(user_name, workspace), default={"tasks": []}).get(
+        "tasks", []
+    )
+    return list(reversed(all_tasks))[offset : offset + limit]

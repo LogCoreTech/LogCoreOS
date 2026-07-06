@@ -1,4 +1,5 @@
 """Setup wizard — scaffolds the Brain folder for a new user after registration."""
+
 import re
 import shutil
 from pathlib import Path
@@ -12,7 +13,7 @@ from config import settings
 from routers.auth import get_current_user
 from services import auth_service
 from services.features_service import init_features
-from services.file_service import brain_path, write_markdown, user_path
+from services.file_service import brain_path, user_path, write_markdown
 from services.rate_limiter import rate_limit
 
 router = APIRouter()
@@ -32,7 +33,7 @@ def _sanitize(value: str, field: str) -> str:
         raise HTTPException(
             status_code=400,
             detail=f"'{field}' contains invalid characters. "
-                   "Newlines and markdown control characters are not allowed.",
+            "Newlines and markdown control characters are not allowed.",
         )
     return clean
 
@@ -105,8 +106,7 @@ def setup_user(req: SetupRequest, current_user: dict = Depends(get_current_user)
     # Inject priority order — priority_order already includes custom cats; never concatenate again
     priority_lines = "\n".join(f"{i+1}. {cat}" for i, cat in enumerate(req.priority_order))
     custom_lines = (
-        "\n".join(f"- {_sanitize(cat, 'category')}" for cat in req.custom_categories)
-        or "- (none)"
+        "\n".join(f"- {_sanitize(cat, 'category')}" for cat in req.custom_categories) or "- (none)"
     )
 
     profile_content = re.sub(
@@ -129,6 +129,7 @@ def setup_user(req: SetupRequest, current_user: dict = Depends(get_current_user)
     if safe_role:
         profile_json["occupation"] = safe_role
     from services.file_service import write_json
+
     write_json(dest / "profile.json", profile_json)
 
     # Replace placeholders in memory files (atomic writes)

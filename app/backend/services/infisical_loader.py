@@ -18,9 +18,9 @@ import httpx
 logger = logging.getLogger("logcore.infisical")
 
 # Module-level state — set by load_infisical_secrets(), read by status endpoints
-_token_source: str | None = None   # "env" | "file" | None
+_token_source: str | None = None  # "env" | "file" | None
 _connected: bool = False
-_last_fetched: str | None = None   # ISO-8601 UTC timestamp
+_last_fetched: str | None = None  # ISO-8601 UTC timestamp
 
 
 def _brain_path() -> Path:
@@ -85,7 +85,11 @@ def _fetch_secrets(token: str) -> dict[str, str]:
 def _write_cache(secrets: dict[str, str]) -> None:
     cache = _cache_file()
     cache.parent.mkdir(parents=True, exist_ok=True)
-    cache.write_text(json.dumps({"fetched_at": datetime.now(timezone.utc).isoformat(), "secrets": secrets}, indent=2))
+    cache.write_text(
+        json.dumps(
+            {"fetched_at": datetime.now(timezone.utc).isoformat(), "secrets": secrets}, indent=2
+        )
+    )
 
 
 def _load_cache() -> dict[str, str] | None:
@@ -126,6 +130,7 @@ def load_infisical_secrets() -> None:
         # Write secrets to n8n.env so the n8n container can reference them as {{ $env.VAR }}
         try:
             from services.n8n_service import write_n8n_env
+
             write_n8n_env(secrets)
         except Exception as _n8n_exc:
             logger.warning("Could not write n8n.env: %s", _n8n_exc)
@@ -141,7 +146,9 @@ def load_infisical_secrets() -> None:
         for key, value in cached.items():
             os.environ[key] = value
         _connected = False
-        logger.warning("Infisical: loaded %d secret(s) from cache (Infisical was unreachable).", len(cached))
+        logger.warning(
+            "Infisical: loaded %d secret(s) from cache (Infisical was unreachable).", len(cached)
+        )
 
 
 def get_status() -> dict:

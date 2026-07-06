@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Body, Depends
 from typing import Any
 
+from fastapi import APIRouter, Body, Depends
+
 from routers.auth import get_current_user, get_workspace
-from services.rate_limiter import rate_limit
 from services.profile_service import load_profile, save_profile
+from services.rate_limiter import rate_limit
 
 router = APIRouter()
 _write_limit = rate_limit(10, 60)

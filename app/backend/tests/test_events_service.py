@@ -1,4 +1,5 @@
 """Tests for Calendar events CRUD in services/events_service.py."""
+
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -11,14 +12,8 @@ _mock_auth = MagicMock()
 _mock_auth.get_user_timezone.return_value = "America/Chicago"
 sys.modules.setdefault("services.auth_service", _mock_auth)
 
+from services.events_service import add_event, delete_event, get_event, list_events, update_event
 from services.file_service import events_path
-from services.events_service import (
-    list_events,
-    get_event,
-    add_event,
-    update_event,
-    delete_event,
-)
 
 USER = "EventUser"
 

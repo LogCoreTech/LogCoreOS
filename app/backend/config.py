@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     ai_provider: str = "anthropic"
     anthropic_api_key: str = ""
     ai_model: str = "claude-sonnet-4-6"
-    ai_api_key: str = ""    # generic key for OpenAI-compatible providers
-    ai_base_url: str = ""   # custom endpoint; empty = provider default
+    ai_api_key: str = ""  # generic key for OpenAI-compatible providers
+    ai_base_url: str = ""  # custom endpoint; empty = provider default
 
     # Web Search — Tavily (https://tavily.com — free tier: 1 000 searches/month)
     # Required for Research mode web search. Leave empty to disable.
@@ -41,8 +41,8 @@ class Settings(BaseSettings):
 
     # Scheduler timezone — must be a valid IANA tz string
     scheduler_timezone: str = "America/Chicago"
-    morning_digest_hour: int = Field(6, ge=0, le=23)   # 0–23, in scheduler_timezone
-    overdue_check_hour: int = Field(19, ge=0, le=23)   # 0–23, in scheduler_timezone
+    morning_digest_hour: int = Field(6, ge=0, le=23)  # 0–23, in scheduler_timezone
+    overdue_check_hour: int = Field(19, ge=0, le=23)  # 0–23, in scheduler_timezone
 
     # When False (default), only the first user can self-register.
     # Subsequent users must be added by an admin.

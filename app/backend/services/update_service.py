@@ -1,14 +1,15 @@
 """update_service.py — version check, update trigger, and log access."""
+
 import json
 import logging
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
 from config import settings
-from services.file_service import write_json, read_json
+from services.file_service import read_json, write_json
 
 logger = logging.getLogger("logcore.update")
 
@@ -40,7 +41,12 @@ def check_latest_version() -> dict:
         pass
 
     if not GITHUB_REPO:
-        result = {"latest_version": None, "release_url": None, "cached_at": time.time(), "error": None}
+        result = {
+            "latest_version": None,
+            "release_url": None,
+            "cached_at": time.time(),
+            "error": None,
+        }
         return result
 
     try:
@@ -77,11 +83,13 @@ def check_latest_version() -> dict:
 
 def _version_gt(a: str, b: str) -> bool:
     """Return True if semver string a is strictly greater than b."""
+
     def _t(v: str) -> tuple:
         try:
             return tuple(int(x) for x in v.strip().split("."))
         except Exception:
             return (0,)
+
     return _t(a) > _t(b)
 
 

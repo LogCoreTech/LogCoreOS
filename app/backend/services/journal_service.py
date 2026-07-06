@@ -1,10 +1,11 @@
 """CRUD for Journal/YYYY-MM-DD.md files in the user's Brain."""
+
 import re
 from pathlib import Path
 
-from services.file_service import ws_path, read_markdown, write_markdown
+from services.file_service import read_markdown, write_markdown, ws_path
 
-_DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _MAX_CONTENT_BYTES = 512_000
 
 

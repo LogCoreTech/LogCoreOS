@@ -1,12 +1,22 @@
 import re
 import shutil
 from typing import Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from config import settings
 from services import auth_service
@@ -21,12 +31,12 @@ bearer_optional = HTTPBearer(auto_error=False)
 _COOKIE = "lc_token"
 
 # Rate limits
-_login_limit    = rate_limit(5, 300)    # 5 login attempts per 5 min
-_register_limit = rate_limit(3, 3600)   # 3 registrations per hour
-_me_limit       = rate_limit(10, 60)    # 10 profile updates per minute
-_get_me_limit   = rate_limit(30, 60)    # 30 GET /me or /today per minute (polled endpoints)
-_status_limit   = rate_limit(20, 60)    # 20 /status checks per minute (public)
-_admin_limit    = rate_limit(20, 60)    # 20 admin ops per minute
+_login_limit = rate_limit(5, 300)  # 5 login attempts per 5 min
+_register_limit = rate_limit(3, 3600)  # 3 registrations per hour
+_me_limit = rate_limit(10, 60)  # 10 profile updates per minute
+_get_me_limit = rate_limit(30, 60)  # 30 GET /me or /today per minute (polled endpoints)
+_status_limit = rate_limit(20, 60)  # 20 /status checks per minute (public)
+_admin_limit = rate_limit(20, 60)  # 20 admin ops per minute
 
 
 class RegisterRequest(BaseModel):
@@ -79,7 +89,9 @@ def get_current_user(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     payload = auth_service.decode_token(token)
     if not payload:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token"
+        )
     user = auth_service.get_user_by_id(payload["sub"])
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
@@ -122,6 +134,7 @@ def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
 
 def require_module(module_id: str):
     """Dependency factory — blocks the endpoint if the module is disabled for this user."""
+
     def check(current_user: dict = Depends(get_current_user)) -> dict:
         if module_id in current_user.get("disabled_modules", []):
             raise HTTPException(
@@ -129,6 +142,7 @@ def require_module(module_id: str):
                 detail=f"Module '{module_id}' has been disabled for your account.",
             )
         return current_user
+
     return check
 
 
@@ -141,6 +155,7 @@ def require_pool_edit(pool: str):
     A grant is default-off, so this cannot use the disabled_modules union model
     (which only ever adds restrictions); it is a dedicated per-user grant.
     """
+
     def check(current_user: dict = Depends(get_current_user)) -> dict:
         if current_user.get("role") == "admin":
             return current_user
@@ -150,6 +165,7 @@ def require_pool_edit(pool: str):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to make changes here.",
         )
+
     return check
 
 
@@ -181,7 +197,9 @@ def register(
         if not admin_token and credentials:
             admin_token = credentials.credentials
         if not admin_token:
-            raise HTTPException(status_code=403, detail="Registration is closed. An admin must add new users.")
+            raise HTTPException(
+                status_code=403, detail="Registration is closed. An admin must add new users."
+            )
         payload = auth_service.decode_token(admin_token)
         if not payload or payload.get("role") != "admin":
             raise HTTPException(status_code=403, detail="Only admins can register new users.")
@@ -189,7 +207,9 @@ def register(
     role = "admin" if is_first_user else "member"
     try:
         user = auth_service.create_user(
-            req.email, req.password, req.name,
+            req.email,
+            req.password,
+            req.name,
             role=role,
             session_minutes=req.session_minutes,
         )
@@ -206,17 +226,17 @@ def register(
         "personal",
     )
     return {
-        "id":               user["id"],
-        "name":             user["name"],
-        "role":             user["role"],
+        "id": user["id"],
+        "name": user["name"],
+        "role": user["role"],
         "disabled_modules": effective,
-        "workspaces":       user.get("workspaces", ["personal"]),
-        "timezone":         user.get("timezone", "UTC"),
-        "accent_color":     user.get("accent_color"),
-        "dark_mode":        user.get("dark_mode", "system"),
-        "background":       user.get("background"),
-        "density":          user.get("density", "comfortable"),
-        "corner_style":     user.get("corner_style", "rounded"),
+        "workspaces": user.get("workspaces", ["personal"]),
+        "timezone": user.get("timezone", "UTC"),
+        "accent_color": user.get("accent_color"),
+        "dark_mode": user.get("dark_mode", "system"),
+        "background": user.get("background"),
+        "density": user.get("density", "comfortable"),
+        "corner_style": user.get("corner_style", "rounded"),
     }
 
 
@@ -233,17 +253,17 @@ def login(req: LoginRequest, response: Response, _rl: None = Depends(_login_limi
         "personal",
     )
     return {
-        "id":               user["id"],
-        "name":             user["name"],
-        "role":             user["role"],
+        "id": user["id"],
+        "name": user["name"],
+        "role": user["role"],
         "disabled_modules": effective,
-        "workspaces":       user.get("workspaces", ["personal"]),
-        "timezone":         user.get("timezone", "UTC"),
-        "accent_color":     user.get("accent_color"),
-        "dark_mode":        user.get("dark_mode", "system"),
-        "background":       user.get("background"),
-        "density":          user.get("density", "comfortable"),
-        "corner_style":     user.get("corner_style", "rounded"),
+        "workspaces": user.get("workspaces", ["personal"]),
+        "timezone": user.get("timezone", "UTC"),
+        "accent_color": user.get("accent_color"),
+        "dark_mode": user.get("dark_mode", "system"),
+        "background": user.get("background"),
+        "density": user.get("density", "comfortable"),
+        "corner_style": user.get("corner_style", "rounded"),
     }
 
 
@@ -271,18 +291,21 @@ def _validate_timezone(tz: str) -> str:
     try:
         ZoneInfo(tz)
     except (ZoneInfoNotFoundError, Exception):
-        raise HTTPException(status_code=400, detail=f"Invalid timezone: '{tz}'. Use an IANA zone name like 'America/Chicago'.")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid timezone: '{tz}'. Use an IANA zone name like 'America/Chicago'.",
+        )
     return tz
 
 
-_ACCENT_COLOR_RE = re.compile(r'^#[0-9a-fA-F]{6}$')
+_ACCENT_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 _VALID_DARK_MODES = frozenset({"system", "light", "dark"})
 _VALID_GRADIENT_IDS = frozenset({"none", "midnight", "sunset", "forest", "ocean", "aurora", "dusk"})
 _VALID_DENSITIES = frozenset({"comfortable", "compact"})
 _VALID_CORNER_STYLES = frozenset({"rounded", "sharp"})
 _ALLOWED_BG_TYPES: dict[str, str] = {
     "image/jpeg": "jpg",
-    "image/png":  "png",
+    "image/png": "png",
     "image/webp": "webp",
     "image/avif": "avif",
 }
@@ -291,7 +314,9 @@ _BG_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
 
 def _validate_accent_color(color: str) -> str:
     if not _ACCENT_COLOR_RE.match(color):
-        raise HTTPException(status_code=400, detail="accent_color must be a 6-digit hex color like #f97316")
+        raise HTTPException(
+            status_code=400, detail="accent_color must be a 6-digit hex color like #f97316"
+        )
     return color
 
 
@@ -316,9 +341,11 @@ def _validate_corner_style(val: str) -> str:
 def _validate_background(val: str) -> str:
     if val in ("none", "uploaded"):
         return val
-    if val.startswith("gradient:") and val[len("gradient:"):] in _VALID_GRADIENT_IDS:
+    if val.startswith("gradient:") and val[len("gradient:") :] in _VALID_GRADIENT_IDS:
         return val
-    raise HTTPException(status_code=400, detail="background must be 'none', 'uploaded', or 'gradient:<preset>'")
+    raise HTTPException(
+        status_code=400, detail="background must be 'none', 'uploaded', or 'gradient:<preset>'"
+    )
 
 
 def _find_user_background(user_name: str):
@@ -334,17 +361,21 @@ _VALID_SHORTCUT_WORKSPACES = frozenset({"personal", "business"})
 
 
 class MeUpdateRequest(BaseModel):
-    timezone:     str | None = Field(None, max_length=50)
+    timezone: str | None = Field(None, max_length=50)
     accent_color: str | None = Field(None, max_length=7)
-    dark_mode:    str | None = Field(None, max_length=10)
-    background:   str | None = Field(None, max_length=30)
-    density:      str | None = Field(None, max_length=15)
+    dark_mode: str | None = Field(None, max_length=10)
+    background: str | None = Field(None, max_length=30)
+    density: str | None = Field(None, max_length=15)
     corner_style: str | None = Field(None, max_length=10)
-    shortcuts:    dict | None = None   # {"personal": [...], "business": [...]}
+    shortcuts: dict | None = None  # {"personal": [...], "business": [...]}
 
 
 @router.patch("/me")
-def update_me(req: MeUpdateRequest, current_user: dict = Depends(get_current_user), _rl: None = Depends(_me_limit)):
+def update_me(
+    req: MeUpdateRequest,
+    current_user: dict = Depends(get_current_user),
+    _rl: None = Depends(_me_limit),
+):
     """Update the current user's own profile fields."""
     updates = {k: v for k, v in req.model_dump().items() if v is not None}
     if "timezone" in updates:
@@ -365,9 +396,14 @@ def update_me(req: MeUpdateRequest, current_user: dict = Depends(get_current_use
             raise HTTPException(status_code=400, detail="shortcuts must be an object")
         for ws_key, ids in sc.items():
             if ws_key not in _VALID_SHORTCUT_WORKSPACES:
-                raise HTTPException(status_code=400, detail=f"Invalid workspace key in shortcuts: {ws_key!r}")
+                raise HTTPException(
+                    status_code=400, detail=f"Invalid workspace key in shortcuts: {ws_key!r}"
+                )
             if not isinstance(ids, list) or len(ids) > 4:
-                raise HTTPException(status_code=400, detail="shortcuts per workspace must be a list of up to 4 module IDs")
+                raise HTTPException(
+                    status_code=400,
+                    detail="shortcuts per workspace must be a list of up to 4 module IDs",
+                )
     if not updates:
         return {"ok": True}
     auth_service.update_user(current_user["id"], updates)
@@ -377,22 +413,22 @@ def update_me(req: MeUpdateRequest, current_user: dict = Depends(get_current_use
 @router.get("/me")
 def me(current_user: dict = Depends(get_current_user), _rl: None = Depends(_get_me_limit)):
     return {
-        "id":                   current_user["id"],
-        "name":                 current_user["name"],
-        "role":                 current_user["role"],
+        "id": current_user["id"],
+        "name": current_user["name"],
+        "role": current_user["role"],
         "notification_channel": current_user.get("notification_channel", ""),
-        "session_minutes":      current_user.get("session_minutes", 10080),
-        "timezone":             current_user.get("timezone", "UTC"),
-        "feature_role":         current_user.get("feature_role", "member"),
-        "disabled_modules":     current_user.get("disabled_modules", []),
-        "pool_edit":            current_user.get("pool_edit", []),
-        "workspaces":           current_user.get("workspaces", ["personal"]),
-        "accent_color":         current_user.get("accent_color"),
-        "dark_mode":            current_user.get("dark_mode", "system"),
-        "background":           current_user.get("background"),
-        "density":              current_user.get("density", "comfortable"),
-        "corner_style":         current_user.get("corner_style", "rounded"),
-        "shortcuts":            current_user.get("shortcuts", {}),
+        "session_minutes": current_user.get("session_minutes", 10080),
+        "timezone": current_user.get("timezone", "UTC"),
+        "feature_role": current_user.get("feature_role", "member"),
+        "disabled_modules": current_user.get("disabled_modules", []),
+        "pool_edit": current_user.get("pool_edit", []),
+        "workspaces": current_user.get("workspaces", ["personal"]),
+        "accent_color": current_user.get("accent_color"),
+        "dark_mode": current_user.get("dark_mode", "system"),
+        "background": current_user.get("background"),
+        "density": current_user.get("density", "comfortable"),
+        "corner_style": current_user.get("corner_style", "rounded"),
+        "shortcuts": current_user.get("shortcuts", {}),
     }
 
 
@@ -404,7 +440,9 @@ async def upload_background(
 ):
     ext = _ALLOWED_BG_TYPES.get(file.content_type or "")
     if not ext:
-        raise HTTPException(status_code=400, detail="Only JPEG, PNG, WebP, or AVIF images are allowed")
+        raise HTTPException(
+            status_code=400, detail="Only JPEG, PNG, WebP, or AVIF images are allowed"
+        )
     data = await file.read()
     if len(data) > _BG_MAX_BYTES:
         raise HTTPException(status_code=400, detail="Image must be under 5 MB")
@@ -427,7 +465,9 @@ def get_background(current_user: dict = Depends(get_current_user)):
 
 
 @router.delete("/me/background", status_code=204)
-def delete_background(current_user: dict = Depends(get_current_user), _rl: None = Depends(_me_limit)):
+def delete_background(
+    current_user: dict = Depends(get_current_user), _rl: None = Depends(_me_limit)
+):
     user_dir = user_path(current_user["name"])
     for old_ext in _ALLOWED_BG_TYPES.values():
         (user_dir / f"background.{old_ext}").unlink(missing_ok=True)
@@ -439,10 +479,7 @@ def list_users_legacy(current_user: dict = Depends(require_admin)):
     """List all users without sensitive fields (admin only)."""
     data = auth_service._load_auth()
     safe_fields = {"id", "name", "email", "role", "timezone", "disabled_modules", "created_at"}
-    return [
-        {k: v for k, v in u.items() if k in safe_fields}
-        for u in data["users"]
-    ]
+    return [{k: v for k, v in u.items() if k in safe_fields} for u in data["users"]]
 
 
 class RoleUpdateRequest(BaseModel):
@@ -466,6 +503,7 @@ def update_user_role_legacy(
 
 
 from services.features_service import ALL_MODULE_IDS as _ALL_MODULE_IDS
+
 VALID_MODULE_IDS = set(_ALL_MODULE_IDS)
 
 _VALID_WORKSPACES = {"personal", "business"}
@@ -492,7 +530,9 @@ def update_user_modules(
 ):
     """Set which modules are disabled for a given user (admin only)."""
     if user_id == current_user["id"]:
-        raise HTTPException(status_code=400, detail="Admins cannot restrict their own module access")
+        raise HTTPException(
+            status_code=400, detail="Admins cannot restrict their own module access"
+        )
     user = auth_service.update_user(user_id, {"disabled_modules": req.disabled_modules})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -591,7 +631,9 @@ def update_workspace_modules(
 ):
     """Set disabled modules for a specific workspace for a user (admin only)."""
     if user_id == current_user["id"]:
-        raise HTTPException(status_code=400, detail="Admins cannot restrict their own module access")
+        raise HTTPException(
+            status_code=400, detail="Admins cannot restrict their own module access"
+        )
     target = auth_service.get_user_by_id(user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
@@ -625,7 +667,7 @@ def update_user_by_admin(
     return {"ok": True, **updates}
 
 
-_session_limit = rate_limit(5, 3600)   # 5 session updates per hour
+_session_limit = rate_limit(5, 3600)  # 5 session updates per hour
 
 
 @router.patch("/session")
@@ -667,8 +709,7 @@ def get_ai_settings(current_user: dict = Depends(require_admin)):
     base_url = stored.get("ai_base_url", "")
     # Key is "set" if present in file or in env (for Anthropic)
     key_set = bool(
-        stored.get("ai_api_key")
-        or (provider == "anthropic" and settings.anthropic_api_key)
+        stored.get("ai_api_key") or (provider == "anthropic" and settings.anthropic_api_key)
     )
     return {
         "ai_provider": provider,
@@ -692,8 +733,7 @@ def update_ai_settings(
         stored["ai_api_key"] = req.ai_api_key
     write_json(_AI_SETTINGS_PATH, stored)
     key_set = bool(
-        stored.get("ai_api_key")
-        or (req.ai_provider == "anthropic" and settings.anthropic_api_key)
+        stored.get("ai_api_key") or (req.ai_provider == "anthropic" and settings.anthropic_api_key)
     )
     return {
         "ai_provider": stored["ai_provider"],
@@ -738,8 +778,8 @@ class HostingSettingsRequest(BaseModel):
     cookie_secure: bool
     trust_proxy_headers: bool
     domain_url: str = ""
-    proxy_type: str = ""      # "cloudflare" | "nginx" | ""
-    tunnel_token: str = ""    # Cloudflare tunnel token; empty = don't overwrite stored value
+    proxy_type: str = ""  # "cloudflare" | "nginx" | ""
+    tunnel_token: str = ""  # Cloudflare tunnel token; empty = don't overwrite stored value
 
 
 @router.get("/admin/hosting-settings")
@@ -780,12 +820,15 @@ def update_hosting_settings(
 def apply_hosting_settings(current_user: dict = Depends(require_admin)):
     stored = read_json(_HOSTING_SETTINGS_PATH, default={})
     if stored.get("proxy_type") != "cloudflare":
-        raise HTTPException(status_code=400, detail="Apply is only available for Cloudflare Tunnel mode.")
+        raise HTTPException(
+            status_code=400, detail="Apply is only available for Cloudflare Tunnel mode."
+        )
     token = stored.get("tunnel_token", "")
     if not token:
         raise HTTPException(status_code=400, detail="No tunnel token saved. Save settings first.")
     try:
         import docker as docker_sdk
+
         client = docker_sdk.from_env()
         # Stop and remove the existing container so we can recreate it with the current token.
         # A plain restart keeps the original env vars from container creation time.
@@ -812,6 +855,7 @@ def apply_hosting_settings(current_user: dict = Depends(require_admin)):
 # ---------------------------------------------------------------------------
 # Admin — user management
 # ---------------------------------------------------------------------------
+
 
 class CreateUserRequest(BaseModel):
     email: EmailStr
@@ -843,16 +887,24 @@ def admin_create_user(req: CreateUserRequest, current_user: dict = Depends(requi
     return {k: v for k, v in user.items() if k in {"id", "email", "name", "role", "created_at"}}
 
 
-_ADMIN_USER_FIELDS = {"id", "email", "name", "role", "created_at", "feature_role", "disabled_modules", "workspaces", "pool_edit", "timezone"}
+_ADMIN_USER_FIELDS = {
+    "id",
+    "email",
+    "name",
+    "role",
+    "created_at",
+    "feature_role",
+    "disabled_modules",
+    "workspaces",
+    "pool_edit",
+    "timezone",
+}
 
 
 @router.get("/admin/users")
 def admin_list_users(current_user: dict = Depends(require_admin)):
     data = auth_service._load_auth()
-    users = [
-        {k: v for k, v in u.items() if k in _ADMIN_USER_FIELDS}
-        for u in data.get("users", [])
-    ]
+    users = [{k: v for k, v in u.items() if k in _ADMIN_USER_FIELDS} for u in data.get("users", [])]
     return {"users": users}
 
 
@@ -886,6 +938,7 @@ def admin_delete_user(user_id: str, current_user: dict = Depends(require_admin))
 # ---------------------------------------------------------------------------
 # Admin — registration settings
 # ---------------------------------------------------------------------------
+
 
 class AdminSettingsRequest(BaseModel):
     allow_open_registration: bool | None = None

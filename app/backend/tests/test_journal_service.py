@@ -1,4 +1,5 @@
 """Tests for services/journal_service.py."""
+
 import sys
 from pathlib import Path
 
@@ -108,22 +109,28 @@ def test_delete_entry_not_found(journal_dir):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("bad_date", [
-    "June 1 2024",
-    "20240601",
-    "2024/06/01",
-    "not-a-date",
-    "",
-])
+@pytest.mark.parametrize(
+    "bad_date",
+    [
+        "June 1 2024",
+        "20240601",
+        "2024/06/01",
+        "not-a-date",
+        "",
+    ],
+)
 def test_invalid_date_raises(journal_dir, bad_date):
     with pytest.raises(ValueError, match="YYYY-MM-DD"):
         svc.upsert_entry(USER, bad_date, "content")
 
 
-@pytest.mark.parametrize("bad_date", [
-    "June 1 2024",
-    "20240601",
-])
+@pytest.mark.parametrize(
+    "bad_date",
+    [
+        "June 1 2024",
+        "20240601",
+    ],
+)
 def test_invalid_date_get_raises(journal_dir, bad_date):
     with pytest.raises(ValueError):
         svc.get_entry(USER, bad_date)

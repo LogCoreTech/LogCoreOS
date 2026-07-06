@@ -5,26 +5,26 @@ from pydantic import BaseModel, Field, model_validator
 
 from config import settings
 from routers.auth import get_current_user, get_workspace, require_module
+from services.agent_service import run_agent
+from services.ai_provider import chat_completion, is_ai_configured
 from services.auth_service import today_for_user
 from services.file_service import (
-    read_markdown,
-    write_markdown,
     profile_path,
-    tasks_path,
     read_json,
+    read_markdown,
+    tasks_path,
     user_path,
+    write_markdown,
     ws_path,
 )
-from services.ai_provider import chat_completion, is_ai_configured
-from services.agent_service import run_agent
 from services.rate_limiter import rate_limit
 
 router = APIRouter()
 
 _require_chat = require_module("chat")
-_chat_limit   = rate_limit(20, 60)  # 20 messages per minute per IP
-_memory_limit = rate_limit(5, 60)    # 5 memory saves per minute per IP
-_save_limit   = rate_limit(30, 60)  # 30 chat auto-saves per minute per IP
+_chat_limit = rate_limit(20, 60)  # 20 messages per minute per IP
+_memory_limit = rate_limit(5, 60)  # 5 memory saves per minute per IP
+_save_limit = rate_limit(30, 60)  # 30 chat auto-saves per minute per IP
 
 _MEMORY_MAX_BYTES = 100_000  # 100 KB cap per memory file
 
@@ -112,6 +112,7 @@ async def chat(
 
     from datetime import datetime
     from zoneinfo import ZoneInfo
+
     user_tz = current_user.get("timezone", "UTC")
     try:
         now_local = datetime.now(ZoneInfo(user_tz))
@@ -136,18 +137,22 @@ async def chat(
         )
 
     tool_guidance = (
-        "Tool guidance:\n"
-        "- Goals the user wants to complete (lose weight, learn Spanish) → tasks with type='goal'\n"
-        "- Calendar appointments/events → tasks with type='appointment', due_date, and optionally due_time\n"
-        "- Notes → use list_notes, create_note, update_note, delete_note\n"
-        "- Profile details (occupation, health, family, life mission, values, AI preferences) → get_profile then update_profile\n"
-        "- Save something to memory → append_memory (short for recent context, long for stable facts)\n\n"
-        "Planning guidance:\n"
-        "- 'Plan my week' → call get_week_snapshot, reason about priorities and gaps, call propose_plan listing tasks to create, then create_tasks on confirmation\n"
-        "- 'Break [goal] into tasks' → reason about 3–7 concrete subtasks, call propose_plan, then create_tasks on confirmation\n"
-        "- 'Organize tasks by project/category' → call list_tasks, group by category and summarize — read-only, no propose_plan needed\n"
-        "- 'Summarize my progress' → call get_task_history with since_date + list_journal_entries — read-only, no propose_plan needed\n\n"
-    ) if req.mode != "research" else ""
+        (
+            "Tool guidance:\n"
+            "- Goals the user wants to complete (lose weight, learn Spanish) → tasks with type='goal'\n"
+            "- Calendar appointments/events → tasks with type='appointment', due_date, and optionally due_time\n"
+            "- Notes → use list_notes, create_note, update_note, delete_note\n"
+            "- Profile details (occupation, health, family, life mission, values, AI preferences) → get_profile then update_profile\n"
+            "- Save something to memory → append_memory (short for recent context, long for stable facts)\n\n"
+            "Planning guidance:\n"
+            "- 'Plan my week' → call get_week_snapshot, reason about priorities and gaps, call propose_plan listing tasks to create, then create_tasks on confirmation\n"
+            "- 'Break [goal] into tasks' → reason about 3–7 concrete subtasks, call propose_plan, then create_tasks on confirmation\n"
+            "- 'Organize tasks by project/category' → call list_tasks, group by category and summarize — read-only, no propose_plan needed\n"
+            "- 'Summarize my progress' → call get_task_history with since_date + list_journal_entries — read-only, no propose_plan needed\n\n"
+        )
+        if req.mode != "research"
+        else ""
+    )
 
     system_prompt = (
         f"You are the AI layer of LogCore Brain — a personal life operating system. "
@@ -162,8 +167,13 @@ async def chat(
 
     history = [m.model_dump() for m in req.history]
     result = await run_agent(
-        current_user, req.message, history, system_prompt,
-        mode=req.mode, workspace=workspace, cross_workspace=req.cross_workspace,
+        current_user,
+        req.message,
+        history,
+        system_prompt,
+        mode=req.mode,
+        workspace=workspace,
+        cross_workspace=req.cross_workspace,
     )
 
     return {
@@ -206,7 +216,9 @@ async def save_memory(
 
     existing = mem_path.read_text() if mem_path.exists() else ""
     if len(existing.encode()) >= _MEMORY_MAX_BYTES:
-        raise HTTPException(status_code=413, detail="Memory file is full. Clear some entries before saving more.")
+        raise HTTPException(
+            status_code=413, detail="Memory file is full. Clear some entries before saving more."
+        )
 
     # Escape any brain_data closing tags in AI output to prevent prompt injection via memory
     safe_summary = summary.strip().replace("</brain_data>", "[/brain_data]")
@@ -251,7 +263,7 @@ async def save_chat(
         existing_title = None
         if target.exists():
             try:
-                existing_title = target.open().readline().strip().lstrip('# ')
+                existing_title = target.open().readline().strip().lstrip("# ")
             except Exception:
                 pass
         title = req.name.strip() or existing_title or "Chat"
@@ -284,7 +296,7 @@ def list_saved_chats(
     for f in files:
         # Read only the first line to get the title cheaply
         try:
-            first_line = f.open().readline().strip().lstrip('# ')
+            first_line = f.open().readline().strip().lstrip("# ")
         except Exception:
             first_line = f.stem
         result.append({"filename": f.name, "path": f"Chats/{f.name}", "title": first_line})

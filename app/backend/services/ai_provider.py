@@ -3,6 +3,7 @@
 Runtime config is read from {brain_path}/ai_settings.json on every call,
 so admin UI changes take effect immediately without a restart.
 """
+
 import asyncio
 import json
 from dataclasses import dataclass, field
@@ -20,15 +21,16 @@ class ToolCall:
 
 @dataclass
 class AgentResponse:
-    stop_reason: str            # "tool_use" | "end_turn" | "max_tokens"
+    stop_reason: str  # "tool_use" | "end_turn" | "max_tokens"
     text: str
     tool_calls: list[ToolCall]
-    raw_content: list           # Anthropic-format blocks; used to continue message history
+    raw_content: list  # Anthropic-format blocks; used to continue message history
 
 
 # ---------------------------------------------------------------------------
 # Runtime config helpers
 # ---------------------------------------------------------------------------
+
 
 def _load_ai_settings() -> dict:
     """Load runtime AI config from brain/ai_settings.json; returns {} if absent."""
@@ -63,6 +65,7 @@ def is_ai_configured() -> bool:
 # Public async API
 # ---------------------------------------------------------------------------
 
+
 async def chat_completion(system: str, messages: list[dict], max_tokens: int = 1024) -> str:
     """Send a chat request and return the text response."""
     return await asyncio.to_thread(_dispatch, system, messages, max_tokens)
@@ -81,6 +84,7 @@ async def agent_completion(
 # ---------------------------------------------------------------------------
 # Synchronous dispatch
 # ---------------------------------------------------------------------------
+
 
 def _dispatch(system: str, messages: list[dict], max_tokens: int) -> str:
     cfg = _get_config()
@@ -111,8 +115,10 @@ def _dispatch_agent(
 # Anthropic implementation
 # ---------------------------------------------------------------------------
 
+
 def _anthropic(system: str, messages: list[dict], max_tokens: int, cfg: dict) -> str:
     import anthropic
+
     key = cfg.get("ai_api_key") or cfg.get("anthropic_api_key")
     client = anthropic.Anthropic(api_key=key)
     response = client.messages.create(
@@ -132,6 +138,7 @@ def _anthropic_agent(
     cfg: dict,
 ) -> AgentResponse:
     import anthropic
+
     key = cfg.get("ai_api_key") or cfg.get("anthropic_api_key")
     client = anthropic.Anthropic(api_key=key)
     response = client.messages.create(
@@ -152,12 +159,14 @@ def _anthropic_agent(
             raw_content.append({"type": "text", "text": block.text})
         elif block.type == "tool_use":
             tool_calls.append(ToolCall(id=block.id, name=block.name, input=block.input))
-            raw_content.append({
-                "type": "tool_use",
-                "id": block.id,
-                "name": block.name,
-                "input": block.input,
-            })
+            raw_content.append(
+                {
+                    "type": "tool_use",
+                    "id": block.id,
+                    "name": block.name,
+                    "input": block.input,
+                }
+            )
 
     return AgentResponse(
         stop_reason=response.stop_reason,
@@ -171,8 +180,10 @@ def _anthropic_agent(
 # OpenAI-compatible implementation
 # ---------------------------------------------------------------------------
 
+
 def _openai(system: str, messages: list[dict], max_tokens: int, cfg: dict) -> str:
     import openai as _openai
+
     client = _openai.OpenAI(
         api_key=cfg.get("ai_api_key") or "ollama",
         base_url=cfg.get("ai_base_url") or None,
@@ -194,6 +205,7 @@ def _openai_agent(
     cfg: dict,
 ) -> AgentResponse:
     import openai as _openai
+
     client = _openai.OpenAI(
         api_key=cfg.get("ai_api_key") or "ollama",
         base_url=cfg.get("ai_base_url") or None,
@@ -242,12 +254,14 @@ def _openai_agent(
             except (json.JSONDecodeError, TypeError):
                 input_data = {}
             tool_calls.append(ToolCall(id=tc.id, name=tc.function.name, input=input_data))
-            raw_content.append({
-                "type": "tool_use",
-                "id": tc.id,
-                "name": tc.function.name,
-                "input": input_data,
-            })
+            raw_content.append(
+                {
+                    "type": "tool_use",
+                    "id": tc.id,
+                    "name": tc.function.name,
+                    "input": input_data,
+                }
+            )
 
     stop_reason = "end_turn"
     if choice.finish_reason == "tool_calls":
@@ -273,10 +287,7 @@ def _anthropic_msg_to_openai(msg: dict) -> list[dict]:
 
     if isinstance(content, list):
         if role == "assistant":
-            text_parts = [
-                b["text"] for b in content
-                if b.get("type") == "text" and b.get("text")
-            ]
+            text_parts = [b["text"] for b in content if b.get("type") == "text" and b.get("text")]
             oai_tool_calls = [
                 {
                     "id": b["id"],
@@ -286,7 +297,8 @@ def _anthropic_msg_to_openai(msg: dict) -> list[dict]:
                         "arguments": json.dumps(b["input"]),
                     },
                 }
-                for b in content if b.get("type") == "tool_use"
+                for b in content
+                if b.get("type") == "tool_use"
             ]
             oai_msg: dict = {
                 "role": "assistant",
@@ -303,11 +315,13 @@ def _anthropic_msg_to_openai(msg: dict) -> list[dict]:
                     rc = block["content"]
                     if not isinstance(rc, str):
                         rc = json.dumps(rc)
-                    result.append({
-                        "role": "tool",
-                        "tool_call_id": block["tool_use_id"],
-                        "content": rc,
-                    })
+                    result.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": block["tool_use_id"],
+                            "content": rc,
+                        }
+                    )
                 elif block.get("type") == "text":
                     result.append({"role": "user", "content": block["text"]})
             return result

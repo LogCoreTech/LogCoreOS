@@ -1,12 +1,13 @@
 """CRUD for Notes/ files and folders in the user's Brain."""
+
 import re
 import shutil
 from datetime import datetime
 from pathlib import Path
 
-from services.file_service import ws_path, read_markdown, write_markdown
+from services.file_service import read_markdown, write_markdown, ws_path
 
-_SEGMENT_RE = re.compile(r'^[\w \-. ]+$')
+_SEGMENT_RE = re.compile(r"^[\w \-. ]+$")
 _MAX_CONTENT_BYTES = 512_000
 
 _GETTING_STARTED_PATH = "Getting Started"
@@ -34,7 +35,9 @@ def _validate_path(path: str) -> None:
     if not parts or any(p in ("", ".", "..") for p in parts):
         raise ValueError("Invalid path")
     if not all(_SEGMENT_RE.match(p) for p in parts):
-        raise ValueError("Path contains invalid characters (use letters, digits, spaces, hyphens, dots, underscores)")
+        raise ValueError(
+            "Path contains invalid characters (use letters, digits, spaces, hyphens, dots, underscores)"
+        )
 
 
 def _notes_root(user_name: str, workspace: str = "personal") -> Path:
@@ -68,12 +71,14 @@ def list_notes(user_name: str, workspace: str = "personal") -> list[dict]:
                 _walk(p, p_rel)
             elif p.is_file() and p.suffix == ".md":
                 note_rel = f"{rel}/{p.stem}" if rel else p.stem
-                items.append({
-                    "type": "note",
-                    "path": note_rel,
-                    "name": p.stem,
-                    "modified_at": datetime.fromtimestamp(p.stat().st_mtime).isoformat(),
-                })
+                items.append(
+                    {
+                        "type": "note",
+                        "path": note_rel,
+                        "name": p.stem,
+                        "modified_at": datetime.fromtimestamp(p.stat().st_mtime).isoformat(),
+                    }
+                )
 
     _walk(root, "")
 
@@ -82,12 +87,14 @@ def list_notes(user_name: str, workspace: str = "personal") -> list[dict]:
         p = _note_path(user_name, _GETTING_STARTED_PATH, workspace)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(_GETTING_STARTED_CONTENT, encoding="utf-8")
-        items.append({
-            "type": "note",
-            "path": _GETTING_STARTED_PATH,
-            "name": "Getting Started",
-            "modified_at": datetime.fromtimestamp(p.stat().st_mtime).isoformat(),
-        })
+        items.append(
+            {
+                "type": "note",
+                "path": _GETTING_STARTED_PATH,
+                "name": "Getting Started",
+                "modified_at": datetime.fromtimestamp(p.stat().st_mtime).isoformat(),
+            }
+        )
 
     return items
 
@@ -121,7 +128,9 @@ def create_note(user_name: str, path: str, content: str = "", workspace: str = "
     }
 
 
-def update_note(user_name: str, path: str, content: str, workspace: str = "personal") -> dict | None:
+def update_note(
+    user_name: str, path: str, content: str, workspace: str = "personal"
+) -> dict | None:
     _validate_path(path)
     if len(content.encode()) > _MAX_CONTENT_BYTES:
         raise ValueError("Content exceeds 500 KB limit")
@@ -164,7 +173,9 @@ def delete_folder(user_name: str, path: str, workspace: str = "personal") -> boo
     return True
 
 
-def move_item(user_name: str, from_path: str, to_path: str, item_type: str, workspace: str = "personal") -> dict:
+def move_item(
+    user_name: str, from_path: str, to_path: str, item_type: str, workspace: str = "personal"
+) -> dict:
     """Rename or move a note or folder."""
     _validate_path(from_path)
     _validate_path(to_path)

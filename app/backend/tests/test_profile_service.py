@@ -1,4 +1,5 @@
 """Tests for services/profile_service.py."""
+
 import sys
 from pathlib import Path
 
@@ -35,9 +36,7 @@ def test_load_profile_reads_json(user_dir):
 
 
 def test_load_profile_seeds_from_profile_md(user_dir):
-    (user_dir / "Profile.md").write_text(
-        "## Life Priorities\n1. Health\n2. Work\n"
-    )
+    (user_dir / "Profile.md").write_text("## Life Priorities\n1. Health\n2. Work\n")
     data = svc.load_profile(USER)
     assert data.get("priority_order") == ["Health", "Work"]
 
@@ -84,9 +83,7 @@ def test_get_priority_order_fallback_to_defaults(user_dir):
 
 
 def test_get_priority_order_fallback_to_profile_md(user_dir):
-    (user_dir / "Profile.md").write_text(
-        "## Life Priorities\n1. God\n2. Family\n"
-    )
+    (user_dir / "Profile.md").write_text("## Life Priorities\n1. God\n2. Family\n")
     order = svc.get_priority_order(USER)
     assert order == ["God", "Family"]
 

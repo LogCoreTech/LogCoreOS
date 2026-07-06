@@ -5,16 +5,39 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 # Infisical must inject env vars before Settings() is instantiated at config import time
 from services.infisical_loader import load_infisical_secrets
+
 load_infisical_secrets()
 
 from fastapi import FastAPI, Request
-from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from config import settings
 from migrations.runner import run_pending as run_migrations
-from routers import auth, tasks, priorities, chat, setup, health, brain, export, shared, push, notes, journal, calendar, profile, suggestions, infisical, features, automations, home, team, update
+from routers import (
+    auth,
+    automations,
+    brain,
+    calendar,
+    chat,
+    export,
+    features,
+    health,
+    home,
+    infisical,
+    journal,
+    notes,
+    priorities,
+    profile,
+    push,
+    setup,
+    shared,
+    suggestions,
+    tasks,
+    team,
+    update,
+)
 from scheduler import start as start_scheduler
 from services.hosting_service import effective_domain_url
 
@@ -116,7 +139,9 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
         if origin and self._is_allowed(origin):
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Credentials"] = "true"
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+            response.headers["Access-Control-Allow-Methods"] = (
+                "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+            )
             response.headers["Access-Control-Allow-Headers"] = "*"
             if request.method == "OPTIONS":
                 response.headers["Access-Control-Max-Age"] = "600"
@@ -138,27 +163,27 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(DynamicCORSMiddleware)
 
-app.include_router(health.router,     prefix="/api/v1/health",     tags=["health"])
-app.include_router(auth.router,       prefix="/api/v1/auth",       tags=["auth"])
-app.include_router(tasks.router,      prefix="/api/v1/tasks",      tags=["tasks"])
+app.include_router(health.router, prefix="/api/v1/health", tags=["health"])
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["tasks"])
 app.include_router(priorities.router, prefix="/api/v1/priorities", tags=["priorities"])
-app.include_router(chat.router,       prefix="/api/v1/chat",       tags=["chat"])
-app.include_router(setup.router,      prefix="/api/v1/setup",      tags=["setup"])
-app.include_router(brain.router,      prefix="/api/v1/brain",      tags=["brain"])
-app.include_router(export.router,     prefix="/api/v1/user",       tags=["export"])
-app.include_router(shared.router,     prefix="/api/v1/shared",       tags=["shared"])
-app.include_router(push.router,       prefix="/api/v1/push",         tags=["push"])
-app.include_router(notes.router,      prefix="/api/v1/notes",        tags=["notes"])
-app.include_router(journal.router,    prefix="/api/v1/journal",      tags=["journal"])
-app.include_router(calendar.router,   prefix="/api/v1/calendar",     tags=["calendar"])
-app.include_router(profile.router,    prefix="/api/v1/profile",      tags=["profile"])
-app.include_router(suggestions.router, prefix="/api/v1/suggestions",  tags=["suggestions"])
-app.include_router(infisical.router,  prefix="/api/v1/auth",          tags=["infisical"])
-app.include_router(features.router,   prefix="/api/v1/auth",          tags=["features"])
-app.include_router(automations.router, prefix="/api/v1/automations",    tags=["automations"])
-app.include_router(home.router,        prefix="/api/v1/home",             tags=["home"])
-app.include_router(team.router,        prefix="/api/v1/team",             tags=["team"])
-app.include_router(update.router,      prefix="/api/v1/update",           tags=["update"])
+app.include_router(chat.router, prefix="/api/v1/chat", tags=["chat"])
+app.include_router(setup.router, prefix="/api/v1/setup", tags=["setup"])
+app.include_router(brain.router, prefix="/api/v1/brain", tags=["brain"])
+app.include_router(export.router, prefix="/api/v1/user", tags=["export"])
+app.include_router(shared.router, prefix="/api/v1/shared", tags=["shared"])
+app.include_router(push.router, prefix="/api/v1/push", tags=["push"])
+app.include_router(notes.router, prefix="/api/v1/notes", tags=["notes"])
+app.include_router(journal.router, prefix="/api/v1/journal", tags=["journal"])
+app.include_router(calendar.router, prefix="/api/v1/calendar", tags=["calendar"])
+app.include_router(profile.router, prefix="/api/v1/profile", tags=["profile"])
+app.include_router(suggestions.router, prefix="/api/v1/suggestions", tags=["suggestions"])
+app.include_router(infisical.router, prefix="/api/v1/auth", tags=["infisical"])
+app.include_router(features.router, prefix="/api/v1/auth", tags=["features"])
+app.include_router(automations.router, prefix="/api/v1/automations", tags=["automations"])
+app.include_router(home.router, prefix="/api/v1/home", tags=["home"])
+app.include_router(team.router, prefix="/api/v1/team", tags=["team"])
+app.include_router(update.router, prefix="/api/v1/update", tags=["update"])
 
 # Serve React frontend — must come last
 static_dir = Path(__file__).parent.parent / "frontend" / "dist"

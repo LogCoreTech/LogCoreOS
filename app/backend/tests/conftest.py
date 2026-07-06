@@ -1,4 +1,5 @@
 """Shared fixtures for all backend tests."""
+
 import sys
 from pathlib import Path
 
@@ -12,6 +13,7 @@ import pytest
 def brain(tmp_path, monkeypatch):
     """Patch settings.brain_path to an isolated temp directory."""
     from config import settings
+
     monkeypatch.setattr(settings, "brain_path", tmp_path / "brain")
     (tmp_path / "brain" / "_system").mkdir(parents=True, exist_ok=True)
     return tmp_path / "brain"

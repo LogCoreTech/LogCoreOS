@@ -1,4 +1,5 @@
 """Shared Pydantic models for event create/update — used by calendar.py and shared.py."""
+
 import re
 from datetime import date
 

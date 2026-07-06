@@ -1,4 +1,5 @@
 """Tests for the in-memory IP-based rate limiter."""
+
 import sys
 import time
 from pathlib import Path

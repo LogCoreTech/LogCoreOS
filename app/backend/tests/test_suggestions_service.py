@@ -1,7 +1,8 @@
 """Tests for services/suggestions_service.py."""
+
 import sys
-from unittest.mock import MagicMock
 from datetime import date
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -12,7 +13,6 @@ _mock_auth.today_for_user.return_value = date.today()
 sys.modules.setdefault("services.auth_service", _mock_auth)
 
 import services.suggestions_service as svc
-
 
 USER = "TestUser"
 

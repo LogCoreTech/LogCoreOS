@@ -1,4 +1,5 @@
 """Web Push subscription management and VAPID public key endpoint."""
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 

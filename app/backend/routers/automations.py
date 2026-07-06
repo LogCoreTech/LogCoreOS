@@ -1,4 +1,5 @@
 """Automations module — import and run n8n workflows."""
+
 import json
 import logging
 
@@ -12,7 +13,7 @@ from services.rate_limiter import rate_limit
 logger = logging.getLogger("logcore.automations")
 
 _require_automations = require_module("automations")
-_read_limit  = rate_limit(30, 60)
+_read_limit = rate_limit(30, 60)
 _write_limit = rate_limit(10, 60)
 
 router = APIRouter()
@@ -24,6 +25,7 @@ class N8nConfigRequest(BaseModel):
 
 
 # ── n8n admin endpoints (must come before /{id}/... routes) ───────────────────
+
 
 @router.get("/n8n/status")
 def n8n_status(
@@ -59,7 +61,8 @@ def sync_secrets_to_n8n(
     _rl: None = Depends(_write_limit),
 ):
     """Write cached Infisical secrets to docker/n8n.env and restart n8n."""
-    from services.file_service import read_json, brain_path
+    from services.file_service import brain_path, read_json
+
     cache_path = brain_path() / "_system" / "infisical_cache.json"
     cache = read_json(cache_path, default={})
     secrets = cache.get("secrets", {})
@@ -78,6 +81,7 @@ def sync_secrets_to_n8n(
 
 # ── Workflow list ──────────────────────────────────────────────────────────────
 
+
 @router.get("")
 def list_automations(
     scope: str = "all",
@@ -91,6 +95,7 @@ def list_automations(
 
 
 # ── Import workflow ────────────────────────────────────────────────────────────
+
 
 @router.post("/import")
 async def import_workflow(
@@ -134,6 +139,7 @@ async def import_workflow(
 
 # ── Per-workflow endpoints ─────────────────────────────────────────────────────
 
+
 @router.delete("/{record_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_automation(
     record_id: str,
@@ -166,7 +172,10 @@ def run_automation(
     _rl: None = Depends(_write_limit),
 ):
     if not n8n_service.is_configured():
-        raise HTTPException(status_code=503, detail="n8n is not configured. Go to Admin → Automations to set up n8n.")
+        raise HTTPException(
+            status_code=503,
+            detail="n8n is not configured. Go to Admin → Automations to set up n8n.",
+        )
     record = n8n_service.find_workflow(record_id, current_user["name"])
     if not record:
         raise HTTPException(status_code=404, detail="Workflow not found")
@@ -182,8 +191,10 @@ def run_automation(
         raise HTTPException(status_code=502, detail=f"Execution failed: {exc}")
 
     from datetime import datetime, timezone
-    n8n_service.update_last_run(record_id, current_user["name"], record["scope"],
-                                datetime.now(timezone.utc).isoformat())
+
+    n8n_service.update_last_run(
+        record_id, current_user["name"], record["scope"], datetime.now(timezone.utc).isoformat()
+    )
     return result
 
 
@@ -194,7 +205,10 @@ def activate_automation(
     _rl: None = Depends(_write_limit),
 ):
     if not n8n_service.is_configured():
-        raise HTTPException(status_code=503, detail="n8n is not configured. Go to Admin → Automations to set up n8n.")
+        raise HTTPException(
+            status_code=503,
+            detail="n8n is not configured. Go to Admin → Automations to set up n8n.",
+        )
     record = n8n_service.find_workflow(record_id, current_user["name"])
     if not record:
         raise HTTPException(status_code=404, detail="Workflow not found")
@@ -219,7 +233,10 @@ def deactivate_automation(
     _rl: None = Depends(_write_limit),
 ):
     if not n8n_service.is_configured():
-        raise HTTPException(status_code=503, detail="n8n is not configured. Go to Admin → Automations to set up n8n.")
+        raise HTTPException(
+            status_code=503,
+            detail="n8n is not configured. Go to Admin → Automations to set up n8n.",
+        )
     record = n8n_service.find_workflow(record_id, current_user["name"])
     if not record:
         raise HTTPException(status_code=404, detail="Workflow not found")
@@ -245,7 +262,10 @@ def get_logs(
     _rl: None = Depends(_read_limit),
 ):
     if not n8n_service.is_configured():
-        raise HTTPException(status_code=503, detail="n8n is not configured. Go to Admin → Automations to set up n8n.")
+        raise HTTPException(
+            status_code=503,
+            detail="n8n is not configured. Go to Admin → Automations to set up n8n.",
+        )
     record = n8n_service.find_workflow(record_id, current_user["name"])
     if not record:
         raise HTTPException(status_code=404, detail="Workflow not found")

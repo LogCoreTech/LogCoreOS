@@ -22,7 +22,20 @@ from pathlib import Path
 
 from services.file_service import read_json, write_json
 
-ALL_MODULE_IDS = ["dashboard", "tasks", "goals", "calendar", "household", "notes", "journal", "chat", "automations", "automations_business", "home", "team"]
+ALL_MODULE_IDS = [
+    "dashboard",
+    "tasks",
+    "goals",
+    "calendar",
+    "household",
+    "notes",
+    "journal",
+    "chat",
+    "automations",
+    "automations_business",
+    "home",
+    "team",
+]
 
 _PERSONAL_MEMBER = {m: True for m in ALL_MODULE_IDS if m not in ("automations_business", "team")}
 
@@ -45,13 +58,14 @@ _DEFAULT_FEATURES: dict = {
     "profile": "personal",
     "roles": {
         "member": _PERSONAL_MEMBER.copy(),
-        "guest":  _PERSONAL_MEMBER.copy(),
+        "guest": _PERSONAL_MEMBER.copy(),
     },
 }
 
 
 def _features_path() -> Path:
     from config import settings
+
     return settings.brain_path / "_system" / "features.json"
 
 
