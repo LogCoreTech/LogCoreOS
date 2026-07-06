@@ -1,5 +1,7 @@
 # LogCore OS
 
+[![CI](https://github.com/LogCoreTech/LogCoreOS/actions/workflows/ci.yml/badge.svg)](https://github.com/LogCoreTech/LogCoreOS/actions/workflows/ci.yml)
+
 A self-hosted life operating system for individuals, families, and households. An AI that knows you personally — your priorities, your goals, your people — running privately on your own server.
 
 ---

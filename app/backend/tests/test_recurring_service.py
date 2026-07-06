@@ -1,6 +1,7 @@
 """Tests for recurring task date arithmetic and the nightly processor."""
 
 import sys
+from datetime import timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -96,7 +97,25 @@ def rec_brain(brain):
     return brain
 
 
-def test_process_user_advances_done_task(rec_brain):
+def test_process_user_advances_task_completed_yesterday(rec_brain):
+    # The nightly 00:01 run advances recurring tasks completed on a *previous* day
+    today = auth_service.today_for_user(REC_USER)
+    yesterday = (today - timedelta(days=1)).isoformat()
+    _seed_recurring(
+        rec_brain,
+        [
+            _task_row("Daily", "done", yesterday, last_completed=yesterday),
+        ],
+    )
+    result = process_user(REC_USER)
+    assert result["advanced"] == 1
+    tasks = read_json(tasks_path(REC_USER))["tasks"]
+    assert tasks[0]["status"] == "pending"
+    assert tasks[0]["due_date"] > yesterday
+
+
+def test_process_user_leaves_task_completed_today(rec_brain):
+    # A task completed today stays done until tomorrow's nightly run
     today = auth_service.today_for_user(REC_USER).isoformat()
     _seed_recurring(
         rec_brain,
@@ -105,10 +124,9 @@ def test_process_user_advances_done_task(rec_brain):
         ],
     )
     result = process_user(REC_USER)
-    assert result["advanced"] == 1
+    assert result["advanced"] == 0
     tasks = read_json(tasks_path(REC_USER))["tasks"]
-    assert tasks[0]["status"] == "pending"
-    assert tasks[0]["due_date"] > today
+    assert tasks[0]["status"] == "done"
 
 
 def test_process_user_breaks_streak_on_missed_task(rec_brain):

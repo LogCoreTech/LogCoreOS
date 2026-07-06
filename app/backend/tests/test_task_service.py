@@ -5,9 +5,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from datetime import datetime, timedelta
+
 import pytest
 
 from services import auth_service, task_service
+from services.file_service import read_json, tasks_path, write_json
+from services.recurring_service import process_user
 
 USER = "TestUser"
 
@@ -50,9 +54,28 @@ def test_list_tasks_returns_added(user_brain):
     assert "Task B" in titles
 
 
-def test_mark_task_done_moves_to_history(user_brain):
+def _backdate_completed(task_id: str, days: int = 1) -> None:
+    """Rewind a done task's completed_at so the nightly archiver treats it as yesterday's."""
+    data = read_json(tasks_path(USER))
+    for t in data["tasks"]:
+        if t["id"] == task_id:
+            done_at = datetime.fromisoformat(t["completed_at"]) - timedelta(days=days)
+            t["completed_at"] = done_at.isoformat()
+    write_json(tasks_path(USER), data)
+
+
+def test_mark_task_done_stays_active_until_nightly_archive(user_brain):
     task = task_service.add_task(USER, _make_task())
     task_service.update_task(USER, task["id"], {"status": "done"})
+
+    # Done non-recurring tasks stay in tasks.json until the 00:01 nightly job
+    active = task_service.list_tasks(USER)
+    assert any(t["id"] == task["id"] and t["status"] == "done" for t in active)
+    assert task_service.list_history(USER) == []
+
+    # Next night: completed_at is now yesterday, so the processor archives it
+    _backdate_completed(task["id"])
+    process_user(USER)
     active = task_service.list_tasks(USER)
     assert all(t["id"] != task["id"] for t in active)
     history = task_service.list_history(USER)
@@ -80,6 +103,8 @@ def test_history_pagination(user_brain):
     tasks = [task_service.add_task(USER, _make_task(f"Task {i}")) for i in range(5)]
     for t in tasks:
         task_service.update_task(USER, t["id"], {"status": "done"})
+        _backdate_completed(t["id"])
+    process_user(USER)  # nightly archive moves them to history
 
     page1 = task_service.list_history(USER, limit=3, offset=0)
     page2 = task_service.list_history(USER, limit=3, offset=3)
@@ -95,6 +120,9 @@ def test_history_most_recent_first(user_brain):
     t2 = task_service.add_task(USER, _make_task("Second"))
     task_service.update_task(USER, t1["id"], {"status": "done"})
     task_service.update_task(USER, t2["id"], {"status": "done"})
+    _backdate_completed(t1["id"])
+    _backdate_completed(t2["id"])
+    process_user(USER)  # nightly archive moves them to history
     history = task_service.list_history(USER)
     # Most recent (t2) should appear before t1
     ids = [t["id"] for t in history]
