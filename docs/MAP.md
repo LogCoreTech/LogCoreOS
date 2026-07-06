@@ -146,7 +146,8 @@ LogCoreOS/
     ├── AGENTS.md                  → AI boot protocol + dev conventions
     ├── SOUL.md                    → AI personality and principles
     ├── PROJECT.md                 → system architecture + development roadmap
-    ├── TASKS.md                   → active work queue + backlog
+    ├── TASKS.md                   → active work queue + backlog (phased per BLUEPRINT.md)
+    ├── BLUEPRINT.md               → business scaling blueprint: $10k/mo plan, market research, pricing, risks
     ├── MEMORY.md                  → design decisions, security rules, known gotchas
     ├── MAP.md                     → THIS FILE — navigation index
     ├── API.md                     → REST API endpoint reference
@@ -172,6 +173,7 @@ LogCoreOS/
 |---|---|
 | What this project is | `docs/README.md`, `docs/PROJECT.md` |
 | Current priorities / tasks | `docs/TASKS.md` |
+| Business strategy & revenue plan | `docs/BLUEPRINT.md` |
 | Design decisions & hard rules | `docs/MEMORY.md` |
 | Architecture & roadmap | `docs/PROJECT.md` |
 | What was worked on recently | `docs/Daily Notes/YYYY-MM-DD.md` |
