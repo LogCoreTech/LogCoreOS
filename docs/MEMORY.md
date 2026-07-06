@@ -60,7 +60,7 @@ Auth roles (`admin`, `member`, `guest`) control who can access admin endpoints. 
 3. **`trust_proxy_headers`** defaults to `False`. Only enable when there is a trusted reverse proxy in front of the app.
 4. **`SECRET_KEY`** must be changed from the default before any network exposure. `launch.sh` generates one automatically.
 5. **Passwords** are bcrypt-hashed. Never store or log plaintext passwords.
-6. **`brain/_system/auth.json` and `docker/.env` must never be committed.** Both are in `.gitignore`.
+6. **`brain/_system/auth.json`, `brain/ai_settings.json`, and `docker/.env` must never be committed.** All are in `.gitignore` (`ai_settings.json` was missing until 2026-07-06 — caught when the live API key showed up as untracked).
 7. **`cookie_secure`** should be `true` in any HTTPS deployment. The Admin → Hosting panel sets this at runtime.
 8. **Self-hosters must never see the Infisical card** in Admin unless a token was configured at deploy time. Env var tokens cannot be cleared via UI — only file-sourced tokens can be cleared.
 9. **Rate limits are enforced on all endpoints.** Login: 5/5 min; register: 3/hour; general reads: 30/min; writes: 10/min; admin ops: 20/min. Always apply `rate_limit(count, window_secs)` to new endpoints.

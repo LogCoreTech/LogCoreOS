@@ -9,6 +9,9 @@ brain/Memory/Daily Notes/
 # ── Runtime hosting config (contains tunnel token — generated per deployment) ─
 brain/hosting.json
 
+# ── AI provider settings (contains API keys — written by Admin UI) ────────────
+brain/ai_settings.json
+
 # ── Auth registry (contains hashed passwords — lives in brain/_system/ at runtime)
 brain/_system/
 
