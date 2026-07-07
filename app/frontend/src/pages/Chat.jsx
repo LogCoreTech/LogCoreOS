@@ -28,6 +28,16 @@ function ProposalCard({ step, onConfirm, onCancel }) {
   )
 }
 
+// Shape thread state into a history the /chat validator accepts: no injected
+// proactive notifications, must start with a user message and end with an
+// assistant one (older archives can carry leading notification messages).
+function toApiHistory(msgs) {
+  const h = msgs.filter(m => !m._proactive).map(m => ({ role: m.role, content: m.content }))
+  while (h.length && h[0].role !== 'user') h.shift()
+  while (h.length && h[h.length - 1].role !== 'assistant') h.pop()
+  return h
+}
+
 function StepTrace({ steps }) {
   const [expanded, setExpanded] = useState({})
 
@@ -160,12 +170,17 @@ export default function Chat() {
     }
   }, [workspace])
 
-  // Auto-save after each AI response
+  // Auto-save after each AI response. Injected proactive notifications are
+  // display-only: they stay out of archives, and a thread that contains nothing
+  // else must not be saved at all.
   useEffect(() => {
     if (loading) return
-    if (messages.length <= 1) return
+    const history = messages
+      .slice(1)
+      .filter(m => !m._proactive)
+      .map(m => ({ role: m.role, content: m.content }))
+    if (history.length === 0) return
     const t = setTimeout(async () => {
-      const history = messages.slice(1).map(m => ({ role: m.role, content: m.content }))
       const firstUser = history.find(m => m.role === 'user')
       const autoTitle = firstUser
         ? firstUser.content.slice(0, 60) + (firstUser.content.length > 60 ? '…' : '')
@@ -196,7 +211,7 @@ export default function Chat() {
     setLoading(true)
 
     try {
-      const history = updated.slice(1, -1).map(m => ({ role: m.role, content: m.content }))
+      const history = toApiHistory(updated.slice(1, -1))
       const res = await chatApi.send(msg, history, chatMode, crossWorkspace)
       setMessages([...updated, {
         role: 'assistant',

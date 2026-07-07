@@ -8,7 +8,6 @@ Keep this up to date. Mark tasks done as they're completed. Add new tasks as the
 
 ## Now — active build work
 
-- [ ] **BUG: proactive notification injection breaks chat + writes junk archives** — Chat.jsx injects unread chat-delivery notifications as assistant messages after the greeting; sending a message then produces a history starting with an assistant role, which ChatRequest's alternation validator 422s ("History must begin with a user message"); the auto-save effect also fires on injection, saving a junk archive containing only the notification (found 2026-07-06 while fixing the chat-history bug)
 - [ ] **Chat modes: add a default "approve edits" mode** — agent acts freely on reads but asks approval before any write/edit; make it the default mode (plan mode already proposes whole plans — this is lighter, per-write approval) (reported 2026-07-06)
 - [ ] **Automation Inbox** — workflows write structured output to Brain JSON; users see results with per-item actions (Interested / Pass / Offer Made / Closed); workflow skips already-reviewed items
 - [ ] **Land lead search & qualify workflow** — n8n pulling land listings (multiple sources with a fallback from day one) and AI-qualifying against configurable criteria; stub file in `automations_stubs/`; Brain JSON output schema; depends on Automation Inbox
@@ -28,12 +27,11 @@ Keep this up to date. Mark tasks done as they're completed. Add new tasks as the
 - [ ] **Screenshots in README** — 3+ images + a 30-second GIF of the AI using its memory
 - [ ] **CONTRIBUTING.md** — how to run locally and submit a PR
 - [ ] **GitHub issue templates** — bug report + feature request
-- [ ] **GitHub Discussions** — one toggle in repo settings
 - [ ] **Website: copy refresh + Try the Demo CTA** — CTA → demo.logcoretech.com; add comparison table (LogCoreOS vs Khoj / Notion AI / Open WebUI)
 - [ ] **OG/social preview image for logcoretech.com** — `<meta og:image>` with branded screenshot
 - [ ] **Waitlist form** — Formspree, capture interest before self-serve signup exists
 - [ ] **Cloudflare Analytics enabled** — one toggle, free
-- [ ] **LinkedIn company page** — logo, description, link
+- [ ] **LinkedIn company page** — BLOCKED: LinkedIn requires a registered company (LLC) to create a page; revisit after LLC formation (business-side, tracked in private Business repo) (2026-07-06)
 
 ## Features that unblock scale (build when demanded)
 
@@ -67,6 +65,8 @@ Keep this up to date. Mark tasks done as they're completed. Add new tasks as the
 
 ## Done
 
+- [x] **BUG: proactive notification injection breaks chat + writes junk archives** — proactive messages are now display-only: `toApiHistory()` strips them and trims history to the validator's shape (start user / end assistant, also heals older junk archives on continue); auto-save skips proactive messages and proactive-only threads (2026-07-06)
+- [x] **GitHub Discussions** — was already enabled on the repo (confirmed 2026-07-06)
 - [x] **BUG: AI responses lost from saved chat history** — root cause was the archive parse, not the save: `parseSavedChat()` kept only lines starting with `**You**:`/`**AI**:`, dropping every continuation line of multi-line responses; continuing a chat then auto-saved the truncated parse back over the same file. Parser now accumulates continuation lines; saved-chat viewer renders full multi-line bubbles; history content cap raised 5000→30000 (long agent responses were silently 422ing the auto-save) (2026-07-06)
 - [x] **BUG: agent member-name resolution on shared task assignment** — `add_shared_task`/`update_shared_task` now resolve `assigned_to` against real members via `_resolve_member_name()` (exact → first-name → prefix, case-insensitive); ambiguous/unknown names return an error listing candidates so the agent asks instead of guessing; new `list_household_members` agent tool; 16 tests added (2026-07-06)
 - [x] **GitHub Release v0.1.0 published** — CHANGELOG stamped, release live, built-in updater now has a target (2026-07-06)
