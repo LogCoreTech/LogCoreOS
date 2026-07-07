@@ -28,6 +28,31 @@ function ProposalCard({ step, onConfirm, onCancel }) {
   )
 }
 
+function ApprovalCard({ steps, onApprove, onDeny }) {
+  return (
+    <div className="mt-3 border border-orange-300 dark:border-orange-700 rounded-xl p-4 bg-orange-50 dark:bg-orange-950/30">
+      <p className="text-xs font-semibold text-orange-600 dark:text-orange-400 mb-2 uppercase tracking-wide">Waiting for your approval</p>
+      <ul className="text-xs text-charcoal-600 dark:text-charcoal-300 space-y-1.5 mb-4">
+        {steps.map((s, i) => (
+          <li key={i} className="flex gap-2">
+            <span className="text-orange-400 shrink-0">·</span>
+            <span className="min-w-0 break-words">
+              <span className="font-semibold">{s.tool.replaceAll('_', ' ')}</span>
+              {s.input && Object.keys(s.input).length > 0 && (
+                <span className="opacity-80"> — {Object.entries(s.input).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join(', ')}</span>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="flex gap-2">
+        <button onClick={onApprove} className="btn-primary text-xs px-3 py-1.5">Approve</button>
+        <button onClick={onDeny} className="btn-ghost text-xs px-3 py-1.5">Deny</button>
+      </div>
+    </div>
+  )
+}
+
 // Shape thread state into a history the /chat validator accepts: no injected
 // proactive notifications, must start with a user message and end with an
 // assistant one (older archives can carry leading notification messages).
@@ -118,7 +143,7 @@ export default function Chat() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [continuedFromFile, setContinuedFromFile] = useState(null) // { filename, title }
-  const [chatMode, setChatMode] = useState('plan')
+  const [chatMode, setChatMode] = useState('approve')
   const [crossWorkspace, setCrossWorkspace] = useState(false)
   const [showModeDrawer, setShowModeDrawer] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
@@ -199,7 +224,7 @@ export default function Chat() {
     return () => clearTimeout(t)
   }, [messages, loading])
 
-  async function send(e, overrideMsg) {
+  async function send(e, overrideMsg, modeOverride) {
     e?.preventDefault()
     const msg = overrideMsg ?? input.trim()
     if (!msg || loading) return
@@ -212,7 +237,7 @@ export default function Chat() {
 
     try {
       const history = toApiHistory(updated.slice(1, -1))
-      const res = await chatApi.send(msg, history, chatMode, crossWorkspace)
+      const res = await chatApi.send(msg, history, modeOverride || chatMode, crossWorkspace)
       setMessages([...updated, {
         role: 'assistant',
         content: res.response,
@@ -361,6 +386,7 @@ export default function Chat() {
               </div>
               {m.role === 'assistant' && (() => {
                 const proposalStep = m.steps?.find(s => s.type === 'tool_call' && s.tool === 'propose_plan')
+                const pendingWrites = m.steps?.filter(s => s.type === 'pending_write') || []
                 const isLastMsg = i === messages.length - 1
                 return (
                   <>
@@ -370,6 +396,13 @@ export default function Chat() {
                         step={proposalStep}
                         onConfirm={() => send(null, 'Yes, go ahead.')}
                         onCancel={() => send(null, "Cancel that, don't make any changes.")}
+                      />
+                    )}
+                    {pendingWrites.length > 0 && isLastMsg && !loading && (
+                      <ApprovalCard
+                        steps={pendingWrites}
+                        onApprove={() => send(null, 'Yes, go ahead.', 'auto')}
+                        onDeny={() => send(null, "No — don't make those changes.")}
                       />
                     )}
                   </>
@@ -403,12 +436,13 @@ export default function Chat() {
             className="btn-ghost text-xs px-2 py-1 flex items-center gap-1"
             title="Switch chat mode"
           >
-            <span>{chatMode === 'plan' ? 'Plan Mode' : chatMode === 'auto' ? '⚡ Auto Mode' : '🔍 Research Mode'}</span>
+            <span>{chatMode === 'approve' ? '✓ Approve Mode' : chatMode === 'plan' ? 'Plan Mode' : chatMode === 'auto' ? '⚡ Auto Mode' : '🔍 Research Mode'}</span>
             <span className="text-[10px] opacity-60">▾</span>
           </button>
           {showModeDrawer && (
             <div className="absolute bottom-full mb-1 left-0 bg-white dark:bg-charcoal-900 border border-charcoal-200 dark:border-charcoal-700 rounded-xl shadow-lg z-50 overflow-hidden min-w-[150px]">
               {[
+                { id: 'approve',  label: '✓ Approve',   title: 'AI asks before each change' },
                 { id: 'plan',     label: 'Plan',        title: 'AI proposes before acting' },
                 { id: 'auto',     label: '⚡ Auto',     title: 'AI executes without asking' },
                 { id: 'research', label: '🔍 Research',  title: 'Read-only analysis and web search' },

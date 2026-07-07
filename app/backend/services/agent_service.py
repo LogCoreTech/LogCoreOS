@@ -52,6 +52,11 @@ _RESEARCH_TOOLS = {
     "read_system_file",
 }
 
+# Tools that never modify data — safe to run without per-write approval in
+# approve mode. Anything NOT listed here requires approval, so new tools are
+# write-gated by default.
+_READ_TOOLS = _RESEARCH_TOOLS | {"get_home_state"}
+
 # ---------------------------------------------------------------------------
 # Tool definitions (Anthropic input_schema format — translated for OpenAI by ai_provider)
 # ---------------------------------------------------------------------------
@@ -1283,11 +1288,11 @@ async def run_agent(
 
     messages = list(history) + [{"role": "user", "content": goal}]
     all_tools = _get_tools(user)
-    if mode == "auto":
+    if mode in ("auto", "approve"):
         active_tools = [t for t in all_tools if t["name"] != "propose_plan"]
     elif mode == "research":
         active_tools = [t for t in all_tools if t["name"] in _RESEARCH_TOOLS]
-    else:  # plan (default)
+    else:  # plan
         active_tools = all_tools
 
     for step_num in range(MAX_STEPS):
@@ -1299,6 +1304,26 @@ async def run_agent(
             if response.stop_reason == "max_tokens":
                 status = "max_steps_reached"
             break
+
+        # Approve mode: pause before any write — nothing in this response is
+        # executed; the frontend shows the pending writes for user approval.
+        if mode == "approve":
+            pending = [tc for tc in response.tool_calls if tc.name not in _READ_TOOLS]
+            if pending:
+                if response.text:
+                    steps.append({"type": "thought", "content": response.text, "step": step_num})
+                for tc in pending:
+                    steps.append(
+                        {
+                            "type": "pending_write",
+                            "tool": tc.name,
+                            "input": tc.input,
+                            "step": step_num,
+                        }
+                    )
+                status = "awaiting_approval"
+                final_answer = response.text or "I need your approval to make these changes."
+                break
 
         # Tool-use turn
         tools_used = True

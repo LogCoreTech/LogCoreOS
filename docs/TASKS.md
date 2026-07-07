@@ -8,7 +8,6 @@ Keep this up to date. Mark tasks done as they're completed. Add new tasks as the
 
 ## Now — active build work
 
-- [ ] **Chat modes: add a default "approve edits" mode** — agent acts freely on reads but asks approval before any write/edit; make it the default mode (plan mode already proposes whole plans — this is lighter, per-write approval) (reported 2026-07-06)
 - [ ] **Automation Inbox** — workflows write structured output to Brain JSON; users see results with per-item actions (Interested / Pass / Offer Made / Closed); workflow skips already-reviewed items
 - [ ] **Land lead search & qualify workflow** — n8n pulling land listings (multiple sources with a fallback from day one) and AI-qualifying against configurable criteria; stub file in `automations_stubs/`; Brain JSON output schema; depends on Automation Inbox
 
@@ -34,6 +33,8 @@ Keep this up to date. Mark tasks done as they're completed. Add new tasks as the
 - [ ] **LinkedIn company page** — BLOCKED: LinkedIn requires a registered company (LLC) to create a page; revisit after LLC formation (business-side, tracked in private Business repo) (2026-07-06)
 
 ## Features that unblock scale (build when demanded)
+
+- [ ] **Assets module — REQUIRED BEFORE PILOT CLIENT** — owner flagged as important (2026-07-06); scope not yet defined (asset tracking for household/business — equipment, property, inventory?). Needs a definition session before build: data shape under the Brain (`Assets/assets.json`?), workspace scoping, module ID `assets` in constants.js + backend router
 
 - [ ] **Ollama / local LLM support** — pulled forward from roadmap Phase 6; #1 r/selfhosted credibility feature; ship before/with the Reddit launch
 - [ ] **RAG over the Brain (v0.2)** — embeddings + semantic search over notes/journal/files, auto-fed into chat context. Design rule (locked): vector index is a disposable derived cache — embedded file-backed store (e.g. Chroma), rebuildable from Brain files anytime, never source of truth, no new stateful service. Local-embeddings option pairs with Ollama. Target with the public demo
@@ -65,6 +66,7 @@ Keep this up to date. Mark tasks done as they're completed. Add new tasks as the
 
 ## Done
 
+- [x] **Chat "approve edits" mode — new default** — reads run freely, every write tool call pauses (`awaiting_approval` + `pending_write` steps) and the UI shows an ApprovalCard (Approve → one-turn auto re-send; Deny → conversational decline); `_READ_TOOLS` allowlist means future tools are write-gated by default; default mode switched to `approve` in backend + frontend; 5 tests (2026-07-06)
 - [x] **BUG: proactive notification injection breaks chat + writes junk archives** — proactive messages are now display-only: `toApiHistory()` strips them and trims history to the validator's shape (start user / end assistant, also heals older junk archives on continue); auto-save skips proactive messages and proactive-only threads (2026-07-06)
 - [x] **GitHub Discussions** — was already enabled on the repo (confirmed 2026-07-06)
 - [x] **BUG: AI responses lost from saved chat history** — root cause was the archive parse, not the save: `parseSavedChat()` kept only lines starting with `**You**:`/`**AI**:`, dropping every continuation line of multi-line responses; continuing a chat then auto-saved the truncated parse back over the same file. Parser now accumulates continuation lines; saved-chat viewer renders full multi-line bubbles; history content cap raised 5000→30000 (long agent responses were silently 422ing the auto-save) (2026-07-06)

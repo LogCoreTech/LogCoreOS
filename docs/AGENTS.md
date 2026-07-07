@@ -169,11 +169,12 @@ All routes are under `/api/v1/`. The frontend base is `const BASE = '/api/v1'` i
 
 ### Chat System
 
-The AI chat feature (`routers/chat.py` + `services/agent_service.py`) supports three modes:
+The AI chat feature (`routers/chat.py` + `services/agent_service.py`) supports four modes:
 
-- **Plan mode** — AI proposes a structured plan before executing. User approves or redirects.
+- **Approve mode (default)** — reads run freely; every write tool call pauses with status `awaiting_approval` and `pending_write` steps. The UI shows an ApprovalCard; Approve re-sends as a one-turn auto request, Deny replies conversationally. Write-vs-read is decided by the `_READ_TOOLS` allowlist in `agent_service.py` — tools not listed there are write-gated by default.
+- **Plan mode** — AI proposes a structured plan (`propose_plan` tool) before executing. User approves or redirects.
 - **Auto mode** — AI executes directly using available tools (read Brain files, write tasks, search notes, etc.).
-- **Research mode** — AI uses web search via Tavily (`web_search_service.py`) in addition to Brain context.
+- **Research mode** — AI uses web search via Tavily (`web_search_service.py`) in addition to Brain context. Read-only.
 
 The agent in `agent_service.py` runs a tool registry with safety guardrails. Tools include: read/write Brain files, task management, notes management, profile access, journal access, web search. Thoughts and tool calls are streamed back as a step trace visible in the UI.
 

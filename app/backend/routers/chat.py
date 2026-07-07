@@ -81,7 +81,8 @@ class HistoryMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=5000)
     history: list[HistoryMessage] = Field(default=[], max_length=50)
-    mode: Literal["plan", "auto", "research"] = "plan"
+    # "approve" is the default: reads run freely, each write pauses for user approval
+    mode: Literal["approve", "plan", "auto", "research"] = "approve"
     cross_workspace: bool = False
 
     @model_validator(mode="after")
@@ -124,7 +125,13 @@ async def chat(
     today_str = now_local.strftime("%A, %B %d, %Y (%Y-%m-%d)")
 
     mode_block = ""
-    if req.mode == "plan":
+    if req.mode == "approve":
+        mode_block = (
+            "Any change you attempt (create/update/delete) is paused and shown to the user "
+            "for approval before it is applied — call tools normally and keep any lead-in text "
+            "short. If the user declines, do not retry the change; ask what they want instead.\n\n"
+        )
+    elif req.mode == "plan":
         mode_block = (
             "IMPORTANT — before creating, updating, or deleting anything, always call propose_plan "
             "with a plain-English summary and list of specific actions. Do not call any other write "

@@ -426,7 +426,7 @@ Send a message to the AI. Returns a streaming response with step trace.
 }
 ```
 
-- `mode`: `"auto"` (default) | `"plan"` | `"research"`. Plan mode proposes before executing. Research mode adds Tavily web search.
+- `mode`: `"approve"` (default) | `"plan"` | `"auto"` | `"research"`. Approve mode runs reads freely but pauses before any write: the response has `mode: "awaiting_approval"` and `steps` containing `pending_write` entries (`{ type, tool, input, step }`); nothing is executed until the user approves (the frontend re-sends as a one-turn `auto` request). Plan mode proposes a whole plan before executing. Research mode adds Tavily web search, read-only.
 - `cross_workspace`: when `true` and the user has both workspaces, the AI searches both personal and business Brain paths (results prefixed `personal/` or `business/`). Only available to dual-workspace users.
 
 Rate limited: 20 messages per minute per IP.
