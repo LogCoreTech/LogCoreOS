@@ -28,7 +28,7 @@ DOCS_UPDATED=false
 if [ "$LAST_STOP" -gt 0 ]; then
   for f in "$DOCS_DIR/TASKS.md" "$DOCS_DIR/MEMORY.md" "$DOCS_DIR/AGENTS.md" \
             "$DOCS_DIR/MAP.md" "$DOCS_DIR/API.md" "$DOCS_DIR/PROJECT.md" \
-            "$REPO_DIR/CHANGELOG.md" \
+            "$DOCS_DIR/TESTING.md" "$REPO_DIR/CHANGELOG.md" \
             "$DOCS_DIR/Daily Notes/$TODAY.md"; do
     if [ -f "$f" ]; then
       FILE_MTIME=$(stat -c %Y "$f")
@@ -56,16 +56,19 @@ if [ "$LAST_STOP" -gt 0 ]; then
   python3 -c "import os; os.utime('$REF_FILE', ($LAST_STOP, $LAST_STOP))" 2>/dev/null
   CHANGED_FILES=$(find "$REPO_DIR/app" "$REPO_DIR/brain" "$REPO_DIR/docs/hooks" "$REPO_DIR/docker" \
     -newer "$REF_FILE" -type f 2>/dev/null \
-    | grep -vE "__pycache__|\.pyc|node_modules|/dist/|\.min\.")
+    | grep -vE "__pycache__|\.pyc|node_modules|/dist/|\.min\.|\.pytest_cache|/venv/|/\.venv/")
   rm -f "$REF_FILE"
 fi
 
 # --- Build targeted checklist ---
 CHECKLIST="1. docs/TASKS.md — mark completed tasks done; add new tasks surfaced this turn.
 2. docs/MEMORY.md — update if design decisions or stable facts changed.
-3. docs/Daily Notes/${TODAY}.md — update or create with what was worked on and decisions made."
+3. docs/Daily Notes/${TODAY}.md — update or create with what was worked on and decisions made.
+4. CHANGELOG.md — add an entry if this turn shipped a user-visible feature, fix, or breaking change.
+5. docs/PROJECT.md — update if architecture, phases, or the roadmap moved this turn.
+6. docs/TESTING.md — update if test patterns, fixtures, or coverage guidance changed."
 
-ITEM_NUM=4
+ITEM_NUM=7
 EXTRA=""
 
 if [ -n "$CHANGED_FILES" ]; then
@@ -153,11 +156,14 @@ ${ITEM_NUM}. docs/PROJECT.md (Docker services table) — docker-compose.yml chan
     ITEM_NUM=$((ITEM_NUM + 1))
   fi
 
-  # Any app/ code changes → suggest CHANGELOG.md
-  CODE_CHANGES=$(echo "$CHANGED_FILES" | grep "^$REPO_DIR/app/" | grep -vE "node_modules|/dist/" | head -1)
-  if [ -n "$CODE_CHANGES" ]; then
+  # Backend code changed but no tests did → test coverage nudge
+  BACKEND_CODE_CHANGES=$(echo "$CHANGED_FILES" | grep "app/backend/" \
+    | grep -vE "/tests/|automations_stubs/" \
+    | sed 's|.*/||' | tr '\n' ' ' | sed 's/ $//')
+  TEST_CHANGES=$(echo "$CHANGED_FILES" | grep "app/backend/tests/")
+  if [ -n "$BACKEND_CODE_CHANGES" ] && [ -z "$TEST_CHANGES" ]; then
     EXTRA="${EXTRA}
-${ITEM_NUM}. CHANGELOG.md — app code changed this turn; add an entry if this turn shipped a user-visible feature, fix, or breaking change."
+${ITEM_NUM}. TESTS MISSING — backend code changed (${BACKEND_CODE_CHANGES}) but no file in app/backend/tests/ did. Write or extend tests for the new behavior (see docs/TESTING.md for the brain fixture pattern), then run pytest before committing."
     ITEM_NUM=$((ITEM_NUM + 1))
   fi
 fi
