@@ -47,6 +47,7 @@ _RESEARCH_TOOLS = {
     "search_web",
     # admin read-only
     "list_users",
+    "list_household_members",
     "list_shared_tasks",
     "read_system_file",
 }
@@ -661,6 +662,11 @@ _ADMIN_TOOLS: list[dict] = [
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
     {
+        "name": "list_household_members",
+        "description": "List the names of household members valid for shared task assignment (admin only). Call this before assigning a shared task if you are not certain of the exact member name.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
         "name": "list_shared_tasks",
         "description": "List all shared household tasks (admin only).",
         "input_schema": {"type": "object", "properties": {}, "required": []},
@@ -678,7 +684,7 @@ _ADMIN_TOOLS: list[dict] = [
                 "notes": {"type": "string"},
                 "assigned_to": {
                     "type": "string",
-                    "description": "Username of the member responsible for this task",
+                    "description": "Name of the member responsible for this task. Must match a real household member — first names are matched automatically; if the name is ambiguous or unknown the tool returns an error listing valid members, and you should ask the user which member they meant.",
                 },
             },
             "required": ["title", "category"],
@@ -697,7 +703,10 @@ _ADMIN_TOOLS: list[dict] = [
                 "due_date": {"type": "string"},
                 "due_time": {"type": "string"},
                 "notes": {"type": "string"},
-                "assigned_to": {"type": "string", "description": "Reassign to a different member"},
+                "assigned_to": {
+                    "type": "string",
+                    "description": "Reassign to a different member. Must match a real household member; ambiguous or unknown names return an error listing valid members.",
+                },
             },
             "required": ["task_id"],
         },
@@ -766,6 +775,50 @@ def _get_tools(user: dict) -> list[dict]:
     if user.get("role") == "admin":
         tools.extend(_ADMIN_TOOLS)
     return tools
+
+
+# ---------------------------------------------------------------------------
+# Member name resolution (shared task assignment)
+# ---------------------------------------------------------------------------
+
+
+def _resolve_member_name(raw: str) -> tuple[str | None, str | None]:
+    """Resolve a (possibly partial) name against real member names.
+
+    Returns (resolved_name, error). Exactly one of the two is set.
+    Matching order: exact full name, exact first name, then first-name prefix —
+    all case-insensitive. Ambiguous or unknown names return an error message
+    that lists the candidates so the agent can ask the user.
+    """
+    query = raw.strip().lower()
+    names = [u["name"] for u in auth_service.list_users()]
+    if not query:
+        return None, "assigned_to cannot be empty. Members: " + ", ".join(names)
+
+    exact = [n for n in names if n.lower() == query]
+    if len(exact) == 1:
+        return exact[0], None
+
+    first_name = [n for n in names if n.split()[0].lower() == query]
+    if len(first_name) == 1:
+        return first_name[0], None
+
+    prefix = [n for n in names if n.split()[0].lower().startswith(query)]
+    if len(prefix) == 1:
+        return prefix[0], None
+
+    candidates = exact or first_name or prefix
+    if candidates:
+        return None, (
+            f"Ambiguous member name {raw!r} — matches: "
+            + ", ".join(sorted(candidates))
+            + ". Ask the user which member they meant."
+        )
+    return None, (
+        f"No household member matching {raw!r}. Members: "
+        + ", ".join(sorted(names))
+        + ". Ask the user which member they meant — do not guess."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1046,6 +1099,11 @@ def _execute_tool(
                 safe = {"id", "name", "email", "role", "timezone"}
                 return [{k: v for k, v in u.items() if k in safe} for u in _load_auth()["users"]]
 
+            case "list_household_members":
+                if user.get("role") != "admin":
+                    return {"error": "Admin access required"}
+                return [{"name": u["name"]} for u in auth_service.list_users()]
+
             case "list_shared_tasks":
                 if user.get("role") != "admin":
                     return {"error": "Admin access required"}
@@ -1054,6 +1112,11 @@ def _execute_tool(
             case "add_shared_task":
                 if user.get("role") != "admin":
                     return {"error": "Admin access required"}
+                if inputs.get("assigned_to") is not None:
+                    resolved, err = _resolve_member_name(inputs["assigned_to"])
+                    if err:
+                        return {"error": err}
+                    inputs = {**inputs, "assigned_to": resolved}
                 return task_service.add_task("_household", inputs)
 
             case "update_shared_task":
@@ -1061,6 +1124,11 @@ def _execute_tool(
                     return {"error": "Admin access required"}
                 task_id = inputs["task_id"]
                 updates = {k: v for k, v in inputs.items() if k != "task_id"}
+                if updates.get("assigned_to") is not None:
+                    resolved, err = _resolve_member_name(updates["assigned_to"])
+                    if err:
+                        return {"error": err}
+                    updates["assigned_to"] = resolved
                 result = task_service.update_task("_household", task_id, updates)
                 if result is None:
                     return {"error": f"Shared task {task_id!r} not found"}

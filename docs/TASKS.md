@@ -8,7 +8,6 @@ Keep this up to date. Mark tasks done as they're completed. Add new tasks as the
 
 ## Now — active build work
 
-- [ ] **BUG (fix before demo): agent doesn't resolve member names on assignment** — asked to add a household task assigned by first name; the agent wrote the raw string into `assigned_to` without looking up actual members. It should list/validate against pool members (match on first name) and ask when ambiguous — likely needs a members-lookup tool in the agent registry + validation in the task-write tool (reported 2026-07-06)
 - [ ] **BUG (fix before demo): AI responses lost from saved chat history** — after a chat ends, the archive keeps the short lead-in sentence but the main response body disappears. Suspect the auto-save/step-trace assembly saves the pre-tool-use text block and drops the final post-tool message (reported 2026-07-06)
 - [ ] **Chat modes: add a default "approve edits" mode** — agent acts freely on reads but asks approval before any write/edit; make it the default mode (plan mode already proposes whole plans — this is lighter, per-write approval) (reported 2026-07-06)
 - [ ] **Automation Inbox** — workflows write structured output to Brain JSON; users see results with per-item actions (Interested / Pass / Offer Made / Closed); workflow skips already-reviewed items
@@ -68,6 +67,7 @@ Keep this up to date. Mark tasks done as they're completed. Add new tasks as the
 
 ## Done
 
+- [x] **BUG: agent member-name resolution on shared task assignment** — `add_shared_task`/`update_shared_task` now resolve `assigned_to` against real members via `_resolve_member_name()` (exact → first-name → prefix, case-insensitive); ambiguous/unknown names return an error listing candidates so the agent asks instead of guessing; new `list_household_members` agent tool; 16 tests added (2026-07-06)
 - [x] **GitHub Release v0.1.0 published** — CHANGELOG stamped, release live, built-in updater now has a target (2026-07-06)
 - [x] **CI green + badge** — first green run after 92 failures: black formatting applied, 4 stale lifecycle tests rewritten to nightly-archive behavior, badge live in README (2026-07-06)
 - [x] **GitHub repo description + topics** — About section filled with description + ~16 topics (2026-07-06)
