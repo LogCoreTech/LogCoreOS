@@ -221,15 +221,24 @@ export default function Chat() {
     setInput('')
   }
 
+  // Multi-line messages: only the first line carries the **You**:/**AI**: marker,
+  // so continuation lines must be accumulated — dropping them here truncates the
+  // archive on the next auto-save overwrite.
   function parseSavedChat(content) {
     const parsed = []
+    let current = null
     for (const line of content.split('\n')) {
       if (line.startsWith('**You**:')) {
-        parsed.push({ role: 'user', content: line.slice(8).trim(), steps: [] })
+        current = { role: 'user', content: line.slice(8).trimStart(), steps: [] }
+        parsed.push(current)
       } else if (line.startsWith('**AI**:')) {
-        parsed.push({ role: 'assistant', content: line.slice(7).trim(), steps: [] })
+        current = { role: 'assistant', content: line.slice(7).trimStart(), steps: [] }
+        parsed.push(current)
+      } else if (current) {
+        current.content += '\n' + line
       }
     }
+    for (const m of parsed) m.content = m.content.trim()
     return parsed
   }
 
@@ -500,22 +509,25 @@ export default function Chat() {
                       Continue →
                     </button>
                   </div>
-                  {selectedChat.content.split('\n').filter(l => l.trim()).map((line, i) => {
-                    if (line.startsWith('# ')) return (
-                      <p key={i} className="text-sm font-semibold text-charcoal-700 dark:text-charcoal-200">{line.slice(2)}</p>
-                    )
-                    if (line.startsWith('**You**:')) return (
-                      <div key={i} className="flex justify-end">
-                        <div className="bg-orange-500 text-white text-sm px-3 py-2 rounded-2xl rounded-br-sm max-w-[85%]">{line.slice(8).trim()}</div>
+                  {(() => {
+                    const titleLine = selectedChat.content.split('\n').find(l => l.startsWith('# '))
+                    return titleLine ? (
+                      <p className="text-sm font-semibold text-charcoal-700 dark:text-charcoal-200">{titleLine.slice(2)}</p>
+                    ) : null
+                  })()}
+                  {parseSavedChat(selectedChat.content).map((m, i) => (
+                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div
+                        className={`text-sm px-3 py-2 rounded-2xl max-w-[85%] whitespace-pre-wrap ${
+                          m.role === 'user'
+                            ? 'bg-orange-500 text-white rounded-br-sm'
+                            : 'card rounded-bl-sm text-charcoal-800 dark:text-charcoal-100'
+                        }`}
+                      >
+                        {m.content}
                       </div>
-                    )
-                    if (line.startsWith('**AI**:')) return (
-                      <div key={i} className="flex justify-start">
-                        <div className="card text-sm px-3 py-2 rounded-2xl rounded-bl-sm max-w-[85%] text-charcoal-800 dark:text-charcoal-100">{line.slice(7).trim()}</div>
-                      </div>
-                    )
-                    return null
-                  })}
+                    </div>
+                  ))}
                 </div>
               ) : savedChats.length === 0 ? (
                 <p className="text-sm text-charcoal-400 dark:text-charcoal-500 text-center py-10">No saved chats yet.</p>

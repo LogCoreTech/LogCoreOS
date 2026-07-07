@@ -71,8 +71,11 @@ def _build_context(user_name: str, workspace: str = "personal") -> str:
 
 
 class HistoryMessage(BaseModel):
+    # 30k cap: agent/research responses regularly exceed 5k chars; a lower cap here
+    # makes auto-save 422 silently and blocks continuing chats that contain them.
+    # User input stays capped at 5000 via ChatRequest.message.
     role: Literal["user", "assistant"]
-    content: str = Field(..., max_length=5000)
+    content: str = Field(..., max_length=30_000)
 
 
 class ChatRequest(BaseModel):
