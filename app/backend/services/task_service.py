@@ -36,8 +36,8 @@ def add_task(user_name: str, task_data: dict, workspace: str = "personal") -> di
         "streak_count": 0,
         "last_completed_date": None,
     }
-    # Pass through optional attribution/assignment fields
-    for extra in ("created_by", "assigned_to"):
+    # Pass through optional attribution/assignment/linking fields
+    for extra in ("created_by", "assigned_to", "asset_id"):
         if extra in task_data:
             task[extra] = task_data[extra]
     data["tasks"].append(task)

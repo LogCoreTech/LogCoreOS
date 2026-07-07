@@ -1,0 +1,426 @@
+"""Tests for assets_service — templates, hierarchy, sharing, pools, attachments."""
+
+import shutil
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+import pytest
+
+from services import assets_service as svc
+from services import auth_service, automations_config, task_service
+from services.file_service import assets_files_path, user_path
+
+PARCEL_FIELDS = [
+    {
+        "key": "status",
+        "label": "Status",
+        "type": "select",
+        "options": ["available", "sold"],
+        "default": "available",
+    },
+    {"key": "acreage", "label": "Acreage", "type": "number"},
+    {"key": "county", "label": "County", "type": "text"},
+    {"key": "close_date", "label": "Close Date", "type": "date"},
+    {"key": "listed", "label": "Listed", "type": "boolean"},
+]
+
+
+@pytest.fixture()
+def users(brain):
+    alice = auth_service.create_user("alice@example.com", "password123", "Alice", role="admin")
+    bob = auth_service.create_user("bob@example.com", "password123", "Bob")
+    yield {"alice": alice, "bob": bob}
+    auth_service._revoked_jtis.clear()
+
+
+@pytest.fixture()
+def parcel(users):
+    svc.create_template({"key": "parcel", "label": "Parcel", "fields": PARCEL_FIELDS})
+    svc.create_template({"key": "subdivision", "label": "Subdivision", "fields": []})
+    return svc.get_template("parcel")
+
+
+# ---------------------------------------------------------------------------
+# Templates
+# ---------------------------------------------------------------------------
+
+
+def test_templates_start_empty(brain):
+    assert svc.list_templates() == []
+
+
+def test_create_and_get_template(users):
+    svc.create_template({"key": "vehicle", "label": "Vehicle", "fields": []})
+    assert svc.get_template("vehicle")["label"] == "Vehicle"
+
+
+def test_duplicate_template_key_rejected(users):
+    svc.create_template({"key": "vehicle", "fields": []})
+    with pytest.raises(ValueError, match="already exists"):
+        svc.create_template({"key": "vehicle", "fields": []})
+
+
+def test_invalid_template_key_rejected(users):
+    with pytest.raises(ValueError, match="Invalid template key"):
+        svc.create_template({"key": "Bad Key!", "fields": []})
+
+
+def test_select_field_requires_options(users):
+    with pytest.raises(ValueError, match="needs at least one option"):
+        svc.create_template(
+            {"key": "x", "fields": [{"key": "status", "type": "select", "options": []}]}
+        )
+
+
+def test_field_order_preserved(parcel):
+    keys = [f["key"] for f in svc.get_template("parcel")["fields"]]
+    assert keys == ["status", "acreage", "county", "close_date", "listed"]
+
+
+def test_update_template_replaces_fields(parcel):
+    svc.update_template("parcel", {"fields": [{"key": "acreage", "type": "number"}]})
+    assert [f["key"] for f in svc.get_template("parcel")["fields"]] == ["acreage"]
+
+
+def test_insert_example_uses_unique_keys(users):
+    first = svc.insert_example_template()
+    second = svc.insert_example_template()
+    assert first["key"] == "example"
+    assert second["key"] == "example_2"
+
+
+def test_delete_template_blocked_when_referenced(parcel, users):
+    svc.create_asset("Alice", {"template": "parcel", "name": "Lot 1"}, created_by="Alice")
+    with pytest.raises(ValueError, match="still use template"):
+        svc.delete_template("parcel")
+
+
+def test_delete_unused_template(parcel):
+    assert svc.delete_template("subdivision") is True
+    assert svc.get_template("subdivision") is None
+
+
+# ---------------------------------------------------------------------------
+# Asset creation + field validation
+# ---------------------------------------------------------------------------
+
+
+def test_create_asset_prefills_defaults(parcel):
+    asset = svc.create_asset("Alice", {"template": "parcel", "name": "Lot 1"}, created_by="Alice")
+    assert asset["fields"]["status"] == "available"
+
+
+def test_create_asset_unknown_template(users):
+    with pytest.raises(ValueError, match="Unknown template"):
+        svc.create_asset("Alice", {"template": "nope", "name": "X"}, created_by="Alice")
+
+
+def test_create_asset_unknown_field_rejected(parcel):
+    with pytest.raises(ValueError, match="Unknown field"):
+        svc.create_asset(
+            "Alice",
+            {"template": "parcel", "name": "X", "fields": {"bogus": 1}},
+            created_by="Alice",
+        )
+
+
+@pytest.mark.parametrize(
+    "fields,match",
+    [
+        ({"acreage": "two"}, "must be a number"),
+        ({"acreage": True}, "must be a number"),
+        ({"county": 42}, "must be text"),
+        ({"close_date": "07/04/2026"}, "YYYY-MM-DD"),
+        ({"listed": "yes"}, "must be true or false"),
+        ({"status": "pending"}, "must be one of"),
+    ],
+)
+def test_field_type_validation(parcel, fields, match):
+    with pytest.raises(ValueError, match=match):
+        svc.create_asset(
+            "Alice", {"template": "parcel", "name": "X", "fields": fields}, created_by="Alice"
+        )
+
+
+def test_empty_field_values_dropped(parcel):
+    asset = svc.create_asset(
+        "Alice",
+        {"template": "parcel", "name": "X", "fields": {"county": "", "acreage": 2.5}},
+        created_by="Alice",
+    )
+    assert "county" not in asset["fields"]
+    assert asset["fields"]["acreage"] == 2.5
+
+
+def test_update_merges_fields_and_null_deletes(parcel):
+    asset = svc.create_asset(
+        "Alice",
+        {"template": "parcel", "name": "X", "fields": {"county": "Bexar", "acreage": 2.5}},
+        created_by="Alice",
+    )
+    updated = svc.update_asset(
+        "Alice", asset["id"], {"fields": {"acreage": None, "county": "Hill"}}, by="Alice"
+    )
+    assert "acreage" not in updated["fields"]
+    assert updated["fields"]["county"] == "Hill"
+
+
+def test_orphaned_value_survives_field_removal(parcel):
+    asset = svc.create_asset(
+        "Alice",
+        {"template": "parcel", "name": "X", "fields": {"county": "Bexar"}},
+        created_by="Alice",
+    )
+    svc.update_template("parcel", {"fields": [{"key": "acreage", "type": "number"}]})
+    current = svc.get_asset("Alice", asset["id"])
+    assert current["fields"]["county"] == "Bexar"
+    with pytest.raises(ValueError, match="Unknown field"):
+        svc.update_asset("Alice", asset["id"], {"fields": {"county": "Hill"}}, by="Alice")
+    cleared = svc.update_asset("Alice", asset["id"], {"fields": {"county": None}}, by="Alice")
+    assert "county" not in cleared["fields"]
+
+
+# ---------------------------------------------------------------------------
+# Hierarchy, archive, delete
+# ---------------------------------------------------------------------------
+
+
+def _tree(users):
+    sub = svc.create_asset("Alice", {"template": "subdivision", "name": "Sub"}, created_by="Alice")
+    lot = svc.create_asset(
+        "Alice",
+        {"template": "parcel", "name": "Lot 1", "parent_id": sub["id"]},
+        created_by="Alice",
+    )
+    return sub, lot
+
+
+def test_parent_must_exist(parcel):
+    with pytest.raises(ValueError, match="Parent asset"):
+        svc.create_asset(
+            "Alice",
+            {"template": "parcel", "name": "X", "parent_id": "missing"},
+            created_by="Alice",
+        )
+
+
+def test_cycle_rejected(parcel, users):
+    sub, lot = _tree(users)
+    with pytest.raises(ValueError, match="descendant"):
+        svc.update_asset("Alice", sub["id"], {"parent_id": lot["id"]}, by="Alice")
+
+
+def test_delete_blocked_with_children(parcel, users):
+    sub, _ = _tree(users)
+    with pytest.raises(ValueError, match="child asset"):
+        svc.delete_asset("Alice", sub["id"])
+
+
+def test_delete_leaf_removes_files_dir(parcel, users):
+    _, lot = _tree(users)
+    svc.add_attachment("Alice", lot["id"], "a.pdf", "application/pdf", b"%PDF", by="Alice")
+    files_dir = assets_files_path("Alice") / lot["id"]
+    assert files_dir.exists()
+    assert svc.delete_asset("Alice", lot["id"]) is True
+    assert not files_dir.exists()
+
+
+def test_archive_hides_subtree(parcel, users):
+    sub, lot = _tree(users)
+    svc.set_archived("Alice", sub["id"], True, by="Alice")
+    visible_ids = {a["id"] for a in svc.list_visible("Alice", "personal")}
+    assert sub["id"] not in visible_ids and lot["id"] not in visible_ids
+    all_ids = {a["id"] for a in svc.list_visible("Alice", "personal", include_archived=True)}
+    assert sub["id"] in all_ids and lot["id"] in all_ids
+
+
+def test_workspace_isolation(parcel):
+    svc.create_asset(
+        "Alice", {"template": "parcel", "name": "Biz Lot"}, workspace="business", created_by="Alice"
+    )
+    assert svc.list_assets("Alice", "personal") == []
+    assert len(svc.list_assets("Alice", "business")) == 1
+
+
+def test_history_recorded_and_capped(parcel):
+    asset = svc.create_asset("Alice", {"template": "parcel", "name": "X"}, created_by="Alice")
+    svc.update_asset("Alice", asset["id"], {"fields": {"county": "Bexar"}}, by="Alice")
+    current = svc.get_asset("Alice", asset["id"])
+    assert current["history"][-1]["action"] == "update"
+    assert current["history"][-1]["changes"]["fields.county"] == [None, "Bexar"]
+    for i in range(60):
+        svc.update_asset("Alice", asset["id"], {"fields": {"acreage": i + 1}}, by="Alice")
+    assert len(svc.get_asset("Alice", asset["id"])["history"]) == 50
+
+
+# ---------------------------------------------------------------------------
+# Sharing + hidden_from
+# ---------------------------------------------------------------------------
+
+
+def test_named_user_share_subtree_and_access(parcel, users):
+    sub, lot = _tree(users)
+    svc.update_access(
+        "Alice", sub["id"], shared_with=[{"target": "Bob", "access": "read"}], by="Alice"
+    )
+    visible = {a["id"]: a for a in svc.list_visible("Bob", "personal")}
+    assert visible[sub["id"]]["_owner"] == "Alice"
+    assert visible[lot["id"]]["_access"] == "read"
+    found = svc.find_asset("Bob", "personal", lot["id"])
+    assert found["relation"] == "shared" and found["can_edit"] is False
+
+
+def test_edit_share_can_edit(parcel, users):
+    sub, lot = _tree(users)
+    svc.update_access(
+        "Alice", sub["id"], shared_with=[{"target": "Bob", "access": "edit"}], by="Alice"
+    )
+    found = svc.find_asset("Bob", "personal", lot["id"])
+    assert found["can_edit"] is True and found["can_manage"] is False
+
+
+def test_household_share_personal_workspace(parcel, users):
+    sub, _ = _tree(users)
+    svc.update_access(
+        "Alice",
+        sub["id"],
+        shared_with=[{"target": "household", "access": "read"}],
+        by="Alice",
+        asset_workspace="personal",
+    )
+    assert any(a["id"] == sub["id"] for a in svc.list_visible("Bob", "personal"))
+
+
+def test_unknown_share_target_rejected(parcel, users):
+    sub, _ = _tree(users)
+    with pytest.raises(ValueError, match="Unknown share target"):
+        svc.update_access(
+            "Alice", sub["id"], shared_with=[{"target": "Charlie", "access": "read"}], by="Alice"
+        )
+
+
+def test_hidden_from_beats_share(parcel, users):
+    sub, lot = _tree(users)
+    svc.update_access(
+        "Alice",
+        sub["id"],
+        shared_with=[{"target": "Bob", "access": "edit"}],
+        hidden_from=["Bob"],
+        by="Alice",
+    )
+    assert not any(a["id"] in (sub["id"], lot["id"]) for a in svc.list_visible("Bob", "personal"))
+    assert svc.find_asset("Bob", "personal", lot["id"]) is None
+
+
+# ---------------------------------------------------------------------------
+# Pool ownership
+# ---------------------------------------------------------------------------
+
+
+def test_convert_moves_subtree_strips_shares_and_moves_files(parcel, users):
+    sub, lot = _tree(users)
+    svc.update_access(
+        "Alice", sub["id"], shared_with=[{"target": "Bob", "access": "read"}], by="Alice"
+    )
+    svc.add_attachment("Alice", lot["id"], "plat.pdf", "application/pdf", b"%PDF", by="Alice")
+
+    root = svc.convert_to_pool("Alice", sub["id"], workspace="personal", by="Alice")
+    assert root["parent_id"] is None
+    assert root["shared_with"] == []
+    assert svc.list_assets("Alice", "personal") == []
+    pool_ids = {a["id"] for a in svc.list_assets("_household")}
+    assert {sub["id"], lot["id"]} <= pool_ids
+    assert (assets_files_path("_household") / lot["id"]).exists()
+    assert not (assets_files_path("Alice") / lot["id"]).exists()
+
+
+def test_pool_assets_visible_to_all_members_and_gated(parcel, users):
+    sub, _ = _tree(users)
+    svc.convert_to_pool("Alice", sub["id"], by="Alice")
+    visible = {a["id"]: a for a in svc.list_visible("Bob", "personal")}
+    assert visible[sub["id"]]["_owner"] == "household"
+    assert visible[sub["id"]]["_access"] == "read"
+    found = svc.find_asset("Bob", "personal", sub["id"])
+    assert found["relation"] == "pool" and found["can_edit"] is False
+    granted = svc.find_asset("Bob", "personal", sub["id"], pool_edit=["household"])
+    assert granted["can_edit"] is True and granted["can_delete"] is False
+
+
+def test_pool_hidden_from_respected_except_admin(parcel, users):
+    sub, _ = _tree(users)
+    svc.convert_to_pool("Alice", sub["id"], by="Alice")
+    svc.update_access("_household", sub["id"], hidden_from=["Bob"], by="Alice")
+    assert not any(a["id"] == sub["id"] for a in svc.list_visible("Bob", "personal"))
+    assert svc.find_asset("Bob", "personal", sub["id"]) is None
+    assert any(a["id"] == sub["id"] for a in svc.list_visible("Alice", "personal", is_admin=True))
+
+
+def test_pool_assets_survive_owner_deletion(parcel, users):
+    sub, lot = _tree(users)
+    svc.convert_to_pool("Alice", sub["id"], by="Alice")
+    shutil.rmtree(user_path("Alice"))  # what admin user-deletion does to the Brain folder
+    pool_ids = {a["id"] for a in svc.list_assets("_household")}
+    assert {sub["id"], lot["id"]} <= pool_ids
+    assert any(a["id"] == lot["id"] for a in svc.list_visible("Bob", "personal"))
+
+
+# ---------------------------------------------------------------------------
+# Attachments
+# ---------------------------------------------------------------------------
+
+
+def test_attachment_roundtrip_and_disk_name(parcel):
+    asset = svc.create_asset("Alice", {"template": "parcel", "name": "X"}, created_by="Alice")
+    att = svc.add_attachment(
+        "Alice", asset["id"], "../../evil name.pdf", "application/pdf", b"%PDF", by="Alice"
+    )
+    assert att["filename"] == "evil name.pdf"
+    disk = assets_files_path("Alice") / asset["id"] / f"{att['id']}.pdf"
+    assert disk.exists()
+    meta = svc.get_attachment("Alice", asset["id"], att["id"])
+    assert meta["mime"] == "application/pdf"
+    assert svc.delete_attachment("Alice", asset["id"], att["id"], by="Alice") is True
+    assert not disk.exists()
+    assert svc.get_asset("Alice", asset["id"])["attachments"] == []
+
+
+def test_attachment_type_size_and_count_limits(parcel):
+    asset = svc.create_asset("Alice", {"template": "parcel", "name": "X"}, created_by="Alice")
+    with pytest.raises(ValueError, match="Unsupported file type"):
+        svc.add_attachment("Alice", asset["id"], "x.exe", "application/x-dosexec", b"x", by="Alice")
+    with pytest.raises(ValueError, match="too large"):
+        svc.add_attachment(
+            "Alice",
+            asset["id"],
+            "big.pdf",
+            "application/pdf",
+            b"x" * (svc.MAX_ATTACHMENT_BYTES + 1),
+            by="Alice",
+        )
+    for i in range(svc.MAX_ATTACHMENTS):
+        svc.add_attachment("Alice", asset["id"], f"f{i}.pdf", "application/pdf", b"%", by="Alice")
+    with pytest.raises(ValueError, match="limit"):
+        svc.add_attachment("Alice", asset["id"], "over.pdf", "application/pdf", b"%", by="Alice")
+
+
+# ---------------------------------------------------------------------------
+# Automation token + task linking
+# ---------------------------------------------------------------------------
+
+
+def test_automation_token_generated_once_and_rotates(brain):
+    first = automations_config.get_api_token()
+    assert first == automations_config.get_api_token()
+    assert automations_config.verify_api_token(first)
+    rotated = automations_config.rotate_api_token()
+    assert rotated != first
+    assert not automations_config.verify_api_token(first)
+
+
+def test_task_asset_id_passthrough(users):
+    task = task_service.add_task("Alice", {"title": "Survey lot", "asset_id": "abc123"})
+    assert task["asset_id"] == "abc123"
+    updated = task_service.update_task("Alice", task["id"], {"asset_id": None})
+    assert updated["asset_id"] is None

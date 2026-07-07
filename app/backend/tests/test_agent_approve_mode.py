@@ -138,8 +138,20 @@ def test_new_tools_are_write_gated_by_default():
         "write_brain_file",
         "add_shared_task",
         "update_profile",
+        "create_asset",
+        "update_asset",
+        "archive_asset",
+        "delete_asset",
+        "create_asset_template",
     ):
         assert name in write_names
     # And known reads are not
-    for name in ("list_tasks", "search_brain", "get_profile", "list_household_members"):
+    for name in (
+        "list_tasks",
+        "search_brain",
+        "get_profile",
+        "list_household_members",
+        "list_assets",
+        "list_asset_templates",
+    ):
         assert name not in write_names

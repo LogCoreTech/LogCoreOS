@@ -10,6 +10,9 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    // 'static' not the default 'assets' — the app has an /assets page route,
+    // and the backend mount at /assets would shadow it (see main.py).
+    assetsDir: 'static',
     sourcemap: false,
   },
 })

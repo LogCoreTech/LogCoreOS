@@ -16,6 +16,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from config import settings
 from migrations.runner import run_pending as run_migrations
 from routers import (
+    assets,
     auth,
     automations,
     brain,
@@ -181,6 +182,7 @@ app.include_router(suggestions.router, prefix="/api/v1/suggestions", tags=["sugg
 app.include_router(infisical.router, prefix="/api/v1/auth", tags=["infisical"])
 app.include_router(features.router, prefix="/api/v1/auth", tags=["features"])
 app.include_router(automations.router, prefix="/api/v1/automations", tags=["automations"])
+app.include_router(assets.router, prefix="/api/v1/assets", tags=["assets"])
 app.include_router(home.router, prefix="/api/v1/home", tags=["home"])
 app.include_router(team.router, prefix="/api/v1/team", tags=["team"])
 app.include_router(update.router, prefix="/api/v1/update", tags=["update"])
@@ -188,8 +190,10 @@ app.include_router(update.router, prefix="/api/v1/update", tags=["update"])
 # Serve React frontend — must come last
 static_dir = Path(__file__).parent.parent / "frontend" / "dist"
 if static_dir.exists():
-    # Serve static assets (JS/CSS/images) directly
-    app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="assets")
+    # Serve the built JS/CSS bundle. Mounted at /static (Vite assetsDir) — NOT /assets,
+    # which is an app page route and must fall through to the SPA handler.
+    if (static_dir / "static").exists():
+        app.mount("/static", StaticFiles(directory=str(static_dir / "static")), name="static")
 
     # Serve any file that exists at the root of dist (icons, manifest, sw.js, etc.)
     _static_root = static_dir.resolve()

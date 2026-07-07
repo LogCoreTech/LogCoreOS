@@ -36,6 +36,7 @@ class TaskCreateBase(BaseModel):
     due_time: str | None = None
     notes: str | None = Field(None, max_length=5000)
     assigned_to: str | None = None
+    asset_id: str | None = Field(None, max_length=64)
 
     @field_validator("due_date")
     @classmethod
@@ -63,6 +64,7 @@ class TaskUpdateBase(BaseModel):
     due_time: str | None = None
     notes: str | None = Field(None, max_length=5000)
     assigned_to: str | None = None
+    asset_id: str | None = Field(None, max_length=64)
 
     @field_validator("due_date")
     @classmethod

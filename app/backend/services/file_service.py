@@ -58,6 +58,18 @@ def events_path(user_name: str, workspace: str = "personal") -> Path:
     return ws_path(user_name, workspace) / "Calendar" / "events.json"
 
 
+def assets_path(user_name: str, workspace: str = "personal") -> Path:
+    return ws_path(user_name, workspace) / "Assets" / "assets.json"
+
+
+def assets_files_path(user_name: str, workspace: str = "personal") -> Path:
+    return ws_path(user_name, workspace) / "Assets" / "files"
+
+
+def asset_templates_path() -> Path:
+    return brain_path() / "_system" / "asset_templates.json"
+
+
 def automations_path(user_name: str) -> Path:
     return user_path(user_name) / "Automations" / "workflows.json"
 

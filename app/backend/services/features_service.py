@@ -35,6 +35,7 @@ ALL_MODULE_IDS = [
     "automations_business",
     "home",
     "team",
+    "assets",
 ]
 
 _PERSONAL_MEMBER = {m: True for m in ALL_MODULE_IDS if m not in ("automations_business", "team")}
@@ -52,6 +53,7 @@ _BUSINESS_MEMBER = {
     "automations_business": True,
     "home": False,
     "team": True,
+    "assets": True,
 }
 
 _DEFAULT_FEATURES: dict = {
