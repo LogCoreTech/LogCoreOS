@@ -5,7 +5,7 @@ const PRIORITIES = ['High', 'Medium', 'Low']
 const TYPES = ['todo', 'recurring', 'goal', 'appointment']
 const RECURRENCES = ['daily', 'weekly', 'monthly']
 
-export default function TaskModal({ task, categories: propCategories, defaultType, saveApi, users, onClose, onSave, onDelete }) {
+export default function TaskModal({ task, categories: propCategories, defaultType, saveApi, users, assets, defaultAssetId, onClose, onSave, onDelete }) {
   const editing = !!task
   // Assigned pool tasks (household/team) live in another store — open them view-only.
   // Tasks page tags them with `_source`; Calendar tags them with `_household`.
@@ -21,6 +21,7 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
     due_time:    task?.due_time    || '',
     notes:       task?.notes       || '',
     assigned_to: task?.assigned_to || '',
+    asset_id:    task?.asset_id    || defaultAssetId || '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -70,6 +71,7 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
         recurrence:  form.type === 'recurring' ? (form.recurrence || 'daily') : null,
         notes:       form.notes      || null,
         assigned_to: form.assigned_to || null,
+        asset_id:    form.asset_id   || null,
       }
       const api = saveApi || tasksApi
       if (editing) {
@@ -257,6 +259,19 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
               <select value={form.assigned_to} onChange={e => set('assigned_to', e.target.value)} className="input">
                 <option value="">Unassigned</option>
                 {users.map(u => <option key={u.name} value={u.name}>{u.name}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* Linked asset — only shown when an assets list is provided (assets module on) */}
+          {assets && assets.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Linked asset <span className="text-charcoal-400 font-normal">(optional)</span>
+              </label>
+              <select value={form.asset_id} onChange={e => set('asset_id', e.target.value)} className="input">
+                <option value="">None</option>
+                {assets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </div>
           )}

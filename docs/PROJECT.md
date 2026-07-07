@@ -160,6 +160,7 @@ The App currently provides:
 - n8n Automations integration — personal and business workflow cards, import/run/logs via n8n REST API; business workflows auto-synced from `automations_stubs/` on startup
 - Smart Home (Home Assistant) — entity tiles, scene control, HA automation management, per-user starred favourites on dashboard widget; admin config panel
 - Team module — business-workspace shared task + event pool (`_team`), structurally separate from Household (`_household`); no data can cross between the two
+- Assets module — template-driven nestable object tracking (subdivisions → parcels, vehicles, equipment): admin-curated typed field templates, subtree sharing + per-user hide, pool conversion (survives account deletion), archive-first lifecycle, change history, attachments, task linking, AI tools, and a token-authenticated n8n automation API
 
 **Phase 4 (partial — shipped early):**
 

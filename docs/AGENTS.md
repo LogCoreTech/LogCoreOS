@@ -130,7 +130,7 @@ The module registry lives in `app/frontend/src/lib/constants.js` (`ALL_MODULES`)
 
 Backend enforcement: `require_module("module_id")` is a FastAPI dependency factory that returns 403 if the module is in `user["disabled_modules"]` for the current workspace.
 
-Valid module IDs: `dashboard`, `tasks`, `goals`, `calendar`, `household`, `notes`, `journal`, `chat`, `automations`, `automations_business`, `home`, `team`
+Valid module IDs: `dashboard`, `tasks`, `goals`, `calendar`, `household`, `notes`, `journal`, `chat`, `automations`, `automations_business`, `home`, `team`, `assets`
 
 ### Workspace Switching
 Users can have one or both of two workspaces: `personal` and `business`. The active workspace is stored in `localStorage('lc_ws')` and sent on every API call as the `X-Workspace: personal|business` request header.
@@ -346,6 +346,20 @@ The Household module (`pages/Household.jsx`) is personal-workspace-only. All dat
 ## Team Module
 
 The Team module (`pages/Team.jsx`) is the business-workspace equivalent of Household. It uses a completely separate pool (`brain/USERS/_team/`) and a separate router (`routers/team.py`) — never shares code paths with Household. Module ID: `team`; defaults `True` for business members, `False` for personal. Read/complete is open to team members; **managing the pool** (add/edit/delete events + tasks + assign) requires admin or the `team` grant in `pool_edit`, enforced by `require_pool_edit("team")`. Mirrors Household's permission model exactly.
+
+## Assets Module
+
+The Assets module (`pages/Assets.jsx`, `routers/assets.py`, `services/assets_service.py`) tracks anything ownable as a **single object type with arbitrary nesting** (`parent_id`): subdivisions → parcels, vehicles, equipment. Available in both workspaces.
+
+- **Templates** (admin-only, instance-level in `brain/_system/asset_templates.json`): ordered typed field definitions (`text|number|date|boolean|select`, optional defaults) that premake an object's structure. Template `key` is immutable. Starts empty — Template Manager has an optional example insert.
+- **Storage**: per user per workspace at `ws_path/Assets/assets.json`; attachments (images/PDF, 10 MB, ≤20/asset) at `Assets/files/{asset_id}/{attachment_id}.{ext}` — disk names never come from user input.
+- **Sharing**: `shared_with` (targets `team`/`household`/user name; `read`|`edit`) applies to the whole subtree; `hidden_from` excludes named users and **beats shares**; both enforced server-side (`list_visible()`/`find_asset()`).
+- **Pools**: admins convert an asset subtree to `_team`/`_household` (physical move incl. attachment dirs) so it survives account deletion; pool writes need admin or the matching `pool_edit` grant.
+- **Lifecycle**: archive-first (hides subtree; "Show archived" toggle); hard delete = admin + confirm, 409 when children exist. Per-asset `history` (cap 50).
+- **Task linking**: tasks carry optional `asset_id`; AssetModal shows linked tasks + creates pre-linked ones; TaskModal has an asset picker when the module is enabled.
+- **Automation API**: `X-Automation-Token` header (token in `brain/_system/automations_config.json`; Admin → n8n card reveals/rotates) for n8n list/create/update; `user` may be `_team`/`_household`.
+- **Agent tools**: `list_asset_templates`/`list_assets` (read), `create_asset`/`update_asset`/`archive_asset` (approval-gated), `delete_asset`/`create_asset_template`/`update_asset_template` (admin).
+- **Gotcha**: the Vite bundle is mounted at `/static` (not `/assets`) precisely because this page owns the `/assets` route — never mount static files on an app route.
 
 ## Notes Module
 

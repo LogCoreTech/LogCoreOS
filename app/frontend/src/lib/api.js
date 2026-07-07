@@ -45,7 +45,13 @@ const del    = (path)       => request('DELETE', path)
 async function requestFile(method, path, file) {
   const fd = new FormData()
   fd.append('file', file)
-  const res = await fetch(`${BASE}${path}`, { method, credentials: 'include', body: fd })
+  // No Content-Type header — the browser sets the multipart boundary itself
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    credentials: 'include',
+    headers: { 'X-Workspace': getWorkspace() },
+    body: fd,
+  })
   if (res.status === 401) {
     localStorage.removeItem('lc_user')
     if (!window.location.pathname.startsWith('/login')) window.location.href = '/login'
@@ -55,6 +61,14 @@ async function requestFile(method, path, file) {
   const data = await res.json()
   if (!res.ok) throw new Error(data.detail || 'Request failed')
   return data
+}
+
+// Fetch a protected binary (e.g. asset attachment) as a blob — <img src> can't send
+// the X-Workspace header, so images render via URL.createObjectURL of this blob.
+async function requestBlob(path) {
+  const res = await fetch(`${BASE}${path}`, { credentials: 'include', headers: headers() })
+  if (!res.ok) throw new Error('File fetch failed')
+  return res.blob()
 }
 
 export const auth = {
@@ -177,6 +191,34 @@ export const team = {
 
 function encodePath(path) {
   return path.split('/').map(encodeURIComponent).join('/')
+}
+
+export const assets = {
+  list:           (opts = {}) => {
+    const params = new URLSearchParams()
+    if (opts.template) params.set('template', opts.template)
+    if (opts.includeArchived) params.set('include_archived', 'true')
+    const qs = params.toString()
+    return get(`/assets${qs ? `?${qs}` : ''}`)
+  },
+  get:            (id)              => get(`/assets/${id}`),
+  create:         (data)            => post('/assets', data),
+  update:         (id, data)        => patch(`/assets/${id}`, data),
+  remove:         (id)              => del(`/assets/${id}`),
+  archive:        (id)              => post(`/assets/${id}/archive`, {}),
+  unarchive:      (id)              => post(`/assets/${id}/unarchive`, {}),
+  convertToPool:  (id)              => post(`/assets/${id}/convert`, { target: 'pool' }),
+  updateAccess:   (id, data)        => request('PUT', `/assets/${id}/access`, data),
+  listTemplates:  ()                => get('/assets/templates'),
+  createTemplate: (data)            => post('/assets/templates', data),
+  updateTemplate: (key, data)       => patch(`/assets/templates/${key}`, data),
+  removeTemplate: (key)             => del(`/assets/templates/${key}`),
+  insertExample:  ()                => post('/assets/templates/example', {}),
+  uploadFile:     (id, file)        => requestFile('POST', `/assets/${id}/files`, file),
+  fileBlob:       (id, fileId)      => requestBlob(`/assets/${id}/files/${fileId}`),
+  removeFile:     (id, fileId)      => del(`/assets/${id}/files/${fileId}`),
+  automationToken:       ()         => get('/assets/automation/token'),
+  rotateAutomationToken: ()         => post('/assets/automation/token/rotate', {}),
 }
 
 export const notes = {

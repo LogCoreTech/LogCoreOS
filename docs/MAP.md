@@ -45,6 +45,7 @@ LogCoreOS/
 │   │   │   ├── infisical.py      → Infisical secrets manager integration (admin only; status, token set/clear)
 │   │   │   ├── features.py       → feature flags + custom role management (admin only)
 │   │   │   ├── automations.py    → automations module: import/run/logs n8n workflows (personal + business scopes)
+│   │   │   ├── assets.py         → assets module: templates (admin), asset tree CRUD, shares/hidden_from, pool convert, attachments, n8n automation API (X-Automation-Token)
 │   │   │   ├── home.py           → Home Assistant module: entity control, scenes, automations, favourites, admin config
 │   │   │   └── update.py         → update status check + trigger (admin only); works with update.sh on host
 │   │   ├── services/
@@ -67,6 +68,8 @@ LogCoreOS/
 │   │   │   ├── web_search_service.py  → Tavily API web search (for chat research mode)
 │   │   │   ├── infisical_loader.py    → Infisical secrets pull on startup; token validation + file storage
 │   │   │   ├── features_service.py    → feature flags + role resolution (get_effective_disabled)
+│   │   │   ├── assets_service.py      → assets core: templates, field validation, tree ops, share/hidden resolution, pool conversion, history, attachments
+│   │   │   ├── automations_config.py  → instance automation API token (generate/rotate/verify) for n8n → LogCore writes
 │   │   │   ├── n8n_service.py         → n8n REST API client; import/execute/delete/activate workflows; write docker/n8n.env; sync_business_workflows() for auto-sync
 │   │   │   ├── ha_service.py          → Home Assistant REST API client; config CRUD, entity states, service calls, scenes, automations, user favourites
 │   │   │   └── update_service.py      → GitHub release check (cached 4h), pending_update flag trigger, update log reader
@@ -96,6 +99,7 @@ LogCoreOS/
 │           │   ├── Brain.jsx      → browse + edit user's Brain markdown files directly
 │           │   ├── Profile.jsx    → edit Profile.md and profile.json fields (priorities, occupation, etc.)
 │           │   ├── Automations.jsx → automations: personal/business n8n workflow cards, import modal, run + logs
+│           │   ├── Assets.jsx      → assets: template-driven object tree (expand/collapse, filters, archived toggle), both workspaces
 │           │   ├── Home.jsx        → Smart Home: entity tiles by domain, scenes panel, HA automations, favourite stars
 │           │   ├── Admin.jsx      → admin panel (users, feature roles, workspace access, AI settings, web search, hosting, Infisical, n8n, Smart Home)
 │           │   ├── Settings.jsx   → user settings (appearance, timezone, session, notifications, background upload, shortcuts — server-side per-workspace via PATCH /auth/me)
@@ -103,7 +107,9 @@ LogCoreOS/
 │           │   └── Setup.jsx      → first-time setup wizard (Personal/Business profile, priorities, timezone)
 │           └── components/
 │               ├── Layout.jsx     → root shell: sidebar nav, user menu, theme toggle, module access guard
-│               ├── TaskModal.jsx  → create/edit task form (title, category, type, recurrence, due date/time, assigned_to)
+│               ├── TaskModal.jsx  → create/edit task form (title, category, type, recurrence, due date/time, assigned_to, linked asset)
+│               ├── AssetModal.jsx → create/edit asset: dynamic template fields, attachments, access (shares/hide), history, archive/convert
+│               ├── TemplateManager.jsx → admin template editor: ordered typed fields, defaults, example insert
 │               ├── EventModal.jsx → create/edit calendar event form (title, dates, times, all_day, color, notes)
 │               ├── CalendarGrid.jsx → month view: day cells with event/task indicators, click to open detail
 │               └── ErrorBoundary.jsx → catch React render errors, display fallback UI

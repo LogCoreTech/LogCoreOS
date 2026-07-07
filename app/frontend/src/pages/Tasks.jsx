@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { tasks as tasksApi, priorities as prioritiesApi, shared as sharedApi, team as teamApi } from '../lib/api'
+import { tasks as tasksApi, priorities as prioritiesApi, shared as sharedApi, team as teamApi, assets as assetsApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
 import TaskModal from '../components/TaskModal'
@@ -20,13 +20,16 @@ export default function Tasks() {
   const [tempOrder, setTempOrder] = useState([])
   const [dragIdx, setDragIdx] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [assetList, setAssetList] = useState([])
+  const assetsEnabled = !user?.disabledModules?.includes('assets')
 
   async function load() {
     setLoading(true)
-    const [all, prio, pool] = await Promise.allSettled([
+    const [all, prio, pool, assetsRes] = await Promise.allSettled([
       tasksApi.list(),
       prioritiesApi.get(),
       tasksApi.assigned(),
+      assetsEnabled ? assetsApi.list() : Promise.resolve([]),
     ])
     if (all.status === 'fulfilled') setTaskList(all.value)
     if (prio.status === 'fulfilled') {
@@ -36,6 +39,7 @@ export default function Tasks() {
     if (pool.status === 'fulfilled') {
       setAssignedPoolTasks(pool.value)
     }
+    if (assetsRes.status === 'fulfilled') setAssetList(assetsRes.value || [])
     setLoading(false)
   }
 
@@ -248,6 +252,7 @@ export default function Tasks() {
         <TaskModal
           task={editTask}
           categories={priorityOrder}
+          assets={assetsEnabled ? assetList : null}
           onClose={() => { setShowModal(false); setEditTask(null) }}
           onSave={() => { setShowModal(false); setEditTask(null); load() }}
           onDelete={() => { setShowModal(false); setEditTask(null); load() }}

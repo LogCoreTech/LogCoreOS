@@ -20,6 +20,7 @@ import Setup from './pages/Setup'
 import Profile from './pages/Profile'
 import Automations from './pages/Automations'
 import Home from './pages/Home'
+import Assets from './pages/Assets'
 
 function Protected({ children }) {
   const { user } = useAuth()
@@ -61,6 +62,7 @@ export default function App() {
                 <Route path="/chat"      element={<ModuleRoute moduleId="chat"><Chat /></ModuleRoute>} />
                 <Route path="/automations" element={<ModuleRoute moduleId="automations"><Automations /></ModuleRoute>} />
                 <Route path="/home"        element={<ModuleRoute moduleId="home"><Home /></ModuleRoute>} />
+                <Route path="/assets"      element={<ModuleRoute moduleId="assets"><Assets /></ModuleRoute>} />
                 <Route path="/brain"     element={<Brain />} />
                 <Route path="/profile"   element={<Profile />} />
                 <Route path="/settings" element={<Settings />} />

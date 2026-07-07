@@ -8,6 +8,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+**Assets module**
+- Track anything ownable — land parcels, vehicles, equipment — as a nestable object tree (subdivision → parcels → …)
+- Admin-curated Templates define each object type's premade fields (text/number/date/boolean/select, optional defaults); starts empty with a one-click editable example
+- Share an asset (and everything inside it) to Team, Household, or a specific person as read-only or edit; hide specific objects from selected users
+- Admins can convert an asset tree into a shared Team/Household object that survives user account deletion
+- Archive-first lifecycle (hard delete is admin-only and blocked while children exist), per-asset change history, photo/PDF attachments
+- Link tasks to assets from either side (task form asset picker; "＋ Task for this asset" in the asset editor)
+- AI chat can list, create, update, and archive assets (writes still require your approval), and admins can manage templates by chat
+- n8n automation API: token-authenticated endpoints to list/create/update assets from workflows; token managed in Admin → n8n
+
+**Approve-edits chat mode (new default)**
+- The AI now pauses before any data change and shows an approval card; reads run freely
+- Plan / Auto / Research modes unchanged and still selectable
+
+### Fixed
+
+- Saved chat archives no longer lose multi-line AI responses (parser kept only the first line; continuing a chat then overwrote the archive with the truncated copy)
+- Long AI responses (over 5,000 chars) now auto-save correctly
+- Proactive notifications injected into chat no longer break sending messages (422) or create junk chat archives
+- AI agent now resolves household member names on task assignment (first-name matching; asks when ambiguous) instead of writing raw strings
+
 ## [0.1.0] — 2026-07-06
 
 First tagged release.

@@ -34,7 +34,7 @@ Keep this up to date. Mark tasks done as they're completed. Add new tasks as the
 
 ## Features that unblock scale (build when demanded)
 
-- [ ] **Assets module — REQUIRED BEFORE PILOT CLIENT** — owner flagged as important (2026-07-06); scope not yet defined (asset tracking for household/business — equipment, property, inventory?). Needs a definition session before build: data shape under the Brain (`Assets/assets.json`?), workspace scoping, module ID `assets` in constants.js + backend router
+- [ ] **Assets module follow-ups (deferred from MVP)** — template-key rename; convert pool assets back to personal; multiple named templates with preset values per structure; bulk CSV import; map/gallery views; per-field permissions; share notifications; pool-task linking; Automation Inbox reuses the `automations_config.py` token
 
 - [ ] **Ollama / local LLM support** — pulled forward from roadmap Phase 6; #1 r/selfhosted credibility feature; ship before/with the Reddit launch
 - [ ] **RAG over the Brain (v0.2)** — embeddings + semantic search over notes/journal/files, auto-fed into chat context. Design rule (locked): vector index is a disposable derived cache — embedded file-backed store (e.g. Chroma), rebuildable from Brain files anytime, never source of truth, no new stateful service. Local-embeddings option pairs with Ollama. Target with the public demo
@@ -66,6 +66,7 @@ Keep this up to date. Mark tasks done as they're completed. Add new tasks as the
 
 ## Done
 
+- [x] **Assets module MVP — REQUIRED BEFORE PILOT CLIENT** — single object type, arbitrary nesting, admin-curated Templates (instance-level, ordered typed fields + defaults, bare-bones start + optional example), per-user per-workspace stores, subtree sharing (read/edit) + `hidden_from` exclusions, admin convert-to-pool (survives account deletion), archive-first (delete admin-only + confirm), change history, image/PDF attachments, task linking both directions, 8 AI agent tools, n8n automation API with admin-rotatable token, Dashboard widget; `/assets` page route unshadowed by moving the static bundle to `/static`; 44 new tests, suite 249 green (2026-07-07)
 - [x] **Chat "approve edits" mode — new default** — reads run freely, every write tool call pauses (`awaiting_approval` + `pending_write` steps) and the UI shows an ApprovalCard (Approve → one-turn auto re-send; Deny → conversational decline); `_READ_TOOLS` allowlist means future tools are write-gated by default; default mode switched to `approve` in backend + frontend; 5 tests (2026-07-06)
 - [x] **BUG: proactive notification injection breaks chat + writes junk archives** — proactive messages are now display-only: `toApiHistory()` strips them and trims history to the validator's shape (start user / end assistant, also heals older junk archives on continue); auto-save skips proactive messages and proactive-only threads (2026-07-06)
 - [x] **GitHub Discussions** — was already enabled on the repo (confirmed 2026-07-06)

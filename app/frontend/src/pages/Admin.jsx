@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { admin as adminApi, features as featuresApi, infisical as infisicalApi, automations as automationsApi, home as homeApi, priorities as prioritiesApi, update as updateApi } from '../lib/api'
+import { admin as adminApi, features as featuresApi, infisical as infisicalApi, automations as automationsApi, home as homeApi, priorities as prioritiesApi, update as updateApi, assets as assetsApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { ALL_MODULES } from '../lib/constants'
 
@@ -1562,6 +1562,53 @@ function RolesCard({ roles, onRolesChange }) {
 // ---------------------------------------------------------------------------
 // n8n card
 // ---------------------------------------------------------------------------
+function AutomationTokenRow() {
+  const [token, setToken] = useState(null) // null = hidden
+  const [busy, setBusy] = useState(false)
+
+  async function reveal() {
+    setBusy(true)
+    try {
+      const res = await assetsApi.automationToken()
+      setToken(res.token)
+    } catch { /* admin-only; ignore */ } finally {
+      setBusy(false)
+    }
+  }
+
+  async function rotate() {
+    if (!confirm('Rotate the automation API token? Existing n8n workflows using it will stop working until updated.')) return
+    setBusy(true)
+    try {
+      const res = await assetsApi.rotateAutomationToken()
+      setToken(res.token)
+    } catch { /* ignore */ } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="mt-4 pt-3 border-t border-charcoal-100 dark:border-charcoal-800">
+      <p className="text-sm font-medium mb-1">Automation API token</p>
+      <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-2">
+        Lets n8n workflows read and write LogCore data (e.g. assets) via the
+        <code className="mx-1">X-Automation-Token</code> header.
+      </p>
+      {token ? (
+        <p className="text-xs font-mono break-all bg-charcoal-50 dark:bg-charcoal-800 rounded p-2 mb-2 select-all">{token}</p>
+      ) : null}
+      <div className="flex gap-2">
+        <button type="button" onClick={reveal} disabled={busy} className="btn-ghost text-xs px-3 py-1.5 disabled:opacity-50">
+          {token ? 'Refresh' : 'Reveal token'}
+        </button>
+        <button type="button" onClick={rotate} disabled={busy} className="text-xs px-3 py-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50">
+          Rotate
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function N8nCard() {
   const [url, setUrl]               = useState('http://n8n:5678')
   const [apiKey, setApiKey]         = useState('')
@@ -1697,6 +1744,8 @@ function N8nCard() {
           {syncingWf ? 'Syncing…' : '⚡ Sync Workflows Now'}
         </button>
       </div>
+
+      <AutomationTokenRow />
     </div>
   )
 }

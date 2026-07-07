@@ -749,6 +749,51 @@ Delete a team event. **Pool managers only** (admin or `team` grant). Returns `20
 
 ---
 
+## Assets
+
+Router mounted at `/api/v1/assets`. Requires the `assets` module (both workspaces; workspace-scoped via `X-Workspace`). Assets form a tree via `parent_id`; every object is built from an admin-curated **template** (ordered typed fields).
+
+### Templates
+
+| Method | Path | Access | Notes |
+|--------|------|--------|-------|
+| `GET` | `/assets/templates` | module users | list templates |
+| `POST` | `/assets/templates` | admin | `{key, label, icon, fields:[{key,label,type,options?,default?}]}`; types: text/number/date/boolean/select; key slug immutable |
+| `POST` | `/assets/templates/example` | admin | insert an editable example template |
+| `PATCH` | `/assets/templates/{key}` | admin | replace label/icon/fields |
+| `DELETE` | `/assets/templates/{key}` | admin | `409` if any asset still uses it |
+
+### Assets
+
+| Method | Path | Access | Notes |
+|--------|------|--------|-------|
+| `GET` | `/assets` | module users | own + workspace pool + shared-to-me (annotated `_owner`/`_access`); `?template=`, `?include_archived=true` |
+| `POST` | `/assets` | module users | `{template, name, parent_id?, fields?, notes?, owner: "me"\|"pool"}`; `pool` needs admin or `pool_edit` grant |
+| `GET`/`PATCH` | `/assets/{id}` | per access | PATCH allowed for owner/edit-share/pool manager; records history |
+| `POST` | `/assets/{id}/archive` · `/unarchive` | owner / pool manager | archiving hides the whole subtree |
+| `DELETE` | `/assets/{id}` | **admin** | `409` if it has children; removes attachment files |
+| `POST` | `/assets/{id}/convert` | **admin** | `{target:"pool"}` — move subtree + files to `_team`/`_household`; strips shares |
+| `PUT` | `/assets/{id}/access` | owner (pool: admin/grant) | `{shared_with?:[{target,access}], hidden_from?:[names]}`; pool assets accept `hidden_from` only; `hidden_from` beats shares and is enforced server-side |
+| `POST` | `/assets/{id}/files` | owner/edit-share | multipart `file`; jpeg/png/webp/avif/pdf; 10 MB; ≤20 per asset |
+| `GET` | `/assets/{id}/files/{file_id}` | any access | binary response |
+| `DELETE` | `/assets/{id}/files/{file_id}` | owner/edit-share | `204` |
+
+### Automation API (n8n)
+
+Token auth via `X-Automation-Token` header — no JWT. Token lives in `brain/_system/automations_config.json`; admins reveal/rotate it in Admin → n8n or via `GET /assets/automation/token` / `POST /assets/automation/token/rotate` (admin JWT).
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `GET` | `/assets/automation/assets?user=&workspace=&template=` | `user` may be a real user or `_team`/`_household` |
+| `POST` | `/assets/automation/assets` | `{user, workspace, template, name, parent_id?, fields?, notes?}` |
+| `PATCH` | `/assets/automation/assets/{id}` | `{user, workspace, name?, fields?, notes?}` |
+
+### Task linking
+
+`POST /tasks` and `PATCH /tasks/{id}` accept an optional `asset_id` field linking the task to an asset.
+
+---
+
 ## Push Notifications
 
 ### `GET /push/vapid-key`

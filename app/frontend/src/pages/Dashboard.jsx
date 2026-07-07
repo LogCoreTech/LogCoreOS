@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { tasks as tasksApi, auth as authApi, home as homeApi, team as teamApi } from '../lib/api'
+import { tasks as tasksApi, auth as authApi, home as homeApi, team as teamApi, assets as assetsApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
 import { catColor } from '../lib/constants'
@@ -161,7 +161,47 @@ export default function Dashboard() {
       {/* Workspace-specific widgets */}
       {isPersonal && !user?.disabledModules?.includes('home') && <HomeWidget />}
       {!isPersonal && !user?.disabledModules?.includes('team') && <TeamWidget />}
+      {!user?.disabledModules?.includes('assets') && <AssetsWidget key={workspace} />}
 
+    </div>
+  )
+}
+
+function AssetsWidget() {
+  const [items, setItems] = useState([])
+  const [templates, setTemplates] = useState([])
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    Promise.all([assetsApi.list(), assetsApi.listTemplates()])
+      .then(([a, t]) => { setItems(a || []); setTemplates(t || []) })
+      .catch(() => {})
+      .finally(() => setLoaded(true))
+  }, [])
+
+  if (!loaded || items.length === 0) return null
+
+  const counts = {}
+  for (const a of items) counts[a.template] = (counts[a.template] || 0) + 1
+  const byKey = Object.fromEntries(templates.map(t => [t.key, t]))
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold text-sm uppercase tracking-wide text-charcoal-500 dark:text-charcoal-400">
+          🗂️ Assets
+        </h2>
+        <Link to="/assets" className="text-xs text-orange-500 hover:underline">All assets →</Link>
+      </div>
+      <div className="space-y-2">
+        {Object.entries(counts).map(([key, count]) => (
+          <div key={key} className="flex items-center gap-3">
+            <span className="shrink-0">{byKey[key]?.icon || '▫️'}</span>
+            <span className="text-sm flex-1 truncate">{byKey[key]?.label || key}</span>
+            <span className="text-xs text-charcoal-400 dark:text-charcoal-500 shrink-0">{count}</span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
