@@ -28,7 +28,7 @@ DOCS_UPDATED=false
 if [ "$LAST_STOP" -gt 0 ]; then
   for f in "$DOCS_DIR/TASKS.md" "$DOCS_DIR/MEMORY.md" "$DOCS_DIR/AGENTS.md" \
             "$DOCS_DIR/MAP.md" "$DOCS_DIR/API.md" "$DOCS_DIR/PROJECT.md" \
-            "$DOCS_DIR/BLUEPRINT.md" "$REPO_DIR/CHANGELOG.md" \
+            "$REPO_DIR/CHANGELOG.md" \
             "$DOCS_DIR/Daily Notes/$TODAY.md"; do
     if [ -f "$f" ]; then
       FILE_MTIME=$(stat -c %Y "$f")
@@ -43,23 +43,9 @@ fi
 # Record current stop time for next comparison
 date +%s > "$LAST_STOP_FILE"
 
-# Skip reminder if core docs were already updated this turn — but if TASKS.md
-# changed and BLUEPRINT.md didn't, nudge a blueprint gate/checklist sync check.
+# Skip reminder if core docs were already updated this turn
 if [ "$DOCS_UPDATED" = "true" ]; then
   rm -f "$PENDING_FILE"
-  TASKS_MTIME=0
-  BP_MTIME=0
-  [ -f "$DOCS_DIR/TASKS.md" ] && TASKS_MTIME=$(stat -c %Y "$DOCS_DIR/TASKS.md")
-  [ -f "$DOCS_DIR/BLUEPRINT.md" ] && BP_MTIME=$(stat -c %Y "$DOCS_DIR/BLUEPRINT.md")
-  if [ -f "$DOCS_DIR/BLUEPRINT.md" ] && [ "$TASKS_MTIME" -gt "$LAST_STOP" ] && [ "$BP_MTIME" -le "$LAST_STOP" ]; then
-    cat > "$PENDING_FILE" <<EOF
-BLUEPRINT SYNC CHECK — $(date '+%Y-%m-%d %H:%M')
-docs/TASKS.md changed last turn but docs/BLUEPRINT.md did not. If phase tasks were completed:
-1. Mark the matching items done in the docs/BLUEPRINT.md phase checklist.
-2. If that finished a phase, review its checkpoint gate (Success metrics table) and record gate passage in today's daily note.
-Skip if the TASKS.md change only added or reprioritized tasks (no completions).
-EOF
-  fi
   exit 0
 fi
 

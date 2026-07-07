@@ -37,7 +37,6 @@ Don't ask permission. Just do it.
 | Architecture or roadmap changes | Update `docs/PROJECT.md` |
 | A new file or folder is added to the repo | Update `docs/MAP.md` |
 | A mistake or gotcha is discovered | Add it to `docs/MEMORY.md` under Known Gotchas |
-| A blueprint-phase task is completed in TASKS.md | Check off the matching item in `docs/BLUEPRINT.md`; if it finishes a phase, review its checkpoint gate (`docs_reminder.sh` nudges this automatically) |
 
 ---
 
