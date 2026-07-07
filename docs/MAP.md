@@ -14,7 +14,6 @@ LogCoreOS/
 ├── README.md                     → user-facing quick start (do not move — it's for humans)
 ├── CHANGELOG.md                  → user-facing version history (Keep a Changelog format)
 ├── SECURITY.md                   → vulnerability disclosure policy
-├── OWNER_SETUP.md                → LogCoreTech managed-service setup checklist (ops, not for AI agents)
 ├── LICENSE                       → project license
 ├── launch.sh                     → one-command startup: builds frontend, generates .env, starts Docker
 ├── requirements-dev.txt          → dev/test deps (pytest, etc.)
