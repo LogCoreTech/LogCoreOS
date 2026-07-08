@@ -49,8 +49,19 @@ logger = logging.getLogger("logcore")
 async def lifespan(app: FastAPI):
     _startup_checks()
     run_migrations()
+    _warm_share_index()
     start_scheduler()
     yield
+
+
+def _warm_share_index() -> None:
+    """Rebuild the assets share-routing cache from the Brain files on boot."""
+    try:
+        from services.assets_index import rebuild_share_index
+
+        rebuild_share_index()
+    except Exception:
+        logger.exception("assets share index rebuild failed (will lazy-build on first use)")
 
 
 def _startup_checks() -> None:

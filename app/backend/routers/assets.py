@@ -324,6 +324,18 @@ def create_asset(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+@router.get("/members")
+def list_members(current_user: dict = Depends(_require_assets)):
+    """Member display names for the share/hide selectors. Names only.
+
+    Exposed to any Assets user so they can pick who to share with. May become
+    permissioned/opt-in later (see MEMORY.md).
+    """
+    from services.auth_service import list_users
+
+    return [{"name": u["name"]} for u in list_users()]
+
+
 @router.get("/{asset_id}")
 def get_asset(
     asset_id: str,
@@ -375,24 +387,26 @@ def update_asset(
 @router.post("/{asset_id}/archive")
 def archive_asset(
     asset_id: str,
+    cascade: bool = False,
     current_user: dict = Depends(_require_assets),
     workspace: str = Depends(get_workspace),
     _rl: None = Depends(_write_limit),
 ):
-    return _set_archived(asset_id, True, current_user, workspace)
+    return _set_archived(asset_id, True, current_user, workspace, cascade)
 
 
 @router.post("/{asset_id}/unarchive")
 def unarchive_asset(
     asset_id: str,
+    cascade: bool = False,
     current_user: dict = Depends(_require_assets),
     workspace: str = Depends(get_workspace),
     _rl: None = Depends(_write_limit),
 ):
-    return _set_archived(asset_id, False, current_user, workspace)
+    return _set_archived(asset_id, False, current_user, workspace, cascade)
 
 
-def _set_archived(asset_id: str, archived: bool, current_user: dict, workspace: str):
+def _set_archived(asset_id: str, archived: bool, current_user: dict, workspace: str, cascade: bool):
     _validate_asset_id(asset_id)
     found = _find_or_404(current_user, workspace, asset_id)
     if not found["can_manage"]:
@@ -403,18 +417,22 @@ def _set_archived(asset_id: str, archived: bool, current_user: dict, workspace: 
         archived,
         workspace=found["store_workspace"],
         by=current_user["name"],
+        cascade=cascade,
     )
 
 
 @router.delete("/{asset_id}", status_code=204)
 def delete_asset(
     asset_id: str,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(_require_assets),
     workspace: str = Depends(get_workspace),
     _rl: None = Depends(_write_limit),
 ):
     _validate_asset_id(asset_id)
     found = _find_or_404(current_user, workspace, asset_id)
+    # Owners delete their own personal assets; pool assets stay admin-only.
+    if not found["can_delete"]:
+        raise HTTPException(status_code=403, detail="Only an admin can delete this asset")
     try:
         if not assets_service.delete_asset(
             found["store"], asset_id, workspace=found["store_workspace"]

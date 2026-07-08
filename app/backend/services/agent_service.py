@@ -47,6 +47,7 @@ _RESEARCH_TOOLS = {
     "search_web",
     "list_asset_templates",
     "list_assets",
+    "search_assets",
     # admin read-only
     "list_users",
     "list_household_members",
@@ -730,6 +731,37 @@ _USER_TOOLS: list[dict] = [
                     "type": "boolean",
                     "description": "true to archive (default), false to unarchive",
                 },
+                "cascade": {
+                    "type": "boolean",
+                    "description": "true to also (un)archive all descendants",
+                },
+            },
+            "required": ["asset_id"],
+        },
+    },
+    {
+        "name": "search_assets",
+        "description": "Search the assets visible to the user by a text query — matches asset name and field values. Use this instead of list_assets when looking for specific assets in a large collection.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Text to match in name or field values"},
+                "template": {"type": "string", "description": "Optional template key filter"},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "move_asset",
+        "description": "Move an asset to a new parent (or to the top level with parent_id null). Same owner only. Respects the user's edit access.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "asset_id": {"type": "string"},
+                "parent_id": {
+                    "type": "string",
+                    "description": "New parent asset ID, or null for top level",
+                },
             },
             "required": ["asset_id"],
         },
@@ -1335,6 +1367,52 @@ def _execute_tool(
                     found["store"],
                     inputs["asset_id"],
                     bool(inputs.get("archived", True)),
+                    workspace=found["store_workspace"],
+                    by=user["name"],
+                    cascade=bool(inputs.get("cascade", False)),
+                )
+                return result or {"error": "Asset not found"}
+
+            case "search_assets":
+                from services import assets_service
+
+                items = assets_service.list_visible(
+                    user["name"],
+                    workspace,
+                    is_admin=user.get("role") == "admin",
+                    pool_edit=user.get("pool_edit") or [],
+                )
+                if inputs.get("template"):
+                    items = [a for a in items if a.get("template") == inputs["template"]]
+                q = str(inputs.get("query", "")).strip().lower()
+                if q:
+
+                    def _match(a: dict) -> bool:
+                        if q in (a.get("name") or "").lower():
+                            return True
+                        return any(q in str(v).lower() for v in (a.get("fields") or {}).values())
+
+                    items = [a for a in items if _match(a)]
+                return [{k: v for k, v in a.items() if k != "history"} for a in items]
+
+            case "move_asset":
+                from services import assets_service
+
+                found = assets_service.find_asset(
+                    user["name"],
+                    workspace,
+                    inputs["asset_id"],
+                    is_admin=user.get("role") == "admin",
+                    pool_edit=user.get("pool_edit") or [],
+                )
+                if found is None:
+                    return {"error": f"Asset {inputs['asset_id']!r} not found"}
+                if not found["can_edit"]:
+                    return {"error": "Read-only access — you cannot move this asset"}
+                result = assets_service.update_asset(
+                    found["store"],
+                    inputs["asset_id"],
+                    {"parent_id": inputs.get("parent_id")},
                     workspace=found["store_workspace"],
                     by=user["name"],
                 )

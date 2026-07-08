@@ -2,6 +2,22 @@ import { useState, useEffect } from 'react'
 import { assets as assetsApi, tasks as tasksApi } from '../lib/api'
 import TaskModal from './TaskModal'
 
+// Render a history entry's changes tolerantly — a change value is normally an
+// [old, new] pair, but never trust the shape (legacy/hand-edited data would
+// otherwise throw "not iterable" and crash the whole modal via ErrorBoundary).
+function formatChanges(changes) {
+  return Object.entries(changes || {})
+    .map(([k, v]) => {
+      const key = k.replace('fields.', '')
+      if (Array.isArray(v)) {
+        const [o, n] = v
+        return `${key}: ${o ?? '∅'}→${n ?? '∅'}`
+      }
+      return `${key}: ${v == null ? '∅' : typeof v === 'object' ? JSON.stringify(v) : v}`
+    })
+    .join(', ')
+}
+
 // Field input for one template field definition — module-level per MEMORY.md rule.
 function FieldInput({ def, value, onChange }) {
   if (def.type === 'boolean') {
@@ -531,7 +547,7 @@ export default function AssetModal({ asset, templates, allAssets, defaultParentI
                     <div key={i} className="text-charcoal-500 dark:text-charcoal-400">
                       <span className="font-medium">{h.by || 'system'}</span> {h.action}
                       {Object.keys(h.changes || {}).length > 0 && (
-                        <span className="opacity-75"> — {Object.entries(h.changes).map(([k, [o, n]]) => `${k.replace('fields.', '')}: ${o ?? '∅'}→${n ?? '∅'}`).join(', ')}</span>
+                        <span className="opacity-75"> — {formatChanges(h.changes)}</span>
                       )}
                       <span className="opacity-50 ml-1">{(h.at || '').slice(0, 10)}</span>
                     </div>

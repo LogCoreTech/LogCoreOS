@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
 
+from services import assets_index
 from services import assets_service as svc
 from services import auth_service, automations_config, task_service
 from services.file_service import assets_files_path, user_path
@@ -227,13 +228,56 @@ def test_delete_leaf_removes_files_dir(parcel, users):
     assert not files_dir.exists()
 
 
-def test_archive_hides_subtree(parcel, users):
+def test_archive_only_this_node_leaves_children_active(parcel, users):
+    # Per-node archive (no cascade): parent hidden, child stays active/visible.
     sub, lot = _tree(users)
     svc.set_archived("Alice", sub["id"], True, by="Alice")
     visible_ids = {a["id"] for a in svc.list_visible("Alice", "personal")}
+    assert sub["id"] not in visible_ids
+    assert lot["id"] in visible_ids  # child floats up, still active
+    assert svc.get_asset("Alice", lot["id"])["archived"] is False
+
+
+def test_archive_cascade_archives_whole_subtree(parcel, users):
+    sub, lot = _tree(users)
+    svc.set_archived("Alice", sub["id"], True, by="Alice", cascade=True)
+    visible_ids = {a["id"] for a in svc.list_visible("Alice", "personal")}
     assert sub["id"] not in visible_ids and lot["id"] not in visible_ids
+    assert svc.get_asset("Alice", lot["id"])["archived"] is True
     all_ids = {a["id"] for a in svc.list_visible("Alice", "personal", include_archived=True)}
     assert sub["id"] in all_ids and lot["id"] in all_ids
+
+
+def test_can_delete_own_but_not_pool_or_shared(parcel, users):
+    # Owner can delete own personal asset; a shared recipient cannot.
+    lone = svc.create_asset("Alice", {"template": "parcel", "name": "Lone"}, created_by="Alice")
+    assert svc.find_asset("Alice", "personal", lone["id"])["can_delete"] is True
+    svc.update_access(
+        "Alice", lone["id"], shared_with=[{"target": "Bob", "access": "edit"}], by="Alice"
+    )
+    assert svc.find_asset("Bob", "personal", lone["id"])["can_delete"] is False
+    # Pool asset: non-admin grantee cannot delete
+    sub = svc.create_asset("Alice", {"template": "subdivision", "name": "S"}, created_by="Alice")
+    svc.convert_to_pool("Alice", sub["id"], by="Alice")
+    assert (
+        svc.find_asset("Bob", "personal", sub["id"], pool_edit=["household"])["can_delete"] is False
+    )
+    assert svc.find_asset("Alice", "personal", sub["id"], is_admin=True)["can_delete"] is True
+
+
+def test_count_active_descendants(parcel, users):
+    sub, lot = _tree(users)
+    assert svc.count_active_descendants("Alice", sub["id"]) == 1
+    svc.set_archived("Alice", lot["id"], True, by="Alice")
+    assert svc.count_active_descendants("Alice", sub["id"]) == 0
+
+
+def test_unarchive_cascade(parcel, users):
+    sub, lot = _tree(users)
+    svc.set_archived("Alice", sub["id"], True, by="Alice", cascade=True)
+    svc.set_archived("Alice", sub["id"], False, by="Alice", cascade=True)
+    assert svc.get_asset("Alice", sub["id"])["archived"] is False
+    assert svc.get_asset("Alice", lot["id"])["archived"] is False
 
 
 def test_workspace_isolation(parcel):
@@ -312,6 +356,54 @@ def test_hidden_from_beats_share(parcel, users):
     )
     assert not any(a["id"] in (sub["id"], lot["id"]) for a in svc.list_visible("Bob", "personal"))
     assert svc.find_asset("Bob", "personal", lot["id"]) is None
+
+
+# ---------------------------------------------------------------------------
+# Share index (derived routing cache)
+# ---------------------------------------------------------------------------
+
+
+def test_share_index_routes_only_sharers(parcel, users):
+    sub, _ = _tree(users)
+    # Before sharing, Bob has no sharers
+    assert assets_index.sharers_for("Bob", "personal") == []
+    svc.update_access(
+        "Alice", sub["id"], shared_with=[{"target": "Bob", "access": "read"}], by="Alice"
+    )
+    assert assets_index.sharers_for("Bob", "personal") == ["Alice"]
+    # Removing the share clears the routing entry
+    svc.update_access("Alice", sub["id"], shared_with=[], by="Alice")
+    assert assets_index.sharers_for("Bob", "personal") == []
+
+
+def test_share_index_group_target(parcel, users):
+    sub, _ = _tree(users)
+    svc.update_access(
+        "Alice", sub["id"], shared_with=[{"target": "household", "access": "read"}], by="Alice"
+    )
+    assert "Alice" in assets_index.sharers_for("Bob", "personal")
+
+
+def test_rebuild_share_index_parity(parcel, users):
+    sub, _ = _tree(users)
+    svc.update_access(
+        "Alice", sub["id"], shared_with=[{"target": "Bob", "access": "edit"}], by="Alice"
+    )
+    before = assets_index.sharers_for("Bob", "personal")
+    assets_index.rebuild_share_index()  # full rescan must match incremental state
+    assert assets_index.sharers_for("Bob", "personal") == before == ["Alice"]
+
+
+def test_delete_clears_share_index(parcel, users):
+    sub, _ = _tree(users)
+    # a standalone shared asset (no children) so delete is allowed
+    lone = svc.create_asset("Alice", {"template": "parcel", "name": "Lone"}, created_by="Alice")
+    svc.update_access(
+        "Alice", lone["id"], shared_with=[{"target": "Bob", "access": "read"}], by="Alice"
+    )
+    assert assets_index.sharers_for("Bob", "personal") == ["Alice"]
+    svc.delete_asset("Alice", lone["id"])
+    assert assets_index.sharers_for("Bob", "personal") == []
 
 
 # ---------------------------------------------------------------------------

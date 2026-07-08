@@ -11,7 +11,9 @@ export default class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, info) {
-    console.error('Unhandled render error:', error, info.componentStack)
+    // Loud, findable log — open DevTools console to get the real message + stack
+    // (the on-screen message is minified). Keep this when diagnosing crashes.
+    console.error('Unhandled render error:', error?.message, error, info.componentStack)
   }
 
   render() {
@@ -24,12 +26,17 @@ export default class ErrorBoundary extends Component {
             <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mb-4">
               {this.state.error?.message || 'An unexpected error occurred.'}
             </p>
-            <button
-              onClick={() => { this.setState({ hasError: false, error: null }); window.location.href = '/' }}
-              className="btn-primary"
-            >
-              Go Home
-            </button>
+            <div className="flex gap-2 justify-center">
+              <button onClick={() => window.location.reload()} className="btn-ghost">
+                Reload
+              </button>
+              <button
+                onClick={() => { this.setState({ hasError: false, error: null }); window.location.href = '/' }}
+                className="btn-primary"
+              >
+                Go Home
+              </button>
+            </div>
           </div>
         </div>
       )

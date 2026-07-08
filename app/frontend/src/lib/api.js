@@ -8,6 +8,20 @@ function headers(extra = {}) {
   return { 'Content-Type': 'application/json', 'X-Workspace': getWorkspace(), ...extra }
 }
 
+// Re-check the session with a raw /me call (no recursion through request()).
+// A single stray 401 from a data call or background poll used to hard-log-out
+// the user; now we only clear the session when /me itself confirms it's dead.
+let _sessionCheck = null
+function sessionStillValid() {
+  if (!_sessionCheck) {
+    _sessionCheck = fetch(`${BASE}/auth/me`, { headers: headers(), credentials: 'include' })
+      .then(r => r.status !== 401)          // 401 = genuinely expired
+      .catch(() => true)                    // network blip → assume valid, don't kick
+      .finally(() => { _sessionCheck = null })
+  }
+  return _sessionCheck
+}
+
 async function request(method, path, body) {
   const res = await fetch(`${BASE}${path}`, {
     method,
@@ -16,14 +30,18 @@ async function request(method, path, body) {
     body: body ? JSON.stringify(body) : undefined,
   })
   if (res.status === 401) {
-    if (!window.location.pathname.startsWith('/login')) {
+    if (window.location.pathname.startsWith('/login')) {
+      // On the login page surface the real server error (e.g. "Invalid email or password")
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.detail || 'Invalid credentials')
+    }
+    // Verify before nuking the session — a lone 401 is often transient.
+    if (path === '/auth/me' || !(await sessionStillValid())) {
       localStorage.removeItem('lc_user')
       window.location.href = '/login'
       throw new Error('Session expired. Please sign in again.')
     }
-    // On the login page surface the real server error (e.g. "Invalid email or password")
-    const data = await res.json().catch(() => ({}))
-    throw new Error(data.detail || 'Invalid credentials')
+    throw new Error('Request failed — please try again.')
   }
   if (res.status === 204) return null
   const data = await res.json()

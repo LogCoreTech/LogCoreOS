@@ -15,6 +15,7 @@ from datetime import date, datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from services import assets_index
 from services.auth_service import get_user_by_name, get_user_timezone, list_users
 from services.file_service import (
     asset_templates_path,
@@ -316,8 +317,11 @@ def collect_subtree_ids(assets: list[dict], root_id: str) -> set[str]:
     return ids
 
 
-def _is_archived(asset: dict, by_id: dict[str, dict]) -> bool:
-    return any(n.get("archived") for n in _self_and_ancestors(asset, by_id))
+def _is_archived(asset: dict) -> bool:
+    # Per-node: an asset is hidden only if its OWN flag is set. An archived
+    # parent's active children stay visible (they float to top level in the tree
+    # because their parent is no longer in the visible set).
+    return bool(asset.get("archived"))
 
 
 def _is_hidden_from(asset: dict, by_id: dict[str, dict], viewer: str) -> bool:
@@ -450,17 +454,36 @@ def update_asset(
     return asset
 
 
+def count_active_descendants(store_user: str, asset_id: str, workspace: str = "personal") -> int:
+    """Non-archived descendants (excludes the node itself) — drives the archive prompt."""
+    assets = list_assets(store_user, workspace)
+    ids = collect_subtree_ids(assets, asset_id) - {asset_id}
+    return sum(1 for a in assets if a["id"] in ids and not a.get("archived"))
+
+
 def set_archived(
-    store_user: str, asset_id: str, archived: bool, workspace: str = "personal", by: str = ""
+    store_user: str,
+    asset_id: str,
+    archived: bool,
+    workspace: str = "personal",
+    by: str = "",
+    cascade: bool = False,
 ) -> dict | None:
     store = _load(store_user, workspace)
-    asset = _by_id(store["assets"]).get(asset_id)
+    by_id = _by_id(store["assets"])
+    asset = by_id.get(asset_id)
     if asset is None:
         return None
-    if bool(asset.get("archived")) != archived:
-        asset["archived"] = archived
-        asset["updated_at"] = _now_iso(by or store_user)
-        _push_history(asset, by, "archive" if archived else "unarchive")
+    targets = collect_subtree_ids(store["assets"], asset_id) if cascade else {asset_id}
+    changed = False
+    for aid in targets:
+        node = by_id.get(aid)
+        if node is not None and bool(node.get("archived")) != archived:
+            node["archived"] = archived
+            node["updated_at"] = _now_iso(by or store_user)
+            _push_history(node, by, "archive" if archived else "unarchive")
+            changed = True
+    if changed:
         _save(store_user, workspace, store)
     return asset
 
@@ -476,6 +499,7 @@ def delete_asset(store_user: str, asset_id: str, workspace: str = "personal") ->
         )
     store["assets"] = [a for a in store["assets"] if a["id"] != asset_id]
     _save(store_user, workspace, store)
+    assets_index.reindex_owner(store_user, workspace)
     files_dir = assets_files_path(store_user, workspace) / asset_id
     if files_dir.exists():
         shutil.rmtree(files_dir)
@@ -520,6 +544,8 @@ def update_access(
     asset["updated_at"] = _now_iso(by or store_user)
     _push_history(asset, by, "access_update")
     _save(store_user, workspace, store)
+    # shared_with changed → refresh this store's share-index entry
+    assets_index.reindex_owner(store_user, workspace)
     return asset
 
 
@@ -539,9 +565,8 @@ def list_visible(
     result: list[dict] = []
 
     own = list_assets(viewer, workspace)
-    own_by_id = _by_id(own)
     for asset in own:
-        if include_archived or not _is_archived(asset, own_by_id):
+        if include_archived or not _is_archived(asset):
             result.append(asset)
 
     pool_user = POOL_USERS[workspace]
@@ -552,14 +577,15 @@ def list_visible(
     for asset in pool_assets:
         if not is_admin and _is_hidden_from(asset, pool_by_id, viewer):
             continue
-        if not include_archived and _is_archived(asset, pool_by_id):
+        if not include_archived and _is_archived(asset):
             continue
         result.append(
             {**asset, "_owner": pool_label, "_access": "edit" if can_edit_pool else "read"}
         )
 
-    for user in list_users():
-        owner = user["name"]
+    # Only owners who actually share with this viewer (share index routing) —
+    # avoids scanning every user's file on each request.
+    for owner in assets_index.sharers_for(viewer, workspace):
         if owner == viewer:
             continue
         theirs = list_assets(owner, workspace)
@@ -570,7 +596,7 @@ def list_visible(
             access = _share_access(asset, theirs_by_id, viewer, workspace)
             if access is None:
                 continue
-            if not include_archived and _is_archived(asset, theirs_by_id):
+            if not include_archived and _is_archived(asset):
                 continue
             result.append({**asset, "_owner": owner, "_access": access})
 
@@ -598,7 +624,7 @@ def find_asset(
             "relation": "own",
             "can_edit": True,
             "can_manage": True,
-            "can_delete": is_admin,
+            "can_delete": True,  # owners can delete their own personal assets
         }
 
     pool_user = POOL_USERS[workspace]
@@ -619,8 +645,7 @@ def find_asset(
             "can_delete": is_admin,
         }
 
-    for user in list_users():
-        owner = user["name"]
+    for owner in assets_index.sharers_for(viewer, workspace):
         if owner == viewer:
             continue
         theirs = list_assets(owner, workspace)
@@ -666,6 +691,8 @@ def convert_to_pool(owner: str, asset_id: str, workspace: str = "personal", by: 
     pool_store["assets"].extend(moving)
     _save(owner, workspace, store)
     _save(pool_user, "personal", pool_store)
+    # subtree left the owner's store (shares stripped) → refresh their index entry
+    assets_index.reindex_owner(owner, workspace)
 
     src_base = assets_files_path(owner, workspace)
     dst_base = assets_files_path(pool_user)
