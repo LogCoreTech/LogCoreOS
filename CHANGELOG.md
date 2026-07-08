@@ -12,10 +12,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 **Assets module**
 - Track anything ownable — land parcels, vehicles, equipment — as a nestable object tree (subdivision → parcels → …)
-- Admin-curated Templates define each object type's premade fields (text/number/date/boolean/select, optional defaults); starts empty with a one-click editable example
-- Share an asset (and everything inside it) to Team, Household, or a specific person as read-only or edit; hide specific objects from selected users
+- Admin-curated Templates define each object type's premade fields (text/number/date/boolean/select, optional defaults); starts empty with a one-click editable example. Icons via a built-in emoji picker; select options via tag chips
+- Search bar and filter (owned / shared / pool / by type); move an asset to a new parent with a tree-picker
+- Share an asset (and everything inside it) to Team, Household, or a specific person as read-only or edit; hide specific objects from selected users — all via member pickers
 - Admins can convert an asset tree into a shared Team/Household object that survives user account deletion
-- Archive-first lifecycle (hard delete is admin-only and blocked while children exist), per-asset change history, photo/PDF attachments
+- Archive a single asset or its whole subtree (you're asked which); delete your own personal assets. Per-asset change history, photo/PDF attachments
 - Link tasks to assets from either side (task form asset picker; "＋ Task for this asset" in the asset editor)
 - AI chat can list, create, update, and archive assets (writes still require your approval), and admins can manage templates by chat
 - n8n automation API: token-authenticated endpoints to list/create/update assets from workflows; token managed in Admin → n8n
@@ -26,6 +27,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- No longer randomly logged out: a single transient/background 401 used to clear the session and bounce you to login — the app now re-verifies the session first
+- The asset editor no longer crashes to a blank "Something went wrong" page on unusual history data; the error screen gained a Reload button
+- Mobile: the asset and template editors no longer extend under the phone status bar (safe-area-aware modals)
 - Saved chat archives no longer lose multi-line AI responses (parser kept only the first line; continuing a chat then overwrote the archive with the truncated copy)
 - Long AI responses (over 5,000 chars) now auto-save correctly
 - Proactive notifications injected into chat no longer break sending messages (422) or create junk chat archives

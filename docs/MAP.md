@@ -68,7 +68,8 @@ LogCoreOS/
 │   │   │   ├── web_search_service.py  → Tavily API web search (for chat research mode)
 │   │   │   ├── infisical_loader.py    → Infisical secrets pull on startup; token validation + file storage
 │   │   │   ├── features_service.py    → feature flags + role resolution (get_effective_disabled)
-│   │   │   ├── assets_service.py      → assets core: templates, field validation, tree ops, share/hidden resolution, pool conversion, history, attachments
+│   │   │   ├── assets_service.py      → assets core: templates, field validation, tree ops, per-node archive (+cascade), share/hidden resolution, pool conversion, history, attachments
+│   │   │   ├── assets_index.py         → derived share-routing cache (_system/assets_share_index.json); rebuildable, warmed at startup; sharers_for()/reindex_owner()/rebuild_share_index()
 │   │   │   ├── automations_config.py  → instance automation API token (generate/rotate/verify) for n8n → LogCore writes
 │   │   │   ├── n8n_service.py         → n8n REST API client; import/execute/delete/activate workflows; write docker/n8n.env; sync_business_workflows() for auto-sync
 │   │   │   ├── ha_service.py          → Home Assistant REST API client; config CRUD, entity states, service calls, scenes, automations, user favourites
@@ -108,8 +109,10 @@ LogCoreOS/
 │           └── components/
 │               ├── Layout.jsx     → root shell: sidebar nav, user menu, theme toggle, module access guard
 │               ├── TaskModal.jsx  → create/edit task form (title, category, type, recurrence, due date/time, assigned_to, linked asset)
-│               ├── AssetModal.jsx → create/edit asset: dynamic template fields, attachments, access (shares/hide), history, archive/convert
-│               ├── TemplateManager.jsx → admin template editor: ordered typed fields, defaults, example insert
+│               ├── AssetModal.jsx → create/edit asset: dynamic template fields, attachments, member selectors for share/hide, history, 3-choice archive, delete/convert; auto-flips create→edit
+│               ├── TemplateManager.jsx → admin template editor: ordered typed fields (TagInput options), EmojiPicker icon, defaults, example insert
+│               ├── TagInput.jsx    → GitHub-topics-style chip input (free-text or strict selector mode) — template options, share/hide members
+│               ├── EmojiPicker.jsx → curated self-contained emoji grid popover for template icons
 │               ├── EventModal.jsx → create/edit calendar event form (title, dates, times, all_day, color, notes)
 │               ├── CalendarGrid.jsx → month view: day cells with event/task indicators, click to open detail
 │               └── ErrorBoundary.jsx → catch React render errors, display fallback UI
