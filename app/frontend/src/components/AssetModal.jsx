@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { assets as assetsApi, tasks as tasksApi } from '../lib/api'
 import TaskModal from './TaskModal'
+import TagInput from './TagInput'
 
 // Render a history entry's changes tolerantly — a change value is normally an
 // [old, new] pair, but never trust the shape (legacy/hand-edited data would
@@ -107,7 +108,10 @@ function AttachmentThumb({ assetId, file, canEdit, onDelete }) {
   )
 }
 
-export default function AssetModal({ asset, templates, allAssets, defaultParentId, user, workspace, onClose, onSaved }) {
+export default function AssetModal({ asset: initialAsset, templates, allAssets, defaultParentId, user, workspace, onClose, onSaved }) {
+  // `asset` is state so a fresh create can flip the modal into edit mode in place
+  // (files/tasks/sharing need a saved asset id before they can be used).
+  const [asset, setAsset] = useState(initialAsset)
   const editing = !!asset
   const isAdmin = user?.role === 'admin'
   const isForeign = editing && !!asset._owner
@@ -138,6 +142,29 @@ export default function AssetModal({ asset, templates, allAssets, defaultParentI
   })
   const [attachments, setAttachments] = useState(asset?.attachments || [])
   const [uploading, setUploading] = useState(false)
+  const [members, setMembers] = useState([])
+  const [archivePrompt, setArchivePrompt] = useState(false)
+
+  const groupTarget = workspace === 'business' ? 'team' : 'household'
+
+  // Active (non-archived) descendants of this asset — drives the 3-choice archive
+  const activeDescendants = (() => {
+    if (!editing) return 0
+    const kids = {}
+    for (const a of allAssets) (kids[a.parent_id] = kids[a.parent_id] || []).push(a)
+    let count = 0
+    const stack = [...(kids[asset.id] || [])]
+    while (stack.length) {
+      const n = stack.pop()
+      if (!n.archived) count++
+      stack.push(...(kids[n.id] || []))
+    }
+    return count
+  })()
+
+  useEffect(() => {
+    assetsApi.members().then(m => setMembers((m || []).map(x => x.name))).catch(() => {})
+  }, [])
 
   const template = templates.find(t => t.key === form.template)
   const knownKeys = new Set((template?.fields || []).map(f => f.key))
@@ -154,11 +181,11 @@ export default function AssetModal({ asset, templates, allAssets, defaultParentI
   }, [form.template])
 
   useEffect(() => {
-    if (!editing) return
+    if (!asset?.id) return
     tasksApi.list()
       .then(all => setLinkedTasks((all || []).filter(t => t.asset_id === asset.id)))
       .catch(() => {})
-  }, [])
+  }, [asset?.id])
 
   function set(field, value) {
     setForm(f => ({ ...f, [field]: value }))
@@ -208,8 +235,10 @@ export default function AssetModal({ asset, templates, allAssets, defaultParentI
         const payload = { name: form.name, fields, notes: form.notes || null }
         if (!isForeign) payload.parent_id = form.parent_id || null
         await assetsApi.update(asset.id, payload)
+        onSaved()
+        onClose()
       } else {
-        await assetsApi.create({
+        const created = await assetsApi.create({
           template: form.template,
           name: form.name,
           parent_id: form.parent_id || null,
@@ -217,8 +246,11 @@ export default function AssetModal({ asset, templates, allAssets, defaultParentI
           notes: form.notes || null,
           owner: form.owner,
         })
+        // Flip to edit mode in place so files/tasks/sharing become available
+        setAsset(created)
+        setAttachments(created.attachments || [])
+        onSaved()
       }
-      onSaved()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -233,7 +265,8 @@ export default function AssetModal({ asset, templates, allAssets, defaultParentI
       const payload = isPool
         ? { hidden_from: access.hidden_from }
         : { shared_with: access.shared_with, hidden_from: access.hidden_from }
-      await assetsApi.updateAccess(asset.id, payload)
+      const updated = await assetsApi.updateAccess(asset.id, payload)
+      setAsset(a => ({ ...a, ...updated }))
       onSaved()
     } catch (err) {
       setError(err.message)
@@ -242,16 +275,26 @@ export default function AssetModal({ asset, templates, allAssets, defaultParentI
     }
   }
 
-  async function handleArchive() {
+  async function doArchive(cascade) {
+    setArchivePrompt(false)
     setLoading(true)
     try {
-      if (asset.archived) await assetsApi.unarchive(asset.id)
-      else await assetsApi.archive(asset.id)
+      if (asset.archived) await assetsApi.unarchive(asset.id, true)
+      else await assetsApi.archive(asset.id, cascade)
       onSaved()
+      onClose()
     } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  function handleArchive() {
+    if (!asset.archived && activeDescendants > 0) {
+      setArchivePrompt(true)   // ask cascade vs only-this
+    } else {
+      doArchive(false)
     }
   }
 
@@ -261,6 +304,7 @@ export default function AssetModal({ asset, templates, allAssets, defaultParentI
     try {
       await assetsApi.remove(asset.id)
       onSaved()
+      onClose()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -274,6 +318,7 @@ export default function AssetModal({ asset, templates, allAssets, defaultParentI
     try {
       await assetsApi.convertToPool(asset.id)
       onSaved()
+      onClose()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -309,8 +354,8 @@ export default function AssetModal({ asset, templates, allAssets, defaultParentI
   const shareTargets = access.shared_with
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-end md:items-center justify-center p-4">
-      <div className="card p-5 w-full max-w-md max-h-[90vh] overflow-y-auto">
+    <div className="modal-overlay">
+      <div className="modal-card p-5 max-w-md">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">
             {readOnly ? 'View Asset' : editing ? 'Edit Asset' : 'New Asset'}
@@ -441,6 +486,13 @@ export default function AssetModal({ asset, templates, allAssets, defaultParentI
             </div>
           </fieldset>
 
+          {/* On create: show what unlocks after saving so nothing feels hidden */}
+          {!editing && (
+            <p className="text-xs text-charcoal-400 border-t border-charcoal-100 dark:border-charcoal-800 pt-3">
+              📎 Files, ✓ linked tasks, and 🔗 sharing become available right after you create this asset.
+            </p>
+          )}
+
           {/* Attachments — edit mode only (needs an asset id) */}
           {editing && (
             <div>
@@ -497,13 +549,15 @@ export default function AssetModal({ asset, templates, allAssets, defaultParentI
                 <div className="space-y-1">
                   {shareTargets.map((s, i) => (
                     <div key={i} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="text"
+                      <select
                         value={s.target}
                         onChange={e => setAccess(a => ({ ...a, shared_with: a.shared_with.map((x, j) => j === i ? { ...x, target: e.target.value } : x) }))}
-                        placeholder={workspace === 'business' ? 'team or user name' : 'household or user name'}
                         className="input !py-1 flex-1"
-                      />
+                      >
+                        <option value="">— pick —</option>
+                        <option value={groupTarget}>{groupTarget === 'team' ? '🧑‍🤝‍🧑 Whole team' : '🏠 Whole household'}</option>
+                        {members.filter(m => m !== user?.name).map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
                       <select
                         value={s.access}
                         onChange={e => setAccess(a => ({ ...a, shared_with: a.shared_with.map((x, j) => j === i ? { ...x, access: e.target.value } : x) }))}
@@ -521,12 +575,13 @@ export default function AssetModal({ asset, templates, allAssets, defaultParentI
                 </div>
               )}
               <div>
-                <input
-                  type="text"
-                  value={(access.hidden_from || []).join(', ')}
-                  onChange={e => setAccess(a => ({ ...a, hidden_from: e.target.value.split(',').map(s => s.trim()).filter(Boolean) }))}
-                  placeholder="Hide from (user names, comma-separated)"
-                  className="input !py-1"
+                <label className="block text-xs text-charcoal-400 mb-1">Hide from</label>
+                <TagInput
+                  value={access.hidden_from || []}
+                  onChange={hidden_from => setAccess(a => ({ ...a, hidden_from }))}
+                  suggestions={members.filter(m => m !== user?.name)}
+                  strict
+                  placeholder="Pick people to hide this from…"
                 />
               </div>
               <button type="button" onClick={saveAccess} disabled={loading} className="btn-ghost text-xs px-3 py-1.5">
@@ -564,7 +619,7 @@ export default function AssetModal({ asset, templates, allAssets, defaultParentI
               <button type="button" onClick={onClose} className="btn-ghost flex-1">Close</button>
             ) : (
               <>
-                {editing && isAdmin && (
+                {editing && (isAdmin || (!isForeign && !isPool)) && (
                   <button type="button" onClick={handleDelete} disabled={loading}
                     className="px-3 py-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
                     Delete
@@ -599,6 +654,28 @@ export default function AssetModal({ asset, templates, allAssets, defaultParentI
               tasksApi.list().then(all => setLinkedTasks((all || []).filter(t => t.asset_id === asset.id))).catch(() => {})
             }}
           />
+        )}
+
+        {archivePrompt && (
+          <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={() => setArchivePrompt(false)}>
+            <div className="card p-5 w-full max-w-xs" onClick={e => e.stopPropagation()}>
+              <p className="font-semibold mb-1">Archive “{asset.name}”?</p>
+              <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mb-4">
+                It has {activeDescendants} active item{activeDescendants !== 1 ? 's' : ''} inside.
+              </p>
+              <div className="space-y-2">
+                <button onClick={() => doArchive(true)} disabled={loading} className="btn-primary w-full text-sm">
+                  Archive this and everything inside
+                </button>
+                <button onClick={() => doArchive(false)} disabled={loading} className="btn-ghost w-full text-sm">
+                  Archive only this one
+                </button>
+                <button onClick={() => setArchivePrompt(false)} className="w-full text-sm text-charcoal-400 hover:text-charcoal-600 py-1">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

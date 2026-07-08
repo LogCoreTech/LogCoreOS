@@ -64,6 +64,20 @@
     border-radius: var(--card-radius);
   }
 
+  /* Full-screen modal overlay + card. Keeps the card clear of the iOS status
+     bar / notch (safe-area top) and uses dvh so mobile browser chrome doesn't
+     push the top off-screen. */
+  .modal-overlay {
+    @apply fixed inset-0 bg-black/60 z-50 flex items-end md:items-center justify-center;
+    padding: 1rem;
+    padding-top: max(1rem, env(safe-area-inset-top));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  .modal-card {
+    @apply card w-full overflow-y-auto;
+    max-height: 85dvh;
+  }
+
   .btn-primary {
     @apply bg-orange-500 hover:bg-orange-600 text-white font-medium px-4 py-2 transition-colors;
     border-radius: calc(var(--card-radius) * 0.6);

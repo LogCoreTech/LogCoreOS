@@ -12,12 +12,12 @@ const OWNER_CHIP = {
 
 // Recursive tree row — module level per the MEMORY.md rule (components defined
 // inside components remount on every parent render).
-function AssetRow({ asset, depth, childrenMap, expanded, onToggle, onOpen, onAddChild, templatesByKey }) {
+function AssetRow({ asset, depth, childrenMap, expanded, onToggle, onOpen, onAddChild, onMove, templatesByKey }) {
   const children = childrenMap[asset.id] || []
   const isOpen = expanded.has(asset.id)
   const template = templatesByKey[asset.template]
   const status = asset.fields?.status
-  const canAddChild = !asset._owner || asset._access === 'edit'
+  const canEdit = !asset._owner || asset._access === 'edit'
   const pad = ['pl-0', 'pl-5', 'pl-10', 'pl-14', 'pl-20', 'pl-24'][Math.min(depth, 5)]
 
   return (
@@ -50,14 +50,23 @@ function AssetRow({ asset, depth, childrenMap, expanded, onToggle, onOpen, onAdd
             <span className="text-xs text-charcoal-400 shrink-0">📎{asset.attachments.length}</span>
           )}
         </button>
-        {canAddChild && (
-          <button
-            onClick={() => onAddChild(asset)}
-            className="opacity-0 group-hover:opacity-100 btn-ghost text-xs px-2 py-0.5 shrink-0 transition-opacity"
-            title="Add inside"
-          >
-            ＋
-          </button>
+        {canEdit && (
+          <div className="flex items-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={() => onMove(asset)}
+              className="btn-ghost text-xs px-1.5 py-0.5"
+              title="Move"
+            >
+              ⇄
+            </button>
+            <button
+              onClick={() => onAddChild(asset)}
+              className="btn-ghost text-xs px-1.5 py-0.5"
+              title="Add inside"
+            >
+              ＋
+            </button>
+          </div>
         )}
       </div>
       {isOpen && children.map(c => (
@@ -70,10 +79,77 @@ function AssetRow({ asset, depth, childrenMap, expanded, onToggle, onOpen, onAdd
           onToggle={onToggle}
           onOpen={onOpen}
           onAddChild={onAddChild}
+          onMove={onMove}
           templatesByKey={templatesByKey}
         />
       ))}
     </>
+  )
+}
+
+// Move an asset to a new parent via a tree/list picker (same owner only —
+// changing ownership is the admin Convert action, not a move).
+function MovePicker({ asset, allAssets, templatesByKey, onClose, onMoved }) {
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  // Same store, minus self and descendants (can't move under your own child)
+  const sameStore = allAssets.filter(a => (a._owner || '') === (asset._owner || ''))
+  const blocked = new Set([asset.id])
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const a of sameStore) {
+      if (a.parent_id && blocked.has(a.parent_id) && !blocked.has(a.id)) {
+        blocked.add(a.id); grew = true
+      }
+    }
+  }
+  const candidates = sameStore.filter(a => !blocked.has(a.id))
+
+  async function moveTo(parentId) {
+    setSaving(true); setError('')
+    try {
+      await assetsApi.update(asset.id, { parent_id: parentId })
+      onMoved()
+    } catch (err) {
+      setError(err.message); setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-[55] flex items-end md:items-center justify-center p-4" onClick={onClose}>
+      <div className="card p-4 w-full max-w-sm max-h-[80dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold text-sm">Move “{asset.name}” to…</h2>
+          <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+        </div>
+        {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
+        <div className="space-y-1">
+          <button
+            onClick={() => moveTo(null)}
+            disabled={saving || !asset.parent_id}
+            className="block w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-charcoal-50 dark:hover:bg-charcoal-800 disabled:opacity-40"
+          >
+            ⬆ Top level
+          </button>
+          {candidates.map(a => (
+            <button
+              key={a.id}
+              onClick={() => moveTo(a.id)}
+              disabled={saving || a.id === asset.parent_id}
+              className="block w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-charcoal-50 dark:hover:bg-charcoal-800 disabled:opacity-40 truncate"
+            >
+              {templatesByKey[a.template]?.icon || '▫️'} {a.name}
+              {a.id === asset.parent_id && <span className="text-xs text-charcoal-400"> (current)</span>}
+            </button>
+          ))}
+          {candidates.length === 0 && (
+            <p className="text-xs text-charcoal-400 px-3 py-2">No other assets to nest under.</p>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -87,9 +163,11 @@ export default function Assets() {
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState('')
   const [expanded, setExpanded] = useState(new Set())
-  const [filter, setFilter] = useState('')
+  const [query, setQuery] = useState('')
+  const [filterMode, setFilterMode] = useState('all') // all | mine | shared | pool | tmpl:<key>
   const [showArchived, setShowArchived] = useState(false)
   const [modal, setModal] = useState(null) // {asset} | {creating: true, parentId}
+  const [moveAsset, setMoveAsset] = useState(null)
   const [showTemplates, setShowTemplates] = useState(false)
 
   async function load() {
@@ -115,9 +193,27 @@ export default function Assets() {
     [templates]
   )
 
-  const filtered = useMemo(
-    () => (filter ? items.filter(a => a.template === filter) : items),
-    [items, filter]
+  const searching = query.trim() !== '' || filterMode !== 'all'
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return items.filter(a => {
+      if (filterMode === 'mine' && a._owner) return false
+      if (filterMode === 'shared' && !(a._owner && a._owner !== 'team' && a._owner !== 'household')) return false
+      if (filterMode === 'pool' && !(a._owner === 'team' || a._owner === 'household')) return false
+      if (filterMode.startsWith('tmpl:') && a.template !== filterMode.slice(5)) return false
+      if (q) {
+        const inName = (a.name || '').toLowerCase().includes(q)
+        const inFields = Object.values(a.fields || {}).some(v => String(v).toLowerCase().includes(q))
+        if (!inName && !inFields) return false
+      }
+      return true
+    })
+  }, [items, query, filterMode])
+
+  const flatSorted = useMemo(
+    () => [...filtered].sort((a, b) => (a.name || '').localeCompare(b.name || '')),
+    [filtered]
   )
 
   const childrenMap = useMemo(() => {
@@ -141,11 +237,6 @@ export default function Assets() {
     })
   }
 
-  function closeAndReload() {
-    setModal(null)
-    load()
-  }
-
   const roots = childrenMap['_root'] || []
   const usedTemplateKeys = [...new Set(items.map(a => a.template))]
 
@@ -167,35 +258,37 @@ export default function Assets() {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Search + filter */}
       {items.length > 0 && (
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <button
-            onClick={() => setFilter('')}
-            className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-              !filter ? 'bg-orange-500 text-white' : 'bg-charcoal-100 dark:bg-charcoal-800 text-charcoal-600 dark:text-charcoal-300'
-            }`}
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            type="search"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search assets…"
+            className="input flex-1 min-w-[10rem] !py-1.5 text-sm"
+          />
+          <select
+            value={filterMode}
+            onChange={e => setFilterMode(e.target.value)}
+            className="input !py-1.5 !w-auto text-sm"
           >
-            All
-          </button>
-          {usedTemplateKeys.map(k => (
-            <button
-              key={k}
-              onClick={() => setFilter(filter === k ? '' : k)}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                filter === k ? 'bg-orange-500 text-white' : 'bg-charcoal-100 dark:bg-charcoal-800 text-charcoal-600 dark:text-charcoal-300'
-              }`}
-            >
-              {templatesByKey[k]?.icon ? `${templatesByKey[k].icon} ` : ''}{templatesByKey[k]?.label || k}
-            </button>
-          ))}
+            <option value="all">All</option>
+            <option value="mine">Owned by me</option>
+            <option value="shared">Shared with me</option>
+            <option value="pool">{workspace === 'business' ? 'Team' : 'Household'}</option>
+            {usedTemplateKeys.length > 0 && <option disabled>──────</option>}
+            {usedTemplateKeys.map(k => (
+              <option key={k} value={`tmpl:${k}`}>{templatesByKey[k]?.label || k}</option>
+            ))}
+          </select>
           <button
             onClick={() => setShowArchived(s => !s)}
-            className={`ml-auto px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
               showArchived ? 'bg-charcoal-600 text-white' : 'bg-charcoal-100 dark:bg-charcoal-800 text-charcoal-500 dark:text-charcoal-400'
             }`}
           >
-            {showArchived ? 'Hiding nothing' : 'Show archived'}
+            {showArchived ? 'Archived shown' : 'Show archived'}
           </button>
         </div>
       )}
@@ -222,12 +315,35 @@ export default function Assets() {
             <p className="text-xs text-charcoal-400">Ask your admin to create templates.</p>
           )}
         </div>
-      ) : roots.length === 0 ? (
+      ) : items.length === 0 ? (
         <div className="card p-8 text-center space-y-2">
           <p className="text-sm font-medium">No assets yet</p>
           <button onClick={() => setModal({ creating: true })} className="btn-primary text-xs px-4 py-2 mt-1">
             ＋ New Asset
           </button>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="card p-8 text-center">
+          <p className="text-sm text-charcoal-400">No assets match.</p>
+        </div>
+      ) : searching ? (
+        // Flat results while searching/filtering — the tree structure is only
+        // meaningful for the full unfiltered view.
+        <div className="card p-2">
+          {flatSorted.map(a => (
+            <AssetRow
+              key={a.id}
+              asset={a}
+              depth={0}
+              childrenMap={{}}
+              expanded={expanded}
+              onToggle={toggle}
+              onOpen={asset => setModal({ asset })}
+              onAddChild={asset => setModal({ creating: true, parentId: asset.id })}
+              onMove={asset => setMoveAsset(asset)}
+              templatesByKey={templatesByKey}
+            />
+          ))}
         </div>
       ) : (
         <div className="card p-2">
@@ -241,6 +357,7 @@ export default function Assets() {
               onToggle={toggle}
               onOpen={asset => setModal({ asset })}
               onAddChild={asset => setModal({ creating: true, parentId: asset.id })}
+              onMove={asset => setMoveAsset(asset)}
               templatesByKey={templatesByKey}
             />
           ))}
@@ -256,7 +373,17 @@ export default function Assets() {
           user={user}
           workspace={workspace}
           onClose={() => setModal(null)}
-          onSaved={closeAndReload}
+          onSaved={load}
+        />
+      )}
+
+      {moveAsset && (
+        <MovePicker
+          asset={moveAsset}
+          allAssets={items}
+          templatesByKey={templatesByKey}
+          onClose={() => setMoveAsset(null)}
+          onMoved={() => { setMoveAsset(null); load() }}
         />
       )}
 

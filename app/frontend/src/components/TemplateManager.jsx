@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { assets as assetsApi } from '../lib/api'
+import EmojiPicker from './EmojiPicker'
+import TagInput from './TagInput'
 
 const FIELD_TYPES = ['text', 'number', 'date', 'boolean', 'select']
 
@@ -107,8 +109,8 @@ export default function TemplateManager({ templates, onClose, onChanged }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-end md:items-center justify-center p-4">
-      <div className="card p-5 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+    <div className="modal-overlay">
+      <div className="modal-card p-5 max-w-lg">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">{editing ? (editing.isNew ? 'New Template' : `Edit ${form.label}`) : 'Templates'}</h2>
           <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
@@ -151,7 +153,7 @@ export default function TemplateManager({ templates, onClose, onChanged }) {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Icon</label>
-                <input type="text" value={form.icon} onChange={e => setForm(f => ({ ...f, icon: e.target.value }))} placeholder="📐" className="input" />
+                <EmojiPicker value={form.icon} onChange={icon => setForm(f => ({ ...f, icon }))} />
               </div>
             </div>
             <div>
@@ -183,16 +185,14 @@ export default function TemplateManager({ templates, onClose, onChanged }) {
                       <button type="button" onClick={() => moveField(i, 1)} className="text-charcoal-400 hover:text-orange-500 px-0.5" title="Move down">↓</button>
                       <button type="button" onClick={() => setForm(fm => ({ ...fm, fields: fm.fields.filter((_, j) => j !== i) }))} className="text-red-400 hover:text-red-500 px-0.5">✕</button>
                     </div>
+                    {f.type === 'select' && (
+                      <TagInput
+                        value={f.options || []}
+                        onChange={options => setField(i, { options })}
+                        placeholder="Add an option…"
+                      />
+                    )}
                     <div className="flex items-center gap-1.5">
-                      {f.type === 'select' && (
-                        <input
-                          type="text"
-                          value={(f.options || []).join(', ')}
-                          onChange={e => setField(i, { options: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
-                          placeholder="options, comma, separated"
-                          className="input !py-1 flex-1 text-xs"
-                        />
-                      )}
                       <input
                         type="text"
                         value={String(f.default ?? '')}

@@ -102,8 +102,8 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-end md:items-center justify-center p-4">
-      <div className="card p-5 w-full max-w-sm max-h-[90vh] overflow-y-auto">
+    <div className="modal-overlay">
+      <div className="modal-card p-5 max-w-sm">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">{readOnly ? 'View Task' : editing ? 'Edit Task' : 'Add Task'}</h2>
           <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
