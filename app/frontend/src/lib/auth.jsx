@@ -45,8 +45,9 @@ export function AuthProvider({ children }) {
       applyDensity(u.density)
       applyCornerStyle(u.cornerStyle)
     } catch {
-      localStorage.removeItem('lc_user')
-      setUser(null)
+      // A genuine 401 is handled inside request('/auth/me') (clears storage +
+      // redirects to /login). A transient failure (network blip, backend
+      // restart) must NOT eject the user or churn the theme — keep the session.
     }
   }
 
@@ -72,6 +73,13 @@ export function AuthProvider({ children }) {
     try { await authApi.logout() } catch { /* cookie may already be expired */ }
     localStorage.removeItem('lc_user')
     setUser(null)
+    // Reset theme to auth-page defaults so the login page is clean immediately
+    // (otherwise the signed-out user's background/accent linger until a reload).
+    applyBackground(null)
+    applyAccentColor(null)
+    applyDarkMode('system', getSystemDarkPreference())
+    applyDensity('comfortable')
+    applyCornerStyle('rounded')
   }
 
   function updateUserField(key, value) {

@@ -325,20 +325,21 @@ def _is_archived(asset: dict) -> bool:
 
 
 def _is_hidden_from(asset: dict, by_id: dict[str, dict], viewer: str) -> bool:
-    return any(viewer in (n.get("hidden_from") or []) for n in _self_and_ancestors(asset, by_id))
+    # Per-node: hiding is set explicitly on each node (children created under a
+    # hidden node inherit it at creation time; cascade re-applies to a subtree).
+    return viewer in (asset.get("hidden_from") or [])
 
 
 def _share_access(asset: dict, by_id: dict[str, dict], viewer: str, workspace: str) -> str | None:
-    """Best share grant ('edit' > 'read') found on the asset or any ancestor."""
+    """Best share grant ('edit' > 'read') on THIS node (per-node, not inherited)."""
     best: str | None = None
     group = "team" if workspace == "business" else "household"
-    for node in _self_and_ancestors(asset, by_id):
-        for share in node.get("shared_with") or []:
-            if share.get("target") in (viewer, group):
-                access = share.get("access", "read")
-                if access == "edit":
-                    return "edit"
-                best = best or "read"
+    for share in asset.get("shared_with") or []:
+        if share.get("target") in (viewer, group):
+            access = share.get("access", "read")
+            if access == "edit":
+                return "edit"
+            best = best or "read"
     return best
 
 
@@ -363,8 +364,15 @@ def create_asset(
 
     store = _load(store_user, workspace)
     parent_id = data.get("parent_id")
-    if parent_id and not any(a["id"] == parent_id for a in store["assets"]):
+    parent = next((a for a in store["assets"] if a["id"] == parent_id), None) if parent_id else None
+    if parent_id and parent is None:
         raise ValueError(f"Parent asset {parent_id!r} not found")
+
+    # Inherit the parent's audience so a child added under a shared asset is
+    # automatically shared with (and hidden from) the same people — this is how a
+    # shared subtree grows into a "group".
+    inherited_shares = list(parent.get("shared_with") or []) if parent else []
+    inherited_hidden = list(parent.get("hidden_from") or []) if parent else []
 
     fields: dict[str, Any] = {
         f["key"]: f["default"] for f in template.get("fields", []) if "default" in f
@@ -384,8 +392,8 @@ def create_asset(
         "fields": fields,
         "notes": data.get("notes"),
         "archived": False,
-        "shared_with": [],
-        "hidden_from": [],
+        "shared_with": inherited_shares,
+        "hidden_from": inherited_hidden,
         "attachments": [],
         "history": [],
         "created_at": now,
@@ -395,6 +403,8 @@ def create_asset(
     _push_history(asset, created_by, "create")
     store["assets"].append(asset)
     _save(store_user, workspace, store)
+    if inherited_shares:  # child carries an audience → refresh the share index
+        assets_index.reindex_owner(store_user, workspace)
     return asset
 
 
@@ -514,17 +524,20 @@ def update_access(
     hidden_from: list[str] | None = None,
     by: str = "",
     asset_workspace: str = "personal",
+    cascade: bool = True,
 ) -> dict | None:
-    """Replace shared_with and/or hidden_from. asset_workspace is the workspace the
-    asset logically belongs to (pool stores are physically 'personal')."""
+    """Replace shared_with and/or hidden_from on the node (and, when cascade,
+    on all descendants). asset_workspace is the workspace the asset logically
+    belongs to (pool stores are physically 'personal')."""
     store = _load(store_user, workspace)
     asset = _by_id(store["assets"]).get(asset_id)
     if asset is None:
         return None
 
+    cleaned_shares: list[dict] | None = None
     if shared_with is not None:
         group = "team" if asset_workspace == "business" else "household"
-        cleaned = []
+        cleaned_shares = []
         for share in shared_with:
             target = (share.get("target") or "").strip()
             access = share.get("access", "read")
@@ -532,19 +545,29 @@ def update_access(
                 raise ValueError(f"Invalid access {access!r} — use 'read' or 'edit'")
             if target != group and get_user_by_name(target) is None:
                 raise ValueError(f"Unknown share target {target!r}")
-            cleaned.append({"target": target, "access": access})
-        asset["shared_with"] = cleaned
+            cleaned_shares.append({"target": target, "access": access})
 
+    cleaned_hidden: list[str] | None = None
     if hidden_from is not None:
         for name in hidden_from:
             if get_user_by_name(name) is None:
                 raise ValueError(f"Unknown user {name!r} in hidden_from")
-        asset["hidden_from"] = list(dict.fromkeys(hidden_from))
+        cleaned_hidden = list(dict.fromkeys(hidden_from))
 
-    asset["updated_at"] = _now_iso(by or store_user)
-    _push_history(asset, by, "access_update")
+    target_ids = collect_subtree_ids(store["assets"], asset_id) if cascade else {asset_id}
+    by_id = _by_id(store["assets"])
+    for aid in target_ids:
+        node = by_id.get(aid)
+        if node is None:
+            continue
+        if cleaned_shares is not None:
+            node["shared_with"] = [dict(s) for s in cleaned_shares]
+        if cleaned_hidden is not None:
+            node["hidden_from"] = list(cleaned_hidden)
+        node["updated_at"] = _now_iso(by or store_user)
+        _push_history(node, by, "access_update")
+
     _save(store_user, workspace, store)
-    # shared_with changed → refresh this store's share-index entry
     assets_index.reindex_owner(store_user, workspace)
     return asset
 

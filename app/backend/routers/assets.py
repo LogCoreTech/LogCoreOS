@@ -92,6 +92,7 @@ class ShareEntry(BaseModel):
 class AccessUpdate(BaseModel):
     shared_with: list[ShareEntry] | None = Field(None, max_length=50)
     hidden_from: list[str] | None = Field(None, max_length=50)
+    cascade: bool = True  # apply to the whole subtree by default
 
     @field_validator("hidden_from")
     @classmethod
@@ -302,7 +303,16 @@ def create_asset(
     workspace: str = Depends(get_workspace),
     _rl: None = Depends(_write_limit),
 ):
-    if req.owner == "pool":
+    if req.parent_id:
+        # A child is created in its PARENT's store and inherits the parent's
+        # audience — so anyone with edit access can grow a shared subtree/"group".
+        parent = _find_or_404(current_user, workspace, req.parent_id)
+        if not parent["can_edit"]:
+            raise HTTPException(
+                status_code=403, detail="Read-only access — cannot add under this asset"
+            )
+        store, store_ws = parent["store"], parent["store_workspace"]
+    elif req.owner == "pool":
         pool_label = assets_service.POOL_LABEL[assets_service.POOL_USERS[workspace]]
         is_admin = current_user.get("role") == "admin"
         if not is_admin and pool_label not in (current_user.get("pool_edit") or []):
@@ -491,6 +501,7 @@ def update_access(
             hidden_from=req.hidden_from,
             by=current_user["name"],
             asset_workspace=workspace,
+            cascade=req.cascade,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

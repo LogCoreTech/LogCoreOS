@@ -358,6 +358,59 @@ def test_hidden_from_beats_share(parcel, users):
     assert svc.find_asset("Bob", "personal", lot["id"]) is None
 
 
+def test_share_this_node_only_no_cascade(parcel, users):
+    sub, lot = _tree(users)
+    svc.update_access(
+        "Alice",
+        sub["id"],
+        shared_with=[{"target": "Bob", "access": "read"}],
+        by="Alice",
+        cascade=False,
+    )
+    visible = {a["id"] for a in svc.list_visible("Bob", "personal")}
+    assert sub["id"] in visible  # the node itself is shared
+    assert lot["id"] not in visible  # child is NOT shared (per-node)
+    assert svc.find_asset("Bob", "personal", lot["id"]) is None
+
+
+def test_share_cascade_writes_descendants(parcel, users):
+    sub, lot = _tree(users)
+    svc.update_access(
+        "Alice", sub["id"], shared_with=[{"target": "Bob", "access": "edit"}], by="Alice"
+    )  # cascade defaults True
+    assert svc.get_asset("Alice", lot["id"])["shared_with"] == [{"target": "Bob", "access": "edit"}]
+    assert svc.find_asset("Bob", "personal", lot["id"])["can_edit"] is True
+
+
+def test_orphan_by_sharing_visible_without_parent(parcel, users):
+    sub, lot = _tree(users)
+    # Share only the child; its parent stays private → child is an "orphan" the
+    # recipient still sees (the frontend floats it to top level).
+    svc.update_access(
+        "Alice", lot["id"], shared_with=[{"target": "Bob", "access": "read"}], by="Alice"
+    )
+    visible = {a["id"] for a in svc.list_visible("Bob", "personal")}
+    assert lot["id"] in visible and sub["id"] not in visible
+
+
+def test_create_under_shared_inherits_audience(parcel, users):
+    sub, _ = _tree(users)
+    svc.update_access(
+        "Alice",
+        sub["id"],
+        shared_with=[{"target": "Bob", "access": "edit"}],
+        hidden_from=[],
+        by="Alice",
+    )
+    child = svc.create_asset(
+        "Alice",
+        {"template": "parcel", "name": "New Lot", "parent_id": sub["id"]},
+        created_by="Alice",
+    )
+    assert child["shared_with"] == [{"target": "Bob", "access": "edit"}]
+    assert svc.find_asset("Bob", "personal", child["id"])["can_edit"] is True
+
+
 # ---------------------------------------------------------------------------
 # Share index (derived routing cache)
 # ---------------------------------------------------------------------------

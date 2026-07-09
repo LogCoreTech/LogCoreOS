@@ -4,6 +4,15 @@ import App from './App.jsx'
 import './index.css'
 import { applyAccentColor, applyDarkMode, applyBackground, applyDensity, applyCornerStyle, getSystemDarkPreference } from './lib/theme.js'
 
+// Surface any uncaught client error with its stack — the on-screen ErrorBoundary
+// message is minified, so this makes crashes actually diagnosable from the console.
+window.addEventListener('error', e => {
+  console.error('[global error]', e.message, e.error?.stack || e.error || '')
+})
+window.addEventListener('unhandledrejection', e => {
+  console.error('[unhandled rejection]', e.reason?.message || e.reason, e.reason?.stack || '')
+})
+
 // Apply stored theme before React renders to prevent FOUC
 ;(function initTheme() {
   const isAuthPage = window.location.pathname === '/login' || window.location.pathname === '/setup'
