@@ -41,15 +41,15 @@ export default function EmojiPicker({ value, onChange }) {
           onChange={e => onChange(e.target.value)}
           placeholder="or type"
           className="input flex-1"
-          maxLength={8}
+          maxLength={3}
         />
       </div>
       {open && (
-        <div className="absolute z-50 left-0 mt-1 w-64 max-h-48 overflow-y-auto p-2 bg-white dark:bg-charcoal-900 border border-charcoal-200 dark:border-charcoal-700 rounded-lg shadow-lg grid grid-cols-8 gap-1">
+        <div className="absolute z-50 right-0 mt-1 w-60 max-h-52 overflow-y-auto p-2 bg-white dark:bg-charcoal-900 border border-charcoal-200 dark:border-charcoal-700 rounded-lg shadow-lg grid grid-cols-7 gap-1">
           <button
             type="button"
             onClick={() => { onChange(''); setOpen(false) }}
-            className="col-span-8 text-xs text-charcoal-400 hover:text-red-500 mb-1"
+            className="col-span-7 text-xs text-charcoal-400 hover:text-red-500 mb-1"
           >
             Clear icon
           </button>

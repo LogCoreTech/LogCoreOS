@@ -4,6 +4,7 @@ import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
 import AssetModal from '../components/AssetModal'
 import TemplateManager from '../components/TemplateManager'
+import AssetTreePicker from '../components/AssetTreePicker'
 
 const OWNER_CHIP = {
   team: '🧑‍🤝‍🧑 Team',
@@ -94,7 +95,9 @@ function MovePicker({ asset, allAssets, templatesByKey, onClose, onMoved }) {
   const [error, setError] = useState('')
 
   // Same store, minus self and descendants (can't move under your own child)
-  const sameStore = allAssets.filter(a => (a._owner || '') === (asset._owner || ''))
+  const sameStore = (Array.isArray(allAssets) ? allAssets : []).filter(
+    a => (a._owner || '') === (asset._owner || '')
+  )
   const blocked = new Set([asset.id])
   let grew = true
   while (grew) {
@@ -108,6 +111,7 @@ function MovePicker({ asset, allAssets, templatesByKey, onClose, onMoved }) {
   const candidates = sameStore.filter(a => !blocked.has(a.id))
 
   async function moveTo(parentId) {
+    if (saving) return
     setSaving(true); setError('')
     try {
       await assetsApi.update(asset.id, { parent_id: parentId })
@@ -118,36 +122,20 @@ function MovePicker({ asset, allAssets, templatesByKey, onClose, onMoved }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-[55] flex items-end md:items-center justify-center p-4" onClick={onClose}>
-      <div className="card p-4 w-full max-w-sm max-h-[80dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+    <div className="modal-overlay z-[55]" onClick={onClose}>
+      <div className="modal-card p-4 max-w-sm" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-sm">Move “{asset.name}” to…</h2>
           <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
         </div>
         {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
-        <div className="space-y-1">
-          <button
-            onClick={() => moveTo(null)}
-            disabled={saving || !asset.parent_id}
-            className="block w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-charcoal-50 dark:hover:bg-charcoal-800 disabled:opacity-40"
-          >
-            ⬆ Top level
-          </button>
-          {candidates.map(a => (
-            <button
-              key={a.id}
-              onClick={() => moveTo(a.id)}
-              disabled={saving || a.id === asset.parent_id}
-              className="block w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-charcoal-50 dark:hover:bg-charcoal-800 disabled:opacity-40 truncate"
-            >
-              {templatesByKey[a.template]?.icon || '▫️'} {a.name}
-              {a.id === asset.parent_id && <span className="text-xs text-charcoal-400"> (current)</span>}
-            </button>
-          ))}
-          {candidates.length === 0 && (
-            <p className="text-xs text-charcoal-400 px-3 py-2">No other assets to nest under.</p>
-          )}
-        </div>
+        <AssetTreePicker
+          candidates={candidates}
+          templatesByKey={templatesByKey}
+          onPick={moveTo}
+          disabledId={asset.parent_id || null}
+          topDisabled={!asset.parent_id}
+        />
       </div>
     </div>
   )
@@ -177,8 +165,8 @@ export default function Assets() {
         assetsApi.listTemplates(),
         assetsApi.list({ includeArchived: showArchived }),
       ])
-      setTemplates(t || [])
-      setItems(a || [])
+      setTemplates(Array.isArray(t) ? t : [])
+      setItems(Array.isArray(a) ? a : [])
     } catch (err) {
       setError(err.message)
     } finally {
@@ -192,8 +180,6 @@ export default function Assets() {
     () => Object.fromEntries(templates.map(t => [t.key, t])),
     [templates]
   )
-
-  const searching = query.trim() !== '' || filterMode !== 'all'
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -210,11 +196,6 @@ export default function Assets() {
       return true
     })
   }, [items, query, filterMode])
-
-  const flatSorted = useMemo(
-    () => [...filtered].sort((a, b) => (a.name || '').localeCompare(b.name || '')),
-    [filtered]
-  )
 
   const childrenMap = useMemo(() => {
     const map = {}
@@ -326,26 +307,10 @@ export default function Assets() {
         <div className="card p-8 text-center">
           <p className="text-sm text-charcoal-400">No assets match.</p>
         </div>
-      ) : searching ? (
-        // Flat results while searching/filtering — the tree structure is only
-        // meaningful for the full unfiltered view.
-        <div className="card p-2">
-          {flatSorted.map(a => (
-            <AssetRow
-              key={a.id}
-              asset={a}
-              depth={0}
-              childrenMap={{}}
-              expanded={expanded}
-              onToggle={toggle}
-              onOpen={asset => setModal({ asset })}
-              onAddChild={asset => setModal({ creating: true, parentId: asset.id })}
-              onMove={asset => setMoveAsset(asset)}
-              templatesByKey={templatesByKey}
-            />
-          ))}
-        </div>
       ) : (
+        // Always foldered — a match whose parent is filtered out floats to top
+        // level (childrenMap promotes it), which is exactly what we want for
+        // shared/team views where a parent may not be shared.
         <div className="card p-2">
           {roots.map(a => (
             <AssetRow

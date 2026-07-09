@@ -6,15 +6,19 @@ import { useState, useRef } from 'react'
 // - Selector mode (`suggestions` set): a dropdown offers the remaining options;
 //   with `strict`, typed values must match a suggestion (share/hide members).
 export default function TagInput({
-  value = [],
+  value: valueProp = [],
   onChange,
   placeholder = 'Add…',
-  suggestions = [],
+  suggestions: suggestionsProp = [],
   strict = false,
 }) {
   const [text, setText] = useState('')
   const [open, setOpen] = useState(false)
   const inputRef = useRef(null)
+
+  // Never trust the shape — a non-array prop would otherwise crash on .filter
+  const value = Array.isArray(valueProp) ? valueProp : []
+  const suggestions = Array.isArray(suggestionsProp) ? suggestionsProp : []
 
   const remaining = suggestions.filter(s => !value.includes(s))
   const matches = text
@@ -71,9 +75,11 @@ export default function TagInput({
           className="flex-1 min-w-[6rem] bg-transparent outline-none text-sm py-0.5"
         />
       </div>
+      {/* Inline (not absolute) so it can't be clipped by a scrolling modal —
+          a complete, self-scrolling box capped at ~4 rows. */}
       {open && suggestions.length > 0 && matches.length > 0 && (
-        <div className="absolute z-50 left-0 right-0 mt-1 max-h-40 overflow-y-auto bg-white dark:bg-charcoal-900 border border-charcoal-200 dark:border-charcoal-700 rounded-lg shadow-lg">
-          {matches.slice(0, 20).map(s => (
+        <div className="mt-1 max-h-32 overflow-y-auto border border-charcoal-200 dark:border-charcoal-700 rounded-lg">
+          {matches.slice(0, 30).map(s => (
             <button
               key={s}
               type="button"

@@ -111,8 +111,9 @@ LogCoreOS/
 │               ├── TaskModal.jsx  → create/edit task form (title, category, type, recurrence, due date/time, assigned_to, linked asset)
 │               ├── AssetModal.jsx → create/edit asset: dynamic template fields, attachments, member selectors for share/hide, history, 3-choice archive, delete/convert; auto-flips create→edit
 │               ├── TemplateManager.jsx → admin template editor: ordered typed fields (TagInput options), EmojiPicker icon, defaults, example insert
-│               ├── TagInput.jsx    → GitHub-topics-style chip input (free-text or strict selector mode) — template options, share/hide members
-│               ├── EmojiPicker.jsx → curated self-contained emoji grid popover for template icons
+│               ├── TagInput.jsx    → GitHub-topics-style chip input (free-text or strict selector mode); inline capped suggestion box — template options, share/hide members
+│               ├── EmojiPicker.jsx → curated self-contained emoji grid popover (right-aligned) for template icons
+│               ├── AssetTreePicker.jsx → foldered expand/collapse asset picker; reused by Move + create-asset parent chooser
 │               ├── EventModal.jsx → create/edit calendar event form (title, dates, times, all_day, color, notes)
 │               ├── CalendarGrid.jsx → month view: day cells with event/task indicators, click to open detail
 │               └── ErrorBoundary.jsx → catch React render errors, display fallback UI

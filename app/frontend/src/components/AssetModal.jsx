@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { assets as assetsApi, tasks as tasksApi } from '../lib/api'
 import TaskModal from './TaskModal'
 import TagInput from './TagInput'
+import AssetTreePicker from './AssetTreePicker'
 
 // Render a history entry's changes tolerantly — a change value is normally an
 // [old, new] pair, but never trust the shape (legacy/hand-edited data would
@@ -108,7 +109,8 @@ function AttachmentThumb({ assetId, file, canEdit, onDelete }) {
   )
 }
 
-export default function AssetModal({ asset: initialAsset, templates, allAssets, defaultParentId, user, workspace, onClose, onSaved }) {
+export default function AssetModal({ asset: initialAsset, templates, allAssets: allAssetsProp, defaultParentId, user, workspace, onClose, onSaved }) {
+  const allAssets = Array.isArray(allAssetsProp) ? allAssetsProp : []
   // `asset` is state so a fresh create can flip the modal into edit mode in place
   // (files/tasks/sharing need a saved asset id before they can be used).
   const [asset, setAsset] = useState(initialAsset)
@@ -144,7 +146,10 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets, 
   const [uploading, setUploading] = useState(false)
   const [members, setMembers] = useState([])
   const [archivePrompt, setArchivePrompt] = useState(false)
+  const [showParentPicker, setShowParentPicker] = useState(false)
+  const [shareScope, setShareScope] = useState('all') // 'all' = cascade to children, 'one' = this node only
 
+  const templatesByKey = Object.fromEntries((templates || []).map(t => [t.key, t]))
   const groupTarget = workspace === 'business' ? 'team' : 'household'
 
   // Active (non-archived) descendants of this asset — drives the 3-choice archive
@@ -263,8 +268,8 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets, 
     setError('')
     try {
       const payload = isPool
-        ? { hidden_from: access.hidden_from }
-        : { shared_with: access.shared_with, hidden_from: access.hidden_from }
+        ? { hidden_from: access.hidden_from, cascade: shareScope === 'all' }
+        : { shared_with: access.shared_with, hidden_from: access.hidden_from, cascade: shareScope === 'all' }
       const updated = await assetsApi.updateAccess(asset.id, payload)
       setAsset(a => ({ ...a, ...updated }))
       onSaved()
@@ -437,16 +442,34 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets, 
               />
             </div>
 
-            {/* Parent — own assets only */}
+            {/* Parent — foldered tree-picker (own/pool assets) */}
             {!isForeign && parentOptions.length > 0 && (
               <div>
                 <label className="block text-sm font-medium mb-1">
                   Inside <span className="text-charcoal-400 font-normal">(optional)</span>
                 </label>
-                <select value={form.parent_id} onChange={e => set('parent_id', e.target.value)} className="input">
-                  <option value="">— top level —</option>
-                  {parentOptions.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowParentPicker(p => !p)}
+                  className="input text-left flex items-center justify-between"
+                >
+                  <span className="truncate">
+                    {form.parent_id
+                      ? (allAssets.find(a => a.id === form.parent_id)?.name || 'Selected')
+                      : 'Top level'}
+                  </span>
+                  <span className="text-xs text-charcoal-400">{showParentPicker ? '▲' : 'Change ▾'}</span>
+                </button>
+                {showParentPicker && (
+                  <div className="mt-1 border border-charcoal-200 dark:border-charcoal-700 rounded-lg p-1 max-h-48 overflow-y-auto">
+                    <AssetTreePicker
+                      candidates={parentOptions}
+                      templatesByKey={templatesByKey}
+                      disabledId={form.parent_id || null}
+                      onPick={id => { set('parent_id', id || ''); setShowParentPicker(false) }}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -584,6 +607,27 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets, 
                   placeholder="Pick people to hide this from…"
                 />
               </div>
+              {activeDescendants > 0 && (
+                <div className="flex gap-1 text-xs">
+                  {[
+                    { id: 'all', label: 'Apply to everything inside' },
+                    { id: 'one', label: 'This one only' },
+                  ].map(o => (
+                    <button
+                      key={o.id}
+                      type="button"
+                      onClick={() => setShareScope(o.id)}
+                      className={`flex-1 py-1.5 rounded-md font-medium transition-colors ${
+                        shareScope === o.id
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-charcoal-100 dark:bg-charcoal-700 text-charcoal-600 dark:text-charcoal-300'
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              )}
               <button type="button" onClick={saveAccess} disabled={loading} className="btn-ghost text-xs px-3 py-1.5">
                 Save access
               </button>

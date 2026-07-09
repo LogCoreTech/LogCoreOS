@@ -769,12 +769,12 @@ Router mounted at `/api/v1/assets`. Requires the `assets` module (both workspace
 |--------|------|--------|-------|
 | `GET` | `/assets` | module users | own + workspace pool + shared-to-me (annotated `_owner`/`_access`); `?template=`, `?include_archived=true`. Share resolution is index-routed (`assets_share_index.json`) |
 | `GET` | `/assets/members` | module users | member display **names only** for share/hide selectors |
-| `POST` | `/assets` | module users | `{template, name, parent_id?, fields?, notes?, owner: "me"\|"pool"}`; `pool` needs admin or `pool_edit` grant |
+| `POST` | `/assets` | module users | `{template, name, parent_id?, fields?, notes?, owner: "me"\|"pool"}`; `pool` needs admin/`pool_edit`. When `parent_id` is set the child is created in the **parent's store** (requires edit access) and inherits the parent's `shared_with`+`hidden_from` (the "group" mechanic) |
 | `GET`/`PATCH` | `/assets/{id}` | per access | PATCH allowed for owner/edit-share/pool manager; records history. Re-parent (move) is same-owner only |
 | `POST` | `/assets/{id}/archive` · `/unarchive` | owner / pool manager | **per-node**; `?cascade=true` (un)archives the whole subtree. Archiving only a parent leaves its children active (they float to top level) |
 | `DELETE` | `/assets/{id}` | owner (personal) / **admin** (pool) | `409` if it has children; removes attachment files |
 | `POST` | `/assets/{id}/convert` | **admin** | `{target:"pool"}` — move subtree + files to `_team`/`_household`; strips shares |
-| `PUT` | `/assets/{id}/access` | owner (pool: admin/grant) | `{shared_with?:[{target,access}], hidden_from?:[names]}`; pool assets accept `hidden_from` only; `hidden_from` beats shares and is enforced server-side |
+| `PUT` | `/assets/{id}/access` | owner (pool: admin/grant) | `{shared_with?:[{target,access}], hidden_from?:[names], cascade=true}`; sharing/hiding is **per-node**, `cascade` (default) applies to the whole subtree; pool assets accept `hidden_from` only; `hidden_from` beats shares, enforced server-side |
 | `POST` | `/assets/{id}/files` | owner/edit-share | multipart `file`; jpeg/png/webp/avif/pdf; 10 MB; ≤20 per asset |
 | `GET` | `/assets/{id}/files/{file_id}` | any access | binary response |
 | `DELETE` | `/assets/{id}/files/{file_id}` | owner/edit-share | `204` |
