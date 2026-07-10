@@ -139,7 +139,13 @@ export default function Login() {
 
             {error && <p className="text-red-500 text-sm">{error}</p>}
 
-            <button type="submit" disabled={loading} className="btn-primary w-full">
+            {/* Literal brand orange — independent of any user's accent so the login
+                page always looks the same regardless of who was last signed in. */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-2 rounded-lg font-medium text-white bg-[#f97316] hover:bg-[#ea580c] transition-colors disabled:opacity-60"
+            >
               {loading ? 'Please wait…' : mode === 'login' ? 'Sign In' : 'Create Account'}
             </button>
           </form>

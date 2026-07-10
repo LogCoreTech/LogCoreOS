@@ -161,7 +161,7 @@ export default function Chat() {
   // Inject unread chat-delivery notifications as AI messages on mount
   useEffect(() => {
     sugApi.chatNotifications().then(notifs => {
-      if (!notifs) return
+      if (!Array.isArray(notifs)) return
       const unread = notifs.filter(n => !n.read && n.delivery === 'chat')
       if (unread.length === 0) return
       const injected = unread.map(n => ({

@@ -13,7 +13,9 @@ function NotifBell() {
   const panelRef = useRef(null)
 
   function load() {
-    sugApi.notifications().then(list => setNotifs(list || [])).catch(() => {})
+    // Guard against a non-array response (e.g. an error object) — `list || []`
+    // would keep a truthy object and crash notifs.filter below.
+    sugApi.notifications().then(list => setNotifs(Array.isArray(list) ? list : [])).catch(() => {})
   }
 
   useEffect(() => {
@@ -32,7 +34,7 @@ function NotifBell() {
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
-  const unread = notifs.filter(n => !n.read).length
+  const unread = (Array.isArray(notifs) ? notifs : []).filter(n => !n.read).length
 
   function markRead(id) {
     sugApi.markRead(id).catch(() => {})

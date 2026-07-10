@@ -28,7 +28,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- Sign-out now clears your background/theme immediately (it used to linger on the login page until a reload, and could block the next login)
+- Fixed a crash ("Something went wrong") that could appear on any page when the notifications list came back in an unexpected shape
+- Sign-out now fully resets the theme — the login page always shows the brand orange (the sign-in button no longer takes on the last user's accent color), and your background no longer lingers until a reload
 - No longer randomly logged out: a single transient/background 401 (or a blip during the 30-second session refresh) used to clear the session and bounce you to login — the app now re-verifies the session first
 - The asset editor no longer crashes to a blank "Something went wrong" page on unusual history data; the error screen gained a Reload button
 - Mobile: the asset and template editors no longer extend under the phone status bar (safe-area-aware modals)

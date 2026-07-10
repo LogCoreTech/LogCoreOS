@@ -53,9 +53,20 @@ function deriveShades(hex) {
   }
 }
 
+const DEFAULT_ACCENT = '#f97316' // brand orange (matches the :root default in index.css)
+
 export function applyAccentColor(hex) {
-  if (!hex) return
   const el = document.documentElement
+  if (!hex) {
+    // Reset to the brand orange :root defaults by removing the inline overrides
+    // (e.g. on logout, so the login page/button never shows the last user's accent).
+    for (const key of ['--accent-400', '--accent-500', '--accent-600']) {
+      el.style.removeProperty(key)
+    }
+    const meta = document.querySelector('meta[name="theme-color"]')
+    if (meta) meta.setAttribute('content', DEFAULT_ACCENT)
+    return
+  }
   for (const [key, val] of Object.entries(deriveShades(hex))) {
     el.style.setProperty(key, val)
   }
