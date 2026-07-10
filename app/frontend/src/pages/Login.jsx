@@ -11,6 +11,7 @@ export default function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [registrationOpen, setRegistrationOpen] = useState(null) // null = loading
+  const [bgLoaded, setBgLoaded] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
 
@@ -44,11 +45,17 @@ export default function Login() {
   }
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat"
-      style={{ backgroundImage: 'url(/login-banner.PNG)' }}
-    >
-      <div className="w-full max-w-sm">
+    <div className="relative min-h-screen flex items-center justify-center p-4 bg-charcoal-900 overflow-hidden">
+      {/* Fade the banner in once fully loaded so the large PNG never paints
+          top-to-bottom — the solid bg shows until the image is ready. */}
+      <img
+        src="/login-banner.PNG"
+        alt=""
+        aria-hidden="true"
+        onLoad={() => setBgLoaded(true)}
+        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${bgLoaded ? 'opacity-100' : 'opacity-0'}`}
+      />
+      <div className="relative z-10 w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
           <img src="/icon-192.png" alt="LogCore" className="h-20 w-20 mx-auto" />

@@ -215,6 +215,12 @@ if static_dir.exists():
         candidate = (static_dir / full_path).resolve()
         # Containment check prevents path traversal outside the dist directory
         if candidate.is_relative_to(_static_root) and candidate.is_file():
-            return FileResponse(str(candidate))
+            headers = {}
+            # Cache root images (login banner, icons) so re-visits/logout don't
+            # re-fetch and re-paint them. Bundle assets live under /static (hashed,
+            # cached by their own mount); sw.js must stay revalidated.
+            if candidate.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".avif", ".svg", ".ico"}:
+                headers["Cache-Control"] = "public, max-age=86400"
+            return FileResponse(str(candidate), headers=headers)
         # no-cache: always revalidate before serving, but allow storage (needed for iOS PWA)
         return FileResponse(str(static_dir / "index.html"), headers={"Cache-Control": "no-cache"})

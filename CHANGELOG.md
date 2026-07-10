@@ -28,6 +28,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- The login page banner now fades in smoothly instead of painting top-to-bottom, and is preloaded/cached so it appears instantly on return and sign-out
 - Fixed a crash ("Something went wrong") that could appear on any page when the notifications list came back in an unexpected shape
 - Sign-out now fully resets the theme — the login page always shows the brand orange (the sign-in button no longer takes on the last user's accent color), and your background no longer lingers until a reload
 - No longer randomly logged out: a single transient/background 401 (or a blip during the 30-second session refresh) used to clear the session and bounce you to login — the app now re-verifies the session first
