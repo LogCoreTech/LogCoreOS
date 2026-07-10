@@ -381,7 +381,7 @@ def list_assets(
     )
     if template:
         items = [a for a in items if a.get("template") == template]
-    return items
+    return assets_service.attach_templates(items)
 
 
 @router.post("", status_code=201)
@@ -478,6 +478,7 @@ def get_asset(
     elif found["relation"] == "shared":
         asset["_owner"] = found["store"]
         asset["_access"] = "edit" if found["can_edit"] else "read"
+    asset["_template"] = assets_service.resolve_template(asset)
     return asset
 
 

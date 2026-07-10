@@ -16,7 +16,7 @@ const OWNER_CHIP = {
 function AssetRow({ asset, depth, childrenMap, expanded, onToggle, onOpen, onAddChild, onMove, templatesByKey }) {
   const children = childrenMap[asset.id] || []
   const isOpen = expanded.has(asset.id)
-  const template = templatesByKey[asset.template]
+  const template = asset._template || templatesByKey[asset.template]
   const status = asset.fields?.status
   const canEdit = !asset._owner || asset._access === 'edit'
   const pad = ['pl-0', 'pl-5', 'pl-10', 'pl-14', 'pl-20', 'pl-24'][Math.min(depth, 5)]
@@ -131,7 +131,6 @@ function MovePicker({ asset, allAssets, templatesByKey, onClose, onMoved }) {
         {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
         <AssetTreePicker
           candidates={candidates}
-          templatesByKey={templatesByKey}
           onPick={moveTo}
           disabledId={asset.parent_id || null}
           topDisabled={!asset.parent_id}
@@ -226,11 +225,9 @@ export default function Assets() {
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h1 className="text-xl font-bold">Assets</h1>
         <div className="flex items-center gap-2">
-          {isAdmin && (
-            <button onClick={() => setShowTemplates(true)} className="btn-ghost text-xs px-3 py-1.5">
-              Templates
-            </button>
-          )}
+          <button onClick={() => setShowTemplates(true)} className="btn-ghost text-xs px-3 py-1.5">
+            Templates
+          </button>
           {templates.length > 0 && (
             <button onClick={() => setModal({ creating: true })} className="btn-primary text-xs px-3 py-1.5">
               ＋ New Asset
@@ -288,13 +285,9 @@ export default function Assets() {
             Assets are built from templates — premade structures like "Land Parcel" or
             "Vehicle" with the right fields ready to fill in.
           </p>
-          {isAdmin ? (
-            <button onClick={() => setShowTemplates(true)} className="btn-primary text-xs px-4 py-2 mt-2">
-              Create your first template
-            </button>
-          ) : (
-            <p className="text-xs text-charcoal-400">Ask your admin to create templates.</p>
-          )}
+          <button onClick={() => setShowTemplates(true)} className="btn-primary text-xs px-4 py-2 mt-2">
+            Create your first template
+          </button>
         </div>
       ) : items.length === 0 ? (
         <div className="card p-8 text-center space-y-2">
@@ -355,6 +348,7 @@ export default function Assets() {
       {showTemplates && (
         <TemplateManager
           templates={templates}
+          user={{ ...user, workspace }}
           onClose={() => setShowTemplates(false)}
           onChanged={load}
         />

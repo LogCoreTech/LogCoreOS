@@ -114,6 +114,28 @@ def _find_template(tid: str) -> tuple[str, dict] | None:
     return None
 
 
+def all_templates_by_id() -> dict:
+    """id → template for global + every personal store (one scan, for bulk attach)."""
+    m = {t["id"]: t for t in list_global_templates() if t.get("id")}
+    for _owner, t in _all_personal_templates():
+        if t.get("id"):
+            m[t["id"]] = t
+    return m
+
+
+def attach_templates(assets: list[dict]) -> list[dict]:
+    """Return copies of assets with their resolved template embedded as `_template`
+    so a viewer can render icon/label/fields even for a shared asset whose template
+    they don't own."""
+    by_id = all_templates_by_id()
+    by_key = {t.get("key"): t for t in list_global_templates()}
+    out = []
+    for a in assets:
+        tmpl = by_id.get(a.get("template_id")) or by_key.get(a.get("template"))
+        out.append({**a, "_template": tmpl})
+    return out
+
+
 def resolve_template(asset: dict) -> dict | None:
     """Resolve an asset's template — by id (global or any owner's personal) with a
     fallback to the legacy global-by-key reference for pre-Phase-2 assets."""

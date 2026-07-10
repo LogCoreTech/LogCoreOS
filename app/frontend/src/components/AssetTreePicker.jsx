@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react'
 // Foldered asset picker (expand/collapse), reused by Move and by the create-asset
 // parent chooser. Renders the real tree over `candidates`; a node whose parent
 // isn't in the candidate set floats to top level. Calls onPick(assetId | null).
-function PickRow({ node, depth, childrenMap, expanded, onToggle, onPick, templatesByKey, disabledId }) {
+function PickRow({ node, depth, childrenMap, expanded, onToggle, onPick, disabledId }) {
   const kids = childrenMap[node.id] || []
   const isOpen = expanded.has(node.id)
   const pad = ['pl-0', 'pl-4', 'pl-8', 'pl-12', 'pl-16', 'pl-20'][Math.min(depth, 5)]
@@ -23,7 +23,7 @@ function PickRow({ node, depth, childrenMap, expanded, onToggle, onPick, templat
           onClick={() => onPick(node.id)}
           className="flex-1 min-w-0 text-left text-sm px-2 py-1.5 rounded-lg hover:bg-charcoal-50 dark:hover:bg-charcoal-800 disabled:opacity-40 truncate"
         >
-          {templatesByKey[node.template]?.icon || '▫️'} {node.name}
+          {node._template?.icon || "▫️"} {node.name}
           {node.id === disabledId && <span className="text-xs text-charcoal-400"> (current)</span>}
         </button>
       </div>
@@ -36,7 +36,6 @@ function PickRow({ node, depth, childrenMap, expanded, onToggle, onPick, templat
           expanded={expanded}
           onToggle={onToggle}
           onPick={onPick}
-          templatesByKey={templatesByKey}
           disabledId={disabledId}
         />
       ))}
@@ -44,7 +43,7 @@ function PickRow({ node, depth, childrenMap, expanded, onToggle, onPick, templat
   )
 }
 
-export default function AssetTreePicker({ candidates, templatesByKey, onPick, disabledId = null, topLabel = '⬆ Top level', topDisabled = false }) {
+export default function AssetTreePicker({ candidates, onPick, disabledId = null, topLabel = '⬆ Top level', topDisabled = false }) {
   const [expanded, setExpanded] = useState(new Set())
   const list = Array.isArray(candidates) ? candidates : []
 
@@ -88,7 +87,6 @@ export default function AssetTreePicker({ candidates, templatesByKey, onPick, di
           expanded={expanded}
           onToggle={toggle}
           onPick={onPick}
-          templatesByKey={templatesByKey}
           disabledId={disabledId}
         />
       ))}

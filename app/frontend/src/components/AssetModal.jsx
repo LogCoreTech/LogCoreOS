@@ -126,7 +126,8 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
   const canCreateInPool = isAdmin || (user?.poolEdit || []).includes(poolName)
 
   const [form, setForm] = useState({
-    template: asset?.template || templates[0]?.key || '',
+    // template holds the template ID (per-user templates are id-referenced)
+    template: asset?.template_id || templates[0]?.id || '',
     name: asset?.name || '',
     parent_id: asset?.parent_id || defaultParentId || '',
     fields: { ...(asset?.fields || {}) },
@@ -149,7 +150,7 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
   const [showParentPicker, setShowParentPicker] = useState(false)
   const [shareScope, setShareScope] = useState('all') // 'all' = cascade to children, 'one' = this node only
 
-  const templatesByKey = Object.fromEntries((templates || []).map(t => [t.key, t]))
+  const templatesById = Object.fromEntries((templates || []).map(t => [t.id, t]))
   const groupTarget = workspace === 'business' ? 'team' : 'household'
 
   // Active (non-archived) descendants of this asset — drives the 3-choice archive
@@ -171,7 +172,11 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
     assetsApi.members().then(m => setMembers((m || []).map(x => x.name))).catch(() => {})
   }, [])
 
-  const template = templates.find(t => t.key === form.template)
+  // For an existing asset the template comes embedded (_template) — handles shared
+  // assets whose template the viewer doesn't own; on create, use the picked one.
+  const template = editing
+    ? (asset._template || templatesById[asset.template_id] || null)
+    : templatesById[form.template]
   const knownKeys = new Set((template?.fields || []).map(f => f.key))
   const orphanedKeys = Object.keys(form.fields).filter(k => !knownKeys.has(k))
 
@@ -244,7 +249,7 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
         onClose()
       } else {
         const created = await assetsApi.create({
-          template: form.template,
+          template_id: form.template,
           name: form.name,
           parent_id: form.parent_id || null,
           fields,
@@ -300,6 +305,20 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
       setArchivePrompt(true)   // ask cascade vs only-this
     } else {
       doArchive(false)
+    }
+  }
+
+  async function handleLeave() {
+    if (!confirm(`Remove yourself from "${asset.name}"? You can be re-added later.`)) return
+    setLoading(true)
+    try {
+      await assetsApi.leave(asset.id)
+      onSaved()
+      onClose()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -383,11 +402,11 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
                 <div className="flex gap-1 flex-wrap">
                   {templates.map(t => (
                     <button
-                      key={t.key}
+                      key={t.id}
                       type="button"
-                      onClick={() => set('template', t.key)}
+                      onClick={() => set('template', t.id)}
                       className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                        form.template === t.key
+                        form.template === t.id
                           ? 'bg-orange-500 text-white'
                           : 'bg-charcoal-100 dark:bg-charcoal-700 text-charcoal-600 dark:text-charcoal-300'
                       }`}
@@ -464,7 +483,6 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
                   <div className="mt-1 border border-charcoal-200 dark:border-charcoal-700 rounded-lg p-1 max-h-48 overflow-y-auto">
                     <AssetTreePicker
                       candidates={parentOptions}
-                      templatesByKey={templatesByKey}
                       disabledId={form.parent_id || null}
                       onPick={id => { set('parent_id', id || ''); setShowParentPicker(false) }}
                     />
@@ -595,6 +613,7 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
                   <button type="button" onClick={() => setAccess(a => ({ ...a, shared_with: [...a.shared_with, { target: '', access: 'read' }] }))} className="btn-ghost text-xs px-2 py-1">
                     ＋ Share with…
                   </button>
+                  <p className="text-[10px] text-charcoal-400">People you add get a request to accept before it appears for them.</p>
                 </div>
               )}
               <div>
@@ -659,6 +678,12 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
           {error && <p className="text-red-500 text-sm">{error}</p>}
 
           <div className="flex flex-wrap gap-2 pt-1">
+            {isForeign && !isPool && (
+              <button type="button" onClick={handleLeave} disabled={loading}
+                className="px-3 py-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                Leave
+              </button>
+            )}
             {readOnly ? (
               <button type="button" onClick={onClose} className="btn-ghost flex-1">Close</button>
             ) : (

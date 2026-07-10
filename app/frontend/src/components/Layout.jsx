@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
 import { ALL_MODULES, getShortcutsForUser } from '../lib/constants'
-import { suggestions as sugApi } from '../lib/api'
+import { suggestions as sugApi, assets as assetsApi } from '../lib/api'
 
 const ADMIN_NAV = { to: '/admin', icon: '⬡', label: 'Admin' }
 
@@ -39,6 +39,13 @@ function NotifBell() {
   function markRead(id) {
     sugApi.markRead(id).catch(() => {})
     setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
+  }
+
+  async function respond(n, accept) {
+    // Optimistically resolve the request notification
+    setNotifs(prev => prev.map(x => x.id === n.id ? { ...x, status: 'resolved', read: true } : x))
+    try { await assetsApi.respondShare(n.id, accept) } catch { /* keep resolved locally */ }
+    load()
   }
 
   function clearAll() {
@@ -102,7 +109,16 @@ function NotifBell() {
                     <div className={!n.read ? '' : 'pl-3.5'}>
                       <p className="text-xs font-semibold text-charcoal-800 dark:text-charcoal-100">{n.title}</p>
                       <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mt-0.5 line-clamp-2">{n.body}</p>
-                      <p className="text-[10px] text-charcoal-400 dark:text-charcoal-500 mt-1">{fmt(n.created_at)}</p>
+                      {n.action && n.status !== 'resolved' ? (
+                        <div className="flex gap-2 mt-1.5" onClick={e => e.stopPropagation()}>
+                          <button onClick={() => respond(n, true)} className="btn-primary text-[11px] px-2.5 py-1">Accept</button>
+                          <button onClick={() => respond(n, false)} className="btn-ghost text-[11px] px-2.5 py-1">Decline</button>
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-charcoal-400 dark:text-charcoal-500 mt-1">
+                          {n.action ? '✓ handled · ' : ''}{fmt(n.created_at)}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>

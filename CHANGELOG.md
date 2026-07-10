@@ -11,6 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 **Assets module**
+- Anyone can now create their own templates (not just admins); share them with specific people or whole roles. Admins keep global templates and can restrict them to chosen roles
+- Sharing is now a request: when you share an asset or template, each person gets an Accept/Decline notification and it only appears for them once they accept — and they can leave a share later
 - Track anything ownable — land parcels, vehicles, equipment — as a nestable object tree (subdivision → parcels → …)
 - Admin-curated Templates define each object type's premade fields (text/number/date/boolean/select, optional defaults); starts empty with a one-click editable example. Icons via a built-in emoji picker; select options via tag chips
 - Search bar and filter (owned / shared / pool / by type), all shown as the real foldered tree; move an asset with a foldered tree-picker (also used when choosing a parent on create)

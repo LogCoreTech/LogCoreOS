@@ -70,6 +70,7 @@ LogCoreOS/
 │   │   │   ├── features_service.py    → feature flags + role resolution (get_effective_disabled)
 │   │   │   ├── assets_service.py      → assets core: templates, field validation, tree ops, per-node archive (+cascade), share/hidden resolution, pool conversion, history, attachments
 │   │   │   ├── assets_index.py         → derived share-routing cache (_system/assets_share_index.json); rebuildable, warmed at startup; sharers_for()/reindex_owner()/rebuild_share_index()
+│   │   │   │   # Phase 2: per-user templates in USERS/{name}/Assets/templates.json (global in _system/asset_templates.json); assets ref template_id; request-based sharing (accepted[]) + accept/decline notifications
 │   │   │   ├── automations_config.py  → instance automation API token (generate/rotate/verify) for n8n → LogCore writes
 │   │   │   ├── n8n_service.py         → n8n REST API client; import/execute/delete/activate workflows; write docker/n8n.env; sync_business_workflows() for auto-sync
 │   │   │   ├── ha_service.py          → Home Assistant REST API client; config CRUD, entity states, service calls, scenes, automations, user favourites
