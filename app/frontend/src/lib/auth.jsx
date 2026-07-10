@@ -33,10 +33,15 @@ export function AuthProvider({ children }) {
         cornerStyle:     me.corner_style || 'rounded',
         shortcuts:       me.shortcuts    || {},
       }
+      // Persist theme prefs too so the pre-React FOUC script in main.jsx can
+      // apply the real background/accent before first paint (otherwise the
+      // background flashes the default until /me resolves).
       localStorage.setItem('lc_user', JSON.stringify({
         id: u.id, name: u.name, role: u.role,
         disabledModules: u.disabledModules, timezone: u.timezone,
         workspaces: u.workspaces,
+        accentColor: u.accentColor, darkMode: u.darkMode, background: u.background,
+        density: u.density, cornerStyle: u.cornerStyle,
       }))
       setUser(u)
       applyAccentColor(u.accentColor)
@@ -60,7 +65,10 @@ export function AuthProvider({ children }) {
     // Auth is handled via httpOnly cookie set by the server.
     // Only persist session/routing fields — preferences come from server and stay in memory only.
     const u = { id, name, role, disabledModules, timezone, workspaces, accentColor, darkMode, background, density, cornerStyle }
-    localStorage.setItem('lc_user', JSON.stringify({ id, name, role, disabledModules, timezone, workspaces }))
+    localStorage.setItem('lc_user', JSON.stringify({
+      id, name, role, disabledModules, timezone, workspaces,
+      accentColor, darkMode, background, density, cornerStyle,
+    }))
     setUser(u)
     applyAccentColor(accentColor)
     applyDarkMode(darkMode, getSystemDarkPreference())
