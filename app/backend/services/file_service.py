@@ -70,6 +70,12 @@ def asset_templates_path() -> Path:
     return brain_path() / "_system" / "asset_templates.json"
 
 
+def personal_templates_path(user_name: str) -> Path:
+    # Per-user (workspace-agnostic) template store — a user's templates are usable
+    # in both their workspaces.
+    return user_path(user_name) / "Assets" / "templates.json"
+
+
 def automations_path(user_name: str) -> Path:
     return user_path(user_name) / "Automations" / "workflows.json"
 

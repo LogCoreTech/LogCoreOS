@@ -99,12 +99,35 @@ def m004_task_due_time_field(brain: Path) -> None:
                 write_json(tasks_file, data)
 
 
+def m005_asset_template_ids(brain: Path) -> None:
+    """Backfill a stable `id` (+ owner/shared_with/restrict_roles) on existing global
+    asset templates so they can be referenced by id alongside per-user templates."""
+    import uuid
+
+    tpl_file = brain / "_system" / "asset_templates.json"
+    if not tpl_file.exists():
+        return
+    data = read_json(tpl_file, default={"templates": []})
+    changed = False
+    for t in data.get("templates", []):
+        if not t.get("id"):
+            t["id"] = str(uuid.uuid4())
+            changed = True
+        for key, default in (("owner", "_global"), ("shared_with", []), ("restrict_roles", [])):
+            if key not in t:
+                t[key] = default if not isinstance(default, list) else list(default)
+                changed = True
+    if changed:
+        write_json(tpl_file, data)
+
+
 # Ordered list — append new migrations here; never reorder or remove
 MIGRATIONS: list[tuple[str, MigrationFn]] = [
     ("m001_task_type_field", m001_task_type_field),
     ("m002_task_notes_field", m002_task_notes_field),
     ("m003_user_disabled_modules", m003_user_disabled_modules),
     ("m004_task_due_time_field", m004_task_due_time_field),
+    ("m005_asset_template_ids", m005_asset_template_ids),
 ]
 
 # ── Runner ─────────────────────────────────────────────────────────────────────

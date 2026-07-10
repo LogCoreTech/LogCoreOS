@@ -21,6 +21,7 @@ from services.file_service import (
     asset_templates_path,
     assets_files_path,
     assets_path,
+    personal_templates_path,
     read_json,
     write_json,
 )
@@ -57,16 +58,101 @@ def _now_iso(user_name: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _load_templates() -> dict:
-    return read_json(asset_templates_path(), default={"templates": []})
+GLOBAL_OWNER = "_global"
+
+
+def _template_store_path(owner: str):
+    return asset_templates_path() if owner == GLOBAL_OWNER else personal_templates_path(owner)
+
+
+def _load_template_store(owner: str) -> dict:
+    return read_json(_template_store_path(owner), default={"templates": []})
+
+
+def _save_template_store(owner: str, data: dict) -> None:
+    write_json(_template_store_path(owner), data)
+
+
+def list_global_templates() -> list[dict]:
+    return _load_template_store(GLOBAL_OWNER).get("templates", [])
+
+
+def list_personal_templates(owner: str) -> list[dict]:
+    return _load_template_store(owner).get("templates", [])
+
+
+def _all_personal_templates() -> list[tuple[str, dict]]:
+    out: list[tuple[str, dict]] = []
+    for u in list_users():
+        for t in list_personal_templates(u["name"]):
+            out.append((u["name"], t))
+    return out
+
+
+def get_global_template(key: str) -> dict | None:
+    return next((t for t in list_global_templates() if t.get("key") == key), None)
+
+
+def get_template_by_id(tid: str) -> dict | None:
+    for t in list_global_templates():
+        if t.get("id") == tid:
+            return t
+    for _owner, t in _all_personal_templates():
+        if t.get("id") == tid:
+            return t
+    return None
+
+
+def _find_template(tid: str) -> tuple[str, dict] | None:
+    """Return (owner, template) for a template id — owner is GLOBAL_OWNER or a user."""
+    for t in list_global_templates():
+        if t.get("id") == tid:
+            return GLOBAL_OWNER, t
+    for owner, t in _all_personal_templates():
+        if t.get("id") == tid:
+            return owner, t
+    return None
+
+
+def resolve_template(asset: dict) -> dict | None:
+    """Resolve an asset's template — by id (global or any owner's personal) with a
+    fallback to the legacy global-by-key reference for pre-Phase-2 assets."""
+    tid = asset.get("template_id")
+    if tid:
+        return get_template_by_id(tid)
+    return get_global_template(asset.get("template") or "")
+
+
+# Backward-compat: some callers still resolve global templates by key.
+def get_template(key: str) -> dict | None:
+    return get_global_template(key)
 
 
 def list_templates() -> list[dict]:
-    return _load_templates().get("templates", [])
+    """Legacy: global templates only (used by reference counting)."""
+    return list_global_templates()
 
 
-def get_template(key: str) -> dict | None:
-    return next((t for t in list_templates() if t["key"] == key), None)
+def visible_templates(
+    viewer: str, is_admin: bool = False, feature_role: str = "member"
+) -> list[dict]:
+    """Templates a viewer can build from: role-permitted global + own personal +
+    personal templates shared to and accepted by the viewer."""
+    out: list[dict] = []
+    for t in list_global_templates():
+        rr = t.get("restrict_roles") or []
+        if not rr or is_admin or feature_role in rr:
+            out.append({**t, "_scope": "global"})
+    for t in list_personal_templates(viewer):
+        out.append({**t, "_scope": "own"})
+    for owner, t in _all_personal_templates():
+        if owner == viewer:
+            continue
+        for s in t.get("shared_with") or []:
+            if "accepted" in s and viewer in (s.get("accepted") or []):
+                out.append({**t, "_scope": "shared", "_owner": owner})
+                break
+    return out
 
 
 def _validate_field_defs(fields: list[dict]) -> list[dict]:
@@ -102,30 +188,38 @@ def _validate_field_defs(fields: list[dict]) -> list[dict]:
     return cleaned
 
 
-def create_template(data: dict) -> dict:
+def create_template(data: dict, owner: str = GLOBAL_OWNER) -> dict:
     key = (data.get("key") or "").strip()
     if not _KEY_RE.match(key):
         raise ValueError(f"Invalid template key {key!r} — use a-z, 0-9, _ (max 40 chars)")
-    store = _load_templates()
-    if any(t["key"] == key for t in store["templates"]):
+    store = _load_template_store(owner)
+    if any(t.get("key") == key for t in store["templates"]):
         raise ValueError(f"Template {key!r} already exists")
     template = {
+        "id": str(uuid.uuid4()),
         "key": key,
         "label": (data.get("label") or key).strip()[:80],
         "icon": (data.get("icon") or "").strip()[:8],
         "fields": _validate_field_defs(data.get("fields") or []),
+        "owner": owner,
+        "shared_with": [],
+        "restrict_roles": [],
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     store["templates"].append(template)
-    write_json(asset_templates_path(), store)
+    _save_template_store(owner, store)
     return template
 
 
-def update_template(key: str, updates: dict) -> dict | None:
-    """Replace label/icon/fields. The key is immutable (asset records reference it)."""
-    store = _load_templates()
+def update_template(tid: str, updates: dict) -> dict | None:
+    """Replace label/icon/fields (+ restrict_roles for global). Key is immutable."""
+    found = _find_template(tid)
+    if found is None:
+        return None
+    owner, _ = found
+    store = _load_template_store(owner)
     for i, t in enumerate(store["templates"]):
-        if t["key"] != key:
+        if t.get("id") != tid:
             continue
         if "label" in updates and updates["label"]:
             t["label"] = str(updates["label"]).strip()[:80]
@@ -133,39 +227,53 @@ def update_template(key: str, updates: dict) -> dict | None:
             t["icon"] = str(updates["icon"] or "").strip()[:8]
         if "fields" in updates:
             t["fields"] = _validate_field_defs(updates["fields"] or [])
+        if "restrict_roles" in updates and owner == GLOBAL_OWNER:
+            t["restrict_roles"] = [str(r).strip() for r in (updates["restrict_roles"] or [])]
         store["templates"][i] = t
-        write_json(asset_templates_path(), store)
+        _save_template_store(owner, store)
         return t
     return None
 
 
-def template_reference_count(key: str) -> int:
+def template_reference_count(tid: str) -> int:
+    found = _find_template(tid)
+    key = found[1].get("key") if found else None
     count = 0
     for store_user, workspace in _all_stores():
-        count += sum(1 for a in list_assets(store_user, workspace) if a.get("template") == key)
+        for a in list_assets(store_user, workspace):
+            if a.get("template_id") == tid or (
+                key and not a.get("template_id") and a.get("template") == key
+            ):
+                count += 1
     return count
 
 
-def delete_template(key: str) -> bool:
-    refs = template_reference_count(key)
+def delete_template(tid: str) -> bool:
+    found = _find_template(tid)
+    if found is None:
+        return False
+    owner, tmpl = found
+    refs = template_reference_count(tid)
     if refs:
         raise ValueError(
-            f"{refs} asset(s) still use template {key!r} — delete or archive them first"
+            f"{refs} asset(s) still use template {tmpl.get('label', tmpl.get('key'))!r} — "
+            "delete or archive them first"
         )
-    store = _load_templates()
+    store = _load_template_store(owner)
     before = len(store["templates"])
-    store["templates"] = [t for t in store["templates"] if t["key"] != key]
+    store["templates"] = [t for t in store["templates"] if t.get("id") != tid]
     if len(store["templates"]) == before:
         return False
-    write_json(asset_templates_path(), store)
+    _save_template_store(owner, store)
     return True
 
 
-def insert_example_template() -> dict:
-    """Optional starter for the empty state — created only on explicit admin click."""
+def insert_example_template(owner: str = GLOBAL_OWNER) -> dict:
+    """Optional starter for the empty state — created only on explicit user click."""
+    existing = {t.get("key") for t in _load_template_store(owner).get("templates", [])}
     key = "example"
     n = 2
-    while get_template(key) is not None:
+    while key in existing:
         key = f"example_{n}"
         n += 1
     return create_template(
@@ -188,6 +296,83 @@ def insert_example_template() -> dict:
             ],
         }
     )
+
+
+# ---------------------------------------------------------------------------
+# Template sharing (request-based, same handshake as assets)
+# ---------------------------------------------------------------------------
+
+
+def share_template(owner: str, tid: str, shared_with: list[dict], by: str) -> dict | None:
+    """Replace a personal template's shared_with (request-based) and notify new
+    targets. Global templates are managed via restrict_roles, not shares."""
+    store = _load_template_store(owner)
+    tmpl = next((t for t in store["templates"] if t.get("id") == tid), None)
+    if tmpl is None:
+        return None
+
+    prev_accepted = {
+        s.get("target"): list(s.get("accepted") or [])
+        for s in (tmpl.get("shared_with") or [])
+        if "accepted" in s
+    }
+    prev_targets = {s.get("target") for s in (tmpl.get("shared_with") or [])}
+    valid_targets = {"team", "household"} | set(_load_features_roles())
+
+    cleaned = []
+    new_targets = []
+    for share in shared_with or []:
+        target = (share.get("target") or "").strip()
+        if target not in valid_targets and get_user_by_name(target) is None:
+            raise ValueError(f"Unknown share target {target!r}")
+        cleaned.append({"target": target, "accepted": prev_accepted.get(target, [])})
+        if target not in prev_targets:
+            new_targets.append(target)
+
+    tmpl["shared_with"] = cleaned
+    _save_template_store(owner, store)
+
+    already = set(sum(prev_accepted.values(), []))
+    recipients: set[str] = set()
+    for target in new_targets:
+        for name in _resolve_targets(target):
+            if name != by and name not in already:
+                recipients.add(name)
+    if recipients:
+        _notify_share_targets(
+            list(recipients),
+            by,
+            "template_share",
+            tmpl.get("label", tmpl.get("key", "a template")),
+            {"owner": owner, "template_id": tid},
+        )
+    return tmpl
+
+
+def respond_to_template_share(viewer: str, payload: dict, accept: bool) -> bool:
+    owner, tid = payload["owner"], payload["template_id"]
+    store = _load_template_store(owner)
+    tmpl = next((t for t in store["templates"] if t.get("id") == tid), None)
+    if tmpl is None:
+        return False
+    changed = False
+    for share in tmpl.get("shared_with") or []:
+        if "accepted" not in share:
+            continue
+        accepted = share["accepted"]
+        if accept and viewer not in accepted:
+            accepted.append(viewer)
+            changed = True
+        elif not accept and viewer in accepted:
+            accepted.remove(viewer)
+            changed = True
+    if changed:
+        _save_template_store(owner, store)
+    return changed
+
+
+def leave_template_share(viewer: str, owner: str, tid: str) -> bool:
+    return respond_to_template_share(viewer, {"owner": owner, "template_id": tid}, False)
 
 
 # ---------------------------------------------------------------------------
@@ -331,16 +516,73 @@ def _is_hidden_from(asset: dict, by_id: dict[str, dict], viewer: str) -> bool:
 
 
 def _share_access(asset: dict, by_id: dict[str, dict], viewer: str, workspace: str) -> str | None:
-    """Best share grant ('edit' > 'read') on THIS node (per-node, not inherited)."""
+    """Best share grant ('edit' > 'read') on THIS node (per-node, not inherited).
+
+    Request-based: a new-style entry carries an `accepted` list and grants only to
+    viewers who accepted. A legacy entry (no `accepted` key) is open to whoever the
+    target resolves to — keeps pre-Phase-2 shares working until re-shared.
+    """
     best: str | None = None
     group = "team" if workspace == "business" else "household"
     for share in asset.get("shared_with") or []:
-        if share.get("target") in (viewer, group):
-            access = share.get("access", "read")
-            if access == "edit":
-                return "edit"
-            best = best or "read"
+        if "accepted" in share:
+            if viewer not in (share.get("accepted") or []):
+                continue
+        elif share.get("target") not in (viewer, group):
+            continue
+        access = share.get("access", "read")
+        if access == "edit":
+            return "edit"
+        best = best or "read"
     return best
+
+
+def _all_user_names() -> list[str]:
+    return [u["name"] for u in list_users()]
+
+
+def _resolve_targets(target: str) -> list[str]:
+    """Expand a share target (user | 'team' | 'household' | role) to member names."""
+    if target == "household":
+        return _all_user_names()
+    if target == "team":
+        return [
+            u["name"]
+            for u in list_users()
+            if "business" in (get_user_by_name(u["name"]) or {}).get("workspaces", ["personal"])
+        ]
+    from services.features_service import load_features
+
+    if target in (load_features().get("roles") or {}):
+        return [
+            u["name"]
+            for u in list_users()
+            if (get_user_by_name(u["name"]) or {}).get("feature_role", "member") == target
+        ]
+    return [target] if get_user_by_name(target) else []
+
+
+def _notify_share_targets(
+    recipients: list[str], sharer: str, kind: str, label: str, payload: dict
+) -> None:
+    """Send an accept/decline request notification to each recipient (best-effort)."""
+    from services import suggestions_service
+
+    noun = "template" if kind == "template_share" else "item"
+    for name in recipients:
+        if name == sharer:
+            continue
+        try:
+            suggestions_service.add_notification(
+                name,
+                title=f"{sharer} shared a {noun} with you",
+                body=f"“{label}” — accept to add it to your assets.",
+                source="assets",
+                delivery="in_app",
+                action={"type": kind, **payload},
+            )
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -354,10 +596,16 @@ def create_asset(
     workspace: str = "personal",
     created_by: str = "",
 ) -> dict:
-    template = get_template(data.get("template") or "")
+    # Resolve template by id (global or personal) or the legacy global key.
+    tid = data.get("template_id")
+    if tid:
+        template = get_template_by_id(tid)
+    else:
+        template = get_global_template(data.get("template") or "")
     if template is None:
-        valid = [t["key"] for t in list_templates()]
-        raise ValueError(f"Unknown template {data.get('template')!r}. Valid: {valid or '(none)'}")
+        raise ValueError(f"Unknown template {(tid or data.get('template'))!r}")
+    template_key = template.get("key")
+    template_id = template.get("id")
     name = (data.get("name") or "").strip()
     if not name:
         raise ValueError("Asset name is required")
@@ -370,8 +618,16 @@ def create_asset(
 
     # Inherit the parent's audience so a child added under a shared asset is
     # automatically shared with (and hidden from) the same people — this is how a
-    # shared subtree grows into a "group".
-    inherited_shares = list(parent.get("shared_with") or []) if parent else []
+    # shared subtree grows into a "group". Deep-copy so the child's `accepted`
+    # list is independent of the parent's.
+    inherited_shares = (
+        [
+            {k: (list(v) if isinstance(v, list) else v) for k, v in s.items()}
+            for s in (parent.get("shared_with") or [])
+        ]
+        if parent
+        else []
+    )
     inherited_hidden = list(parent.get("hidden_from") or []) if parent else []
 
     fields: dict[str, Any] = {
@@ -386,7 +642,8 @@ def create_asset(
     now = _now_iso(created_by or store_user)
     asset: dict[str, Any] = {
         "id": str(uuid.uuid4()),
-        "template": template["key"],
+        "template": template_key,
+        "template_id": template_id,
         "name": name[:200],
         "parent_id": parent_id,
         "fields": fields,
@@ -444,9 +701,9 @@ def update_asset(
         asset["parent_id"] = new_parent
 
     if "fields" in updates:
-        template = get_template(asset["template"])
+        template = resolve_template(asset)
         if template is None:
-            raise ValueError(f"Template {asset['template']!r} no longer exists")
+            raise ValueError(f"Template {asset.get('template')!r} no longer exists")
         for key, value in _validate_fields(template, updates["fields"]).items():
             old = asset["fields"].get(key)
             if value is None:
@@ -534,18 +791,34 @@ def update_access(
     if asset is None:
         return None
 
+    group = "team" if asset_workspace == "business" else "household"
+    valid_targets = {"team", "household"} | set((_load_features_roles()))
+
+    # Preserve the `accepted` list per target from the current entries, and detect
+    # which targets are NEW (only those trigger accept/decline request notifications).
+    prev_accepted: dict[str, list[str]] = {
+        s.get("target"): list(s.get("accepted") or [])
+        for s in (asset.get("shared_with") or [])
+        if "accepted" in s
+    }
+    prev_targets = {s.get("target") for s in (asset.get("shared_with") or [])}
+
     cleaned_shares: list[dict] | None = None
+    new_targets: list[str] = []
     if shared_with is not None:
-        group = "team" if asset_workspace == "business" else "household"
         cleaned_shares = []
         for share in shared_with:
             target = (share.get("target") or "").strip()
             access = share.get("access", "read")
             if access not in ("read", "edit"):
                 raise ValueError(f"Invalid access {access!r} — use 'read' or 'edit'")
-            if target != group and get_user_by_name(target) is None:
+            if target not in valid_targets and get_user_by_name(target) is None:
                 raise ValueError(f"Unknown share target {target!r}")
-            cleaned_shares.append({"target": target, "access": access})
+            cleaned_shares.append(
+                {"target": target, "access": access, "accepted": prev_accepted.get(target, [])}
+            )
+            if target not in prev_targets:
+                new_targets.append(target)
 
     cleaned_hidden: list[str] | None = None
     if hidden_from is not None:
@@ -561,7 +834,7 @@ def update_access(
         if node is None:
             continue
         if cleaned_shares is not None:
-            node["shared_with"] = [dict(s) for s in cleaned_shares]
+            node["shared_with"] = [dict(s, accepted=list(s["accepted"])) for s in cleaned_shares]
         if cleaned_hidden is not None:
             node["hidden_from"] = list(cleaned_hidden)
         node["updated_at"] = _now_iso(by or store_user)
@@ -569,7 +842,67 @@ def update_access(
 
     _save(store_user, workspace, store)
     assets_index.reindex_owner(store_user, workspace)
+
+    # Send accept/decline requests to members of newly-added targets (not the owner,
+    # not anyone who already accepted).
+    already = set(sum(prev_accepted.values(), []))
+    recipients: set[str] = set()
+    for target in new_targets:
+        for name in _resolve_targets(target):
+            if name != (by or store_user) and name not in already:
+                recipients.add(name)
+    if recipients:
+        _notify_share_targets(
+            list(recipients),
+            by or store_user,
+            "asset_share",
+            asset.get("name", "an item"),
+            {"owner": store_user, "workspace": workspace, "asset_id": asset_id},
+        )
     return asset
+
+
+def _load_features_roles() -> list[str]:
+    from services.features_service import load_features
+
+    return list((load_features().get("roles") or {}).keys())
+
+
+def _apply_share_response(
+    store_user: str, asset_id: str, viewer: str, accept: bool, workspace: str = "personal"
+) -> bool:
+    """Add/remove `viewer` in the `accepted` list of every node in the shared subtree
+    that carries a request-based share. Returns True if anything changed."""
+    store = _load(store_user, workspace)
+    changed = False
+    for aid in collect_subtree_ids(store["assets"], asset_id):
+        node = _by_id(store["assets"]).get(aid)
+        if node is None:
+            continue
+        for share in node.get("shared_with") or []:
+            if "accepted" not in share:
+                continue
+            accepted = share["accepted"]
+            if accept and viewer not in accepted:
+                accepted.append(viewer)
+                changed = True
+            elif not accept and viewer in accepted:
+                accepted.remove(viewer)
+                changed = True
+    if changed:
+        _save(store_user, workspace, store)
+        assets_index.reindex_owner(store_user, workspace)
+    return changed
+
+
+def respond_to_asset_share(viewer: str, payload: dict, accept: bool) -> bool:
+    return _apply_share_response(
+        payload["owner"], payload["asset_id"], viewer, accept, payload.get("workspace", "personal")
+    )
+
+
+def leave_asset_share(viewer: str, owner: str, asset_id: str, workspace: str = "personal") -> bool:
+    return _apply_share_response(owner, asset_id, viewer, False, workspace)
 
 
 # ---------------------------------------------------------------------------

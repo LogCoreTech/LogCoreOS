@@ -138,7 +138,14 @@ def get_notifications(user_name: str, limit: int = 20, delivery: str | None = No
     return list(reversed(notifs))[:limit]
 
 
-def add_notification(user_name: str, title: str, body: str, source: str, delivery: str) -> dict:
+def add_notification(
+    user_name: str,
+    title: str,
+    body: str,
+    source: str,
+    delivery: str,
+    action: dict | None = None,
+) -> dict:
     path = _notifications_path(user_name)
     data = read_json(path, default={"notifications": []})
     notif = {
@@ -150,10 +157,28 @@ def add_notification(user_name: str, title: str, body: str, source: str, deliver
         "created_at": datetime.now(timezone.utc).isoformat(),
         "read": False,
     }
+    if action is not None:
+        # Actionable notification (accept/decline handshake). status: pending → resolved.
+        notif["action"] = action
+        notif["status"] = "pending"
     data["notifications"].append(notif)
     data["notifications"] = data["notifications"][-_NOTIF_CAP:]
     write_json(path, data)
     return notif
+
+
+def resolve_notification(user_name: str, notif_id: str) -> dict | None:
+    """Mark an actionable notification resolved (+read) and return its record so the
+    caller can execute its action. Returns None if not found."""
+    path = _notifications_path(user_name)
+    data = read_json(path, default={"notifications": []})
+    for n in data["notifications"]:
+        if n["id"] == notif_id:
+            n["status"] = "resolved"
+            n["read"] = True
+            write_json(path, data)
+            return n
+    return None
 
 
 def mark_read(user_name: str, notif_id: str) -> bool:

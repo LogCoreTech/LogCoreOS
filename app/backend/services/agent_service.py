@@ -1301,7 +1301,11 @@ def _execute_tool(
             case "list_asset_templates":
                 from services import assets_service
 
-                return assets_service.list_templates()
+                return assets_service.visible_templates(
+                    user["name"],
+                    is_admin=user.get("role") == "admin",
+                    feature_role=user.get("feature_role", "member"),
+                )
 
             case "list_assets":
                 from services import assets_service
@@ -1438,15 +1442,19 @@ def _execute_tool(
 
                 if user.get("role") != "admin":
                     return {"error": "Admin access required"}
-                return assets_service.create_template(inputs)
+                # Admin chat manages GLOBAL templates.
+                return assets_service.create_template(inputs, owner=assets_service.GLOBAL_OWNER)
 
             case "update_asset_template":
                 from services import assets_service
 
                 if user.get("role") != "admin":
                     return {"error": "Admin access required"}
+                tmpl = assets_service.get_global_template(inputs["key"])
+                if tmpl is None:
+                    return {"error": f"Global template {inputs['key']!r} not found"}
                 updates = {k: v for k, v in inputs.items() if k != "key"}
-                result = assets_service.update_template(inputs["key"], updates)
+                result = assets_service.update_template(tmpl["id"], updates)
                 return result or {"error": f"Template {inputs['key']!r} not found"}
 
             case "read_system_file":

@@ -81,7 +81,7 @@ def test_field_order_preserved(parcel):
 
 
 def test_update_template_replaces_fields(parcel):
-    svc.update_template("parcel", {"fields": [{"key": "acreage", "type": "number"}]})
+    svc.update_template(parcel["id"], {"fields": [{"key": "acreage", "type": "number"}]})
     assert [f["key"] for f in svc.get_template("parcel")["fields"]] == ["acreage"]
 
 
@@ -95,11 +95,12 @@ def test_insert_example_uses_unique_keys(users):
 def test_delete_template_blocked_when_referenced(parcel, users):
     svc.create_asset("Alice", {"template": "parcel", "name": "Lot 1"}, created_by="Alice")
     with pytest.raises(ValueError, match="still use template"):
-        svc.delete_template("parcel")
+        svc.delete_template(parcel["id"])
 
 
 def test_delete_unused_template(parcel):
-    assert svc.delete_template("subdivision") is True
+    sub_id = svc.get_template("subdivision")["id"]
+    assert svc.delete_template(sub_id) is True
     assert svc.get_template("subdivision") is None
 
 
@@ -174,7 +175,7 @@ def test_orphaned_value_survives_field_removal(parcel):
         {"template": "parcel", "name": "X", "fields": {"county": "Bexar"}},
         created_by="Alice",
     )
-    svc.update_template("parcel", {"fields": [{"key": "acreage", "type": "number"}]})
+    svc.update_template(parcel["id"], {"fields": [{"key": "acreage", "type": "number"}]})
     current = svc.get_asset("Alice", asset["id"])
     assert current["fields"]["county"] == "Bexar"
     with pytest.raises(ValueError, match="Unknown field"):
@@ -255,6 +256,9 @@ def test_can_delete_own_but_not_pool_or_shared(parcel, users):
     svc.update_access(
         "Alice", lone["id"], shared_with=[{"target": "Bob", "access": "edit"}], by="Alice"
     )
+    svc.respond_to_asset_share(
+        "Bob", {"owner": "Alice", "workspace": "personal", "asset_id": lone["id"]}, True
+    )
     assert svc.find_asset("Bob", "personal", lone["id"])["can_delete"] is False
     # Pool asset: non-admin grantee cannot delete
     sub = svc.create_asset("Alice", {"template": "subdivision", "name": "S"}, created_by="Alice")
@@ -300,15 +304,25 @@ def test_history_recorded_and_capped(parcel):
 
 
 # ---------------------------------------------------------------------------
-# Sharing + hidden_from
+# Sharing + hidden_from (request-based handshake)
 # ---------------------------------------------------------------------------
 
 
-def test_named_user_share_subtree_and_access(parcel, users):
+def _accept(viewer, owner, asset_id, ws="personal"):
+    svc.respond_to_asset_share(
+        viewer, {"owner": owner, "workspace": ws, "asset_id": asset_id}, True
+    )
+
+
+def test_share_is_pending_until_accepted(parcel, users):
     sub, lot = _tree(users)
     svc.update_access(
         "Alice", sub["id"], shared_with=[{"target": "Bob", "access": "read"}], by="Alice"
     )
+    # Pending: Bob can't see it yet
+    assert not any(a["id"] == sub["id"] for a in svc.list_visible("Bob", "personal"))
+    assert svc.find_asset("Bob", "personal", sub["id"]) is None
+    _accept("Bob", "Alice", sub["id"])
     visible = {a["id"]: a for a in svc.list_visible("Bob", "personal")}
     assert visible[sub["id"]]["_owner"] == "Alice"
     assert visible[lot["id"]]["_access"] == "read"
@@ -316,11 +330,34 @@ def test_named_user_share_subtree_and_access(parcel, users):
     assert found["relation"] == "shared" and found["can_edit"] is False
 
 
+def test_share_request_notifies_recipient(parcel, users):
+    from services import suggestions_service
+
+    sub, _ = _tree(users)
+    svc.update_access(
+        "Alice", sub["id"], shared_with=[{"target": "Bob", "access": "read"}], by="Alice"
+    )
+    notifs = suggestions_service.get_notifications("Bob")
+    assert any(n.get("action", {}).get("type") == "asset_share" for n in notifs)
+
+
+def test_decline_then_leave(parcel, users):
+    sub, _ = _tree(users)
+    svc.update_access(
+        "Alice", sub["id"], shared_with=[{"target": "Bob", "access": "read"}], by="Alice"
+    )
+    _accept("Bob", "Alice", sub["id"])
+    assert any(a["id"] == sub["id"] for a in svc.list_visible("Bob", "personal"))
+    svc.leave_asset_share("Bob", "Alice", sub["id"])
+    assert not any(a["id"] == sub["id"] for a in svc.list_visible("Bob", "personal"))
+
+
 def test_edit_share_can_edit(parcel, users):
     sub, lot = _tree(users)
     svc.update_access(
         "Alice", sub["id"], shared_with=[{"target": "Bob", "access": "edit"}], by="Alice"
     )
+    _accept("Bob", "Alice", sub["id"])
     found = svc.find_asset("Bob", "personal", lot["id"])
     assert found["can_edit"] is True and found["can_manage"] is False
 
@@ -334,6 +371,18 @@ def test_household_share_personal_workspace(parcel, users):
         by="Alice",
         asset_workspace="personal",
     )
+    _accept("Bob", "Alice", sub["id"])
+    assert any(a["id"] == sub["id"] for a in svc.list_visible("Bob", "personal"))
+
+
+def test_legacy_share_without_accepted_is_open(parcel, users):
+    # A pre-Phase-2 share entry (no `accepted` key) stays open to the target.
+    sub, _ = _tree(users)
+    store = svc._load("Alice", "personal")
+    node = svc._by_id(store["assets"])[sub["id"]]
+    node["shared_with"] = [{"target": "Bob", "access": "read"}]  # legacy shape
+    svc._save("Alice", "personal", store)
+    assets_index.reindex_owner("Alice", "personal")
     assert any(a["id"] == sub["id"] for a in svc.list_visible("Bob", "personal"))
 
 
@@ -354,6 +403,7 @@ def test_hidden_from_beats_share(parcel, users):
         hidden_from=["Bob"],
         by="Alice",
     )
+    _accept("Bob", "Alice", sub["id"])  # even if Bob accepts, hidden_from wins
     assert not any(a["id"] in (sub["id"], lot["id"]) for a in svc.list_visible("Bob", "personal"))
     assert svc.find_asset("Bob", "personal", lot["id"]) is None
 
@@ -367,6 +417,7 @@ def test_share_this_node_only_no_cascade(parcel, users):
         by="Alice",
         cascade=False,
     )
+    _accept("Bob", "Alice", sub["id"])
     visible = {a["id"] for a in svc.list_visible("Bob", "personal")}
     assert sub["id"] in visible  # the node itself is shared
     assert lot["id"] not in visible  # child is NOT shared (per-node)
@@ -378,7 +429,8 @@ def test_share_cascade_writes_descendants(parcel, users):
     svc.update_access(
         "Alice", sub["id"], shared_with=[{"target": "Bob", "access": "edit"}], by="Alice"
     )  # cascade defaults True
-    assert svc.get_asset("Alice", lot["id"])["shared_with"] == [{"target": "Bob", "access": "edit"}]
+    assert svc.get_asset("Alice", lot["id"])["shared_with"][0]["target"] == "Bob"
+    _accept("Bob", "Alice", sub["id"])  # accepting the root grants the subtree
     assert svc.find_asset("Bob", "personal", lot["id"])["can_edit"] is True
 
 
@@ -389,6 +441,7 @@ def test_orphan_by_sharing_visible_without_parent(parcel, users):
     svc.update_access(
         "Alice", lot["id"], shared_with=[{"target": "Bob", "access": "read"}], by="Alice"
     )
+    _accept("Bob", "Alice", lot["id"])
     visible = {a["id"] for a in svc.list_visible("Bob", "personal")}
     assert lot["id"] in visible and sub["id"] not in visible
 
@@ -396,18 +449,17 @@ def test_orphan_by_sharing_visible_without_parent(parcel, users):
 def test_create_under_shared_inherits_audience(parcel, users):
     sub, _ = _tree(users)
     svc.update_access(
-        "Alice",
-        sub["id"],
-        shared_with=[{"target": "Bob", "access": "edit"}],
-        hidden_from=[],
-        by="Alice",
+        "Alice", sub["id"], shared_with=[{"target": "Bob", "access": "edit"}], by="Alice"
     )
+    _accept("Bob", "Alice", sub["id"])  # Bob is now in the accepted list
     child = svc.create_asset(
         "Alice",
         {"template": "parcel", "name": "New Lot", "parent_id": sub["id"]},
         created_by="Alice",
     )
-    assert child["shared_with"] == [{"target": "Bob", "access": "edit"}]
+    # Child inherits Bob-in-accepted → immediately visible/editable (group mechanic)
+    assert child["shared_with"][0]["target"] == "Bob"
+    assert "Bob" in child["shared_with"][0]["accepted"]
     assert svc.find_asset("Bob", "personal", child["id"])["can_edit"] is True
 
 
