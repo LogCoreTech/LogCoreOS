@@ -121,6 +121,34 @@ def m005_asset_template_ids(brain: Path) -> None:
         write_json(tpl_file, data)
 
 
+def m006_seed_folder_template(brain: Path) -> None:
+    """Seed a default global 'Folder' asset template (name + notes only, no
+    custom fields) so users can organize assets without building a template
+    first. Seeded once — an admin who deletes it won't see it come back."""
+    import uuid
+    from datetime import datetime, timezone
+
+    tpl_file = brain / "_system" / "asset_templates.json"
+    data = read_json(tpl_file, default={"templates": []})
+    templates = data.setdefault("templates", [])
+    if any(t.get("key") == "folder" for t in templates):
+        return
+    templates.append(
+        {
+            "id": str(uuid.uuid4()),
+            "key": "folder",
+            "label": "Folder",
+            "icon": "📁",
+            "fields": [],
+            "owner": "_global",
+            "shared_with": [],
+            "restrict_roles": [],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    write_json(tpl_file, data)
+
+
 # Ordered list — append new migrations here; never reorder or remove
 MIGRATIONS: list[tuple[str, MigrationFn]] = [
     ("m001_task_type_field", m001_task_type_field),
@@ -128,6 +156,7 @@ MIGRATIONS: list[tuple[str, MigrationFn]] = [
     ("m003_user_disabled_modules", m003_user_disabled_modules),
     ("m004_task_due_time_field", m004_task_due_time_field),
     ("m005_asset_template_ids", m005_asset_template_ids),
+    ("m006_seed_folder_template", m006_seed_folder_template),
 ]
 
 # ── Runner ─────────────────────────────────────────────────────────────────────

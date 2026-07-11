@@ -624,3 +624,94 @@ def test_task_asset_id_passthrough(users):
     assert task["asset_id"] == "abc123"
     updated = task_service.update_task("Alice", task["id"], {"asset_id": None})
     assert updated["asset_id"] is None
+
+
+# ---------------------------------------------------------------------------
+# Create-response annotation (router) — the create modal flips straight into
+# edit mode on this response, so records created outside the creator's own
+# store must carry _owner/_access like list/find responses do.
+# ---------------------------------------------------------------------------
+
+
+def _router_create(payload: dict, user: dict, workspace: str = "personal"):
+    from routers.assets import AssetCreate
+    from routers.assets import create_asset as route_create
+
+    return route_create(AssetCreate(**payload), current_user=user, workspace=workspace, _rl=None)
+
+
+def test_create_own_asset_response_not_annotated(parcel, users):
+    created = _router_create({"template": "parcel", "name": "Mine"}, users["alice"])
+    assert "_owner" not in created and "_access" not in created
+
+
+def test_create_pool_asset_response_annotated(parcel, users):
+    created = _router_create(
+        {"template": "parcel", "name": "Pool thing", "owner": "pool"}, users["alice"]
+    )
+    assert created["_owner"] == "household"
+    assert created["_access"] == "edit"
+    # And the record really lives in the pool store
+    assert any(a["id"] == created["id"] for a in svc.list_assets("_household"))
+
+
+def test_create_child_under_pool_parent_response_annotated(parcel, users):
+    root = _router_create(
+        {"template": "subdivision", "name": "Pool sub", "owner": "pool"}, users["alice"]
+    )
+    child = _router_create(
+        {"template": "parcel", "name": "Pool lot", "parent_id": root["id"]}, users["alice"]
+    )
+    assert child["_owner"] == "household"
+    assert child["_access"] == "edit"
+
+
+def test_create_child_under_foreign_share_response_annotated(parcel, users):
+    sub, _ = _tree(users)
+    svc.update_access(
+        "Alice", sub["id"], shared_with=[{"target": "Bob", "access": "edit"}], by="Alice"
+    )
+    _accept("Bob", "Alice", sub["id"])
+    child = _router_create(
+        {"template": "parcel", "name": "Bob's lot", "parent_id": sub["id"]}, users["bob"]
+    )
+    # Created in Alice's store on Bob's behalf → annotated as hers, editable
+    assert child["_owner"] == "Alice"
+    assert child["_access"] == "edit"
+
+
+# ---------------------------------------------------------------------------
+# m006 — default Folder template seed
+# ---------------------------------------------------------------------------
+
+
+def test_m006_seeds_folder_template(brain):
+    from migrations.runner import m006_seed_folder_template
+
+    m006_seed_folder_template(brain)
+    folder = svc.get_global_template("folder")
+    assert folder is not None
+    assert folder["label"] == "Folder"
+    assert folder["icon"] == "📁"
+    assert folder["fields"] == []
+    assert folder["owner"] == "_global"
+    assert folder["id"]
+    # Idempotent — running again doesn't duplicate
+    m006_seed_folder_template(brain)
+    assert sum(1 for t in svc.list_global_templates() if t["key"] == "folder") == 1
+    # Usable: an asset can be built from it with just name + notes
+    asset = svc.create_asset(
+        "Alice", {"template_id": folder["id"], "name": "Vehicles", "notes": "All cars"}
+    )
+    assert asset["fields"] == {}
+
+
+def test_m006_respects_admin_deletion_choice(brain):
+    # Seeding is key-based: if a folder template already exists (or existed and
+    # the migration already ran), nothing is re-added.
+    svc.create_template({"key": "folder", "label": "My Folders", "fields": []})
+    from migrations.runner import m006_seed_folder_template
+
+    m006_seed_folder_template(brain)
+    folders = [t for t in svc.list_global_templates() if t["key"] == "folder"]
+    assert len(folders) == 1 and folders[0]["label"] == "My Folders"

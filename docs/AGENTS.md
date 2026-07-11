@@ -204,17 +204,18 @@ The agent in `agent_service.py` runs a tool registry with safety guardrails. Too
 ## Development Setup
 
 ```bash
-# Backend (from app/backend/)
-pip install -r requirements.txt
-pip install -r ../../requirements-dev.txt
-uvicorn main:app --reload --port 8000
+# Backend (from app/backend/) — host Python is 3.14; deps need 3.12, so use the
+# uv-managed venv at app/backend/.venv (gitignored; see MEMORY.md gotcha)
+uv venv --python 3.12 .venv
+uv pip install -p .venv/bin/python -r requirements.txt -r ../../requirements-dev.txt
+.venv/bin/uvicorn main:app --reload --port 8000
 
 # Frontend (from app/frontend/)
 npm install
 npm run dev
 
 # Run tests (from app/backend/)
-pytest tests/ -v
+.venv/bin/pytest tests/ -v
 ```
 
 Full Docker stack (canonical):
@@ -351,15 +352,17 @@ The Team module (`pages/Team.jsx`) is the business-workspace equivalent of House
 
 The Assets module (`pages/Assets.jsx`, `routers/assets.py`, `services/assets_service.py`) tracks anything ownable as a **single object type with arbitrary nesting** (`parent_id`): subdivisions → parcels, vehicles, equipment. Available in both workspaces.
 
-- **Templates** (admin-only, instance-level in `brain/_system/asset_templates.json`): ordered typed field definitions (`text|number|date|boolean|select`, optional defaults) that premake an object's structure. Template `key` is immutable. Starts empty — Template Manager has an optional example insert.
+- **Templates** (admin-only, instance-level in `brain/_system/asset_templates.json`): ordered typed field definitions (`text|number|date|boolean|select`, optional defaults) that premake an object's structure. Template `key` is immutable. Starts with one seeded default — a 📁 **Folder** template (key `folder`, no custom fields; migration `m006`, key-based so deletion sticks) for organizing assets — Template Manager has an optional example insert for more.
 - **Storage**: per user per workspace at `ws_path/Assets/assets.json`; attachments (images/PDF, 10 MB, ≤20/asset) at `Assets/files/{asset_id}/{attachment_id}.{ext}` — disk names never come from user input.
 - **Sharing**: `shared_with` (targets `team`/`household`/user name; `read`|`edit`) applies to the whole subtree; `hidden_from` excludes named users and **beats shares**; both enforced server-side (`list_visible()`/`find_asset()`).
 - **Pools**: admins convert an asset subtree to `_team`/`_household` (physical move incl. attachment dirs) so it survives account deletion; pool writes need admin or the matching `pool_edit` grant.
 - **Lifecycle**: archive-first (hides subtree; "Show archived" toggle); hard delete = admin + confirm, 409 when children exist. Per-asset `history` (cap 50).
+- **Read-first view**: clicking an existing asset opens `AssetView.jsx` (a clean read-only overview) inside `AssetModal` — the modal holds a `mode` state (`'view'` for an existing asset, `'edit'` for a new one). The **✎ Edit** button flips `mode` to `'edit'` (shown only when not `readOnly`, so read-only shared assets are view-only); Cancel returns to the view for an existing asset. Shared display bits (`AttachmentThumb`, `formatChanges`, `fieldDisplay`) live in `components/assetDisplay.jsx` so view + editor reuse them without a circular import. Drilling into a child calls `onOpenAsset` up to `Assets.jsx`, which re-targets the modal (`key` forces a fresh remount).
 - **Task linking**: tasks carry optional `asset_id`; AssetModal shows linked tasks + creates pre-linked ones; TaskModal has an asset picker when the module is enabled.
 - **Automation API**: `X-Automation-Token` header (token in `brain/_system/automations_config.json`; Admin → n8n card reveals/rotates) for n8n list/create/update; `user` may be `_team`/`_household`.
 - **Agent tools**: `list_asset_templates`/`list_assets` (read), `create_asset`/`update_asset`/`archive_asset` (approval-gated), `delete_asset`/`create_asset_template`/`update_asset_template` (admin).
 - **Gotcha**: the Vite bundle is mounted at `/static` (not `/assets`) precisely because this page owns the `/assets` route — never mount static files on an app route.
+- **Gotcha**: any endpoint returning an asset that the frontend holds as modal state (create does — the modal flips create→edit on its response) must annotate `_owner`/`_access` when the record's store isn't the requester's own, or the edit UI mis-gates pool/share controls (see MEMORY.md 2026-07-11).
 
 ## Notes Module
 

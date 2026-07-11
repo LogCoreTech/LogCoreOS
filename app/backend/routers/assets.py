@@ -412,7 +412,7 @@ def create_asset(
     else:
         store, store_ws = current_user["name"], workspace
     try:
-        return assets_service.create_asset(
+        created = assets_service.create_asset(
             store,
             req.model_dump(exclude={"owner"}),
             workspace=store_ws,
@@ -420,6 +420,16 @@ def create_asset(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    # Annotate like list/find responses when the record lives outside the
+    # creator's own store. The frontend flips the create modal straight into
+    # edit mode on this response and gates pool/share UI on _owner/_access —
+    # a bare record made it treat a fresh pool asset as personal and send
+    # shared_with on save (400 "use hidden_from instead of shares").
+    if store in assets_service.POOL_LABEL:
+        return {**created, "_owner": assets_service.POOL_LABEL[store], "_access": "edit"}
+    if store != current_user["name"]:
+        return {**created, "_owner": store, "_access": "edit"}
+    return created
 
 
 @router.get("/members")

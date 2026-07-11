@@ -11,6 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 **Assets module**
+- New default **📁 Folder** template out of the box — just a name and notes, for organizing assets into groups without building a template first
+- Clicking an asset now opens a clean, read-first overview — fields laid out to read at a glance, attachments, the items inside it, and linked tasks — with an **Edit** button to switch into the editor (shown only if you can edit). Cancelling an edit returns you to the overview
 - Anyone can now create their own templates (not just admins); share them with specific people or whole roles. Admins keep global templates and can restrict them to chosen roles
 - Sharing is now a request: when you share an asset or template, each person gets an Accept/Decline notification and it only appears for them once they accept — and they can leave a share later
 - Track anything ownable — land parcels, vehicles, equipment — as a nestable object tree (subdivision → parcels → …)
@@ -30,6 +32,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Saving a just-created Team/Household asset no longer fails with "Pool assets are workspace-visible — use hidden_from instead of shares" — the editor now knows a fresh asset is a pool asset (the share selector is hidden, as it already was when reopening one)
 - The login page banner now fades in smoothly instead of painting top-to-bottom, and is preloaded/cached so it appears instantly on return and sign-out
 - Fixed a crash ("Something went wrong") that could appear on any page when the notifications list came back in an unexpected shape
 - Sign-out now fully resets the theme — the login page always shows the brand orange (the sign-in button no longer takes on the last user's accent color), and your background no longer lingers until a reload

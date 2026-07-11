@@ -757,7 +757,7 @@ Router mounted at `/api/v1/assets`. Requires the `assets` module (both workspace
 
 | Method | Path | Access | Notes |
 |--------|------|--------|-------|
-| `GET` | `/assets/templates` | module users | templates the viewer can build from: role-permitted global + own personal + accepted-shared (each tagged `_scope`: global/own/shared) |
+| `GET` | `/assets/templates` | module users | templates the viewer can build from: role-permitted global + own personal + accepted-shared (each tagged `_scope`: global/own/shared). A default global 📁 **Folder** template (key `folder`, no custom fields) is seeded once by migration `m006` |
 | `POST` | `/assets/templates` | module users | `{key, label, icon, fields:[...], owner:"me"\|"global"}`; `global` = admin only; key slug immutable, unique within owner |
 | `POST` | `/assets/templates/example?owner=me\|global` | module users (global=admin) | insert an editable example template |
 | `PATCH` | `/assets/templates/{id}` | owner / admin (global) | replace label/icon/fields (+ `restrict_roles` for global) |
@@ -773,7 +773,7 @@ Router mounted at `/api/v1/assets`. Requires the `assets` module (both workspace
 |--------|------|--------|-------|
 | `GET` | `/assets` | module users | own + workspace pool + shared-to-me (annotated `_owner`/`_access`); `?template=`, `?include_archived=true`. Share resolution is index-routed (`assets_share_index.json`) |
 | `GET` | `/assets/members` | module users | member display **names only** for share/hide selectors |
-| `POST` | `/assets` | module users | `{template_id\|template, name, parent_id?, fields?, notes?, owner:"me"\|"pool"}`; `pool` needs admin/`pool_edit`. `parent_id` set → child created in the **parent's store** (requires edit access) inheriting its `shared_with`+`hidden_from` (the "group" mechanic). Asset responses embed the resolved template as `_template` |
+| `POST` | `/assets` | module users | `{template_id\|template, name, parent_id?, fields?, notes?, owner:"me"\|"pool"}`; `pool` needs admin/`pool_edit`. `parent_id` set → child created in the **parent's store** (requires edit access) inheriting its `shared_with`+`hidden_from` (the "group" mechanic). Asset responses embed the resolved template as `_template`. When the record is created outside the caller's own store, the response carries `_owner` (`team`/`household`/owner name) + `_access: "edit"` like list/find responses |
 | `PUT` | `/assets/{id}/access` | owner (pool: admin/grant) | share entries are **requests**: `{shared_with:[{target,access}], hidden_from?, cascade=true}`; each new target (user/team/household/role) is notified and the asset stays hidden until they accept |
 | `POST` | `/assets/{id}/leave` | share recipient | remove self from an asset shared with you |
 | `GET`/`PATCH` | `/assets/{id}` | per access | PATCH allowed for owner/edit-share/pool manager; records history. Re-parent (move) is same-owner only |
