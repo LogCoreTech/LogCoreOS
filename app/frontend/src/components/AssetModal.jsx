@@ -245,6 +245,14 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
         const payload = { name: form.name, fields, notes: form.notes || null }
         if (!isForeign) payload.parent_id = form.parent_id || null
         await assetsApi.update(asset.id, payload)
+        // Save sharing/hiding in the same Save (owner/pool-manager only) so the
+        // one Save button persists shares too — no separate "Save access" step.
+        if (canManage) {
+          const accessPayload = isPool
+            ? { hidden_from: access.hidden_from, cascade: shareScope === 'all' }
+            : { shared_with: access.shared_with, hidden_from: access.hidden_from, cascade: shareScope === 'all' }
+          await assetsApi.updateAccess(asset.id, accessPayload)
+        }
         onSaved()
         onClose()
       } else {
@@ -261,23 +269,6 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
         setAttachments(created.attachments || [])
         onSaved()
       }
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function saveAccess() {
-    setLoading(true)
-    setError('')
-    try {
-      const payload = isPool
-        ? { hidden_from: access.hidden_from, cascade: shareScope === 'all' }
-        : { shared_with: access.shared_with, hidden_from: access.hidden_from, cascade: shareScope === 'all' }
-      const updated = await assetsApi.updateAccess(asset.id, payload)
-      setAsset(a => ({ ...a, ...updated }))
-      onSaved()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -647,9 +638,7 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
                   ))}
                 </div>
               )}
-              <button type="button" onClick={saveAccess} disabled={loading} className="btn-ghost text-xs px-3 py-1.5">
-                Save access
-              </button>
+              <p className="text-[10px] text-charcoal-400">Sharing is saved when you press Save below.</p>
             </div>
           )}
 

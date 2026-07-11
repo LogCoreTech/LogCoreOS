@@ -377,17 +377,7 @@ def respond_to_template_share(viewer: str, payload: dict, accept: bool) -> bool:
     tmpl = next((t for t in store["templates"] if t.get("id") == tid), None)
     if tmpl is None:
         return False
-    changed = False
-    for share in tmpl.get("shared_with") or []:
-        if "accepted" not in share:
-            continue
-        accepted = share["accepted"]
-        if accept and viewer not in accepted:
-            accepted.append(viewer)
-            changed = True
-        elif not accept and viewer in accepted:
-            accepted.remove(viewer)
-            changed = True
+    tmpl["shared_with"], changed = _respond_shares(tmpl.get("shared_with") or [], viewer, accept)
     if changed:
         _save_template_store(owner, store)
     return changed
@@ -901,20 +891,39 @@ def _apply_share_response(
         node = _by_id(store["assets"]).get(aid)
         if node is None:
             continue
-        for share in node.get("shared_with") or []:
-            if "accepted" not in share:
-                continue
-            accepted = share["accepted"]
-            if accept and viewer not in accepted:
-                accepted.append(viewer)
-                changed = True
-            elif not accept and viewer in accepted:
-                accepted.remove(viewer)
-                changed = True
+        node["shared_with"], node_changed = _respond_shares(
+            node.get("shared_with") or [], viewer, accept
+        )
+        changed = changed or node_changed
     if changed:
         _save(store_user, workspace, store)
         assets_index.reindex_owner(store_user, workspace)
     return changed
+
+
+def _respond_shares(shares: list[dict], viewer: str, accept: bool) -> tuple[list[dict], bool]:
+    """Apply an accept/decline to a shared_with list. Accept adds the viewer to the
+    matching entry's `accepted`; decline removes them — and if the entry targets the
+    viewer directly (a per-user share), the whole entry is dropped so the owner no
+    longer lists them. Group/role entries just lose the viewer from `accepted`."""
+    out: list[dict] = []
+    changed = False
+    for share in shares:
+        if "accepted" not in share:
+            out.append(share)
+            continue
+        if not accept and share.get("target") == viewer:
+            changed = True  # per-user share declined/left → drop the entry entirely
+            continue
+        accepted = share["accepted"]
+        if accept and viewer not in accepted:
+            accepted.append(viewer)
+            changed = True
+        elif not accept and viewer in accepted:
+            accepted.remove(viewer)
+            changed = True
+        out.append(share)
+    return out, changed
 
 
 def respond_to_asset_share(viewer: str, payload: dict, accept: bool) -> bool:

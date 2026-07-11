@@ -350,6 +350,9 @@ def test_decline_then_leave(parcel, users):
     assert any(a["id"] == sub["id"] for a in svc.list_visible("Bob", "personal"))
     svc.leave_asset_share("Bob", "Alice", sub["id"])
     assert not any(a["id"] == sub["id"] for a in svc.list_visible("Bob", "personal"))
+    # Leaving a per-user share drops the entry so the owner no longer lists Bob
+    targets = [s["target"] for s in svc.get_asset("Alice", sub["id"])["shared_with"]]
+    assert "Bob" not in targets
 
 
 def test_edit_share_can_edit(parcel, users):

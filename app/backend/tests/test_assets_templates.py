@@ -95,6 +95,9 @@ def test_template_leave(users):
     assert p["id"] in {t["id"] for t in svc.visible_templates("Bob")}
     svc.leave_template_share("Bob", "Alice", p["id"])
     assert p["id"] not in {t["id"] for t in svc.visible_templates("Bob")}
+    # Owner no longer lists Bob as a share target
+    owner_tmpl = svc.get_template_by_id(p["id"])
+    assert "Bob" not in [s["target"] for s in owner_tmpl.get("shared_with", [])]
 
 
 def test_template_share_by_role_notifies_role_members(users):
