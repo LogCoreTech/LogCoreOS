@@ -3,22 +3,8 @@ import { assets as assetsApi, tasks as tasksApi } from '../lib/api'
 import TaskModal from './TaskModal'
 import TagInput from './TagInput'
 import AssetTreePicker from './AssetTreePicker'
-
-// Render a history entry's changes tolerantly — a change value is normally an
-// [old, new] pair, but never trust the shape (legacy/hand-edited data would
-// otherwise throw "not iterable" and crash the whole modal via ErrorBoundary).
-function formatChanges(changes) {
-  return Object.entries(changes || {})
-    .map(([k, v]) => {
-      const key = k.replace('fields.', '')
-      if (Array.isArray(v)) {
-        const [o, n] = v
-        return `${key}: ${o ?? '∅'}→${n ?? '∅'}`
-      }
-      return `${key}: ${v == null ? '∅' : typeof v === 'object' ? JSON.stringify(v) : v}`
-    })
-    .join(', ')
-}
+import AssetView from './AssetView'
+import { AttachmentThumb, formatChanges } from './assetDisplay'
 
 // Field input for one template field definition — module-level per MEMORY.md rule.
 function FieldInput({ def, value, onChange }) {
@@ -60,56 +46,7 @@ function FieldInput({ def, value, onChange }) {
   )
 }
 
-function AttachmentThumb({ assetId, file, canEdit, onDelete }) {
-  const [url, setUrl] = useState(null)
-  const isImage = file.mime.startsWith('image/')
-
-  useEffect(() => {
-    let objectUrl = null
-    if (isImage) {
-      assetsApi.fileBlob(assetId, file.id)
-        .then(blob => { objectUrl = URL.createObjectURL(blob); setUrl(objectUrl) })
-        .catch(() => {})
-    }
-    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl) }
-  }, [assetId, file.id])
-
-  async function open() {
-    try {
-      const blob = await assetsApi.fileBlob(assetId, file.id)
-      const u = URL.createObjectURL(blob)
-      window.open(u, '_blank')
-      setTimeout(() => URL.revokeObjectURL(u), 60000)
-    } catch { /* ignore */ }
-  }
-
-  return (
-    <div className="relative group border border-charcoal-200 dark:border-charcoal-700 rounded-lg overflow-hidden">
-      <button type="button" onClick={open} className="block w-full" title={file.filename}>
-        {isImage && url ? (
-          <img src={url} alt={file.filename} className="w-full h-20 object-cover" />
-        ) : (
-          <div className="w-full h-20 flex flex-col items-center justify-center text-charcoal-500 dark:text-charcoal-400">
-            <span className="text-xl">📄</span>
-            <span className="text-[10px] px-1 truncate max-w-full">{file.filename}</span>
-          </div>
-        )}
-      </button>
-      {canEdit && (
-        <button
-          type="button"
-          onClick={() => onDelete(file)}
-          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-          title="Delete file"
-        >
-          ✕
-        </button>
-      )}
-    </div>
-  )
-}
-
-export default function AssetModal({ asset: initialAsset, templates, allAssets: allAssetsProp, defaultParentId, user, workspace, onClose, onSaved }) {
+export default function AssetModal({ asset: initialAsset, templates, allAssets: allAssetsProp, defaultParentId, user, workspace, onClose, onSaved, onOpenAsset }) {
   const allAssets = Array.isArray(allAssetsProp) ? allAssetsProp : []
   // `asset` is state so a fresh create can flip the modal into edit mode in place
   // (files/tasks/sharing need a saved asset id before they can be used).
@@ -134,6 +71,9 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
     notes: asset?.notes || '',
     owner: 'me',
   })
+  // Existing assets open read-first (clean view); creating starts in the editor.
+  // The view's Edit button flips this to 'edit' in place.
+  const [mode, setMode] = useState(initialAsset ? 'view' : 'edit')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [linkedTasks, setLinkedTasks] = useState([])
@@ -203,6 +143,13 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
 
   function setFieldValue(key, value) {
     setForm(f => ({ ...f, fields: { ...f.fields, [key]: value } }))
+  }
+
+  // Cancel out of the editor: an existing asset was opened in the read view, so
+  // return there; a brand-new (or just-created) asset closes the modal.
+  function handleCancel() {
+    if (initialAsset) setMode('view')
+    else onClose()
   }
 
   // Parent options: same-store assets only, excluding self and own descendants
@@ -367,6 +314,24 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
   }
 
   const shareTargets = access.shared_with
+
+  // Read-first: an existing asset opens in a clean, readable view. Edit (owner /
+  // editor only) flips this same modal into the editor below.
+  if (mode === 'view' && asset) {
+    return (
+      <AssetView
+        asset={asset}
+        template={template}
+        linkedTasks={linkedTasks}
+        childAssets={allAssets.filter(a => a.parent_id === asset.id)}
+        canEdit={!readOnly}
+        canManage={canManage}
+        onEdit={() => setMode('edit')}
+        onClose={onClose}
+        onOpenAsset={onOpenAsset}
+      />
+    )
+  }
 
   return (
     <div className="modal-overlay">
@@ -693,7 +658,7 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
                     → {workspace === 'business' ? 'Team' : 'Household'}
                   </button>
                 )}
-                <button type="button" onClick={onClose} className="btn-ghost flex-1">Cancel</button>
+                <button type="button" onClick={handleCancel} className="btn-ghost flex-1">Cancel</button>
                 <button type="submit" disabled={loading} className="btn-primary flex-1">
                   {loading ? 'Saving…' : editing ? 'Save' : 'Create'}
                 </button>

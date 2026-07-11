@@ -324,6 +324,7 @@ export default function Assets() {
 
       {modal && (
         <AssetModal
+          key={modal.asset?.id || 'new'}
           asset={modal.asset || null}
           templates={templates}
           allAssets={items}
@@ -332,6 +333,7 @@ export default function Assets() {
           workspace={workspace}
           onClose={() => setModal(null)}
           onSaved={load}
+          onOpenAsset={asset => setModal({ asset })}
         />
       )}
 

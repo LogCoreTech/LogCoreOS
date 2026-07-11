@@ -110,7 +110,9 @@ LogCoreOS/
 │           └── components/
 │               ├── Layout.jsx     → root shell: sidebar nav, user menu, theme toggle, module access guard
 │               ├── TaskModal.jsx  → create/edit task form (title, category, type, recurrence, due date/time, assigned_to, linked asset)
-│               ├── AssetModal.jsx → create/edit asset: dynamic template fields, attachments, member selectors for share/hide, history, 3-choice archive, delete/convert; auto-flips create→edit
+│               ├── AssetModal.jsx → asset modal: opens an existing asset in read-first view (AssetView), Edit flips to the editor (dynamic template fields, attachments, share/hide selectors, history, 3-choice archive, delete/convert); auto-flips create→edit
+│               ├── AssetView.jsx  → read-only asset overview: header, attachments, fields as label/value pairs, notes, child list (drill-in), linked tasks, sharing summary, history; ✎ Edit button (owner/editor only)
+│               ├── assetDisplay.jsx → shared asset display helpers (no circular import): AttachmentThumb component, formatChanges(), fieldDisplay()
 │               ├── TemplateManager.jsx → admin template editor: ordered typed fields (TagInput options), EmojiPicker icon, defaults, example insert
 │               ├── TagInput.jsx    → GitHub-topics-style chip input (free-text or strict selector mode); inline capped suggestion box — template options, share/hide members
 │               ├── EmojiPicker.jsx → curated self-contained emoji grid popover (right-aligned) for template icons
