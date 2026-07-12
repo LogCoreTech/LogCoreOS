@@ -24,6 +24,7 @@ from services.file_service import (
     assets_path,
     personal_templates_path,
     read_json,
+    user_path,
     write_json,
 )
 
@@ -559,45 +560,60 @@ def _merge_caps(a: dict | None, b: dict) -> dict:
     }
 
 
+def _resolve_grant(entries: list[dict], viewer: str, group: str) -> tuple[str | None, dict | None]:
+    """Specificity-based grant resolution: an entry targeting the viewer BY NAME
+    beats any group/role entry — otherwise restricting one member of a group
+    (e.g. crew gets contribute while the household has edit) is impossible.
+    Within the winning specificity level, the highest access wins
+    ('edit' > 'contribute' > 'read'); caps union only across same-level
+    contribute entries. Returns (access, caps).
+    """
+    best: str | None = None
+    caps: dict | None = None
+    for entry in entries:
+        access = entry.get("access", "read")
+        if access == "edit":
+            return "edit", None
+        if access == "contribute":
+            best = "contribute"
+            caps = _merge_caps(caps, normalize_caps(entry.get("caps")))
+        elif best is None:
+            best = "read"
+    return best, caps if best == "contribute" else None
+
+
 def _share_access(
     asset: dict, by_id: dict[str, dict], viewer: str, workspace: str
 ) -> tuple[str | None, dict | None]:
-    """Best share grant ('edit' > 'contribute' > 'read') on THIS node (per-node,
-    not inherited). Returns (access, caps) — caps only set for 'contribute'
-    (matching contribute entries have their caps unioned).
+    """Best share grant on THIS node (per-node, not inherited), resolved by
+    specificity — see _resolve_grant. Returns (access, caps).
 
     Request-based: a new-style entry carries an `accepted` list and grants only to
     viewers who accepted. A legacy entry (no `accepted` key) is open to whoever the
     target resolves to — keeps pre-Phase-2 shares working until re-shared.
     """
-    best: str | None = None
-    caps: dict | None = None
     group = "team" if workspace == "business" else "household"
+    personal: list[dict] = []
+    grouped: list[dict] = []
     for share in asset.get("shared_with") or []:
         if "accepted" in share:
             if viewer not in (share.get("accepted") or []):
                 continue
         elif share.get("target") not in (viewer, group):
             continue
-        access = share.get("access", "read")
-        if access == "edit":
-            return "edit", None
-        if access == "contribute":
-            best = "contribute"
-            caps = _merge_caps(caps, normalize_caps(share.get("caps")))
-        elif best is None:
-            best = "read"
-    return best, caps if best == "contribute" else None
+        (personal if share.get("target") == viewer else grouped).append(share)
+    return _resolve_grant(personal or grouped, viewer, group)
 
 
 def _contributor_caps(asset: dict, viewer: str, workspace: str) -> dict | None:
     """Resolve pool-asset contributor caps for a viewer (no handshake — pool
-    assets are already workspace-visible). Matching entries are unioned."""
+    assets are already workspace-visible). A by-name entry beats group entries."""
     group = "team" if workspace == "business" else "household"
+    personal = [c for c in asset.get("contributors") or [] if c.get("target") == viewer]
+    grouped = [c for c in asset.get("contributors") or [] if c.get("target") == group]
     caps: dict | None = None
-    for entry in asset.get("contributors") or []:
-        if entry.get("target") in (viewer, group):
-            caps = _merge_caps(caps, normalize_caps(entry.get("caps")))
+    for entry in personal or grouped:
+        caps = _merge_caps(caps, normalize_caps(entry.get("caps")))
     return caps
 
 
@@ -819,25 +835,47 @@ def add_comment(
     if len(text) > MAX_COMMENT_LEN:
         raise ValueError(f"Comment too long (max {MAX_COMMENT_LEN} characters)")
     store = _load(store_user, workspace)
-    asset = _by_id(store["assets"]).get(asset_id)
+    by_id = _by_id(store["assets"])
+    asset = by_id.get(asset_id)
     if asset is None:
         return None
+    if asset.get("comments_hidden"):
+        raise ValueError("Comments are turned off on this asset")
     comment = {"id": str(uuid.uuid4()), "by": by, "at": _now_iso(by or store_user), "text": text}
     comments = list(asset.get("comments") or [])
     comments.append(comment)
     asset["comments"] = comments[-MAX_COMMENTS:]
     asset["updated_at"] = _now_iso(by or store_user)
     _save(store_user, workspace, store)
-    _notify_comment(store_user, asset, comment, asset_workspace)
+    _notify_comment(store_user, asset, comment, asset_workspace, by_id)
     return comment
 
 
-def _notify_comment(store_user: str, asset: dict, comment: dict, asset_workspace: str) -> None:
+def set_comments_hidden(
+    store_user: str, asset_id: str, hidden: bool, workspace: str = "personal", by: str = ""
+) -> dict | None:
+    """Owner/manager toggle: hide the comments section for ALL users (data kept)."""
+    store = _load(store_user, workspace)
+    asset = _by_id(store["assets"]).get(asset_id)
+    if asset is None:
+        return None
+    asset["comments_hidden"] = bool(hidden)
+    asset["updated_at"] = _now_iso(by or store_user)
+    _push_history(asset, by, "comments_off" if hidden else "comments_on")
+    _save(store_user, workspace, store)
+    return asset
+
+
+def _notify_comment(
+    store_user: str, asset: dict, comment: dict, asset_workspace: str, by_id: dict
+) -> None:
     from services import suggestions_service
 
     author = comment.get("by") or ""
     snippet = comment["text"][:140] + ("…" if len(comment["text"]) > 140 else "")
     for name in sorted(_comment_audience(store_user, asset, asset_workspace) - {author}):
+        if _muted_node(name, asset["id"], by_id):
+            continue
         try:
             suggestions_service.notify_user(
                 name,
@@ -849,6 +887,61 @@ def _notify_comment(store_user: str, asset: dict, comment: dict, asset_workspace
             )
         except Exception:
             pass
+
+
+# ---------------------------------------------------------------------------
+# Comment notification mutes — per-user opt-out, applies to a node + its subtree
+# ---------------------------------------------------------------------------
+
+
+def _mutes_path(user_name: str):
+    return user_path(user_name) / "Assets" / "comment_mutes.json"
+
+
+def get_comment_mutes(user_name: str) -> list[str]:
+    return read_json(_mutes_path(user_name), default={"muted": []}).get("muted", [])
+
+
+def set_comment_mute(user_name: str, asset_id: str, muted: bool) -> list[str]:
+    mutes = set(get_comment_mutes(user_name))
+    if muted:
+        mutes.add(asset_id)
+    else:
+        mutes.discard(asset_id)
+    write_json(_mutes_path(user_name), {"muted": sorted(mutes)})
+    return sorted(mutes)
+
+
+def _muted_node(user_name: str, asset_id: str, by_id: dict) -> str | None:
+    """Return the id of the node whose mute covers this asset (self or any
+    ancestor — muting a parent silences its whole subtree), else None."""
+    muted = set(get_comment_mutes(user_name))
+    if not muted:
+        return None
+    seen: set[str] = set()
+    cur: str | None = asset_id
+    while cur and cur not in seen:
+        if cur in muted:
+            return cur
+        seen.add(cur)
+        node = by_id.get(cur)
+        cur = node.get("parent_id") if node else None
+    return None
+
+
+def comment_mute_state(
+    user_name: str, store_user: str, asset_id: str, workspace: str = "personal"
+) -> dict:
+    """Effective mute state for the bell popup: muted (self or via ancestor),
+    plus which node carries the mute so the UI can explain it."""
+    by_id = _by_id(list_assets(store_user, workspace))
+    via = _muted_node(user_name, asset_id, by_id)
+    return {
+        "muted": via is not None,
+        "self": asset_id in set(get_comment_mutes(user_name)),
+        "via": via,
+        "via_name": (by_id.get(via) or {}).get("name") if via else None,
+    }
 
 
 def delete_comment(

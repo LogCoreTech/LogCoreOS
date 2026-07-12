@@ -14,6 +14,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Contribute access for employees/crew**: share an asset with a new middle access level where you pick exactly what the person can do — which fields they may change (e.g. just Status) and what they may add (comments, photos/PDFs, items inside). They work from the clean asset view (quick status dropdown, only their granted fields editable, comment box) and never see the full editor
 - **Contributors on Team/Household assets**: give a member (or the whole team) the same picked-capability access on pool assets — without handing them full team management rights
 - **Comments on assets**: an attributed, append-only note log per asset ("gate fixed, invoice sent") that can't overwrite anyone else's text. Everyone with edit access gets notified when someone comments — the bell notification has a **View →** button (and the push notification a link) that jumps straight to that asset
+- Comments are an audit-style log: **only an admin can delete one**. Owners/managers instead get a **"Hide for everyone"** toggle that turns the whole comments section off on that asset (data kept, posting blocked) and can turn it back on
+- **🔔 per-asset notification mute**: a bell button in the asset view opens a popup to opt out (or back in) of comment notifications for that asset **and everything inside it** — personal preference, doesn't affect anyone else; muting a parent covers all its children, and the popup tells you when a mute comes from a parent
 - **Hide from whole roles**: the Hide-from picker now accepts roles (e.g. `role:crew`) — hides the asset from everyone holding that role, including people assigned to it later
 - Workflow (n8n) API can now post asset comments too (attributed "automation", triggers the same notifications); asset edits from workflows were already supported — both are documented in the API reference
 - New default **📁 Folder** template out of the box — just a name and notes, for organizing assets into groups without building a template first
@@ -37,10 +39,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- Goal-type tasks no longer appear in the Tasks page — they live on the Goals page only (they still show on the calendar when dated, and still count in priority scoring — by design)
+- Goal-type tasks now live on the Goals page only — removed from the Tasks page, the dashboard's Top 3 and Due Today, and the morning digest (they still show on the calendar when dated; goal-drift check-ins are unchanged)
 
 ### Fixed
 
+- **Per-person asset permissions now beat group permissions.** When an asset was shared with the whole household/team AND a specific person had their own contribute grant, the grants were blended — so tightening one member's permissions appeared not to take effect. A by-name entry now fully overrides any group entry (shares and pool contributors alike), so restricting a single member of a group actually works
 - Saving a just-created Team/Household asset no longer fails with "Pool assets are workspace-visible — use hidden_from instead of shares" — the editor now knows a fresh asset is a pool asset (the share selector is hidden, as it already was when reopening one)
 - The login page banner now fades in smoothly instead of painting top-to-bottom, and is preloaded/cached so it appears instantly on return and sign-out
 - Fixed a crash ("Something went wrong") that could appear on any page when the notifications list came back in an unexpected shape

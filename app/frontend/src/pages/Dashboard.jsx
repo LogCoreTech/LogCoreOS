@@ -28,7 +28,8 @@ export default function Dashboard() {
       ])
       const todayStr = todayResp?.today ?? new Date().toISOString().split('T')[0]
       setTop3(t3)
-      setToday(all.filter(t => t.status === 'pending' && t.due_date === todayStr))
+      // Goal-type tasks live on the Goals page — keep the daily view tasks-only
+      setToday(all.filter(t => t.status === 'pending' && t.due_date === todayStr && t.type !== 'goal'))
       setStreaks(all.filter(t => t.type === 'recurring' && (t.streak_count || 0) > 0)
         .sort((a, b) => b.streak_count - a.streak_count)
         .slice(0, 5))

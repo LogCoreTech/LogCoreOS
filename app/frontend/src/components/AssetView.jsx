@@ -30,6 +30,8 @@ export default function AssetView({
   const [commentText, setCommentText] = useState('')
   const [draft, setDraft] = useState({})
   const [uploading, setUploading] = useState(false)
+  const [mutePopup, setMutePopup] = useState(false)
+  const [muteInfo, setMuteInfo] = useState(null) // {muted, self, via, via_name}
 
   const isForeign = !!asset._owner
   const isPool = asset._owner === 'team' || asset._owner === 'household'
@@ -50,10 +52,14 @@ export default function AssetView({
   const kids = Array.isArray(childAssets) ? childAssets : []
 
   // What this viewer can do from the view itself
+  const isAdmin = user?.role === 'admin'
+  const commentsHidden = !!asset.comments_hidden
   const canQuickStatus = !!statusDef && (canEdit || (isContribute && capFields.includes('status')))
   const inlineDefs = isContribute ? fieldDefs.filter(f => capFields.includes(f.key)) : []
-  const canComment = canEdit || canManage || (isContribute && capAdds.includes('comments'))
+  const canComment = !commentsHidden && (canEdit || canManage || (isContribute && capAdds.includes('comments')))
   const canUploadHere = isContribute && capAdds.includes('files')
+  // Only edit-level users receive comment notifications, so only they get the bell
+  const showBell = canEdit || canManage
   const dirty = Object.keys(draft).length > 0
 
   function shareLabel(target) {
@@ -112,6 +118,37 @@ export default function AssetView({
     }
   }
 
+  async function openMutePopup() {
+    setMutePopup(true)
+    setMuteInfo(null)
+    try { setMuteInfo(await assetsApi.muteState(asset.id)) } catch { setMuteInfo({ muted: false, self: false }) }
+  }
+
+  async function toggleMute() {
+    if (!muteInfo) return
+    setBusy(true)
+    try {
+      setMuteInfo(await assetsApi.setMute(asset.id, !muteInfo.self))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function toggleCommentsHidden() {
+    setBusy(true)
+    setError('')
+    try {
+      await assetsApi.setCommentsHidden(asset.id, !commentsHidden)
+      onAssetUpdated && onAssetUpdated({ ...asset, comments_hidden: !commentsHidden })
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function handleUpload(e) {
     const file = e.target.files?.[0]
     e.target.value = ''
@@ -160,7 +197,18 @@ export default function AssetView({
               {asset.archived && <span>archived</span>}
             </div>
           </div>
-          <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200 shrink-0">✕</button>
+          <div className="flex items-center gap-1 shrink-0">
+            {showBell && (
+              <button
+                onClick={openMutePopup}
+                className="text-charcoal-400 hover:text-orange-500 transition-colors p-0.5"
+                title="Comment notifications for this asset"
+              >
+                🔔
+              </button>
+            )}
+            <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+          </div>
         </div>
 
         <div className="space-y-4">
@@ -266,11 +314,34 @@ export default function AssetView({
             </div>
           )}
 
-          {/* Comments — attributed job log; edit-level users get notified */}
-          {(comments.length > 0 || canComment) && (
+          {/* Comments — attributed job log; edit-level users get notified.
+              Owner/manager can hide the whole section for everyone; only an
+              admin can delete individual comments (audit-style log). */}
+          {commentsHidden && canManage && (
+            <div className="flex items-center gap-2 text-xs text-charcoal-400">
+              <span>Comments are turned off on this asset.</span>
+              <button type="button" onClick={toggleCommentsHidden} disabled={busy} className="btn-ghost text-[11px] px-2 py-0.5">
+                Turn on
+              </button>
+            </div>
+          )}
+          {!commentsHidden && (comments.length > 0 || canComment || canManage) && (
             <div>
-              <div className="text-[11px] uppercase tracking-wide text-charcoal-400 mb-1">
-                Comments{comments.length > 0 ? ` (${comments.length})` : ''}
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[11px] uppercase tracking-wide text-charcoal-400">
+                  Comments{comments.length > 0 ? ` (${comments.length})` : ''}
+                </span>
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={toggleCommentsHidden}
+                    disabled={busy}
+                    className="text-[10px] text-charcoal-400 hover:text-orange-500 transition-colors ml-auto"
+                    title="Hide the comments section for all users"
+                  >
+                    Hide for everyone
+                  </button>
+                )}
               </div>
               {comments.length > 0 && (
                 <div className="space-y-2 max-h-48 overflow-y-auto mb-2">
@@ -279,12 +350,12 @@ export default function AssetView({
                       <div className="flex items-center gap-2 text-[11px] text-charcoal-400">
                         <span className="font-medium text-charcoal-600 dark:text-charcoal-300">{c.by || 'system'}</span>
                         <span>{fmtWhen(c.at)}</span>
-                        {(c.by === user?.name || canManage) && (
+                        {isAdmin && (
                           <button
                             type="button"
                             onClick={() => removeComment(c)}
                             className="ml-auto text-red-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                            title="Delete comment"
+                            title="Delete comment (admin)"
                           >
                             ✕
                           </button>
@@ -374,6 +445,34 @@ export default function AssetView({
             <button type="button" onClick={onEdit} className="btn-primary flex-1">✎ Edit</button>
           )}
         </div>
+
+        {/* Comment-notification mute popup (per-user; covers the whole subtree) */}
+        {mutePopup && (
+          <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={() => setMutePopup(false)}>
+            <div className="card p-5 w-full max-w-xs" onClick={e => e.stopPropagation()}>
+              <p className="font-semibold mb-1">Comment notifications</p>
+              <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mb-4">
+                Applies to “{asset.name}” and everything inside it. Only affects you.
+              </p>
+              {muteInfo == null ? (
+                <div className="flex justify-center py-2">
+                  <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : muteInfo.muted && !muteInfo.self ? (
+                <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mb-3">
+                  🔕 Muted through “{muteInfo.via_name || 'a parent asset'}” — open that asset to unmute.
+                </p>
+              ) : (
+                <button onClick={toggleMute} disabled={busy} className="btn-primary w-full text-sm mb-2">
+                  {muteInfo.self ? '🔔 Turn notifications on' : '🔕 Mute notifications'}
+                </button>
+              )}
+              <button onClick={() => setMutePopup(false)} className="w-full text-sm text-charcoal-400 hover:text-charcoal-600 py-1">
+                Close
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

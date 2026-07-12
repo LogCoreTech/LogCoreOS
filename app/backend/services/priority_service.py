@@ -36,12 +36,18 @@ def score_task(task: dict, category_order: list[str], today_str: str) -> int:
     return (cat_weight * pri_weight) + urgency
 
 
+def _pending_non_goal(tasks: list[dict]) -> list[dict]:
+    # Goal-type tasks live in the Goals module (and goal_drift suggestions) —
+    # they don't compete in daily task scoring, top3, or the morning digest.
+    return [t for t in tasks if t.get("status") == "pending" and t.get("type") != "goal"]
+
+
 def get_top3(user_name: str, workspace: str = "personal") -> list[dict[str, Any]]:
     """Return top 3 scored pending tasks with score attached."""
     tasks_data = read_json(tasks_path(user_name, workspace), default={"tasks": []})
     order = get_priority_order(user_name, workspace)
     today_str = today_for_user(user_name).isoformat()
-    pending = [t for t in tasks_data.get("tasks", []) if t.get("status") == "pending"]
+    pending = _pending_non_goal(tasks_data.get("tasks", []))
     for task in pending:
         task["_score"] = score_task(task, order, today_str)
     return sorted(pending, key=lambda t: t["_score"], reverse=True)[:3]
@@ -52,7 +58,7 @@ def get_all_scored(user_name: str, workspace: str = "personal") -> list[dict[str
     tasks_data = read_json(tasks_path(user_name, workspace), default={"tasks": []})
     order = get_priority_order(user_name, workspace)
     today_str = today_for_user(user_name).isoformat()
-    pending = [t for t in tasks_data.get("tasks", []) if t.get("status") == "pending"]
+    pending = _pending_non_goal(tasks_data.get("tasks", []))
     for t in pending:
         t["_score"] = score_task(t, order, today_str)
     return sorted(pending, key=lambda t: t["_score"], reverse=True)

@@ -928,9 +928,14 @@ def test_comment_delete_permissions(parcel, users):
             sub["id"], posted["id"], current_user=carol, workspace="personal", _rl=None
         )
     assert exc.value.status_code == 403
-    # author can
+    with pytest.raises(HTTPException) as exc:  # not even the author — audit log
+        route_delete_comment(
+            sub["id"], posted["id"], current_user=users["bob"], workspace="personal", _rl=None
+        )
+    assert exc.value.status_code == 403
+    # only an admin can
     route_delete_comment(
-        sub["id"], posted["id"], current_user=users["bob"], workspace="personal", _rl=None
+        sub["id"], posted["id"], current_user=users["alice"], workspace="personal", _rl=None
     )
     assert posted["id"] not in [c["id"] for c in svc.get_asset("Alice", sub["id"])["comments"]]
 
@@ -1014,3 +1019,164 @@ def test_hidden_from_rejects_unknown_role(parcel, users):
     lone = svc.create_asset("Alice", {"template": "parcel", "name": "Mine"}, created_by="Alice")
     with pytest.raises(ValueError, match="Unknown role"):
         svc.update_access("Alice", lone["id"], hidden_from=["role:ghosts"], by="Alice")
+
+
+# ---------------------------------------------------------------------------
+# Specificity: a by-name grant beats a group grant (shares + pool contributors)
+# ---------------------------------------------------------------------------
+
+
+def test_personal_share_entry_beats_group_entry(parcel, users):
+    # Whole household gets edit; Bob individually gets status-only contribute →
+    # Bob must be RESTRICTED to contribute (else per-member control is pointless).
+    sub, _ = _tree(users)
+    svc.update_access(
+        "Alice",
+        sub["id"],
+        shared_with=[
+            {"target": "household", "access": "edit"},
+            {
+                "target": "Bob",
+                "access": "contribute",
+                "caps": {"fields": ["status"], "add": ["comments"]},
+            },
+        ],
+        by="Alice",
+    )
+    _accept("Bob", "Alice", sub["id"])
+    found = svc.find_asset("Bob", "personal", sub["id"])
+    assert found["can_edit"] is False
+    assert found["can_contribute"] == {"fields": ["status"], "add": ["comments"]}
+
+
+def test_updated_personal_caps_win_over_stale_group_caps(parcel, users):
+    # The owner-reported bug: a group contribute entry (old caps) plus a
+    # per-user entry (new caps) must resolve to ONLY the per-user caps —
+    # no union with the group's.
+    sub, _ = _tree(users)
+    svc.update_access(
+        "Alice",
+        sub["id"],
+        shared_with=[
+            {
+                "target": "household",
+                "access": "contribute",
+                "caps": {"fields": ["status", "county"], "add": ["comments", "files"]},
+            },
+            {
+                "target": "Bob",
+                "access": "contribute",
+                "caps": {"fields": ["close_date"], "add": []},
+            },
+        ],
+        by="Alice",
+    )
+    _accept("Bob", "Alice", sub["id"])
+    found = svc.find_asset("Bob", "personal", sub["id"])
+    assert found["can_contribute"] == {"fields": ["close_date"], "add": []}
+
+
+def test_pool_contributor_user_entry_beats_group_entry(parcel, users):
+    sub, lot = _tree(users)
+    svc.convert_to_pool("Alice", sub["id"], by="Alice")
+    _router_access(
+        sub["id"],
+        {
+            "contributors": [
+                {"target": "household", "caps": {"fields": ["status", "county"], "add": ["files"]}},
+                {"target": "Bob", "caps": {"fields": ["status"], "add": []}},
+            ]
+        },
+        users["alice"],
+    )
+    found = svc.find_asset("Bob", "personal", lot["id"])
+    assert found["can_contribute"] == {"fields": ["status"], "add": []}
+
+
+# ---------------------------------------------------------------------------
+# Comments: hide-for-everyone toggle + per-user notification mutes
+# ---------------------------------------------------------------------------
+
+
+def test_comments_hidden_blocks_posting_and_manager_gated(parcel, users):
+    from fastapi import HTTPException
+    from routers.assets import CommentsVisibility, set_comments_visibility
+
+    sub, _ = _tree(users)
+    _share_contribute("Alice", sub["id"], "Bob", {"fields": [], "add": ["comments"]})
+    # Contribute user cannot toggle visibility
+    with pytest.raises(HTTPException) as exc:
+        set_comments_visibility(
+            sub["id"],
+            CommentsVisibility(hidden=True),
+            current_user=users["bob"],
+            workspace="personal",
+            _rl=None,
+        )
+    assert exc.value.status_code == 403
+    # Owner hides → posting blocked for everyone; data kept
+    svc.add_comment("Alice", sub["id"], "kept", by="Alice")
+    set_comments_visibility(
+        sub["id"],
+        CommentsVisibility(hidden=True),
+        current_user=users["alice"],
+        workspace="personal",
+        _rl=None,
+    )
+    with pytest.raises(Exception) as exc:
+        _router_comment(sub["id"], "nope", users["bob"])
+    assert getattr(exc.value, "status_code", None) == 400
+    asset = svc.get_asset("Alice", sub["id"])
+    assert asset["comments_hidden"] is True
+    assert len(asset["comments"]) == 1
+    # Owner re-enables
+    set_comments_visibility(
+        sub["id"],
+        CommentsVisibility(hidden=False),
+        current_user=users["alice"],
+        workspace="personal",
+        _rl=None,
+    )
+    assert _router_comment(sub["id"], "back on", users["bob"])["text"] == "back on"
+
+
+def test_comment_mute_silences_subtree_notifications(parcel, users):
+    from services import suggestions_service
+
+    sub, lot = _tree(users)
+    _share_contribute("Alice", sub["id"], "Bob", {"fields": [], "add": ["comments"]})
+    # Alice mutes the PARENT → a comment on the CHILD must not notify her
+    svc.set_comment_mute("Alice", sub["id"], True)
+    _router_comment(lot["id"], "quiet please", users["bob"])
+    assert not any(
+        n.get("action", {}).get("type") == "open_asset"
+        for n in suggestions_service.get_notifications("Alice")
+    )
+    # State reports the mute is inherited from the parent
+    state = svc.comment_mute_state("Alice", "Alice", lot["id"])
+    assert state["muted"] is True and state["self"] is False and state["via"] == sub["id"]
+    assert state["via_name"] == "Sub"
+    # Unmute → notifications flow again
+    svc.set_comment_mute("Alice", sub["id"], False)
+    _router_comment(lot["id"], "loud again", users["bob"])
+    assert any(
+        n.get("action", {}).get("type") == "open_asset"
+        for n in suggestions_service.get_notifications("Alice")
+    )
+
+
+# ---------------------------------------------------------------------------
+# Goal-type tasks stay out of daily scoring surfaces
+# ---------------------------------------------------------------------------
+
+
+def test_goals_excluded_from_top3_and_scored(users):
+    from services import priority_service, task_service
+
+    task_service.add_task("Alice", {"title": "Do dishes", "category": "Home"})
+    task_service.add_task("Alice", {"title": "Buy 100 acres", "category": "Home", "type": "goal"})
+    top3 = priority_service.get_top3("Alice")
+    scored = priority_service.get_all_scored("Alice")
+    assert all(t.get("type") != "goal" for t in top3)
+    assert all(t.get("type") != "goal" for t in scored)
+    assert any(t["title"] == "Do dishes" for t in top3)

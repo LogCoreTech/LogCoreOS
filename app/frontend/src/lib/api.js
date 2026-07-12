@@ -243,6 +243,9 @@ export const assets = {
   removeFile:     (id, fileId)      => del(`/assets/${id}/files/${fileId}`),
   addComment:     (id, text)        => post(`/assets/${id}/comments`, { text }),
   removeComment:  (id, commentId)   => del(`/assets/${id}/comments/${commentId}`),
+  setCommentsHidden: (id, hidden)   => request('PUT', `/assets/${id}/comments/visibility`, { hidden }),
+  muteState:      (id)              => get(`/assets/${id}/mute`),
+  setMute:        (id, muted)       => request('PUT', `/assets/${id}/mute`, { muted }),
   automationToken:       ()         => get('/assets/automation/token'),
   rotateAutomationToken: ()         => post('/assets/automation/token/rotate', {}),
 }

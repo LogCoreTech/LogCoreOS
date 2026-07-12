@@ -136,6 +136,14 @@ class CommentCreate(BaseModel):
     text: str = Field(..., min_length=1, max_length=2000)
 
 
+class CommentsVisibility(BaseModel):
+    hidden: bool
+
+
+class MuteUpdate(BaseModel):
+    muted: bool
+
+
 class ConvertRequest(BaseModel):
     target: str = Field(..., pattern="^pool$")
 
@@ -799,19 +807,75 @@ def delete_comment(
     workspace: str = Depends(get_workspace),
     _rl: None = Depends(_write_limit),
 ):
+    """Comments are an audit-style log — only an admin can remove one. Owners
+    who want them gone from view use the hide-comments toggle instead."""
+    _validate_asset_id(asset_id)
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Only an admin can delete comments")
+    found = _find_or_404(current_user, workspace, asset_id)
+    if not assets_service.delete_comment(
+        found["store"], asset_id, comment_id, workspace=found["store_workspace"]
+    ):
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+
+@router.put("/{asset_id}/comments/visibility")
+def set_comments_visibility(
+    asset_id: str,
+    req: CommentsVisibility,
+    current_user: dict = Depends(_require_assets),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_write_limit),
+):
+    """Owner/pool-manager toggle: hide (or re-show) the comments section for
+    ALL users on this asset. Data is kept; posting is blocked while hidden."""
     _validate_asset_id(asset_id)
     found = _find_or_404(current_user, workspace, asset_id)
-    comment = next(
-        (c for c in found["asset"].get("comments") or [] if c.get("id") == comment_id), None
-    )
-    if comment is None:
-        raise HTTPException(status_code=404, detail="Comment not found")
-    if comment.get("by") != current_user["name"] and not found["can_manage"]:
+    if not found["can_manage"]:
         raise HTTPException(
-            status_code=403, detail="Only the comment author or the owner can delete it"
+            status_code=403, detail="Only the owner or a pool manager can change this"
         )
-    assets_service.delete_comment(
-        found["store"], asset_id, comment_id, workspace=found["store_workspace"]
+    result = assets_service.set_comments_hidden(
+        found["store"],
+        asset_id,
+        req.hidden,
+        workspace=found["store_workspace"],
+        by=current_user["name"],
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return {"ok": True, "comments_hidden": bool(req.hidden)}
+
+
+@router.get("/{asset_id}/mute")
+def get_comment_mute(
+    asset_id: str,
+    current_user: dict = Depends(_require_assets),
+    workspace: str = Depends(get_workspace),
+):
+    """Viewer's own comment-notification state for this asset (+subtree)."""
+    _validate_asset_id(asset_id)
+    found = _find_or_404(current_user, workspace, asset_id)
+    return assets_service.comment_mute_state(
+        current_user["name"], found["store"], asset_id, workspace=found["store_workspace"]
+    )
+
+
+@router.put("/{asset_id}/mute")
+def set_comment_mute(
+    asset_id: str,
+    req: MuteUpdate,
+    current_user: dict = Depends(_require_assets),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_write_limit),
+):
+    """Per-user opt in/out of comment notifications for this asset and
+    everything inside it (mute is stored on this node; delivery walks ancestors)."""
+    _validate_asset_id(asset_id)
+    found = _find_or_404(current_user, workspace, asset_id)
+    assets_service.set_comment_mute(current_user["name"], asset_id, req.muted)
+    return assets_service.comment_mute_state(
+        current_user["name"], found["store"], asset_id, workspace=found["store_workspace"]
     )
 
 
