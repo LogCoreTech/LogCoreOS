@@ -88,11 +88,12 @@ export default function Tasks() {
   const _today = new Date()
   const _todayStr = `${_today.getFullYear()}-${String(_today.getMonth() + 1).padStart(2, '0')}-${String(_today.getDate()).padStart(2, '0')}`
 
-  // Merge personal tasks + assigned pool tasks (tagged with _source from backend)
+  // Merge personal tasks + assigned pool tasks (tagged with _source from backend).
+  // Goal-type tasks live on the Goals page only — they'd double up here.
   const allTasks = [
     ...taskList,
     ...assignedPoolTasks,
-  ]
+  ].filter(t => t.type !== 'goal')
 
   const filtered = allTasks.filter(t =>
     filter === 'all'     ? true :
