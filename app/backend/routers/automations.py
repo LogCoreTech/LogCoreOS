@@ -1,13 +1,15 @@
-"""Automations module — import and run n8n workflows."""
+"""Automations module — import and run n8n workflows + the Automation Inbox."""
 
 import json
 import logging
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile, status
+from pydantic import BaseModel, Field
 
-from routers.auth import get_current_user, require_admin, require_module
-from services import n8n_service
+from routers.auth import get_current_user, get_workspace, require_admin, require_module
+from services import automation_inbox_service as inbox_service
+from services import automations_config, n8n_service
+from services.auth_service import get_user_by_name
 from services.rate_limiter import rate_limit
 
 logger = logging.getLogger("logcore.automations")
@@ -15,6 +17,7 @@ logger = logging.getLogger("logcore.automations")
 _require_automations = require_module("automations")
 _read_limit = rate_limit(30, 60)
 _write_limit = rate_limit(10, 60)
+_automation_limit = rate_limit(30, 60)
 
 router = APIRouter()
 
@@ -22,6 +25,40 @@ router = APIRouter()
 class N8nConfigRequest(BaseModel):
     url: str
     api_key: str
+
+
+class InboxItemIn(BaseModel):
+    external_id: str = Field(..., min_length=1, max_length=500)
+    title: str = Field(..., min_length=1, max_length=200)
+    summary: str | None = Field(None, max_length=2000)
+    url: str | None = Field(None, max_length=1000)
+    fields: dict = Field(default={})
+
+
+class AutomationInboxPost(BaseModel):
+    user: str = Field(..., max_length=100)
+    workspace: str = Field("business", pattern="^(personal|business)$")
+    workflow_key: str = Field(..., min_length=1, max_length=100)
+    items: list[InboxItemIn] = Field(..., max_length=100)
+
+
+class InboxCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=80)
+    notify: list[str] = Field(default=[], max_length=50)
+    reviewers: list[str] = Field(default=[], max_length=50)
+    workflows: list[str] = Field(default=[], max_length=50)
+
+
+class InboxUpdate(BaseModel):
+    name: str | None = Field(None, max_length=80)
+    notify: list[str] | None = Field(None, max_length=50)
+    reviewers: list[str] | None = Field(None, max_length=50)
+    workflows: list[str] | None = Field(None, max_length=50)
+
+
+class ItemStatusUpdate(BaseModel):
+    status: str = Field(..., pattern="^(new|interested|passed|offer_made|closed)$")
+    note: str | None = Field(None, max_length=1000)
 
 
 # ── n8n admin endpoints (must come before /{id}/... routes) ───────────────────
@@ -135,6 +172,187 @@ async def import_workflow(
         raise HTTPException(status_code=502, detail=f"n8n import failed: {exc}")
 
     return record
+
+
+# ── Automation Inbox ───────────────────────────────────────────────────────────
+# Workflow-written reviewable items. n8n posts via the automation token; humans
+# review from the Automations page. Business scope lives in the _team pool.
+
+
+def _require_automation_token(x_automation_token: str = Header("")) -> None:
+    if not automations_config.verify_api_token(x_automation_token):
+        raise HTTPException(status_code=401, detail="Invalid automation token")
+
+
+def _inbox_store(current_user: dict, workspace: str) -> str:
+    """JWT calls: business workspace reviews the shared _team inbox; personal
+    reviews the caller's own."""
+    return "_team" if workspace == "business" else current_user["name"]
+
+
+def _can_manage_inboxes(current_user: dict, workspace: str) -> bool:
+    """Business inboxes are admin-managed; a personal inbox belongs to its owner."""
+    return workspace != "business" or current_user.get("role") == "admin"
+
+
+def _can_act_on(inbox: dict, current_user: dict, workspace: str) -> bool:
+    """Status changes: admin, personal-scope owner, or a picked reviewer."""
+    if current_user.get("role") == "admin" or workspace != "business":
+        return True
+    return current_user["name"] in (inbox.get("reviewers") or [])
+
+
+@router.post("/inbox/items", status_code=201)
+def automation_post_items(
+    req: AutomationInboxPost,
+    _auth: None = Depends(_require_automation_token),
+    _rl: None = Depends(_automation_limit),
+):
+    """n8n → LogCore: post a batch of reviewable items. Dedup by
+    (workflow_key, external_id); routed to the inbox claiming the key
+    (else General); the inbox's notify list gets one batched notification."""
+    if req.user != "_team" and get_user_by_name(req.user) is None:
+        raise HTTPException(status_code=404, detail=f"Unknown user {req.user!r}")
+    try:
+        return inbox_service.add_items(
+            req.user,
+            req.workflow_key,
+            [i.model_dump() for i in req.items],
+            workspace=req.workspace,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/inbox/seen")
+def automation_seen_ids(
+    user: str,
+    workflow_key: str | None = None,
+    _auth: None = Depends(_require_automation_token),
+    _rl: None = Depends(_automation_limit),
+):
+    """external_ids already in the store — lets a workflow skip re-qualifying
+    listings it has already submitted (reviewed or not)."""
+    if user != "_team" and get_user_by_name(user) is None:
+        raise HTTPException(status_code=404, detail=f"Unknown user {user!r}")
+    return {"seen": inbox_service.seen_ids(user, workflow_key)}
+
+
+@router.get("/inbox")
+def get_inbox(
+    current_user: dict = Depends(_require_automations),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_read_limit),
+):
+    store = _inbox_store(current_user, workspace)
+    data = inbox_service.load_store(store)
+    can_manage = _can_manage_inboxes(current_user, workspace)
+    inboxes = [
+        {
+            **b,
+            "_can_act": _can_act_on(b, current_user, workspace),
+            "_can_manage": can_manage,
+        }
+        for b in data["inboxes"]
+    ]
+    return {"inboxes": inboxes, "items": data["items"]}
+
+
+@router.post("/inboxes", status_code=201)
+def create_inbox(
+    req: InboxCreate,
+    current_user: dict = Depends(_require_automations),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_write_limit),
+):
+    if not _can_manage_inboxes(current_user, workspace):
+        raise HTTPException(status_code=403, detail="Only admins can manage business inboxes")
+    try:
+        return inbox_service.create_inbox(
+            _inbox_store(current_user, workspace),
+            req.name,
+            notify=req.notify,
+            reviewers=req.reviewers,
+            workflows=req.workflows,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.patch("/inboxes/{inbox_id}")
+def update_inbox(
+    inbox_id: str,
+    req: InboxUpdate,
+    current_user: dict = Depends(_require_automations),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_write_limit),
+):
+    if not _can_manage_inboxes(current_user, workspace):
+        raise HTTPException(status_code=403, detail="Only admins can manage business inboxes")
+    try:
+        result = inbox_service.update_inbox(
+            _inbox_store(current_user, workspace), inbox_id, req.model_dump(exclude_unset=True)
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Inbox not found")
+    return result
+
+
+@router.delete("/inboxes/{inbox_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_inbox(
+    inbox_id: str,
+    current_user: dict = Depends(_require_automations),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_write_limit),
+):
+    if not _can_manage_inboxes(current_user, workspace):
+        raise HTTPException(status_code=403, detail="Only admins can manage business inboxes")
+    try:
+        found = inbox_service.delete_inbox(_inbox_store(current_user, workspace), inbox_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    if not found:
+        raise HTTPException(status_code=404, detail="Inbox not found")
+
+
+@router.post("/inbox/items/{item_id}/status")
+def set_item_status(
+    item_id: str,
+    req: ItemStatusUpdate,
+    current_user: dict = Depends(_require_automations),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_write_limit),
+):
+    store = _inbox_store(current_user, workspace)
+    found = inbox_service.find_item(store, item_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    _item, inbox = found
+    if not _can_act_on(inbox, current_user, workspace):
+        raise HTTPException(
+            status_code=403, detail="Only a reviewer of this inbox can change item status"
+        )
+    try:
+        return inbox_service.set_item_status(
+            store, item_id, req.status, by=current_user["name"], note=req.note
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.delete("/inbox/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_inbox_item(
+    item_id: str,
+    current_user: dict = Depends(_require_automations),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_write_limit),
+):
+    if not _can_manage_inboxes(current_user, workspace):
+        raise HTTPException(status_code=403, detail="Only admins can delete business inbox items")
+    if not inbox_service.delete_item(_inbox_store(current_user, workspace), item_id):
+        raise HTTPException(status_code=404, detail="Item not found")
 
 
 # ── Per-workflow endpoints ─────────────────────────────────────────────────────

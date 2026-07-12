@@ -72,6 +72,7 @@ LogCoreOS/
 │   │   │   ├── assets_index.py         → derived share-routing cache (_system/assets_share_index.json); rebuildable, warmed at startup; sharers_for()/reindex_owner()/rebuild_share_index()
 │   │   │   │   # Phase 2: per-user templates in USERS/{name}/Assets/templates.json (global in _system/asset_templates.json); assets ref template_id; request-based sharing (accepted[]) + accept/decline notifications
 │   │   │   ├── automations_config.py  → instance automation API token (generate/rotate/verify) for n8n → LogCore writes
+│   │   │   ├── automation_inbox_service.py → Automation Inbox: named inboxes (notify/reviewers/workflow routing), item dedup by (workflow_key, external_id), status lifecycle, trim, batched notifications
 │   │   │   ├── n8n_service.py         → n8n REST API client; import/execute/delete/activate workflows; write docker/n8n.env; sync_business_workflows() for auto-sync
 │   │   │   ├── ha_service.py          → Home Assistant REST API client; config CRUD, entity states, service calls, scenes, automations, user favourites
 │   │   │   └── update_service.py      → GitHub release check (cached 4h), pending_update flag trigger, update log reader
@@ -100,7 +101,7 @@ LogCoreOS/
 │           │   ├── Journal.jsx    → daily journal (date picker, markdown editor per day, entry list)
 │           │   ├── Brain.jsx      → browse + edit user's Brain markdown files directly
 │           │   ├── Profile.jsx    → edit Profile.md and profile.json fields (priorities, occupation, etc.)
-│           │   ├── Automations.jsx → automations: personal/business n8n workflow cards, import modal, run + logs
+│           │   ├── Automations.jsx → automations: Workflows|Inbox views — n8n workflow cards (import/run/logs) + Automation Inbox (item review actions, named-inbox chips, settings modal, ?view=inbox deep link)
 │           │   ├── Assets.jsx      → assets: template-driven object tree (expand/collapse, filters, archived toggle), both workspaces
 │           │   ├── Home.jsx        → Smart Home: entity tiles by domain, scenes panel, HA automations, favourite stars
 │           │   ├── Admin.jsx      → admin panel (users, feature roles, workspace access, AI settings, web search, hosting, Infisical, n8n, Smart Home)

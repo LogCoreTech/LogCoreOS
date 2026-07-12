@@ -873,6 +873,28 @@ Deactivate a workflow in n8n.
 #### `GET /automations/{record_id}/logs`
 Get recent execution logs for a workflow.
 
+### Automation Inbox
+
+Workflow-written reviewable items inside the Automations module (no separate module). Business-scope items live in the `_team` pool (`brain/USERS/_team/Automations/inbox.json`); personal items in `USERS/{name}/Automations/inbox.json`. **Named inboxes** route items by `workflow_key` and carry their own `notify` (pinged on new items) and `reviewers` (may act) lists; unmatched keys land in an auto-created **General** inbox. Retention: 500 items per scope, oldest reviewed trimmed first.
+
+**Workflow side — token auth (`X-Automation-Token`, same token as the assets automation API):**
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `POST` | `/automations/inbox/items` | `{user: "_team"\|name, workspace, workflow_key, items:[{external_id, title, summary?, url?, fields?}]}` (≤100/batch). Dedup by `(workflow_key, external_id)` — re-posts are skipped. Routes to the claiming inbox; its `notify` members each get ONE batched notification (in-app `open_inbox` action + push deep link `/automations?view=inbox&inbox=<id>`). Returns `{created, skipped, inbox_id}` |
+| `GET` | `/automations/inbox/seen?user=&workflow_key=` | `{seen: [external_ids]}` — all known ids for that workflow, so a run can skip re-qualifying listings it already submitted |
+
+**Human side — JWT, `automations` module, workspace-scoped via `X-Workspace`:**
+
+| Method | Path | Access | Notes |
+|--------|------|--------|-------|
+| `GET` | `/automations/inbox` | module users | `{inboxes, items}`; each inbox annotated `_can_act`/`_can_manage` |
+| `POST` | `/automations/inbox/items/{id}/status` | admin / inbox reviewer / personal owner | `{status: new\|interested\|passed\|offer_made\|closed, note?}` — records `status_by`/`status_at` |
+| `DELETE` | `/automations/inbox/items/{id}` | admin (business) / owner (personal) | `204` |
+| `POST` | `/automations/inboxes` | admin (business) / owner (personal) | `{name, notify?, reviewers?, workflows?}` |
+| `PATCH` | `/automations/inboxes/{id}` | same | any of name/notify/reviewers/workflows |
+| `DELETE` | `/automations/inboxes/{id}` | same | `409` while it still has items |
+
 ---
 
 ## Smart Home (Home Assistant)

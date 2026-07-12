@@ -323,6 +323,13 @@ export const automations = {
   saveN8nConfig: (cfg) => post('/automations/n8n/config', cfg),
   syncSecrets:   ()    => post('/automations/n8n/sync-secrets', {}),
   syncWorkflows: ()    => post('/automations/n8n/sync-workflows', {}),
+  // Automation Inbox (workspace-scoped via X-Workspace header)
+  inbox:         ()                  => get('/automations/inbox'),
+  createInbox:   (data)              => post('/automations/inboxes', data),
+  updateInbox:   (id, data)          => patch(`/automations/inboxes/${id}`, data),
+  removeInbox:   (id)                => del(`/automations/inboxes/${id}`),
+  setItemStatus: (id, status, note)  => post(`/automations/inbox/items/${id}/status`, { status, note: note || null }),
+  removeItem:    (id)                => del(`/automations/inbox/items/${id}`),
 }
 
 export const infisical = {

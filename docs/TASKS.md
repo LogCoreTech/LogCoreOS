@@ -8,8 +8,7 @@ Keep this up to date. Mark tasks done as they're completed. Add new tasks as the
 
 ## Now — active build work
 
-- [ ] **Automation Inbox** — workflows write structured output to Brain JSON; users see results with per-item actions (Interested / Pass / Offer Made / Closed); workflow skips already-reviewed items
-- [ ] **Land lead search & qualify workflow** — n8n pulling land listings (multiple sources with a fallback from day one) and AI-qualifying against configurable criteria; stub file in `automations_stubs/`; Brain JSON output schema; depends on Automation Inbox
+- [ ] **Land lead search & qualify workflow** — n8n pulling land listings (multiple sources with a fallback from day one) and AI-qualifying against configurable criteria; stub file in `automations_stubs/`; posts to the Automation Inbox (`POST /automations/inbox/items`, `GET /inbox/seen` to skip known listings)
 
 ## Launch surface (do in order)
 
@@ -67,6 +66,7 @@ Keep this up to date. Mark tasks done as they're completed. Add new tasks as the
 
 ## Done
 
+- [x] **Automation Inbox — inside the Automations module (no new module)** — named inboxes (admin-created; each routes chosen `workflow_key`s and carries its own notify + reviewers lists; unmatched keys → auto General inbox); n8n posts item batches via the automation token (`POST /automations/inbox/items`, dedup by workflow_key+external_id, `GET /inbox/seen` for cheap skip-known); per-item review actions Interested/Pass/Offer Made/Closed (attributed; admins + picked reviewers; personal scope = owner); recipients get ONE batched bell/push notification with **View →** that switches workspace and deep-links to the inbox; business items in the `_team` pool, personal in own Brain; cap 500/scope. Automations page gains Workflows|Inbox views with status filter, inbox chips, settings modal. 13 new tests, suite **316 green** (2026-07-12)
 - [x] **BUG (round 2, owner-found): contribute caps ignored for pool managers** — the tester held `pool_edit: ["household"]`, and the pool branch granted `can_edit` from that blanket grant BEFORE consulting contributors, so caps never applied. A **by-name contributor entry now downgrades a non-admin pool_edit manager to contribute** with those caps on that asset (group entries never downgrade managers; admins never restricted). Specificity ladder for pool assets: admin > by-name contributor > pool_edit > group contributor > read. 3 new tests (2026-07-12)
 - [x] **Comments visibility split per owner intent** — any user can collapse the comments section for themselves (resets when the asset is reopened); the off-for-everyone switch moved to the **edit page** and is gated to **edit-level** users (was manager-only, in-view). Suite **303 green** (2026-07-12)
 - [x] **BUG: per-user contribute caps blended with group grants (owner-found)** — a by-name share/contributor entry now **fully overrides** group/role entries (`_resolve_grant` specificity resolution) instead of unioning — changing one member's caps takes effect even when a household/team-wide entry exists, and a group-edit share no longer makes per-member restriction impossible. 3 new tests (2026-07-12)

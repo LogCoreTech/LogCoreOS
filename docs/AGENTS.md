@@ -369,6 +369,16 @@ The Assets module (`pages/Assets.jsx`, `routers/assets.py`, `services/assets_ser
 - **Gotcha**: the Vite bundle is mounted at `/static` (not `/assets`) precisely because this page owns the `/assets` route — never mount static files on an app route.
 - **Gotcha**: any endpoint returning an asset that the frontend holds as modal state (create does — the modal flips create→edit on its response) must annotate `_owner`/`_access` when the record's store isn't the requester's own, or the edit UI mis-gates pool/share controls (see MEMORY.md 2026-07-11).
 
+## Automation Inbox
+
+Inside the Automations module (no separate module — owner decision 2026-07-12). Workflows POST reviewable items via the automation token; humans review them from the Automations page's **Inbox** view with per-item actions (Interested / Pass / Offer Made / Closed, attributed).
+
+- **Storage**: business scope in the `_team` pool (`USERS/_team/Automations/inbox.json`), personal in `USERS/{name}/Automations/inbox.json`. `{inboxes:[], items:[]}` per scope; cap 500 items (oldest reviewed trimmed first).
+- **Named inboxes** (`services/automation_inbox_service.py`): each has `notify` (pinged on new items), `reviewers` (may act — admins always; personal owner always), and `workflows` (keys that route here). Unmatched `workflow_key` → auto-created **General** inbox. Business inboxes are admin-managed; inbox delete 409s while items exist.
+- **Dedup**: `(workflow_key, external_id)` unique per scope; `GET /automations/inbox/seen` lets a run skip already-submitted listings before paying for AI qualification.
+- **Notifications**: one batched notification per POST per recipient via `suggestions_service.notify_user()` — action `{type:"open_inbox", workspace, inbox_id}` (NotifBell **View →** switches workspace if needed) + push deep link `/automations?view=inbox&inbox=<id>`; `Automations.jsx` consumes those query params.
+- **Gating**: same as the rest of the router — `require_module("automations")`; the business tab is hidden client-side by `automations_business` (established pattern).
+
 ## Notes Module
 
 - Auto-save: 1.5 s debounce after user stops typing. No explicit Save button.

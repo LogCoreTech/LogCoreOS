@@ -84,6 +84,12 @@ def system_automations_path() -> Path:
     return brain_path() / "_system" / "automations_index.json"
 
 
+def automation_inbox_path(user_name: str) -> Path:
+    """Inbox store for workflow-written reviewable items. user_name is a real
+    user (personal scope) or the _team pool pseudo-user (business scope)."""
+    return user_path(user_name) / "Automations" / "inbox.json"
+
+
 def profile_path(user_name: str) -> Path:
     return user_path(user_name) / "Profile.md"
 

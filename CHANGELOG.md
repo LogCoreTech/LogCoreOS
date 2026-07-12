@@ -10,6 +10,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+**Automation Inbox**
+- Workflows (n8n) can now post structured, reviewable results into LogCore — land leads, alerts, anything — reviewed from a new **Inbox** view on the Automations page with one-tap actions: Interested / Pass / Offer Made / Closed (every action records who took it)
+- **Named inboxes**: create as many as you need ("Land Leads", "Price Alerts"), route each workflow's output to the right one, and pick per inbox **who gets notified** on new items and **who may act** on them (admins always can). Unrouted results land in an auto-created General inbox
+- New items send ONE batched notification (bell + push) with a **View →** button that jumps straight to the right inbox — switching you to the business workspace if needed
+- Duplicate protection: re-running a workflow never re-adds items it already submitted, and workflows can ask LogCore what it has already seen before spending AI credits qualifying old listings
+- Works in both workspaces: business inboxes are shared with the team (and survive account changes); personal inboxes are yours
+
 **Assets module**
 - **Contribute access for employees/crew**: share an asset with a new middle access level where you pick exactly what the person can do — which fields they may change (e.g. just Status) and what they may add (comments, photos/PDFs, items inside). They work from the clean asset view (quick status dropdown, only their granted fields editable, comment box) and never see the full editor
 - **Contributors on Team/Household assets**: give a member (or the whole team) the same picked-capability access on pool assets — without handing them full team management rights

@@ -12,6 +12,24 @@ function NotifBell() {
   const [open, setOpen] = useState(false)
   const panelRef = useRef(null)
   const navigate = useNavigate()
+  const { workspace, switchWorkspace } = useWorkspace()
+
+  // Navigation actions rendered as a View → button. open_inbox may need a
+  // workspace switch first (e.g. business inbox ping while in personal).
+  function navTarget(action) {
+    if (action?.type === 'open_asset') return `/assets?asset=${action.asset_id}`
+    if (action?.type === 'open_inbox') return `/automations?view=inbox&inbox=${action.inbox_id || ''}`
+    return null
+  }
+
+  function openTarget(n) {
+    markRead(n.id)
+    setOpen(false)
+    if (n.action.type === 'open_inbox' && n.action.workspace && n.action.workspace !== workspace) {
+      switchWorkspace(n.action.workspace)
+    }
+    navigate(navTarget(n.action))
+  }
 
   function load() {
     // Guard against a non-array response (e.g. an error object) — `list || []`
@@ -110,15 +128,11 @@ function NotifBell() {
                     <div className={!n.read ? '' : 'pl-3.5'}>
                       <p className="text-xs font-semibold text-charcoal-800 dark:text-charcoal-100">{n.title}</p>
                       <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mt-0.5 line-clamp-2">{n.body}</p>
-                      {n.action?.type === 'open_asset' ? (
+                      {navTarget(n.action) ? (
                         // Navigation action — always available (re-viewable, no resolve)
                         <div className="flex gap-2 mt-1.5" onClick={e => e.stopPropagation()}>
                           <button
-                            onClick={() => {
-                              markRead(n.id)
-                              setOpen(false)
-                              navigate(`/assets?asset=${n.action.asset_id}`)
-                            }}
+                            onClick={() => openTarget(n)}
                             className="btn-primary text-[11px] px-2.5 py-1"
                           >
                             View →
