@@ -143,10 +143,15 @@ function InboxSettingsModal({ inbox, isBusiness, workflowKeySuggestions, onClose
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card p-5 max-w-md" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-1">
           <h2 className="font-semibold">{editing ? 'Inbox settings' : 'New inbox'}</h2>
           <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
         </div>
+        <p className="text-xs text-charcoal-400 mb-4">
+          {isBusiness
+            ? '🧑‍🤝‍🧑 Business inbox — shared with the team.'
+            : 'Personal inbox — only you. Switch to the business workspace for a team inbox.'}
+        </p>
         <form onSubmit={submit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">Name</label>
@@ -591,6 +596,9 @@ export default function Automations() {
     .sort((a, b) => (b.received_at || '').localeCompare(a.received_at || ''))
   const inboxById = Object.fromEntries(inboxes.map(b => [b.id, b]))
   const workflowKeySuggestions = [...new Set(items.map(i => i.workflow_key).filter(Boolean))]
+  // Settings targets the selected inbox — or the only one, so a lone fresh
+  // inbox is manageable without first selecting a chip
+  const settingsTarget = activeInbox ? inboxById[activeInbox] : (inboxes.length === 1 ? inboxes[0] : null)
 
   function canActOn(item) {
     const box = inboxById[item.inbox_id]
@@ -666,27 +674,32 @@ export default function Automations() {
 
       {view === 'inbox' && (
         <>
-          {/* Inbox chips + status filter */}
+          {/* Inbox chips + status filter — chips always visible so a fresh
+              inbox is discoverable even before any items arrive */}
           <div className="flex items-center gap-2 flex-wrap">
-            {inboxes.length > 1 && (
+            {inboxes.length > 0 && (
               <div className="flex gap-1 flex-wrap">
-                <button
-                  onClick={() => setActiveInbox('')}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                    !activeInbox ? 'bg-charcoal-600 text-white' : 'bg-charcoal-100 dark:bg-charcoal-800 text-charcoal-500 dark:text-charcoal-400'
-                  }`}
-                >
-                  All
-                </button>
+                {inboxes.length > 1 && (
+                  <button
+                    onClick={() => setActiveInbox('')}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                      !activeInbox ? 'bg-charcoal-600 text-white' : 'bg-charcoal-100 dark:bg-charcoal-800 text-charcoal-500 dark:text-charcoal-400'
+                    }`}
+                  >
+                    All
+                  </button>
+                )}
                 {inboxes.map(b => (
                   <button
                     key={b.id}
-                    onClick={() => setActiveInbox(b.id)}
+                    onClick={() => setActiveInbox(activeInbox === b.id ? '' : b.id)}
                     className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                      activeInbox === b.id ? 'bg-charcoal-600 text-white' : 'bg-charcoal-100 dark:bg-charcoal-800 text-charcoal-500 dark:text-charcoal-400'
+                      activeInbox === b.id || inboxes.length === 1
+                        ? 'bg-charcoal-600 text-white'
+                        : 'bg-charcoal-100 dark:bg-charcoal-800 text-charcoal-500 dark:text-charcoal-400'
                     }`}
                   >
-                    {b.name}
+                    📥 {b.name}
                   </button>
                 ))}
               </div>
@@ -700,8 +713,8 @@ export default function Automations() {
               <option value="reviewed">Reviewed</option>
               <option value="all">All</option>
             </select>
-            {canManageInboxes && activeInbox && inboxById[activeInbox] && (
-              <button onClick={() => setInboxModal({ inbox: inboxById[activeInbox] })} className="btn-ghost text-xs px-2 py-1">
+            {canManageInboxes && settingsTarget && (
+              <button onClick={() => setInboxModal({ inbox: settingsTarget })} className="btn-ghost text-xs px-2 py-1">
                 ⚙ Settings
               </button>
             )}
@@ -711,7 +724,11 @@ export default function Automations() {
             <div className="text-center py-12 text-charcoal-400">
               <p className="text-4xl mb-3">📥</p>
               <p className="text-sm font-medium">
-                {items.length === 0 ? 'No inbox items yet' : 'Nothing matches this filter'}
+                {items.length === 0
+                  ? inboxes.length > 0
+                    ? `${inboxes.map(b => `“${b.name}”`).join(', ')} ${inboxes.length === 1 ? 'is' : 'are'} ready — no items yet`
+                    : 'No inbox items yet'
+                  : 'Nothing matches this filter'}
               </p>
               {items.length === 0 && (
                 <p className="text-xs mt-1 max-w-sm mx-auto">
