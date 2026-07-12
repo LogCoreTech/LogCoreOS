@@ -827,14 +827,12 @@ def set_comments_visibility(
     workspace: str = Depends(get_workspace),
     _rl: None = Depends(_write_limit),
 ):
-    """Owner/pool-manager toggle: hide (or re-show) the comments section for
-    ALL users on this asset. Data is kept; posting is blocked while hidden."""
+    """Edit-level toggle (set from the edit page): turn comments off (or back
+    on) for ALL users on this asset. Data is kept; posting is blocked while off."""
     _validate_asset_id(asset_id)
     found = _find_or_404(current_user, workspace, asset_id)
-    if not found["can_manage"]:
-        raise HTTPException(
-            status_code=403, detail="Only the owner or a pool manager can change this"
-        )
+    if not found["can_edit"]:
+        raise HTTPException(status_code=403, detail="Only an edit-level user can change this")
     result = assets_service.set_comments_hidden(
         found["store"],
         asset_id,

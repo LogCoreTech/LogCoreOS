@@ -1180,3 +1180,59 @@ def test_goals_excluded_from_top3_and_scored(users):
     assert all(t.get("type") != "goal" for t in top3)
     assert all(t.get("type") != "goal" for t in scored)
     assert any(t["title"] == "Do dishes" for t in top3)
+
+
+# ---------------------------------------------------------------------------
+# By-name contributor entries downgrade pool_edit managers (owner bug #2)
+# ---------------------------------------------------------------------------
+
+
+def test_named_contributor_entry_downgrades_pool_manager(parcel, users):
+    from fastapi import HTTPException
+
+    sub, lot = _tree(users)
+    svc.convert_to_pool("Alice", sub["id"], by="Alice")
+    _router_access(
+        sub["id"],
+        {"contributors": [{"target": "Bob", "caps": {"fields": ["status"], "add": []}}]},
+        users["alice"],
+    )
+    # Bob HAS the household pool_edit grant — the by-name entry still restricts
+    # him on this asset (the per-asset entry is more specific than the grant).
+    found = svc.find_asset("Bob", "personal", lot["id"], pool_edit=["household"])
+    assert found["can_edit"] is False and found["can_manage"] is False
+    assert found["can_contribute"] == {"fields": ["status"], "add": []}
+    visible = {a["id"]: a for a in svc.list_visible("Bob", "personal", pool_edit=["household"])}
+    assert visible[lot["id"]]["_access"] == "contribute"
+    assert visible[lot["id"]]["_caps"] == {"fields": ["status"], "add": []}
+
+    bob_mgr = {**users["bob"], "pool_edit": ["household"]}
+    updated = _router_patch(lot["id"], {"fields": {"status": "sold"}}, bob_mgr)
+    assert updated["fields"]["status"] == "sold"
+    with pytest.raises(HTTPException) as exc:
+        _router_patch(lot["id"], {"fields": {"county": "Hays"}}, bob_mgr)
+    assert exc.value.status_code == 400
+
+
+def test_group_contributor_entry_does_not_downgrade_manager(parcel, users):
+    sub, lot = _tree(users)
+    svc.convert_to_pool("Alice", sub["id"], by="Alice")
+    _router_access(
+        sub["id"],
+        {"contributors": [{"target": "household", "caps": {"fields": ["status"], "add": []}}]},
+        users["alice"],
+    )
+    found = svc.find_asset("Bob", "personal", lot["id"], pool_edit=["household"])
+    assert found["can_edit"] is True and found["can_contribute"] is None
+
+
+def test_admin_never_downgraded_by_contributor_entry(parcel, users):
+    sub, lot = _tree(users)
+    svc.convert_to_pool("Alice", sub["id"], by="Alice")
+    _router_access(
+        sub["id"],
+        {"contributors": [{"target": "Alice", "caps": {"fields": ["status"], "add": []}}]},
+        users["alice"],
+    )
+    found = svc.find_asset("Alice", "personal", lot["id"], is_admin=True)
+    assert found["can_edit"] is True and found["can_contribute"] is None

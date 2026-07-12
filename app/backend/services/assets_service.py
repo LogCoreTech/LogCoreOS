@@ -605,12 +605,20 @@ def _share_access(
     return _resolve_grant(personal or grouped, viewer, group)
 
 
-def _contributor_caps(asset: dict, viewer: str, workspace: str) -> dict | None:
+def _contributor_caps(
+    asset: dict, viewer: str, workspace: str, named_only: bool = False
+) -> dict | None:
     """Resolve pool-asset contributor caps for a viewer (no handshake — pool
-    assets are already workspace-visible). A by-name entry beats group entries."""
+    assets are already workspace-visible). A by-name entry beats group entries.
+    named_only=True considers only by-name entries — used to decide whether a
+    pool_edit manager is downgraded to contribute on this specific asset."""
     group = "team" if workspace == "business" else "household"
     personal = [c for c in asset.get("contributors") or [] if c.get("target") == viewer]
-    grouped = [c for c in asset.get("contributors") or [] if c.get("target") == group]
+    grouped = (
+        []
+        if named_only
+        else [c for c in asset.get("contributors") or [] if c.get("target") == group]
+    )
     caps: dict | None = None
     for entry in personal or grouped:
         caps = _merge_caps(caps, normalize_caps(entry.get("caps")))
@@ -1215,9 +1223,14 @@ def list_visible(
             continue
         if not include_archived and _is_archived(asset):
             continue
-        entry = {**asset, "_owner": pool_label, "_access": "edit" if can_edit_pool else "read"}
-        if not can_edit_pool:
-            caps = _contributor_caps(asset, viewer, workspace)
+        # A by-name contributor entry is more specific than the blanket
+        # pool_edit grant — it downgrades a (non-admin) manager to contribute
+        # on this asset. Group entries never downgrade managers.
+        named = None if is_admin else _contributor_caps(asset, viewer, workspace, named_only=True)
+        asset_edit = can_edit_pool and named is None
+        entry = {**asset, "_owner": pool_label, "_access": "edit" if asset_edit else "read"}
+        if not asset_edit:
+            caps = named if named is not None else _contributor_caps(asset, viewer, workspace)
             if caps is not None:
                 entry["_access"] = "contribute"
                 entry["_caps"] = caps
@@ -1280,7 +1293,14 @@ def find_asset(
     if pool_asset is not None:
         if not is_admin and _is_hidden_from(pool_asset, pool_by_id, viewer, viewer_role):
             return None
-        can_edit = is_admin or POOL_LABEL[pool_user] in (pool_edit or [])
+        # By-name contributor entry downgrades a (non-admin) pool_edit manager
+        # to contribute on this asset — see list_visible for the rationale.
+        named = (
+            None if is_admin else _contributor_caps(pool_asset, viewer, workspace, named_only=True)
+        )
+        can_edit = (is_admin or POOL_LABEL[pool_user] in (pool_edit or [])) and (
+            is_admin or named is None
+        )
         return {
             "store": pool_user,
             "store_workspace": "personal",
@@ -1290,7 +1310,11 @@ def find_asset(
             "can_manage": can_edit,
             "can_delete": is_admin,
             "can_contribute": (
-                None if can_edit else _contributor_caps(pool_asset, viewer, workspace)
+                None
+                if can_edit
+                else (
+                    named if named is not None else _contributor_caps(pool_asset, viewer, workspace)
+                )
             ),
         }
 

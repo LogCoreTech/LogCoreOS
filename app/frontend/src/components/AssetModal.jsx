@@ -50,6 +50,7 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
   const [roleNames, setRoleNames] = useState([])
   const [archivePrompt, setArchivePrompt] = useState(false)
   const [showParentPicker, setShowParentPicker] = useState(false)
+  const [commentsOff, setCommentsOff] = useState(!!asset?.comments_hidden)
   const [shareScope, setShareScope] = useState('all') // 'all' = cascade to children, 'one' = this node only
 
   const templatesById = Object.fromEntries((templates || []).map(t => [t.id, t]))
@@ -249,6 +250,19 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
       setError(err.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Turn comments off/on for everyone — immediate, edit-level action
+  async function toggleCommentsOff() {
+    setError('')
+    try {
+      await assetsApi.setCommentsHidden(asset.id, !commentsOff)
+      setCommentsOff(!commentsOff)
+      setAsset(a => ({ ...a, comments_hidden: !commentsOff }))
+      onSaved()
+    } catch (err) {
+      setError(err.message)
     }
   }
 
@@ -470,6 +484,27 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
             <p className="text-xs text-charcoal-400 border-t border-charcoal-100 dark:border-charcoal-800 pt-3">
               📎 Files, ✓ linked tasks, and 🔗 sharing become available right after you create this asset.
             </p>
+          )}
+
+          {/* Comments on/off for everyone — edit-level, immediate */}
+          {editing && !readOnly && (
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-sm font-medium">Comments</label>
+                <p className="text-[10px] text-charcoal-400">Off hides the section and blocks posting for everyone.</p>
+              </div>
+              <button
+                type="button"
+                onClick={toggleCommentsOff}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  commentsOff
+                    ? 'bg-charcoal-600 text-white'
+                    : 'bg-charcoal-100 dark:bg-charcoal-700 text-charcoal-600 dark:text-charcoal-300'
+                }`}
+              >
+                {commentsOff ? 'Off for everyone' : 'On'}
+              </button>
+            </div>
           )}
 
           {/* Attachments — edit mode only (needs an asset id) */}

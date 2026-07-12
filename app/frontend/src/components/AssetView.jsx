@@ -32,6 +32,9 @@ export default function AssetView({
   const [uploading, setUploading] = useState(false)
   const [mutePopup, setMutePopup] = useState(false)
   const [muteInfo, setMuteInfo] = useState(null) // {muted, self, via, via_name}
+  // Per-user, per-open collapse — plain component state, so the section
+  // reappears the next time the asset is opened.
+  const [commentsCollapsed, setCommentsCollapsed] = useState(false)
 
   const isForeign = !!asset._owner
   const isPool = asset._owner === 'team' || asset._owner === 'household'
@@ -129,19 +132,6 @@ export default function AssetView({
     setBusy(true)
     try {
       setMuteInfo(await assetsApi.setMute(asset.id, !muteInfo.self))
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function toggleCommentsHidden() {
-    setBusy(true)
-    setError('')
-    try {
-      await assetsApi.setCommentsHidden(asset.id, !commentsHidden)
-      onAssetUpdated && onAssetUpdated({ ...asset, comments_hidden: !commentsHidden })
     } catch (err) {
       setError(err.message)
     } finally {
@@ -315,35 +305,30 @@ export default function AssetView({
           )}
 
           {/* Comments — attributed job log; edit-level users get notified.
-              Owner/manager can hide the whole section for everyone; only an
-              admin can delete individual comments (audit-style log). */}
-          {commentsHidden && canManage && (
-            <div className="flex items-center gap-2 text-xs text-charcoal-400">
-              <span>Comments are turned off on this asset.</span>
-              <button type="button" onClick={toggleCommentsHidden} disabled={busy} className="btn-ghost text-[11px] px-2 py-0.5">
-                Turn on
-              </button>
-            </div>
+              Any user can collapse the section for themselves (resets on
+              reopen); turning comments OFF for everyone lives in the edit
+              page; only an admin can delete individual comments. */}
+          {commentsHidden && canEdit && (
+            <p className="text-xs text-charcoal-400">
+              Comments are turned off on this asset — manage it in ✎ Edit.
+            </p>
           )}
-          {!commentsHidden && (comments.length > 0 || canComment || canManage) && (
+          {!commentsHidden && (comments.length > 0 || canComment) && (
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-[11px] uppercase tracking-wide text-charcoal-400">
                   Comments{comments.length > 0 ? ` (${comments.length})` : ''}
                 </span>
-                {canManage && (
-                  <button
-                    type="button"
-                    onClick={toggleCommentsHidden}
-                    disabled={busy}
-                    className="text-[10px] text-charcoal-400 hover:text-orange-500 transition-colors ml-auto"
-                    title="Hide the comments section for all users"
-                  >
-                    Hide for everyone
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setCommentsCollapsed(c => !c)}
+                  className="text-[10px] text-charcoal-400 hover:text-orange-500 transition-colors ml-auto"
+                  title="Hide the comments section for yourself until you reopen this asset"
+                >
+                  {commentsCollapsed ? 'Show' : 'Hide'}
+                </button>
               </div>
-              {comments.length > 0 && (
+              {!commentsCollapsed && comments.length > 0 && (
                 <div className="space-y-2 max-h-48 overflow-y-auto mb-2">
                   {comments.map(c => (
                     <div key={c.id} className="group text-sm bg-charcoal-50 dark:bg-charcoal-800 rounded-lg px-2.5 py-1.5">
@@ -366,7 +351,7 @@ export default function AssetView({
                   ))}
                 </div>
               )}
-              {canComment && (
+              {!commentsCollapsed && canComment && (
                 <div className="flex gap-2">
                   <input
                     type="text"
