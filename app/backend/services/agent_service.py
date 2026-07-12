@@ -1316,6 +1316,7 @@ def _execute_tool(
                     include_archived=bool(inputs.get("include_archived")),
                     is_admin=user.get("role") == "admin",
                     pool_edit=user.get("pool_edit") or [],
+                    viewer_role=user.get("feature_role") or "",
                 )
                 if inputs.get("template"):
                     items = [a for a in items if a.get("template") == inputs["template"]]
@@ -1338,6 +1339,7 @@ def _execute_tool(
                     inputs["asset_id"],
                     is_admin=user.get("role") == "admin",
                     pool_edit=user.get("pool_edit") or [],
+                    viewer_role=user.get("feature_role") or "",
                 )
                 if found is None:
                     return {"error": f"Asset {inputs['asset_id']!r} not found"}
@@ -1362,6 +1364,7 @@ def _execute_tool(
                     inputs["asset_id"],
                     is_admin=user.get("role") == "admin",
                     pool_edit=user.get("pool_edit") or [],
+                    viewer_role=user.get("feature_role") or "",
                 )
                 if found is None:
                     return {"error": f"Asset {inputs['asset_id']!r} not found"}
@@ -1385,6 +1388,7 @@ def _execute_tool(
                     workspace,
                     is_admin=user.get("role") == "admin",
                     pool_edit=user.get("pool_edit") or [],
+                    viewer_role=user.get("feature_role") or "",
                 )
                 if inputs.get("template"):
                     items = [a for a in items if a.get("template") == inputs["template"]]
@@ -1408,6 +1412,7 @@ def _execute_tool(
                     inputs["asset_id"],
                     is_admin=user.get("role") == "admin",
                     pool_edit=user.get("pool_edit") or [],
+                    viewer_role=user.get("feature_role") or "",
                 )
                 if found is None:
                     return {"error": f"Asset {inputs['asset_id']!r} not found"}

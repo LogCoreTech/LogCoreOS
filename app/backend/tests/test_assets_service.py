@@ -715,3 +715,302 @@ def test_m006_respects_admin_deletion_choice(brain):
     m006_seed_folder_template(brain)
     folders = [t for t in svc.list_global_templates() if t["key"] == "folder"]
     assert len(folders) == 1 and folders[0]["label"] == "My Folders"
+
+
+# ---------------------------------------------------------------------------
+# Contribute access level (configurable caps) + pool contributors
+# ---------------------------------------------------------------------------
+
+
+def _router_patch(asset_id: str, payload: dict, user: dict, workspace: str = "personal"):
+    from routers.assets import AssetUpdate
+    from routers.assets import update_asset as route_patch
+
+    return route_patch(
+        asset_id, AssetUpdate(**payload), current_user=user, workspace=workspace, _rl=None
+    )
+
+
+def _router_access(asset_id: str, payload: dict, user: dict, workspace: str = "personal"):
+    from routers.assets import AccessUpdate
+    from routers.assets import update_access as route_access
+
+    return route_access(
+        asset_id, AccessUpdate(**payload), current_user=user, workspace=workspace, _rl=None
+    )
+
+
+def _router_comment(asset_id: str, text: str, user: dict, workspace: str = "personal"):
+    from routers.assets import CommentCreate
+    from routers.assets import add_comment as route_comment
+
+    return route_comment(
+        asset_id, CommentCreate(text=text), current_user=user, workspace=workspace, _rl=None
+    )
+
+
+def _share_contribute(owner, asset_id, target, caps):
+    svc.update_access(
+        owner,
+        asset_id,
+        shared_with=[{"target": target, "access": "contribute", "caps": caps}],
+        by=owner,
+    )
+    _accept(target, owner, asset_id)
+
+
+def test_contribute_patch_allows_only_capped_fields(parcel, users):
+    from fastapi import HTTPException
+
+    sub, lot = _tree(users)
+    _share_contribute("Alice", sub["id"], "Bob", {"fields": ["status"], "add": ["comments"]})
+
+    updated = _router_patch(lot["id"], {"fields": {"status": "sold"}}, users["bob"])
+    assert updated["fields"]["status"] == "sold"
+    assert updated["history"][-1]["by"] == "Bob"  # attributed audit trail
+
+    with pytest.raises(HTTPException) as exc:
+        _router_patch(lot["id"], {"fields": {"acreage": 5}}, users["bob"])
+    assert exc.value.status_code == 400
+    with pytest.raises(HTTPException) as exc:
+        _router_patch(lot["id"], {"name": "Renamed"}, users["bob"])
+    assert exc.value.status_code == 400
+
+
+def test_contribute_visibility_annotated_with_caps(parcel, users):
+    sub, _ = _tree(users)
+    svc.update_access(
+        "Alice",
+        sub["id"],
+        shared_with=[
+            {"target": "Bob", "access": "contribute", "caps": {"fields": ["status"], "add": []}}
+        ],
+        by="Alice",
+    )
+    # Pending until accepted (handshake unchanged)
+    assert not any(a["id"] == sub["id"] for a in svc.list_visible("Bob", "personal"))
+    _accept("Bob", "Alice", sub["id"])
+    visible = {a["id"]: a for a in svc.list_visible("Bob", "personal")}
+    assert visible[sub["id"]]["_access"] == "contribute"
+    assert visible[sub["id"]]["_caps"] == {"fields": ["status"], "add": []}
+    found = svc.find_asset("Bob", "personal", sub["id"])
+    assert found["can_edit"] is False
+    assert found["can_contribute"] == {"fields": ["status"], "add": []}
+
+
+def test_contribute_children_cap_gates_create(parcel, users):
+    from fastapi import HTTPException
+
+    sub, _ = _tree(users)
+    _share_contribute("Alice", sub["id"], "Bob", {"fields": [], "add": ["children"]})
+    child = _router_create(
+        {"template": "parcel", "name": "Bob's lot", "parent_id": sub["id"]}, users["bob"]
+    )
+    # Child lands in Alice's store, annotated for the contribute creator
+    assert child["_owner"] == "Alice"
+    assert child["_access"] == "contribute"
+    assert child["_caps"]["add"] == ["children"]
+    assert any(a["id"] == child["id"] for a in svc.list_assets("Alice", "personal"))
+
+    # Without the children cap → 403
+    lone = svc.create_asset("Alice", {"template": "parcel", "name": "Lone"}, created_by="Alice")
+    _share_contribute("Alice", lone["id"], "Bob", {"fields": ["status"], "add": []})
+    with pytest.raises(HTTPException) as exc:
+        _router_create(
+            {"template": "parcel", "name": "Nope", "parent_id": lone["id"]}, users["bob"]
+        )
+    assert exc.value.status_code == 403
+
+
+def test_contribute_missing_caps_defaults_to_comment_only(parcel, users):
+    sub, _ = _tree(users)
+    svc.update_access(
+        "Alice",
+        sub["id"],
+        shared_with=[{"target": "Bob", "access": "contribute"}],
+        by="Alice",
+    )
+    _accept("Bob", "Alice", sub["id"])
+    found = svc.find_asset("Bob", "personal", sub["id"])
+    assert found["can_contribute"] == {"fields": [], "add": ["comments"]}
+
+
+def test_pool_contributors_capped_updates(parcel, users):
+    from fastapi import HTTPException
+
+    sub, lot = _tree(users)
+    svc.convert_to_pool("Alice", sub["id"], by="Alice")
+    # Grant Bob (no pool_edit) status-only contribution on the pool subtree
+    _router_access(
+        sub["id"],
+        {"contributors": [{"target": "Bob", "caps": {"fields": ["status"], "add": []}}]},
+        users["alice"],
+    )
+    found = svc.find_asset("Bob", "personal", lot["id"])
+    assert found["relation"] == "pool" and found["can_edit"] is False
+    assert found["can_contribute"] == {"fields": ["status"], "add": []}
+
+    updated = _router_patch(lot["id"], {"fields": {"status": "sold"}}, users["bob"])
+    assert updated["fields"]["status"] == "sold"
+    with pytest.raises(HTTPException) as exc:
+        _router_patch(lot["id"], {"fields": {"county": "Hays"}}, users["bob"])
+    assert exc.value.status_code == 400
+
+
+def test_contributors_rejected_on_personal_assets(parcel, users):
+    from fastapi import HTTPException
+
+    lone = svc.create_asset("Alice", {"template": "parcel", "name": "Mine"}, created_by="Alice")
+    with pytest.raises(HTTPException) as exc:
+        _router_access(lone["id"], {"contributors": [{"target": "Bob"}]}, users["alice"])
+    assert exc.value.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Comments — attributed log + edit-level notifications
+# ---------------------------------------------------------------------------
+
+
+def test_comment_roundtrip_caps_and_limits(parcel, users):
+    lone = svc.create_asset("Alice", {"template": "parcel", "name": "Mine"}, created_by="Alice")
+    c = svc.add_comment("Alice", lone["id"], "First note", by="Alice")
+    assert c["by"] == "Alice" and c["text"] == "First note"
+    with pytest.raises(ValueError, match="too long"):
+        svc.add_comment("Alice", lone["id"], "x" * (svc.MAX_COMMENT_LEN + 1), by="Alice")
+    with pytest.raises(ValueError, match="required"):
+        svc.add_comment("Alice", lone["id"], "   ", by="Alice")
+    # Trim: cap at MAX_COMMENTS, oldest dropped (owner-authored → no notify fan-out)
+    for i in range(svc.MAX_COMMENTS + 5):
+        svc.add_comment("Alice", lone["id"], f"note {i}", by="Alice")
+    comments = svc.get_asset("Alice", lone["id"])["comments"]
+    assert len(comments) == svc.MAX_COMMENTS
+    assert comments[-1]["text"] == f"note {svc.MAX_COMMENTS + 4}"
+
+
+def test_comment_posting_rights(parcel, users):
+    from fastapi import HTTPException
+
+    sub, _ = _tree(users)
+    # read share → cannot comment
+    svc.update_access(
+        "Alice", sub["id"], shared_with=[{"target": "Bob", "access": "read"}], by="Alice"
+    )
+    _accept("Bob", "Alice", sub["id"])
+    with pytest.raises(HTTPException) as exc:
+        _router_comment(sub["id"], "hi", users["bob"])
+    assert exc.value.status_code == 403
+    # contribute with comments cap → can
+    _share_contribute("Alice", sub["id"], "Bob", {"fields": [], "add": ["comments"]})
+    posted = _router_comment(sub["id"], "Job done, gate locked", users["bob"])
+    assert posted["by"] == "Bob"
+
+
+def test_comment_delete_permissions(parcel, users):
+    from fastapi import HTTPException
+    from routers.assets import delete_comment as route_delete_comment
+
+    sub, _ = _tree(users)
+    _share_contribute("Alice", sub["id"], "Bob", {"fields": [], "add": ["comments"]})
+    posted = _router_comment(sub["id"], "note", users["bob"])
+    carol = auth_service.create_user("carol@example.com", "password123", "Carol")
+    svc.update_access(
+        "Alice",
+        sub["id"],
+        shared_with=[
+            {"target": "Bob", "access": "contribute", "caps": {"fields": [], "add": ["comments"]}},
+            {"target": "Carol", "access": "read"},
+        ],
+        by="Alice",
+    )
+    _accept("Carol", "Alice", sub["id"])
+    with pytest.raises(HTTPException) as exc:  # third party can't delete
+        route_delete_comment(
+            sub["id"], posted["id"], current_user=carol, workspace="personal", _rl=None
+        )
+    assert exc.value.status_code == 403
+    # author can
+    route_delete_comment(
+        sub["id"], posted["id"], current_user=users["bob"], workspace="personal", _rl=None
+    )
+    assert posted["id"] not in [c["id"] for c in svc.get_asset("Alice", sub["id"])["comments"]]
+
+
+def test_comment_notifies_edit_audience_not_author(parcel, users):
+    from services import suggestions_service
+
+    sub, _ = _tree(users)
+    _share_contribute("Alice", sub["id"], "Bob", {"fields": [], "add": ["comments"]})
+    _router_comment(sub["id"], "Fence fixed", users["bob"])
+    alice_notifs = suggestions_service.get_notifications("Alice")
+    match = [n for n in alice_notifs if n.get("action", {}).get("type") == "open_asset"]
+    assert match and match[0]["action"]["asset_id"] == sub["id"]
+    assert "Bob" in match[0]["title"]
+    # The author gets nothing
+    assert not any(
+        n.get("action", {}).get("type") == "open_asset"
+        for n in suggestions_service.get_notifications("Bob")
+    )
+
+
+def test_automation_comment_posts_and_notifies(parcel, users):
+    from routers.assets import AutomationCommentCreate, automation_add_comment
+    from services import suggestions_service
+
+    sub, _ = _tree(users)
+    svc.convert_to_pool("Alice", sub["id"], by="Alice")
+    posted = automation_add_comment(
+        sub["id"],
+        AutomationCommentCreate(user="_household", workspace="personal", text="Inspection due"),
+        _auth=None,
+        _rl=None,
+    )
+    assert posted["by"] == "automation"
+    # Pool managers (admin Alice) get the jump-to-asset notification
+    assert any(
+        n.get("action", {}).get("type") == "open_asset" and n["action"]["asset_id"] == sub["id"]
+        for n in suggestions_service.get_notifications("Alice")
+    )
+
+
+# ---------------------------------------------------------------------------
+# Role entries in hidden_from (dynamic role hiding)
+# ---------------------------------------------------------------------------
+
+
+def _give_role(name: str, role: str):
+    from services import features_service
+
+    feats = features_service.load_features()
+    roles = feats.setdefault("roles", {})
+    if role not in roles:
+        roles[role] = {"disabled_modules": []}
+        features_service.save_features(feats)
+    auth_service.update_user(auth_service.get_user_by_name(name)["id"], {"feature_role": role})
+
+
+def test_role_hidden_from_pool_asset(parcel, users):
+    sub, lot = _tree(users)
+    svc.convert_to_pool("Alice", sub["id"], by="Alice")
+    _give_role("Bob", "crew")
+    svc.update_access("_household", sub["id"], hidden_from=["role:crew"], by="Alice")
+
+    # Crew viewer: hidden from list and find — dynamically by role
+    assert not any(
+        a["id"] == sub["id"] for a in svc.list_visible("Bob", "personal", viewer_role="crew")
+    )
+    assert svc.find_asset("Bob", "personal", sub["id"], viewer_role="crew") is None
+    # A different role still sees it; admin always does
+    carol = auth_service.create_user("carol2@example.com", "password123", "Carol")
+    assert any(
+        a["id"] == sub["id"] for a in svc.list_visible("Carol", "personal", viewer_role="member")
+    )
+    assert any(
+        a["id"] == sub["id"]
+        for a in svc.list_visible("Alice", "personal", is_admin=True, viewer_role="crew")
+    )
+
+
+def test_hidden_from_rejects_unknown_role(parcel, users):
+    lone = svc.create_asset("Alice", {"template": "parcel", "name": "Mine"}, created_by="Alice")
+    with pytest.raises(ValueError, match="Unknown role"):
+        svc.update_access("Alice", lone["id"], hidden_from=["role:ghosts"], by="Alice")

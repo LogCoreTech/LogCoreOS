@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { assets as assetsApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
@@ -19,6 +20,9 @@ function AssetRow({ asset, depth, childrenMap, expanded, onToggle, onOpen, onAdd
   const template = asset._template || templatesByKey[asset.template]
   const status = asset.fields?.status
   const canEdit = !asset._owner || asset._access === 'edit'
+  // Contribute viewers with the "children" cap may add inside (but not move)
+  const canAddChild = canEdit ||
+    (asset._access === 'contribute' && (asset._caps?.add || []).includes('children'))
   const pad = ['pl-0', 'pl-5', 'pl-10', 'pl-14', 'pl-20', 'pl-24'][Math.min(depth, 5)]
 
   return (
@@ -51,22 +55,26 @@ function AssetRow({ asset, depth, childrenMap, expanded, onToggle, onOpen, onAdd
             <span className="text-xs text-charcoal-400 shrink-0">📎{asset.attachments.length}</span>
           )}
         </button>
-        {canEdit && (
+        {(canEdit || canAddChild) && (
           <div className="flex items-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              onClick={() => onMove(asset)}
-              className="btn-ghost text-xs px-1.5 py-0.5"
-              title="Move"
-            >
-              ⇄
-            </button>
-            <button
-              onClick={() => onAddChild(asset)}
-              className="btn-ghost text-xs px-1.5 py-0.5"
-              title="Add inside"
-            >
-              ＋
-            </button>
+            {canEdit && (
+              <button
+                onClick={() => onMove(asset)}
+                className="btn-ghost text-xs px-1.5 py-0.5"
+                title="Move"
+              >
+                ⇄
+              </button>
+            )}
+            {canAddChild && (
+              <button
+                onClick={() => onAddChild(asset)}
+                className="btn-ghost text-xs px-1.5 py-0.5"
+                title="Add inside"
+              >
+                ＋
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -156,6 +164,18 @@ export default function Assets() {
   const [modal, setModal] = useState(null) // {asset} | {creating: true, parentId}
   const [moveAsset, setMoveAsset] = useState(null)
   const [showTemplates, setShowTemplates] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // Deep link (?asset=<id>) — comment notifications' "View →" button and web
+  // push clicks land here; open that asset's read-first view once loaded.
+  useEffect(() => {
+    const target = searchParams.get('asset')
+    if (!target || !loaded) return
+    const found = items.find(a => a.id === target)
+    if (found) setModal({ asset: found })
+    searchParams.delete('asset')
+    setSearchParams(searchParams, { replace: true })
+  }, [loaded, items, searchParams])
 
   async function load() {
     setError('')

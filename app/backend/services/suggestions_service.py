@@ -222,6 +222,29 @@ def _deliver(
         add_notification(user_name, title, body, source, "chat")
 
 
+def notify_user(
+    user_name: str,
+    title: str,
+    body: str,
+    source: str = "system",
+    action: dict | None = None,
+    url: str = "/",
+) -> None:
+    """In-app notification (optionally actionable) + push channels, best-effort.
+    Unlike _deliver, the in-app entry can carry an `action` (e.g. open_asset) and
+    the web push carries a deep-link `url`."""
+    add_notification(user_name, title, body, source, "in_app", action=action)
+    try:
+        from services.notification_service import send
+        from services.push_service import get_subscription, send_push
+
+        send(channel=_ntfy_channel(user_name), title=title, message=body, priority="default")
+        if get_subscription(user_name):
+            send_push(user_name, title, body, url=url)
+    except Exception:  # push delivery must never break the write path
+        pass
+
+
 # ---------------------------------------------------------------------------
 # Per-user suggestion runners (sync — safe for scheduler + run-now)
 # ---------------------------------------------------------------------------

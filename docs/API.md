@@ -771,10 +771,12 @@ Router mounted at `/api/v1/assets`. Requires the `assets` module (both workspace
 
 | Method | Path | Access | Notes |
 |--------|------|--------|-------|
-| `GET` | `/assets` | module users | own + workspace pool + shared-to-me (annotated `_owner`/`_access`); `?template=`, `?include_archived=true`. Share resolution is index-routed (`assets_share_index.json`) |
+| `GET` | `/assets` | module users | own + workspace pool + shared-to-me (annotated `_owner`/`_access`; contribute-level entries also carry `_caps`); `?template=`, `?include_archived=true`. Share resolution is index-routed (`assets_share_index.json`) |
 | `GET` | `/assets/members` | module users | member display **names only** for share/hide selectors |
 | `POST` | `/assets` | module users | `{template_id\|template, name, parent_id?, fields?, notes?, owner:"me"\|"pool"}`; `pool` needs admin/`pool_edit`. `parent_id` set → child created in the **parent's store** (requires edit access) inheriting its `shared_with`+`hidden_from` (the "group" mechanic). Asset responses embed the resolved template as `_template`. When the record is created outside the caller's own store, the response carries `_owner` (`team`/`household`/owner name) + `_access: "edit"` like list/find responses |
-| `PUT` | `/assets/{id}/access` | owner (pool: admin/grant) | share entries are **requests**: `{shared_with:[{target,access}], hidden_from?, cascade=true}`; each new target (user/team/household/role) is notified and the asset stays hidden until they accept |
+| `PUT` | `/assets/{id}/access` | owner (pool: admin/grant) | share entries are **requests**: `{shared_with:[{target,access,caps?}], hidden_from?, contributors?, cascade=true}`; each new target (user/team/household/role) is notified and the asset stays hidden until they accept. `access` is `read` \| `contribute` \| `edit` — **contribute** carries a `caps` object `{fields:[keys], add:[comments\|files\|children]}` naming exactly which template fields the person may change and what they may add (missing caps default to comment-only). `hidden_from` accepts user names **and dynamic `role:<feature_role>` entries** (hides from everyone holding that role, future assignees included). `contributors` (pool assets only, admin/pool-manager): `[{target: team\|household\|name, caps}]` — capability grants without the accept handshake, since pool assets are already workspace-visible; `shared_with` on pool assets stays rejected |
+| `POST` | `/assets/{id}/comments` | edit-level, or contribute with `comments` cap | `{text}` (≤2000 chars) → appended to the asset's attributed comment log (cap 100, oldest trimmed). Notifies every edit-level user (owner, accepted edit shares; pool: admins + `pool_edit` grantees) except the author — in-app notification with an `open_asset` action (NotifBell "View →" jumps to `/assets?asset=<id>`) plus ntfy/web push with the same deep link |
+| `DELETE` | `/assets/{id}/comments/{comment_id}` | comment author / owner / pool manager | `204` |
 | `POST` | `/assets/{id}/leave` | share recipient | remove self from an asset shared with you |
 | `GET`/`PATCH` | `/assets/{id}` | per access | PATCH allowed for owner/edit-share/pool manager; records history. Re-parent (move) is same-owner only |
 | `POST` | `/assets/{id}/archive` · `/unarchive` | owner / pool manager | **per-node**; `?cascade=true` (un)archives the whole subtree. Archiving only a parent leaves its children active (they float to top level) |
@@ -792,7 +794,10 @@ Token auth via `X-Automation-Token` header — no JWT. Token lives in `brain/_sy
 |--------|------|-------|
 | `GET` | `/assets/automation/assets?user=&workspace=&template=` | `user` may be a real user or `_team`/`_household` |
 | `POST` | `/assets/automation/assets` | `{user, workspace, template, name, parent_id?, fields?, notes?}` |
-| `PATCH` | `/assets/automation/assets/{id}` | `{user, workspace, name?, fields?, notes?}` |
+| `PATCH` | `/assets/automation/assets/{id}` | **Edit an asset from a workflow**: `{user, workspace, name?, fields?, notes?}`. `fields` merges per key (send `null` to clear a value); values are validated against the asset's template exactly like user edits; the change lands in the asset's `history` attributed `"automation"` |
+| `POST` | `/assets/automation/assets/{id}/comments` | **Post a comment from a workflow**: `{user, workspace, text}` (≤2000 chars). Comment is attributed `"automation"` and triggers the same edit-level notifications as a user comment — e.g. an n8n inspection workflow posting "inspection failed" alerts the owner with a jump-to-asset button |
+
+`user`/`workspace` on every automation call name the store the asset lives in (`user` may be `_team`/`_household` for pool assets). Rate limit 30/min. The automation token is a machine credential — **never hand it to a person**; employees use their own accounts (contribute shares / contributor grants) so writes stay attributed.
 
 ### Task linking
 

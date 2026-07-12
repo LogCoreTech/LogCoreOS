@@ -11,6 +11,7 @@ function NotifBell() {
   const [notifs, setNotifs] = useState([])
   const [open, setOpen] = useState(false)
   const panelRef = useRef(null)
+  const navigate = useNavigate()
 
   function load() {
     // Guard against a non-array response (e.g. an error object) — `list || []`
@@ -109,7 +110,22 @@ function NotifBell() {
                     <div className={!n.read ? '' : 'pl-3.5'}>
                       <p className="text-xs font-semibold text-charcoal-800 dark:text-charcoal-100">{n.title}</p>
                       <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mt-0.5 line-clamp-2">{n.body}</p>
-                      {n.action && n.status !== 'resolved' ? (
+                      {n.action?.type === 'open_asset' ? (
+                        // Navigation action — always available (re-viewable, no resolve)
+                        <div className="flex gap-2 mt-1.5" onClick={e => e.stopPropagation()}>
+                          <button
+                            onClick={() => {
+                              markRead(n.id)
+                              setOpen(false)
+                              navigate(`/assets?asset=${n.action.asset_id}`)
+                            }}
+                            className="btn-primary text-[11px] px-2.5 py-1"
+                          >
+                            View →
+                          </button>
+                          <span className="text-[10px] text-charcoal-400 dark:text-charcoal-500 self-center">{fmt(n.created_at)}</span>
+                        </div>
+                      ) : n.action && n.status !== 'resolved' ? (
                         <div className="flex gap-2 mt-1.5" onClick={e => e.stopPropagation()}>
                           <button onClick={() => respond(n, true)} className="btn-primary text-[11px] px-2.5 py-1">Accept</button>
                           <button onClick={() => respond(n, false)} className="btn-ghost text-[11px] px-2.5 py-1">Decline</button>

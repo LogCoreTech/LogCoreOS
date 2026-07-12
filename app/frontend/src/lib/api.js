@@ -241,6 +241,8 @@ export const assets = {
   uploadFile:     (id, file)        => requestFile('POST', `/assets/${id}/files`, file),
   fileBlob:       (id, fileId)      => requestBlob(`/assets/${id}/files/${fileId}`),
   removeFile:     (id, fileId)      => del(`/assets/${id}/files/${fileId}`),
+  addComment:     (id, text)        => post(`/assets/${id}/comments`, { text }),
+  removeComment:  (id, commentId)   => del(`/assets/${id}/comments/${commentId}`),
   automationToken:       ()         => get('/assets/automation/token'),
   rotateAutomationToken: ()         => post('/assets/automation/token/rotate', {}),
 }

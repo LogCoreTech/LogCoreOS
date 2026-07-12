@@ -8,6 +8,7 @@ stored as Assets/files/{asset_id}/{attachment_id}.{ext} — disk names are never
 user-controlled.
 """
 
+import copy
 import re
 import shutil
 import uuid
@@ -36,9 +37,14 @@ ATTACHMENT_TYPES = {
 }
 MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 MAX_ATTACHMENTS = 20
+MAX_COMMENTS = 100
+MAX_COMMENT_LEN = 2000
 _HISTORY_CAP = 50
 _KEY_RE = re.compile(r"^[a-z0-9_]{1,40}$")
 _TEXT_MAX = 2000
+
+# What a "contribute"-level user may ADD to an asset (per-share/contributor caps).
+CONTRIBUTE_ADDS = {"comments", "files", "children"}
 
 # Pool pseudo-user per workspace. Pool stores always use the personal base path.
 POOL_USERS = {"personal": "_household", "business": "_team"}
@@ -521,20 +527,51 @@ def _is_archived(asset: dict) -> bool:
     return bool(asset.get("archived"))
 
 
-def _is_hidden_from(asset: dict, by_id: dict[str, dict], viewer: str) -> bool:
+def _is_hidden_from(
+    asset: dict, by_id: dict[str, dict], viewer: str, viewer_role: str = ""
+) -> bool:
     # Per-node: hiding is set explicitly on each node (children created under a
     # hidden node inherit it at creation time; cascade re-applies to a subtree).
-    return viewer in (asset.get("hidden_from") or [])
+    # Entries are user names or dynamic "role:<feature_role>" entries — role
+    # entries follow the role (future hires included), unlike snapshot shares.
+    hidden = asset.get("hidden_from") or []
+    if viewer in hidden:
+        return True
+    return bool(viewer_role) and f"role:{viewer_role}" in hidden
 
 
-def _share_access(asset: dict, by_id: dict[str, dict], viewer: str, workspace: str) -> str | None:
-    """Best share grant ('edit' > 'read') on THIS node (per-node, not inherited).
+def normalize_caps(caps: dict | None) -> dict:
+    """Clean a contribute-caps object: {fields: [keys...], add: [comments|files|children]}.
+    A missing caps object defaults to comment-only (safest useful grant)."""
+    if not caps:
+        return {"fields": [], "add": ["comments"]}
+    fields = [str(k) for k in (caps.get("fields") or []) if str(k).strip()][:50]
+    add = [a for a in (caps.get("add") or []) if a in CONTRIBUTE_ADDS]
+    return {"fields": fields, "add": add}
+
+
+def _merge_caps(a: dict | None, b: dict) -> dict:
+    if a is None:
+        return {"fields": list(b["fields"]), "add": list(b["add"])}
+    return {
+        "fields": list(dict.fromkeys(a["fields"] + b["fields"])),
+        "add": list(dict.fromkeys(a["add"] + b["add"])),
+    }
+
+
+def _share_access(
+    asset: dict, by_id: dict[str, dict], viewer: str, workspace: str
+) -> tuple[str | None, dict | None]:
+    """Best share grant ('edit' > 'contribute' > 'read') on THIS node (per-node,
+    not inherited). Returns (access, caps) — caps only set for 'contribute'
+    (matching contribute entries have their caps unioned).
 
     Request-based: a new-style entry carries an `accepted` list and grants only to
     viewers who accepted. A legacy entry (no `accepted` key) is open to whoever the
     target resolves to — keeps pre-Phase-2 shares working until re-shared.
     """
     best: str | None = None
+    caps: dict | None = None
     group = "team" if workspace == "business" else "household"
     for share in asset.get("shared_with") or []:
         if "accepted" in share:
@@ -544,9 +581,24 @@ def _share_access(asset: dict, by_id: dict[str, dict], viewer: str, workspace: s
             continue
         access = share.get("access", "read")
         if access == "edit":
-            return "edit"
-        best = best or "read"
-    return best
+            return "edit", None
+        if access == "contribute":
+            best = "contribute"
+            caps = _merge_caps(caps, normalize_caps(share.get("caps")))
+        elif best is None:
+            best = "read"
+    return best, caps if best == "contribute" else None
+
+
+def _contributor_caps(asset: dict, viewer: str, workspace: str) -> dict | None:
+    """Resolve pool-asset contributor caps for a viewer (no handshake — pool
+    assets are already workspace-visible). Matching entries are unioned."""
+    group = "team" if workspace == "business" else "household"
+    caps: dict | None = None
+    for entry in asset.get("contributors") or []:
+        if entry.get("target") in (viewer, group):
+            caps = _merge_caps(caps, normalize_caps(entry.get("caps")))
+    return caps
 
 
 def _all_user_names() -> list[str]:
@@ -631,16 +683,10 @@ def create_asset(
     # Inherit the parent's audience so a child added under a shared asset is
     # automatically shared with (and hidden from) the same people — this is how a
     # shared subtree grows into a "group". Deep-copy so the child's `accepted`
-    # list is independent of the parent's.
-    inherited_shares = (
-        [
-            {k: (list(v) if isinstance(v, list) else v) for k, v in s.items()}
-            for s in (parent.get("shared_with") or [])
-        ]
-        if parent
-        else []
-    )
+    # list and contribute `caps` are independent of the parent's.
+    inherited_shares = copy.deepcopy(parent.get("shared_with") or []) if parent else []
     inherited_hidden = list(parent.get("hidden_from") or []) if parent else []
+    inherited_contributors = copy.deepcopy(parent.get("contributors") or []) if parent else []
 
     fields: dict[str, Any] = {
         f["key"]: f["default"] for f in template.get("fields", []) if "default" in f
@@ -663,6 +709,7 @@ def create_asset(
         "archived": False,
         "shared_with": inherited_shares,
         "hidden_from": inherited_hidden,
+        "contributors": inherited_contributors,
         "attachments": [],
         "history": [],
         "created_at": now,
@@ -733,6 +780,93 @@ def update_asset(
     return asset
 
 
+def _comment_audience(store_user: str, asset: dict, asset_workspace: str) -> set[str]:
+    """Everyone with edit-level standing on the asset: the owner and accepted
+    edit-share users for personal assets; admins + pool_edit grantees for pool
+    assets. Comment notifications go to this set (minus the author)."""
+    audience: set[str] = set()
+    if store_user in POOL_LABEL:
+        label = POOL_LABEL[store_user]
+        for u in list_users():
+            rec = get_user_by_name(u["name"]) or {}
+            if rec.get("role") == "admin" or label in (rec.get("pool_edit") or []):
+                audience.add(u["name"])
+        return audience
+    audience.add(store_user)
+    for share in asset.get("shared_with") or []:
+        if share.get("access") != "edit":
+            continue
+        if "accepted" in share:
+            audience.update(share.get("accepted") or [])
+        else:  # legacy open entry — resolve its target
+            audience.update(_resolve_targets(share.get("target") or ""))
+    return audience
+
+
+def add_comment(
+    store_user: str,
+    asset_id: str,
+    text: str,
+    workspace: str = "personal",
+    by: str = "",
+    asset_workspace: str = "personal",
+) -> dict | None:
+    """Append an attributed comment to the asset's log (cap MAX_COMMENTS, oldest
+    trimmed) and notify edit-level users with a jump-to-asset action."""
+    text = (text or "").strip()
+    if not text:
+        raise ValueError("Comment text is required")
+    if len(text) > MAX_COMMENT_LEN:
+        raise ValueError(f"Comment too long (max {MAX_COMMENT_LEN} characters)")
+    store = _load(store_user, workspace)
+    asset = _by_id(store["assets"]).get(asset_id)
+    if asset is None:
+        return None
+    comment = {"id": str(uuid.uuid4()), "by": by, "at": _now_iso(by or store_user), "text": text}
+    comments = list(asset.get("comments") or [])
+    comments.append(comment)
+    asset["comments"] = comments[-MAX_COMMENTS:]
+    asset["updated_at"] = _now_iso(by or store_user)
+    _save(store_user, workspace, store)
+    _notify_comment(store_user, asset, comment, asset_workspace)
+    return comment
+
+
+def _notify_comment(store_user: str, asset: dict, comment: dict, asset_workspace: str) -> None:
+    from services import suggestions_service
+
+    author = comment.get("by") or ""
+    snippet = comment["text"][:140] + ("…" if len(comment["text"]) > 140 else "")
+    for name in sorted(_comment_audience(store_user, asset, asset_workspace) - {author}):
+        try:
+            suggestions_service.notify_user(
+                name,
+                title=f"{author or 'Someone'} commented on “{asset['name']}”",
+                body=snippet,
+                source="assets",
+                action={"type": "open_asset", "asset_id": asset["id"]},
+                url=f"/assets?asset={asset['id']}",
+            )
+        except Exception:
+            pass
+
+
+def delete_comment(
+    store_user: str, asset_id: str, comment_id: str, workspace: str = "personal"
+) -> bool:
+    store = _load(store_user, workspace)
+    asset = _by_id(store["assets"]).get(asset_id)
+    if asset is None:
+        return False
+    comments = asset.get("comments") or []
+    kept = [c for c in comments if c.get("id") != comment_id]
+    if len(kept) == len(comments):
+        return False
+    asset["comments"] = kept
+    _save(store_user, workspace, store)
+    return True
+
+
 def count_active_descendants(store_user: str, asset_id: str, workspace: str = "personal") -> int:
     """Non-archived descendants (excludes the node itself) — drives the archive prompt."""
     assets = list_assets(store_user, workspace)
@@ -791,13 +925,14 @@ def update_access(
     workspace: str = "personal",
     shared_with: list[dict] | None = None,
     hidden_from: list[str] | None = None,
+    contributors: list[dict] | None = None,
     by: str = "",
     asset_workspace: str = "personal",
     cascade: bool = True,
 ) -> dict | None:
-    """Replace shared_with and/or hidden_from on the node (and, when cascade,
-    on all descendants). asset_workspace is the workspace the asset logically
-    belongs to (pool stores are physically 'personal')."""
+    """Replace shared_with / hidden_from / contributors on the node (and, when
+    cascade, on all descendants). asset_workspace is the workspace the asset
+    logically belongs to (pool stores are physically 'personal')."""
     store = _load(store_user, workspace)
     asset = _by_id(store["assets"]).get(asset_id)
     if asset is None:
@@ -822,22 +957,40 @@ def update_access(
         for share in shared_with:
             target = (share.get("target") or "").strip()
             access = share.get("access", "read")
-            if access not in ("read", "edit"):
-                raise ValueError(f"Invalid access {access!r} — use 'read' or 'edit'")
+            if access not in ("read", "contribute", "edit"):
+                raise ValueError(f"Invalid access {access!r} — use 'read', 'contribute' or 'edit'")
             if target not in valid_targets and get_user_by_name(target) is None:
                 raise ValueError(f"Unknown share target {target!r}")
-            cleaned_shares.append(
-                {"target": target, "access": access, "accepted": prev_accepted.get(target, [])}
-            )
+            entry = {"target": target, "access": access, "accepted": prev_accepted.get(target, [])}
+            if access == "contribute":
+                entry["caps"] = normalize_caps(share.get("caps"))
+            cleaned_shares.append(entry)
             if target not in prev_targets:
                 new_targets.append(target)
 
     cleaned_hidden: list[str] | None = None
     if hidden_from is not None:
+        role_names = set(_load_features_roles())
         for name in hidden_from:
-            if get_user_by_name(name) is None:
+            if name.startswith("role:"):
+                if name[5:] not in role_names:
+                    raise ValueError(f"Unknown role {name[5:]!r} in hidden_from")
+            elif get_user_by_name(name) is None:
                 raise ValueError(f"Unknown user {name!r} in hidden_from")
         cleaned_hidden = list(dict.fromkeys(hidden_from))
+
+    # Contributors — pool-asset capability grants (no handshake; pool is already
+    # workspace-visible). Targets: the workspace group or a named user.
+    cleaned_contributors: list[dict] | None = None
+    if contributors is not None:
+        cleaned_contributors = []
+        for entry in contributors:
+            target = (entry.get("target") or "").strip()
+            if target != group and get_user_by_name(target) is None:
+                raise ValueError(f"Unknown contributor target {target!r}")
+            cleaned_contributors.append(
+                {"target": target, "caps": normalize_caps(entry.get("caps"))}
+            )
 
     target_ids = collect_subtree_ids(store["assets"], asset_id) if cascade else {asset_id}
     by_id = _by_id(store["assets"])
@@ -846,9 +999,11 @@ def update_access(
         if node is None:
             continue
         if cleaned_shares is not None:
-            node["shared_with"] = [dict(s, accepted=list(s["accepted"])) for s in cleaned_shares]
+            node["shared_with"] = copy.deepcopy(cleaned_shares)
         if cleaned_hidden is not None:
             node["hidden_from"] = list(cleaned_hidden)
+        if cleaned_contributors is not None:
+            node["contributors"] = copy.deepcopy(cleaned_contributors)
         node["updated_at"] = _now_iso(by or store_user)
         _push_history(node, by, "access_update")
 
@@ -947,6 +1102,7 @@ def list_visible(
     include_archived: bool = False,
     is_admin: bool = False,
     pool_edit: tuple | list = (),
+    viewer_role: str = "",
 ) -> list[dict]:
     """Own assets + workspace pool assets + assets shared to the viewer."""
     result: list[dict] = []
@@ -962,13 +1118,17 @@ def list_visible(
     pool_by_id = _by_id(pool_assets)
     can_edit_pool = is_admin or pool_label in (pool_edit or [])
     for asset in pool_assets:
-        if not is_admin and _is_hidden_from(asset, pool_by_id, viewer):
+        if not is_admin and _is_hidden_from(asset, pool_by_id, viewer, viewer_role):
             continue
         if not include_archived and _is_archived(asset):
             continue
-        result.append(
-            {**asset, "_owner": pool_label, "_access": "edit" if can_edit_pool else "read"}
-        )
+        entry = {**asset, "_owner": pool_label, "_access": "edit" if can_edit_pool else "read"}
+        if not can_edit_pool:
+            caps = _contributor_caps(asset, viewer, workspace)
+            if caps is not None:
+                entry["_access"] = "contribute"
+                entry["_caps"] = caps
+        result.append(entry)
 
     # Only owners who actually share with this viewer (share index routing) —
     # avoids scanning every user's file on each request.
@@ -978,14 +1138,17 @@ def list_visible(
         theirs = list_assets(owner, workspace)
         theirs_by_id = _by_id(theirs)
         for asset in theirs:
-            if _is_hidden_from(asset, theirs_by_id, viewer):
+            if _is_hidden_from(asset, theirs_by_id, viewer, viewer_role):
                 continue
-            access = _share_access(asset, theirs_by_id, viewer, workspace)
+            access, caps = _share_access(asset, theirs_by_id, viewer, workspace)
             if access is None:
                 continue
             if not include_archived and _is_archived(asset):
                 continue
-            result.append({**asset, "_owner": owner, "_access": access})
+            entry = {**asset, "_owner": owner, "_access": access}
+            if caps is not None:
+                entry["_caps"] = caps
+            result.append(entry)
 
     return result
 
@@ -996,11 +1159,13 @@ def find_asset(
     asset_id: str,
     is_admin: bool = False,
     pool_edit: tuple | list = (),
+    viewer_role: str = "",
 ) -> dict | None:
     """Locate an asset across own → pool → sharing owners, with viewer permissions.
 
-    Returns {store, store_workspace, asset, relation, can_edit, can_manage, can_delete}
-    or None when the asset doesn't exist or is hidden from the viewer.
+    Returns {store, store_workspace, asset, relation, can_edit, can_manage,
+    can_delete, can_contribute} — can_contribute is the caps dict for a
+    contribute-level viewer, else None. None result = doesn't exist / hidden.
     """
     own = get_asset(viewer, asset_id, workspace)
     if own is not None:
@@ -1012,6 +1177,7 @@ def find_asset(
             "can_edit": True,
             "can_manage": True,
             "can_delete": True,  # owners can delete their own personal assets
+            "can_contribute": None,
         }
 
     pool_user = POOL_USERS[workspace]
@@ -1019,7 +1185,7 @@ def find_asset(
     pool_by_id = _by_id(pool_assets)
     pool_asset = pool_by_id.get(asset_id)
     if pool_asset is not None:
-        if not is_admin and _is_hidden_from(pool_asset, pool_by_id, viewer):
+        if not is_admin and _is_hidden_from(pool_asset, pool_by_id, viewer, viewer_role):
             return None
         can_edit = is_admin or POOL_LABEL[pool_user] in (pool_edit or [])
         return {
@@ -1030,6 +1196,9 @@ def find_asset(
             "can_edit": can_edit,
             "can_manage": can_edit,
             "can_delete": is_admin,
+            "can_contribute": (
+                None if can_edit else _contributor_caps(pool_asset, viewer, workspace)
+            ),
         }
 
     for owner in assets_index.sharers_for(viewer, workspace):
@@ -1040,9 +1209,9 @@ def find_asset(
         asset = theirs_by_id.get(asset_id)
         if asset is None:
             continue
-        if _is_hidden_from(asset, theirs_by_id, viewer):
+        if _is_hidden_from(asset, theirs_by_id, viewer, viewer_role):
             return None
-        access = _share_access(asset, theirs_by_id, viewer, workspace)
+        access, caps = _share_access(asset, theirs_by_id, viewer, workspace)
         if access is None:
             return None
         return {
@@ -1053,6 +1222,7 @@ def find_asset(
             "can_edit": access == "edit",
             "can_manage": False,
             "can_delete": False,
+            "can_contribute": caps,
         }
     return None
 

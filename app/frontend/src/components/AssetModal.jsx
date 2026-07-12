@@ -4,47 +4,7 @@ import TaskModal from './TaskModal'
 import TagInput from './TagInput'
 import AssetTreePicker from './AssetTreePicker'
 import AssetView from './AssetView'
-import { AttachmentThumb, formatChanges } from './assetDisplay'
-
-// Field input for one template field definition — module-level per MEMORY.md rule.
-function FieldInput({ def, value, onChange }) {
-  if (def.type === 'boolean') {
-    return (
-      <label className="flex items-center gap-2 text-sm py-2 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={value === true}
-          onChange={e => onChange(e.target.checked)}
-          className="accent-orange-500 w-4 h-4"
-        />
-        <span>{def.label}</span>
-      </label>
-    )
-  }
-  return (
-    <div>
-      <label className="block text-sm font-medium mb-1">{def.label}</label>
-      {def.type === 'select' ? (
-        <select value={value ?? ''} onChange={e => onChange(e.target.value)} className="input">
-          <option value="">—</option>
-          {(def.options || []).map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
-      ) : def.type === 'number' ? (
-        <input
-          type="number"
-          step="any"
-          value={value ?? ''}
-          onChange={e => onChange(e.target.value === '' ? '' : Number(e.target.value))}
-          className="input"
-        />
-      ) : def.type === 'date' ? (
-        <input type="date" value={value ?? ''} onChange={e => onChange(e.target.value)} className="input" />
-      ) : (
-        <input type="text" value={value ?? ''} onChange={e => onChange(e.target.value)} className="input" />
-      )}
-    </div>
-  )
-}
+import { AttachmentThumb, formatChanges, FieldInput, CapsSelector } from './assetDisplay'
 
 export default function AssetModal({ asset: initialAsset, templates, allAssets: allAssetsProp, defaultParentId, user, workspace, onClose, onSaved, onOpenAsset }) {
   const allAssets = Array.isArray(allAssetsProp) ? allAssetsProp : []
@@ -82,10 +42,12 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
   const [access, setAccess] = useState({
     shared_with: asset?.shared_with || [],
     hidden_from: asset?.hidden_from || [],
+    contributors: asset?.contributors || [],
   })
   const [attachments, setAttachments] = useState(asset?.attachments || [])
   const [uploading, setUploading] = useState(false)
   const [members, setMembers] = useState([])
+  const [roleNames, setRoleNames] = useState([])
   const [archivePrompt, setArchivePrompt] = useState(false)
   const [showParentPicker, setShowParentPicker] = useState(false)
   const [shareScope, setShareScope] = useState('all') // 'all' = cascade to children, 'one' = this node only
@@ -110,6 +72,8 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
 
   useEffect(() => {
     assetsApi.members().then(m => setMembers((m || []).map(x => x.name))).catch(() => {})
+    // Feature-role names feed the hide-from role chips (role:crew etc.)
+    assetsApi.roles().then(r => setRoleNames(Array.isArray(r) ? r : [])).catch(() => {})
   }, [])
 
   // For an existing asset the template comes embedded (_template) — handles shared
@@ -196,7 +160,7 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
         // one Save button persists shares too — no separate "Save access" step.
         if (canManage) {
           const accessPayload = isPool
-            ? { hidden_from: access.hidden_from, cascade: shareScope === 'all' }
+            ? { hidden_from: access.hidden_from, contributors: access.contributors, cascade: shareScope === 'all' }
             : { shared_with: access.shared_with, hidden_from: access.hidden_from, cascade: shareScope === 'all' }
           await assetsApi.updateAccess(asset.id, accessPayload)
         }
@@ -315,8 +279,24 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
 
   const shareTargets = access.shared_with
 
+  // The view can change the asset (quick status, contribute fields, comments,
+  // capped uploads) — sync modal state + the editor's form so a later Edit/Save
+  // doesn't revert those changes, and refresh the page list behind the modal.
+  function handleViewUpdate(updated) {
+    setAsset(updated)
+    setAttachments(updated.attachments || [])
+    setForm(f => ({
+      ...f,
+      name: updated.name ?? f.name,
+      fields: { ...(updated.fields || {}) },
+      notes: updated.notes ?? f.notes,
+    }))
+    onSaved()
+  }
+
   // Read-first: an existing asset opens in a clean, readable view. Edit (owner /
-  // editor only) flips this same modal into the editor below.
+  // editor only) flips this same modal into the editor below. Contribute-level
+  // viewers (employees) never see the editor — they work inline in the view.
   if (mode === 'view' && asset) {
     return (
       <AssetView
@@ -326,9 +306,11 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
         childAssets={allAssets.filter(a => a.parent_id === asset.id)}
         canEdit={!readOnly}
         canManage={canManage}
+        user={user}
         onEdit={() => setMode('edit')}
         onClose={onClose}
         onOpenAsset={onOpenAsset}
+        onAssetUpdated={handleViewUpdate}
       />
     )
   }
@@ -545,31 +527,70 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
               {!isPool && (
                 <div className="space-y-1">
                   {shareTargets.map((s, i) => (
-                    <div key={i} className="flex items-center gap-2 text-sm">
-                      <select
-                        value={s.target}
-                        onChange={e => setAccess(a => ({ ...a, shared_with: a.shared_with.map((x, j) => j === i ? { ...x, target: e.target.value } : x) }))}
-                        className="input !py-1 flex-1"
-                      >
-                        <option value="">— pick —</option>
-                        <option value={groupTarget}>{groupTarget === 'team' ? '🧑‍🤝‍🧑 Whole team' : '🏠 Whole household'}</option>
-                        {members.filter(m => m !== user?.name).map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                      <select
-                        value={s.access}
-                        onChange={e => setAccess(a => ({ ...a, shared_with: a.shared_with.map((x, j) => j === i ? { ...x, access: e.target.value } : x) }))}
-                        className="input !py-1 !w-20"
-                      >
-                        <option value="read">read</option>
-                        <option value="edit">edit</option>
-                      </select>
-                      <button type="button" onClick={() => setAccess(a => ({ ...a, shared_with: a.shared_with.filter((_, j) => j !== i) }))} className="text-red-400 hover:text-red-500">✕</button>
+                    <div key={i} className="space-y-1">
+                      <div className="flex items-center gap-2 text-sm">
+                        <select
+                          value={s.target}
+                          onChange={e => setAccess(a => ({ ...a, shared_with: a.shared_with.map((x, j) => j === i ? { ...x, target: e.target.value } : x) }))}
+                          className="input !py-1 flex-1"
+                        >
+                          <option value="">— pick —</option>
+                          <option value={groupTarget}>{groupTarget === 'team' ? '🧑‍🤝‍🧑 Whole team' : '🏠 Whole household'}</option>
+                          {members.filter(m => m !== user?.name).map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                        <select
+                          value={s.access}
+                          onChange={e => setAccess(a => ({ ...a, shared_with: a.shared_with.map((x, j) => j === i ? { ...x, access: e.target.value, ...(e.target.value === 'contribute' && !x.caps ? { caps: { fields: [], add: ['comments'] } } : {}) } : x) }))}
+                          className="input !py-1 !w-28"
+                        >
+                          <option value="read">read</option>
+                          <option value="contribute">contribute</option>
+                          <option value="edit">edit</option>
+                        </select>
+                        <button type="button" onClick={() => setAccess(a => ({ ...a, shared_with: a.shared_with.filter((_, j) => j !== i) }))} className="text-red-400 hover:text-red-500">✕</button>
+                      </div>
+                      {s.access === 'contribute' && (
+                        <CapsSelector
+                          caps={s.caps}
+                          onChange={caps => setAccess(a => ({ ...a, shared_with: a.shared_with.map((x, j) => j === i ? { ...x, caps } : x) }))}
+                          templateFields={template?.fields || []}
+                        />
+                      )}
                     </div>
                   ))}
                   <button type="button" onClick={() => setAccess(a => ({ ...a, shared_with: [...a.shared_with, { target: '', access: 'read' }] }))} className="btn-ghost text-xs px-2 py-1">
                     ＋ Share with…
                   </button>
-                  <p className="text-[10px] text-charcoal-400">People you add get a request to accept before it appears for them.</p>
+                  <p className="text-[10px] text-charcoal-400">People you add get a request to accept before it appears for them. Contribute = you pick exactly what they can change or add.</p>
+                </div>
+              )}
+              {isPool && (
+                <div className="space-y-1">
+                  <label className="block text-xs text-charcoal-400">Contributors <span className="font-normal">(can update what you pick — without full pool rights)</span></label>
+                  {(access.contributors || []).map((c, i) => (
+                    <div key={i} className="space-y-1">
+                      <div className="flex items-center gap-2 text-sm">
+                        <select
+                          value={c.target}
+                          onChange={e => setAccess(a => ({ ...a, contributors: a.contributors.map((x, j) => j === i ? { ...x, target: e.target.value } : x) }))}
+                          className="input !py-1 flex-1"
+                        >
+                          <option value="">— pick —</option>
+                          <option value={groupTarget}>{groupTarget === 'team' ? '🧑‍🤝‍🧑 Whole team' : '🏠 Whole household'}</option>
+                          {members.filter(m => m !== user?.name).map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                        <button type="button" onClick={() => setAccess(a => ({ ...a, contributors: a.contributors.filter((_, j) => j !== i) }))} className="text-red-400 hover:text-red-500">✕</button>
+                      </div>
+                      <CapsSelector
+                        caps={c.caps}
+                        onChange={caps => setAccess(a => ({ ...a, contributors: a.contributors.map((x, j) => j === i ? { ...x, caps } : x) }))}
+                        templateFields={template?.fields || []}
+                      />
+                    </div>
+                  ))}
+                  <button type="button" onClick={() => setAccess(a => ({ ...a, contributors: [...(a.contributors || []), { target: '', caps: { fields: [], add: ['comments'] } }] }))} className="btn-ghost text-xs px-2 py-1">
+                    ＋ Contributor…
+                  </button>
                 </div>
               )}
               <div>
@@ -577,9 +598,12 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
                 <TagInput
                   value={access.hidden_from || []}
                   onChange={hidden_from => setAccess(a => ({ ...a, hidden_from }))}
-                  suggestions={members.filter(m => m !== user?.name)}
+                  suggestions={[
+                    ...members.filter(m => m !== user?.name),
+                    ...roleNames.map(r => `role:${r}`),
+                  ]}
                   strict
-                  placeholder="Pick people to hide this from…"
+                  placeholder="Pick people or role:… to hide this from…"
                 />
               </div>
               {activeDescendants > 0 && (

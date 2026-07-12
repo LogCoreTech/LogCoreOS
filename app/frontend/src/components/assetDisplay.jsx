@@ -30,6 +30,107 @@ export function fieldDisplay(def, value) {
   return String(value)
 }
 
+// Field input for one template field definition — shared by the editor form and
+// the read-first view's inline contribute controls. Module-level per MEMORY.md rule.
+export function FieldInput({ def, value, onChange }) {
+  if (def.type === 'boolean') {
+    return (
+      <label className="flex items-center gap-2 text-sm py-2 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={value === true}
+          onChange={e => onChange(e.target.checked)}
+          className="accent-orange-500 w-4 h-4"
+        />
+        <span>{def.label}</span>
+      </label>
+    )
+  }
+  return (
+    <div>
+      <label className="block text-sm font-medium mb-1">{def.label}</label>
+      {def.type === 'select' ? (
+        <select value={value ?? ''} onChange={e => onChange(e.target.value)} className="input">
+          <option value="">—</option>
+          {(def.options || []).map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      ) : def.type === 'number' ? (
+        <input
+          type="number"
+          step="any"
+          value={value ?? ''}
+          onChange={e => onChange(e.target.value === '' ? '' : Number(e.target.value))}
+          className="input"
+        />
+      ) : def.type === 'date' ? (
+        <input type="date" value={value ?? ''} onChange={e => onChange(e.target.value)} className="input" />
+      ) : (
+        <input type="text" value={value ?? ''} onChange={e => onChange(e.target.value)} className="input" />
+      )}
+    </div>
+  )
+}
+
+const CAP_ADDS = [
+  { id: 'comments', label: 'Comments' },
+  { id: 'files', label: 'Files' },
+  { id: 'children', label: 'Items inside' },
+]
+
+// Inline checkbox panel configuring what a "contribute" share/contributor can
+// touch: which template fields they may change + what they may add. Rendered
+// inline (not absolutely positioned) so a scrolling modal can't clip it.
+export function CapsSelector({ caps, onChange, templateFields }) {
+  const value = caps || { fields: [], add: ['comments'] }
+
+  function toggle(listKey, id) {
+    const list = value[listKey] || []
+    const next = list.includes(id) ? list.filter(x => x !== id) : [...list, id]
+    onChange({ ...value, [listKey]: next })
+  }
+
+  return (
+    <div className="border border-charcoal-200 dark:border-charcoal-700 rounded-lg p-2 space-y-2 text-xs">
+      <div>
+        <p className="font-medium text-charcoal-500 dark:text-charcoal-400 mb-1">Can change</p>
+        {(templateFields || []).length === 0 ? (
+          <p className="text-charcoal-400">No template fields</p>
+        ) : (
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {templateFields.map(f => (
+              <label key={f.key} className="flex items-center gap-1 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={(value.fields || []).includes(f.key)}
+                  onChange={() => toggle('fields', f.key)}
+                  className="accent-orange-500 w-3.5 h-3.5"
+                />
+                {f.label || f.key}
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+      <div>
+        <p className="font-medium text-charcoal-500 dark:text-charcoal-400 mb-1">Can add</p>
+        <div className="flex flex-wrap gap-x-3 gap-y-1">
+          {CAP_ADDS.map(a => (
+            <label key={a.id} className="flex items-center gap-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={(value.add || []).includes(a.id)}
+                onChange={() => toggle('add', a.id)}
+                className="accent-orange-500 w-3.5 h-3.5"
+              />
+              {a.label}
+            </label>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function AttachmentThumb({ assetId, file, canEdit, onDelete }) {
   const [url, setUrl] = useState(null)
   const isImage = file.mime.startsWith('image/')

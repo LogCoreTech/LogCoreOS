@@ -11,6 +11,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 **Assets module**
+- **Contribute access for employees/crew**: share an asset with a new middle access level where you pick exactly what the person can do — which fields they may change (e.g. just Status) and what they may add (comments, photos/PDFs, items inside). They work from the clean asset view (quick status dropdown, only their granted fields editable, comment box) and never see the full editor
+- **Contributors on Team/Household assets**: give a member (or the whole team) the same picked-capability access on pool assets — without handing them full team management rights
+- **Comments on assets**: an attributed, append-only note log per asset ("gate fixed, invoice sent") that can't overwrite anyone else's text. Everyone with edit access gets notified when someone comments — the bell notification has a **View →** button (and the push notification a link) that jumps straight to that asset
+- **Hide from whole roles**: the Hide-from picker now accepts roles (e.g. `role:crew`) — hides the asset from everyone holding that role, including people assigned to it later
+- Workflow (n8n) API can now post asset comments too (attributed "automation", triggers the same notifications); asset edits from workflows were already supported — both are documented in the API reference
 - New default **📁 Folder** template out of the box — just a name and notes, for organizing assets into groups without building a template first
 - Clicking an asset now opens a clean, read-first overview — fields laid out to read at a glance, attachments, the items inside it, and linked tasks — with an **Edit** button to switch into the editor (shown only if you can edit). Cancelling an edit returns you to the overview
 - Anyone can now create their own templates (not just admins); share them with specific people or whole roles. Admins keep global templates and can restrict them to chosen roles
@@ -29,6 +34,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 **Approve-edits chat mode (new default)**
 - The AI now pauses before any data change and shows an approval card; reads run freely
 - Plan / Auto / Research modes unchanged and still selectable
+
+### Changed
+
+- Goal-type tasks no longer appear in the Tasks page — they live on the Goals page only (they still show on the calendar when dated, and still count in priority scoring — by design)
 
 ### Fixed
 

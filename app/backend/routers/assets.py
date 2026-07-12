@@ -36,6 +36,7 @@ def _find_or_404(current_user: dict, workspace: str, asset_id: str) -> dict:
         asset_id,
         is_admin=current_user.get("role") == "admin",
         pool_edit=current_user.get("pool_edit") or [],
+        viewer_role=current_user.get("feature_role") or "",
     )
     if found is None:
         raise HTTPException(status_code=404, detail="Asset not found")
@@ -101,22 +102,38 @@ class AssetUpdate(BaseModel):
     notes: str | None = Field(None, max_length=5000)
 
 
+class ContributeCaps(BaseModel):
+    fields: list[str] = Field(default=[], max_length=50)
+    add: list[str] = Field(default=[], max_length=10)
+
+
 class ShareEntry(BaseModel):
     target: str = Field(..., max_length=100)
-    access: str = Field("read", pattern="^(read|edit)$")
+    access: str = Field("read", pattern="^(read|contribute|edit)$")
+    caps: ContributeCaps | None = None  # only meaningful for access == "contribute"
+
+
+class ContributorEntry(BaseModel):
+    target: str = Field(..., max_length=100)
+    caps: ContributeCaps | None = None
 
 
 class AccessUpdate(BaseModel):
     shared_with: list[ShareEntry] | None = Field(None, max_length=50)
     hidden_from: list[str] | None = Field(None, max_length=50)
+    contributors: list[ContributorEntry] | None = Field(None, max_length=50)  # pool assets only
     cascade: bool = True  # apply to the whole subtree by default
 
     @field_validator("hidden_from")
     @classmethod
     def _names_max_len(cls, v):
-        if v is not None and any(len(n) > 100 for n in v):
+        if v is not None and any(len(n) > 110 for n in v):
             raise ValueError("User name too long")
         return v
+
+
+class CommentCreate(BaseModel):
+    text: str = Field(..., min_length=1, max_length=2000)
 
 
 class ConvertRequest(BaseModel):
@@ -139,6 +156,12 @@ class AutomationAssetUpdate(BaseModel):
     name: str | None = Field(None, max_length=200)
     fields: dict | None = None
     notes: str | None = Field(None, max_length=5000)
+
+
+class AutomationCommentCreate(BaseModel):
+    user: str = Field(..., max_length=100)
+    workspace: str = Field("personal", pattern="^(personal|business)$")
+    text: str = Field(..., min_length=1, max_length=2000)
 
 
 # ---------------------------------------------------------------------------
@@ -360,6 +383,33 @@ def automation_update_asset(
     return result
 
 
+@router.post("/automation/assets/{asset_id}/comments", status_code=201)
+def automation_add_comment(
+    asset_id: str,
+    req: AutomationCommentCreate,
+    _auth: None = Depends(_require_automation_token),
+    _rl: None = Depends(_automation_limit),
+):
+    """Workflow-posted comment (attributed 'automation'); triggers the same
+    edit-level notifications as a user comment — e.g. n8n posting an alert."""
+    _validate_asset_id(asset_id)
+    store, store_ws = _automation_store(req.user, req.workspace)
+    try:
+        comment = assets_service.add_comment(
+            store,
+            asset_id,
+            req.text,
+            workspace=store_ws,
+            by="automation",
+            asset_workspace=req.workspace,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if comment is None:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return comment
+
+
 # ---------------------------------------------------------------------------
 # Assets (JWT; module-gated; workspace-scoped)
 # ---------------------------------------------------------------------------
@@ -378,6 +428,7 @@ def list_assets(
         include_archived=include_archived,
         is_admin=current_user.get("role") == "admin",
         pool_edit=current_user.get("pool_edit") or [],
+        viewer_role=current_user.get("feature_role") or "",
     )
     if template:
         items = [a for a in items if a.get("template") == template]
@@ -391,15 +442,20 @@ def create_asset(
     workspace: str = Depends(get_workspace),
     _rl: None = Depends(_write_limit),
 ):
+    creator_access, creator_caps = "edit", None
     if req.parent_id:
         # A child is created in its PARENT's store and inherits the parent's
-        # audience — so anyone with edit access can grow a shared subtree/"group".
+        # audience — so anyone with edit access (or a contribute grant that
+        # includes "children") can grow a shared subtree/"group".
         parent = _find_or_404(current_user, workspace, req.parent_id)
-        if not parent["can_edit"]:
+        parent_caps = parent.get("can_contribute") or {}
+        if not parent["can_edit"] and "children" not in (parent_caps.get("add") or []):
             raise HTTPException(
                 status_code=403, detail="Read-only access — cannot add under this asset"
             )
         store, store_ws = parent["store"], parent["store_workspace"]
+        if not parent["can_edit"]:
+            creator_access, creator_caps = "contribute", parent["can_contribute"]
     elif req.owner == "pool":
         pool_label = assets_service.POOL_LABEL[assets_service.POOL_USERS[workspace]]
         is_admin = current_user.get("role") == "admin"
@@ -426,10 +482,14 @@ def create_asset(
     # a bare record made it treat a fresh pool asset as personal and send
     # shared_with on save (400 "use hidden_from instead of shares").
     if store in assets_service.POOL_LABEL:
-        return {**created, "_owner": assets_service.POOL_LABEL[store], "_access": "edit"}
-    if store != current_user["name"]:
-        return {**created, "_owner": store, "_access": "edit"}
-    return created
+        out = {**created, "_owner": assets_service.POOL_LABEL[store], "_access": creator_access}
+    elif store != current_user["name"]:
+        out = {**created, "_owner": store, "_access": creator_access}
+    else:
+        return created
+    if creator_caps is not None:
+        out["_caps"] = creator_caps
+    return out
 
 
 @router.get("/members")
@@ -482,12 +542,19 @@ def get_asset(
     _validate_asset_id(asset_id)
     found = _find_or_404(current_user, workspace, asset_id)
     asset = dict(found["asset"])
-    if found["relation"] == "pool":
-        asset["_owner"] = assets_service.POOL_LABEL[found["store"]]
-        asset["_access"] = "edit" if found["can_edit"] else "read"
-    elif found["relation"] == "shared":
-        asset["_owner"] = found["store"]
-        asset["_access"] = "edit" if found["can_edit"] else "read"
+    if found["relation"] in ("pool", "shared"):
+        asset["_owner"] = (
+            assets_service.POOL_LABEL[found["store"]]
+            if found["relation"] == "pool"
+            else found["store"]
+        )
+        if found["can_edit"]:
+            asset["_access"] = "edit"
+        elif found.get("can_contribute"):
+            asset["_access"] = "contribute"
+            asset["_caps"] = found["can_contribute"]
+        else:
+            asset["_access"] = "read"
     asset["_template"] = assets_service.resolve_template(asset)
     return asset
 
@@ -502,9 +569,24 @@ def update_asset(
 ):
     _validate_asset_id(asset_id)
     found = _find_or_404(current_user, workspace, asset_id)
-    if not found["can_edit"]:
-        raise HTTPException(status_code=403, detail="Read-only access to this asset")
     updates = req.model_dump(exclude_unset=True)
+    if not found["can_edit"]:
+        # Contribute-level: only the field keys granted in the share/contributor
+        # caps may change — never name/parent/notes.
+        caps = found.get("can_contribute")
+        if not caps:
+            raise HTTPException(status_code=403, detail="Read-only access to this asset")
+        allowed = set(caps.get("fields") or [])
+        blocked = [k for k in updates if k != "fields"]
+        bad_fields = [k for k in (updates.get("fields") or {}) if k not in allowed]
+        if blocked or bad_fields:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Contribute access can only change these fields: "
+                    + (", ".join(sorted(allowed)) or "none")
+                ),
+            )
     if found["relation"] == "shared" and ("parent_id" in updates):
         raise HTTPException(status_code=403, detail="Only the owner can move this asset")
     try:
@@ -637,13 +719,25 @@ def update_access(
             status_code=400,
             detail="Pool assets are workspace-visible — use hidden_from instead of shares",
         )
+    if found["relation"] != "pool" and req.contributors is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Contributors are for pool assets — use shared_with with 'contribute' access",
+        )
     try:
         result = assets_service.update_access(
             found["store"],
             asset_id,
             workspace=found["store_workspace"],
-            shared_with=[s.model_dump() for s in shared] if shared is not None else None,
+            shared_with=(
+                [s.model_dump(exclude_none=True) for s in shared] if shared is not None else None
+            ),
             hidden_from=req.hidden_from,
+            contributors=(
+                [c.model_dump(exclude_none=True) for c in req.contributors]
+                if req.contributors is not None
+                else None
+            ),
             by=current_user["name"],
             asset_workspace=workspace,
             cascade=req.cascade,
@@ -653,6 +747,72 @@ def update_access(
     if result is None:
         raise HTTPException(status_code=404, detail="Asset not found")
     return result
+
+
+# ---------------------------------------------------------------------------
+# Comments — append-only attributed log ("leave notes" without clobbering)
+# ---------------------------------------------------------------------------
+
+
+def _can_comment(found: dict) -> bool:
+    """Edit-level users always; contribute users need the 'comments' cap.
+    Plain read access is view-only."""
+    if found["can_edit"] or found["can_manage"]:
+        return True
+    caps = found.get("can_contribute") or {}
+    return "comments" in (caps.get("add") or [])
+
+
+@router.post("/{asset_id}/comments", status_code=201)
+def add_comment(
+    asset_id: str,
+    req: CommentCreate,
+    current_user: dict = Depends(_require_assets),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_write_limit),
+):
+    _validate_asset_id(asset_id)
+    found = _find_or_404(current_user, workspace, asset_id)
+    if not _can_comment(found):
+        raise HTTPException(status_code=403, detail="You don't have comment access on this asset")
+    try:
+        comment = assets_service.add_comment(
+            found["store"],
+            asset_id,
+            req.text,
+            workspace=found["store_workspace"],
+            by=current_user["name"],
+            asset_workspace=workspace,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if comment is None:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return comment
+
+
+@router.delete("/{asset_id}/comments/{comment_id}", status_code=204)
+def delete_comment(
+    asset_id: str,
+    comment_id: str,
+    current_user: dict = Depends(_require_assets),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_write_limit),
+):
+    _validate_asset_id(asset_id)
+    found = _find_or_404(current_user, workspace, asset_id)
+    comment = next(
+        (c for c in found["asset"].get("comments") or [] if c.get("id") == comment_id), None
+    )
+    if comment is None:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    if comment.get("by") != current_user["name"] and not found["can_manage"]:
+        raise HTTPException(
+            status_code=403, detail="Only the comment author or the owner can delete it"
+        )
+    assets_service.delete_comment(
+        found["store"], asset_id, comment_id, workspace=found["store_workspace"]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -670,7 +830,8 @@ async def upload_attachment(
 ):
     _validate_asset_id(asset_id)
     found = _find_or_404(current_user, workspace, asset_id)
-    if not found["can_edit"]:
+    caps = found.get("can_contribute") or {}
+    if not found["can_edit"] and "files" not in (caps.get("add") or []):
         raise HTTPException(status_code=403, detail="Read-only access to this asset")
     if (file.content_type or "") not in assets_service.ATTACHMENT_TYPES:
         raise HTTPException(status_code=400, detail="Unsupported file type — images or PDF only")
