@@ -10,6 +10,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+**Finance module (Phase B — bank sync + CSV import)**
+- **Bank-linked spending data via SimpleFIN** — a read-only bridge: your bank password is never typed into LogCore and never stored anywhere; the connection can only READ balances and transactions, it can never move money, and it's revocable from SimpleFIN's side at any time
+- Connections are **admin-managed**: a member taps "Request bank connection" in Finance → 🏦 Bank (admins get a notification with a jump button), the admin pastes the member's SimpleFIN setup token in the new **Admin → Bank Connections** card (connect / replace / sync now / reveal / disconnect per user)
+- Members then map each connected bank account onto an account in their own books; only admins can point a bank feed at a shared Household/Team book
+- Auto-sync every 12 hours (+ shortly after startup); imported transactions land as **Uncategorized** for you to file — and LogCore **learns your categorization**: categorize "KROGER #123" as Groceries once and every future Kroger charge files itself
+- Re-syncs never duplicate: every bank transaction is tracked by its bank ID; sync failures notify you and the admins at most once a day
+- **CSV import** for banks without SimpleFIN (or fully third-party-free tracking): upload a statement export in Book Settings, map the columns once, import — re-importing the same file skips everything it already has
+
+**Finance module (Phase A — ledger core)**
+- New **Finance** page: create money **books** (e.g. "Family budget", "LLC books") — each with its own accounts (checking/savings/credit/cash), fully customizable expense & income categories, and running balances computed from the ledger
+- Works in both workspaces: personal books are **private to you (not even admins can see them)**; business books live in your business workspace; admins can create shared **Household/Team books** every member can view
+- Log income and expenses with payee, category, notes; filter/search transactions; balances, monthly income-vs-expense summary and top spending categories on the book's Overview
+- Dashboard **Finance widget** shows each visible book's balance and your net worth per workspace
+- AI chat can read your finance data — "what did I spend this month?" works out of the box (read-only; finance write tools come later phases)
+- All amounts stored as exact integer cents (no floating-point money), one year of transactions per file so books stay fast for decades
+- The **guest** role has Finance disabled by default — money visibility is opt-in per user
+- Coming in the next phases (already designed): SimpleFIN bank sync (admin-managed, read-only tokens), CSV import, budgets with overspend alerts, recurring bills, projected balances with deviation alerts, invoices/clients/tax, and asset-style book sharing with per-person caps
+
+## [0.2.0] — 2026-07-13
+
+### Added
+
 **Automation Inbox**
 - Workflows (n8n) can now post structured, reviewable results into LogCore — land leads, alerts, anything — reviewed from a new **Inbox** view on the Automations page with one-tap actions: Interested / Pass / Offer Made / Closed (every action records who took it)
 - **Named inboxes**: create as many as you need ("Land Leads", "Price Alerts"), route each workflow's output to the right one, and pick per inbox **who gets notified** on new items and **who may act** on them (admins always can). Unrouted results land in an auto-created General inbox
