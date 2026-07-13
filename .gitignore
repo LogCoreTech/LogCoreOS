@@ -46,3 +46,6 @@ Thumbs.db
 .idea/
 *.swp
 backups/
+
+# Claude Code personal overrides (never commit)
+.claude/settings.local.json
