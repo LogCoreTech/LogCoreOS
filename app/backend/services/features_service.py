@@ -36,6 +36,7 @@ ALL_MODULE_IDS = [
     "home",
     "team",
     "assets",
+    "finance",
 ]
 
 _PERSONAL_MEMBER = {m: True for m in ALL_MODULE_IDS if m not in ("automations_business", "team")}
@@ -54,13 +55,23 @@ _BUSINESS_MEMBER = {
     "home": False,
     "team": True,
     "assets": True,
+    "finance": True,
 }
+
+
+def _guest_map(base: dict) -> dict:
+    """Guests never get finance by default — money data is the most sensitive
+    in the app, so it's opt-in per guest (m007 applies this to existing installs)."""
+    guest = base.copy()
+    guest["finance"] = False
+    return guest
+
 
 _DEFAULT_FEATURES: dict = {
     "profile": "personal",
     "roles": {
         "member": _PERSONAL_MEMBER.copy(),
-        "guest": _PERSONAL_MEMBER.copy(),
+        "guest": _guest_map(_PERSONAL_MEMBER),
     },
 }
 
@@ -80,7 +91,7 @@ def load_features() -> dict:
     if "member" not in roles:
         roles["member"] = _PERSONAL_MEMBER.copy()
     if "guest" not in roles:
-        roles["guest"] = _PERSONAL_MEMBER.copy()
+        roles["guest"] = _guest_map(_PERSONAL_MEMBER)
     # Fill in any missing module keys for each role
     for role_name, role_map in roles.items():
         for mod in ALL_MODULE_IDS:
@@ -100,7 +111,9 @@ def init_features(profile: str) -> None:
     if path.exists():
         return
     member_map = _BUSINESS_MEMBER.copy() if profile == "business" else _PERSONAL_MEMBER.copy()
-    save_features({"profile": profile, "roles": {"member": member_map, "guest": member_map.copy()}})
+    save_features(
+        {"profile": profile, "roles": {"member": member_map, "guest": _guest_map(member_map)}}
+    )
 
 
 def get_effective_disabled(

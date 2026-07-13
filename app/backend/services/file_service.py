@@ -94,6 +94,28 @@ def profile_path(user_name: str) -> Path:
     return user_path(user_name) / "Profile.md"
 
 
+def finance_books_path(user_name: str, workspace: str = "personal") -> Path:
+    return ws_path(user_name, workspace) / "Finance" / "books.json"
+
+
+def finance_book_dir(user_name: str, book_id: str, workspace: str = "personal") -> Path:
+    return ws_path(user_name, workspace) / "Finance" / "books" / book_id
+
+
+def finance_tx_path(user_name: str, book_id: str, year: int, workspace: str = "personal") -> Path:
+    return finance_book_dir(user_name, book_id, workspace) / f"transactions_{year}.json"
+
+
+def finance_rules_path(user_name: str, book_id: str, workspace: str = "personal") -> Path:
+    return finance_book_dir(user_name, book_id, workspace) / "rules.json"
+
+
+def simplefin_path(user_name: str) -> Path:
+    """Per-user SimpleFIN connection secret — workspace-agnostic, admin-managed,
+    never logged or committed. The access URL grants read-only bank data."""
+    return user_path(user_name) / "Finance" / "simplefin.json"
+
+
 def read_json(path: Path, default: Any = None) -> Any:
     """Read JSON file; return default (or {}) if missing or empty."""
     if not path.exists():

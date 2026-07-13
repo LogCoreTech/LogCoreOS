@@ -24,6 +24,11 @@ from routers import (
     chat,
     export,
     features,
+    finance,
+    finance_banking,
+    finance_invoicing,
+    finance_planning,
+    finance_sharing,
     health,
     home,
     infisical,
@@ -55,13 +60,19 @@ async def lifespan(app: FastAPI):
 
 
 def _warm_share_index() -> None:
-    """Rebuild the assets share-routing cache from the Brain files on boot."""
+    """Rebuild the assets + finance share-routing caches from the Brain on boot."""
     try:
         from services.assets_index import rebuild_share_index
 
         rebuild_share_index()
     except Exception:
         logger.exception("assets share index rebuild failed (will lazy-build on first use)")
+    try:
+        from services.finance_index import rebuild_share_index as rebuild_finance_index
+
+        rebuild_finance_index()
+    except Exception:
+        logger.exception("finance share index rebuild failed (will lazy-build on first use)")
 
 
 def _startup_checks() -> None:
@@ -193,6 +204,11 @@ app.include_router(suggestions.router, prefix="/api/v1/suggestions", tags=["sugg
 app.include_router(infisical.router, prefix="/api/v1/auth", tags=["infisical"])
 app.include_router(features.router, prefix="/api/v1/auth", tags=["features"])
 app.include_router(automations.router, prefix="/api/v1/automations", tags=["automations"])
+app.include_router(finance.router, prefix="/api/v1/finance", tags=["finance"])
+app.include_router(finance_banking.router, prefix="/api/v1/finance", tags=["finance-banking"])
+app.include_router(finance_planning.router, prefix="/api/v1/finance", tags=["finance-planning"])
+app.include_router(finance_invoicing.router, prefix="/api/v1/finance", tags=["finance-invoicing"])
+app.include_router(finance_sharing.router, prefix="/api/v1/finance", tags=["finance-sharing"])
 app.include_router(assets.router, prefix="/api/v1/assets", tags=["assets"])
 app.include_router(home.router, prefix="/api/v1/home", tags=["home"])
 app.include_router(team.router, prefix="/api/v1/team", tags=["team"])
@@ -219,7 +235,15 @@ if static_dir.exists():
             # Cache root images (login banner, icons) so re-visits/logout don't
             # re-fetch and re-paint them. Bundle assets live under /static (hashed,
             # cached by their own mount); sw.js must stay revalidated.
-            if candidate.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".avif", ".svg", ".ico"}:
+            if candidate.suffix.lower() in {
+                ".png",
+                ".jpg",
+                ".jpeg",
+                ".webp",
+                ".avif",
+                ".svg",
+                ".ico",
+            }:
                 headers["Cache-Control"] = "public, max-age=86400"
             return FileResponse(str(candidate), headers=headers)
         # no-cache: always revalidate before serving, but allow storage (needed for iOS PWA)

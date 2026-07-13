@@ -46,6 +46,11 @@ LogCoreOS/
 │   │   │   ├── features.py       → feature flags + custom role management (admin only)
 │   │   │   ├── automations.py    → automations module: import/run/logs n8n workflows (personal + business scopes)
 │   │   │   ├── assets.py         → assets module: templates (admin), asset tree CRUD, shares/hidden_from, pool convert, attachments, n8n automation API (X-Automation-Token)
+│   │   │   ├── finance.py        → finance module: books/accounts/categories/transactions CRUD, monthly report, net worth (access via finance_service._resolve_book_access)
+│   │   │   ├── finance_banking.py → SimpleFIN connections (member request + mapping; ADMIN claim/reveal/disconnect/sync), CSV import (preview/commit), payee rules
+│   │   │   ├── finance_planning.py → budgets (+status), recurring bills (+upcoming), planned one-offs, balance projection endpoints
+│   │   │   ├── finance_invoicing.py → clients CRUD + AR rollup, invoices CRUD, partial payments (w/ linked income tx)
+│   │   │   ├── finance_sharing.py → book/account audience (shares + contributors + hidden_from), share handshake respond, leave, member/role pickers
 │   │   │   ├── home.py           → Home Assistant module: entity control, scenes, automations, favourites, admin config
 │   │   │   └── update.py         → update status check + trigger (admin only); works with update.sh on host
 │   │   ├── services/
@@ -71,6 +76,13 @@ LogCoreOS/
 │   │   │   ├── assets_service.py      → assets core: templates, field validation, tree ops, per-node archive (+cascade), share/hidden resolution, pool conversion, history, attachments
 │   │   │   ├── assets_index.py         → derived share-routing cache (_system/assets_share_index.json); rebuildable, warmed at startup; sharers_for()/reindex_owner()/rebuild_share_index()
 │   │   │   │   # Phase 2: per-user templates in USERS/{name}/Assets/templates.json (global in _system/asset_templates.json); assets ref template_id; request-based sharing (accepted[]) + accept/decline notifications
+│   │   │   ├── finance_service.py     → finance core: books/accounts/categories/transactions (per-book per-year shards), computed balances, _resolve_book_access (single access gate)
+│   │   │   ├── finance_reports.py     → finance reports computed on read: monthly income/expense by category, net worth
+│   │   │   ├── simplefin_service.py   → SimpleFIN bridge client: claim setup token → read-only access URL (per-user secret), account mapping, sync engine w/ dedup + error throttle
+│   │   │   ├── finance_import_service.py → CSV statement import: preview + column-mapped commit, import_hash dedup, Decimal→cents parsing
+│   │   │   ├── finance_planning_service.py → budgets+alerts, recurring bills (matching/advance/missed), planned items, projection, deviation checks, nightly sweep
+│   │   │   ├── finance_invoice_service.py → clients (reserved contact_id for future CRM), invoices (derived totals/overdue, auto-numbering), payments, AR rollup
+│   │   │   ├── finance_index.py       → derived share-routing cache (_system/finance_share_index.json); rebuildable, warmed at startup; sharers_for()/reindex_owner()
 │   │   │   ├── automations_config.py  → instance automation API token (generate/rotate/verify) for n8n → LogCore writes
 │   │   │   ├── automation_inbox_service.py → Automation Inbox: named inboxes (notify/reviewers/workflow routing), item dedup by (workflow_key, external_id), status lifecycle, trim, batched notifications
 │   │   │   ├── n8n_service.py         → n8n REST API client; import/execute/delete/activate workflows; write docker/n8n.env; sync_business_workflows() for auto-sync
@@ -103,6 +115,7 @@ LogCoreOS/
 │           │   ├── Profile.jsx    → edit Profile.md and profile.json fields (priorities, occupation, etc.)
 │           │   ├── Automations.jsx → automations: Workflows|Inbox views — n8n workflow cards (import/run/logs) + Automation Inbox (item review actions, named-inbox chips, settings modal, ?view=inbox deep link)
 │           │   ├── Assets.jsx      → assets: template-driven object tree (expand/collapse, filters, archived toggle), both workspaces
+│           │   ├── Finance.jsx     → finance: book chips, Overview (balances + monthly summary) | Transactions (filters, add/edit) views, both workspaces
 │           │   ├── Home.jsx        → Smart Home: entity tiles by domain, scenes panel, HA automations, favourite stars
 │           │   ├── Admin.jsx      → admin panel (users, feature roles, workspace access, AI settings, web search, hosting, Infisical, n8n, Smart Home)
 │           │   ├── Settings.jsx   → user settings (appearance, timezone, session, notifications, background upload, shortcuts — server-side per-workspace via PATCH /auth/me)
@@ -118,6 +131,7 @@ LogCoreOS/
 │               ├── TagInput.jsx    → GitHub-topics-style chip input (free-text or strict selector mode); inline capped suggestion box — template options, share/hide members
 │               ├── EmojiPicker.jsx → curated self-contained emoji grid popover (right-aligned) for template icons
 │               ├── AssetTreePicker.jsx → foldered expand/collapse asset picker; reused by Move + create-asset parent chooser
+│               ├── finance/       → finance components: TransactionModal.jsx (+tax flags+receipts), BookSettings.jsx (accounts/categories/tax buckets/CSV import), SimpleFinPanel.jsx (bank connect+mapping), BudgetsPanel.jsx, RecurringPanel.jsx (+planned one-offs), InvoicesPanel.jsx (clients/AR/invoices/payments + printable InvoicePrint), ReportsPanel.jsx (P&L + tax export), money.js (cents↔display helpers)
 │               ├── EventModal.jsx → create/edit calendar event form (title, dates, times, all_day, color, notes)
 │               ├── CalendarGrid.jsx → month view: day cells with event/task indicators, click to open detail
 │               └── ErrorBoundary.jsx → catch React render errors, display fallback UI

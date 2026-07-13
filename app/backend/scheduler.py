@@ -156,6 +156,27 @@ def job_workflow_sync():
         logger.exception("business workflow sync failed")
 
 
+def job_simplefin_sync():
+    try:
+        from services.simplefin_service import sync_all_users
+
+        result = sync_all_users()
+        if result.get("users"):
+            logger.info("simplefin sync: %s", result)
+    except Exception:
+        logger.exception("simplefin sync failed")
+
+
+def job_finance_nightly():
+    """Missed-bill flags, budget alerts and balance-deviation checks."""
+    try:
+        from services.finance_planning_service import run_nightly
+
+        run_nightly()
+    except Exception:
+        logger.exception("finance nightly failed")
+
+
 def _custom_job_id(user_name: str, suggestion_id: str) -> str:
     return f"custom__{user_name}__{suggestion_id}"
 
@@ -247,6 +268,12 @@ def start():
     )
     scheduler.add_job(job_workflow_sync, IntervalTrigger(hours=6), id="workflow_sync_periodic")
     scheduler.add_job(job_update_check, CronTrigger(hour=12, minute=0), id="update_check")
+    # SimpleFIN bank sync: 2 min after boot, then every 12h (bridge data refreshes ~daily)
+    scheduler.add_job(
+        job_simplefin_sync, "date", run_date=_dt.now() + _td(seconds=120), id="simplefin_boot"
+    )
+    scheduler.add_job(job_simplefin_sync, IntervalTrigger(hours=12), id="simplefin_periodic")
+    scheduler.add_job(job_finance_nightly, CronTrigger(hour=7, minute=30), id="finance_nightly")
     scheduler.start()
     _load_custom_jobs()
     logger.info(

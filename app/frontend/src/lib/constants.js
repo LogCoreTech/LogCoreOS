@@ -30,6 +30,7 @@ export const ALL_MODULES = [
   { id: 'home',                 to: '/home',         icon: '💡',          label: 'Smart Home', workspace: 'personal' },
   { id: 'team',                 to: '/team',         icon: '🧑‍🤝‍🧑',  label: 'Team',        workspace: 'business' },
   { id: 'assets',               to: '/assets',       icon: '🗂️',         label: 'Assets'                },
+  { id: 'finance',              to: '/finance',      icon: '💵',          label: 'Finance'               },
 ]
 
 export const DEFAULT_SHORTCUTS = ['dashboard', 'tasks', 'chat']

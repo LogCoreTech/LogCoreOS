@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { admin as adminApi, features as featuresApi, infisical as infisicalApi, automations as automationsApi, home as homeApi, priorities as prioritiesApi, update as updateApi, assets as assetsApi } from '../lib/api'
+import { admin as adminApi, features as featuresApi, infisical as infisicalApi, automations as automationsApi, home as homeApi, priorities as prioritiesApi, update as updateApi, assets as assetsApi, finance as financeApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { ALL_MODULES } from '../lib/constants'
 
@@ -2219,9 +2219,164 @@ export default function Admin() {
       <HostingCard />
       <InfisicalCard />
       <N8nCard />
+      <BankConnectionsCard />
       <HomeAssistantCard />
       <PoolPrioritiesCard />
       <UpdateCard />
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Bank Connections card (SimpleFIN — admin-managed, read-only tokens)
+// ---------------------------------------------------------------------------
+function BankConnectionsCard() {
+  const [rows, setRows] = useState([])
+  const [tokenFor, setTokenFor] = useState(null)   // user_id currently entering a token
+  const [token, setToken] = useState('')
+  const [revealed, setRevealed] = useState(null)   // { userId, url }
+  const [busy, setBusy] = useState(null)           // user_id with an in-flight action
+  const [msg, setMsg] = useState(null)
+
+  function load() {
+    financeApi.sfConnections().then(r => setRows(Array.isArray(r) ? r : [])).catch(() => {})
+  }
+  useEffect(() => { load() }, [])
+
+  function flash(ok, text) {
+    setMsg({ ok, text })
+    setTimeout(() => setMsg(null), 5000)
+  }
+
+  async function claim(userId) {
+    if (!token.trim()) return
+    setBusy(userId)
+    try {
+      await financeApi.sfClaim(userId, token.trim())
+      setToken(''); setTokenFor(null)
+      flash(true, 'Connected — the user was notified to map their accounts.')
+      load()
+    } catch (err) {
+      flash(false, err.message || 'Claim failed')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function syncNow(userId) {
+    setBusy(userId)
+    try {
+      const r = await financeApi.sfSync(userId)
+      flash(true, `Synced — ${r.created} new, ${r.skipped} already known.`)
+      load()
+    } catch (err) {
+      flash(false, err.message || 'Sync failed')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function reveal(userId) {
+    setBusy(userId)
+    try {
+      const r = await financeApi.sfReveal(userId)
+      setRevealed({ userId, url: r.access_url })
+    } catch (err) {
+      flash(false, err.message || 'Reveal failed')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function disconnect(userId, name) {
+    if (!window.confirm(`Disconnect ${name}'s bank connection? Their imported transactions stay.`)) return
+    setBusy(userId)
+    try {
+      await financeApi.sfDisconnect(userId)
+      flash(true, 'Disconnected.')
+      load()
+    } catch (err) {
+      flash(false, err.message || 'Disconnect failed')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <div className="card p-5">
+      <h2 className="font-semibold mb-1">Bank Connections</h2>
+      <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-4">
+        SimpleFIN bank sync, managed here. A user connects their bank at{' '}
+        <span className="font-mono">bridge.simplefin.org</span>, sends you their <em>setup token</em>,
+        and you connect it below. Tokens are read-only — they can never move money — and are
+        stored only in that user's Brain.
+      </p>
+
+      <div className="space-y-3">
+        {rows.map(r => (
+          <div key={r.user_id} className="border border-charcoal-200 dark:border-charcoal-700 rounded-lg p-3 space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className={`w-2 h-2 rounded-full shrink-0 ${r.connected ? (r.last_error ? 'bg-yellow-500' : 'bg-green-500') : 'bg-charcoal-300'}`} />
+              <span className="text-sm font-medium flex-1 min-w-0 truncate">{r.name}</span>
+              {r.connected ? (
+                <span className="text-xs text-charcoal-500 dark:text-charcoal-400 shrink-0">
+                  {r.mapped_accounts} mapped{r.last_sync ? ` · synced ${new Date(r.last_sync).toLocaleDateString()}` : ' · never synced'}
+                </span>
+              ) : (
+                <span className="text-xs text-charcoal-400 shrink-0">not connected</span>
+              )}
+            </div>
+            {r.last_error && <p className="text-xs text-red-500">{r.last_error}</p>}
+
+            {tokenFor === r.user_id ? (
+              <div className="flex gap-2">
+                <input
+                  className="input flex-1" placeholder="Paste SimpleFIN setup token"
+                  value={token} onChange={e => setToken(e.target.value)} autoFocus
+                />
+                <button onClick={() => claim(r.user_id)} disabled={busy === r.user_id || !token.trim()} className="btn-primary shrink-0 text-sm">
+                  {busy === r.user_id ? '…' : 'Connect'}
+                </button>
+                <button onClick={() => { setTokenFor(null); setToken('') }} className="btn-ghost shrink-0 text-sm">Cancel</button>
+              </div>
+            ) : (
+              <div className="flex gap-1.5 flex-wrap">
+                <button onClick={() => { setTokenFor(r.user_id); setToken('') }} className="btn-ghost text-xs">
+                  {r.connected ? 'Replace token' : '＋ Connect'}
+                </button>
+                {r.connected && (
+                  <>
+                    <button onClick={() => syncNow(r.user_id)} disabled={busy === r.user_id} className="btn-ghost text-xs">
+                      {busy === r.user_id ? 'Syncing…' : 'Sync now'}
+                    </button>
+                    <button onClick={() => reveal(r.user_id)} disabled={busy === r.user_id} className="btn-ghost text-xs">Reveal</button>
+                    <button onClick={() => disconnect(r.user_id, r.name)} disabled={busy === r.user_id} className="btn-ghost text-xs text-red-500">Disconnect</button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {revealed?.userId === r.user_id && (
+              <div className="text-xs bg-charcoal-100 dark:bg-charcoal-800 rounded p-2 break-all">
+                <p className="text-charcoal-500 dark:text-charcoal-400 mb-1">
+                  Access URL (treat like a password — read-only bank data):
+                </p>
+                <p className="font-mono">{revealed.url}</p>
+                <button onClick={() => setRevealed(null)} className="text-orange-500 mt-1">Hide</button>
+              </div>
+            )}
+          </div>
+        ))}
+        {rows.length === 0 && (
+          <p className="text-sm text-charcoal-500 dark:text-charcoal-400">Loading users…</p>
+        )}
+      </div>
+
+      {msg && (
+        <p className={`text-sm mt-3 ${msg.ok ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+          {msg.text}
+        </p>
+      )}
     </div>
   )
 }

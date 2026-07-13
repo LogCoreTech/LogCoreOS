@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { tasks as tasksApi, auth as authApi, home as homeApi, team as teamApi, assets as assetsApi } from '../lib/api'
+import { tasks as tasksApi, auth as authApi, home as homeApi, team as teamApi, assets as assetsApi, finance as financeApi } from '../lib/api'
+import { fmtMoney } from '../components/finance/money'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
 import { catColor } from '../lib/constants'
@@ -163,7 +164,52 @@ export default function Dashboard() {
       {isPersonal && !user?.disabledModules?.includes('home') && <HomeWidget />}
       {!isPersonal && !user?.disabledModules?.includes('team') && <TeamWidget />}
       {!user?.disabledModules?.includes('assets') && <AssetsWidget key={workspace} />}
+      {!user?.disabledModules?.includes('finance') && <FinanceWidget key={`fin-${workspace}`} />}
 
+    </div>
+  )
+}
+
+function FinanceWidget() {
+  const [data, setData] = useState(null)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    financeApi.netWorth()
+      .then(d => setData(d))
+      .catch(() => {})
+      .finally(() => setLoaded(true))
+  }, [])
+
+  if (!loaded || !data || data.books.length === 0) return null
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold text-sm uppercase tracking-wide text-charcoal-500 dark:text-charcoal-400">
+          💵 Finance
+        </h2>
+        <Link to="/finance" className="text-xs text-orange-500 hover:underline">Open finance →</Link>
+      </div>
+      <div className="space-y-2">
+        {data.books.map(b => (
+          <div key={b.book_id} className="flex items-center justify-between text-sm">
+            <span className="flex items-center gap-2 min-w-0">
+              <span className="shrink-0">{b.icon}</span>
+              <span className="truncate">{b.name}</span>
+              {b._owner === 'household' && <span className="text-xs">🏠</span>}
+              {b._owner === 'team' && <span className="text-xs">🧑‍🤝‍🧑</span>}
+            </span>
+            <span className="font-medium shrink-0">{fmtMoney(b.total_cents, b.currency)}</span>
+          </div>
+        ))}
+        {data.books.length > 1 && (
+          <div className="flex items-center justify-between text-sm pt-2 border-t border-charcoal-100 dark:border-charcoal-700/60">
+            <span className="font-medium">Total</span>
+            <span className="font-semibold">{fmtMoney(data.total_cents)}</span>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

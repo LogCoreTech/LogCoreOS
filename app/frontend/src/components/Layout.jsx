@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
 import { ALL_MODULES, getShortcutsForUser } from '../lib/constants'
-import { suggestions as sugApi, assets as assetsApi } from '../lib/api'
+import { suggestions as sugApi, assets as assetsApi, finance as financeApi } from '../lib/api'
 
 const ADMIN_NAV = { to: '/admin', icon: '⬡', label: 'Admin' }
 
@@ -19,6 +19,8 @@ function NotifBell() {
   function navTarget(action) {
     if (action?.type === 'open_asset') return `/assets?asset=${action.asset_id}`
     if (action?.type === 'open_inbox') return `/automations?view=inbox&inbox=${action.inbox_id || ''}`
+    if (action?.type === 'open_admin_banking') return '/admin'
+    if (action?.type === 'open_finance_book') return `/finance?book=${action.book_id || ''}`
     return null
   }
 
@@ -63,7 +65,10 @@ function NotifBell() {
   async function respond(n, accept) {
     // Optimistically resolve the request notification
     setNotifs(prev => prev.map(x => x.id === n.id ? { ...x, status: 'resolved', read: true } : x))
-    try { await assetsApi.respondShare(n.id, accept) } catch { /* keep resolved locally */ }
+    try {
+      if (n.action?.type === 'finance_share') await financeApi.respondShare(n.id, accept)
+      else await assetsApi.respondShare(n.id, accept)
+    } catch { /* keep resolved locally */ }
     load()
   }
 

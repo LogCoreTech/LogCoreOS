@@ -10,6 +10,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+**Finance module (Phase E — sharing & employee access)**
+- **Share a book** with a person, the whole team/household, or a role — as read, edit, or **contribute**. Sharing is a request: each person gets an Accept/Decline notification and the book only appears for them once they accept (and they can Leave later)
+- **Contribute access is the employee expense-submission mode**: you pick exactly what the person can do — add expenses and/or income, edit their own entries, see balances, see everyone's entries. Defaults are the tightest: submit expenses only, see only their own entries, **no balances**. All enforced server-side: capped viewers get balance-stripped responses and filtered transaction lists, not hidden UI
+- **Per-account overrides**: share the whole book but restrict (or open up) a single account — an entry naming a person always beats a group entry, and an account row always beats the book row, so one member of an edit-shared group can be individually limited
+- **Household/Team pool books** take **contributor grants** (no accept step — the pool is already visible to the workspace): let a member log entries in the family book without making them an admin
+- **Hide from** specific people or whole roles (e.g. `role:crew`) — hiding beats sharing, and role hides cover future hires automatically
+- AI chat gains `add_finance_transaction` and `categorize_transaction` (approval-gated, same caps enforced) — "log $40 gas in the family budget" now works end to end
+
+**Finance module (Phase D — invoicing, clients & taxes)**
+- **Invoices**: line items with quantities, optional tax %, due dates, auto-numbered (INV-2026-0001, prefix customizable per book). Lifecycle draft → sent → paid/void; **overdue is always computed** from the due date and open balance — nothing to forget to update
+- **Partial payments**: record each payment as it arrives; the invoice flips to *paid* by itself at zero balance. A payment can log a **linked income transaction** straight into the ledger (client name as payee)
+- **Clients & who's-behind**: a per-book client list with a rollup answering the owner question directly — invoiced / paid / outstanding / **overdue** per client, worst offender first, with the last payment date. Clients carry a reserved link for the future CRM module
+- **Print / PDF invoices**: clean printable invoice view straight from the browser — no server dependencies
+- **Tax season, handled**: flag transactions deductible and file them into your own tax buckets ("Schedule C: Supplies"); year-end summary per bucket plus a one-click **CSV export for the accountant**
+- **Receipts on transactions**: attach photos/PDFs (10 MB, up to 10 per transaction) — stored with the book, deleted with the transaction
+- **P&L / income statement**: income vs expenses with per-category breakdown for any year, quarter or month
+- AI chat can draft invoices and record payments — every one behind the approval prompt
+
+**Finance module (Phase C — budgets, bills, forecasting & fraud alerts)**
+- **Budgets**: set a monthly limit per category; color bars show where you stand, and you get a bell/push warning at 80% (configurable per book) and again when you go over — each fires once, no nagging
+- **Recurring bills & income**: track rent, subscriptions, paychecks with their cadence (weekly/monthly/yearly). Incoming transactions — typed, bank-synced or CSV — **auto-match** to the bill (small amount/date wiggle tolerated), mark it paid and roll the due date forward; a bill 3+ days late with no matching charge notifies you
+- **Planned one-offs**: expected items like a tax refund or a car repair, with a check-off when they happen
+- **Projected balance** — the "what should I have on day X" number: pick an account and a date, and LogCore adds every scheduled bill, paycheck and planned item to today's balance, with the itemized list of *why*
+- **Balance deviation alerts**: set a threshold per account and LogCore compares the bank's reported balance against what your ledger says it should be — after every sync and nightly. A drift beyond the threshold pings you immediately: unrecorded spending or **someone in your account**. (Cash accounts work too — punch in the actual balance via the account API)
+- AI chat can now answer "am I over budget?" and "what will checking look like on the 1st?" (new read-only budget + projection tools)
+
 **Finance module (Phase B — bank sync + CSV import)**
 - **Bank-linked spending data via SimpleFIN** — a read-only bridge: your bank password is never typed into LogCore and never stored anywhere; the connection can only READ balances and transactions, it can never move money, and it's revocable from SimpleFIN's side at any time
 - Connections are **admin-managed**: a member taps "Request bank connection" in Finance → 🏦 Bank (admins get a notification with a jump button), the admin pastes the member's SimpleFIN setup token in the new **Admin → Bank Connections** card (connect / replace / sync now / reveal / disconnect per user)

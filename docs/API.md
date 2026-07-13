@@ -808,6 +808,99 @@ Token auth via `X-Automation-Token` header — no JWT. Token lives in `brain/_sy
 
 ---
 
+## Finance
+
+Router mounted at `/api/v1/finance`. Requires the `finance` module (disabled for the `guest` feature role by default; both workspaces, workspace-scoped via `X-Workspace`). All amounts are **signed integer cents**: positive = income, negative = expense.
+
+**Books** are the top-level unit — each holds its own accounts, customizable categories (name + kind `expense|income`), and transactions (stored per-book per-year). Personal/business books are private to their owner (invisible to admins). **Pool books** (`_household` in personal ws, `_team` in business ws) are visible to every workspace member; writes are admin-only until per-book contributors ship. Book responses are annotated `_owner` (`household`/`team`; absent = own) and `_access` (`edit`/`read`); list/detail responses include computed `balances` (per account) and `total_cents` (active accounts).
+
+| Method | Path | Access | Notes |
+|--------|------|--------|-------|
+| `GET` | `/finance/books?include_archived=` | module users | own + workspace-pool books with balances |
+| `POST` | `/finance/books` | module users | `{name, icon?, currency?, categories?, pool?}`; `pool: true` = admin only, creates in the workspace pool |
+| `GET`/`PATCH` | `/finance/books/{id}` | read / edit | PATCH: name/icon/currency/budget_warn_pct/archived/categories/tax_categories. Removing a category relabels its transactions to `""` (uncategorized) |
+| `DELETE` | `/finance/books/{id}` | owner / admin (pool) | `409` while transactions exist — archive instead |
+| `POST` | `/finance/books/{id}/accounts` | edit | `{name, type: checking\|savings\|credit\|cash\|other, opening_balance_cents?, opening_date?}` |
+| `PATCH`/`DELETE` | `/finance/books/{id}/accounts/{aid}` | edit | DELETE `409` while the account has transactions (archive instead); archived accounts reject new transactions |
+| `GET` | `/finance/books/{id}/transactions?from&to&account&category&q&limit&offset` | read | newest first; returns `{items, total}` |
+| `POST` | `/finance/books/{id}/transactions` | edit | `{date, amount_cents, account_id, category?, payee?, notes?, deductible?, tax_category?}`; category must exist on the book or be `""` |
+| `PATCH`/`DELETE` | `/finance/books/{id}/transactions/{tid}` | edit | date edits across a year boundary move the record between year shards transparently |
+| `GET` | `/finance/books/{id}/reports/monthly?month=YYYY-MM` | read | income/expense/net + per-category breakdown, computed on read |
+| `GET` | `/finance/networth` | module users | total + per-book totals across all visible books in the workspace |
+
+### Bank sync (SimpleFIN — admin-managed) + CSV import
+
+Bank connections use SimpleFIN Bridge **read-only** tokens. Members never enter tokens: they *request* a connection (admins get a bell/push with a View → to Admin), an admin claims the user's setup token in **Admin → Bank Connections**, then the member maps connected bank accounts onto their own book accounts from **Finance → 🏦 Bank**. The access URL lives at `brain/USERS/{name}/Finance/simplefin.json` and is only ever output by the admin reveal endpoint. Sync runs 2 min after boot + every 12 h; imported transactions land uncategorized (`category: ""`) unless a learned payee rule matches.
+
+| Method | Path | Access | Notes |
+|--------|------|--------|-------|
+| `POST` | `/finance/simplefin/request` | module users | notify all admins (rate 3/hour) |
+| `GET` | `/finance/simplefin/status` | module users | own sanitized status — never includes the access URL |
+| `GET` | `/finance/simplefin/accounts` | module users | live list of connected bank accounts (for the mapping UI) |
+| `PUT` | `/finance/simplefin/mapping` | module users | `{entries: [{simplefin_account_id, bank_name?, account_name?, target: {store: self\|household\|team, workspace, book_id, account_id}, enabled}]}` — pool targets **admin-only** |
+| `GET` | `/finance/simplefin/connections` | **admin** | per-user connection status for the Admin card |
+| `POST` | `/finance/simplefin/claim` | **admin** | `{user_id, setup_token}` → claims + stores the access URL for that user; notifies them (rate 5/hour) |
+| `POST` | `/finance/simplefin/reveal` | **admin** | `{user_id}` → the stored access URL (rate 3/hour — the only endpoint that outputs it) |
+| `DELETE` | `/finance/simplefin/{user_id}` | **admin** | disconnect (deletes the stored token; imported data stays) |
+| `POST` | `/finance/simplefin/sync` | **admin** | `{user_id}` → run a sync now; returns `{created, skipped, errors?}` |
+| `POST` | `/finance/books/{id}/import/csv` | edit | multipart `file` (≤5 MB) → `{headers, rows, total_rows}` preview |
+| `POST` | `/finance/books/{id}/import/csv/commit` | edit | multipart `file` + form fields `account_id, date_col, amount_col, payee_col?, notes_col?, date_format?, invert_amounts?` → `{created, skipped, errors?}`; dedup by `import_hash` |
+| `GET` | `/finance/books/{id}/rules` | edit | learned payee→category rules |
+| `DELETE` | `/finance/books/{id}/rules/{rule_id}` | edit | forget a rule |
+
+Rules are learned automatically when a user sets a category on an imported (`simplefin`/`csv`) transaction via `PATCH /finance/books/{id}/transactions/{tid}`.
+
+### Planning (budgets, recurring, planned, projection)
+
+All statuses/projections computed on read. Alerts (budget warn/over, missed bills, balance deviation) arrive via bell + push with a **View →** deep link to the book; own-store alerts go to the owner, pool-book alerts to admins.
+
+| Method | Path | Access | Notes |
+|--------|------|--------|-------|
+| `GET`/`PUT` | `/finance/books/{id}/budgets` | read / edit | `{budgets: [{category, monthly_limit_cents}]}` — categories must exist on the book |
+| `GET` | `/finance/books/{id}/budgets/status?month=YYYY-MM` | read | spent/remaining/pct per budgeted category. Alerts escalate none→warn (book `budget_warn_pct`, default 80)→over, once each per month |
+| `GET`/`POST` | `/finance/books/{id}/recurring` | read / edit | `{name, amount_cents (signed), account_id, category?, cadence: weekly\|monthly\|yearly, next_due, autopay?}` |
+| `PATCH`/`DELETE` | `/finance/books/{id}/recurring/{rid}` | edit | PATCH also takes `active` (pause/resume) |
+| `GET` | `/finance/books/{id}/recurring/upcoming?days=30` | read | `{upcoming, missed}` — missed = 3+ days past due, unmatched |
+| `GET`/`POST` | `/finance/books/{id}/planned` | read / edit | one-off expected items `{name, date, amount_cents, account_id}`; PATCH takes `done` |
+| `PATCH`/`DELETE` | `/finance/books/{id}/planned/{pid}` | edit | |
+| `GET` | `/finance/books/{id}/accounts/{aid}/projection?date=YYYY-MM-DD` | read | `{current_cents, projected_cents, items: [...]}` — current balance + recurring occurrences + planned items up to the date |
+
+**Bill matching:** any landing transaction (manual, SimpleFIN, CSV) that hits the same account with the same sign, an amount within ±max(3%, $2) and a date within ±4 days of a recurring item's `next_due` marks it paid and advances the due date. **Deviation alerts:** set `deviation_threshold_cents` on an account (PATCH account); the bank-reported `synced_balance_cents` (auto from sync, or set manually via PATCH account for cash) is compared to the ledger balance after every sync and nightly at 07:30.
+
+### Invoicing (clients, invoices, payments, AR)
+
+Invoice `status` stores only the user-set lifecycle (`draft|sent|paid|void`); `subtotal_cents`/`total_cents`/`paid_cents`/`balance_cents`/`overdue` are computed on every read. A fully paid invoice flips to `paid` automatically; removing a payment reopens it. Client records carry a reserved `contact_id` for the future CRM module.
+
+| Method | Path | Access | Notes |
+|--------|------|--------|-------|
+| `GET`/`POST` | `/finance/books/{id}/clients` | read / edit | `{name, email?, phone?, notes?}` |
+| `PATCH`/`DELETE` | `/finance/books/{id}/clients/{cid}` | edit | DELETE `409` while the client has invoices (archive instead) |
+| `GET` | `/finance/books/{id}/clients/ar` | read | per-client rollup: invoiced/paid/outstanding/overdue cents + counts + last_payment, worst offender first |
+| `GET`/`POST` | `/finance/books/{id}/invoices` | read / edit | `{client_id?, issue_date?, due_date, line_items: [{description, qty, unit_cents}], tax_pct?, notes?}`; number auto-assigned from the book's `invoice_prefix` + sequence |
+| `GET`/`PATCH`/`DELETE` | `/finance/books/{id}/invoices/{iid}` | read / edit | PATCH takes any create field + `status` |
+| `POST` | `/finance/books/{id}/invoices/{iid}/payments` | edit | `{amount_cents, date?, method?, account_id?, category?}` — `account_id` set = log a **linked income transaction** (payee = client name, tx carries `invoice_id`/`client_id`) |
+| `DELETE` | `/finance/books/{id}/invoices/{iid}/payments/{pid}` | edit | linked ledger transaction stays — remove it separately if it was a mistake |
+| `POST` | `/finance/books/{id}/transactions/{tid}/receipts` | edit | multipart `file` — JPEG/PNG/WebP/AVIF/PDF, 10 MB, ≤10 per transaction; uuid disk names |
+| `GET`/`DELETE` | `/finance/books/{id}/transactions/{tid}/receipts/{rid}` | read / edit | binary download / `204` |
+| `GET` | `/finance/books/{id}/reports/pnl?year=&period=year\|quarter\|month&quarter=&month=` | read | income statement with per-category breakdown |
+| `GET` | `/finance/books/{id}/reports/tax?year=&format=json\|csv` | read | deductible transactions summarized per tax bucket; `csv` = line-level export for the accountant |
+
+Tax flags live on transactions (`deductible: bool`, `tax_category` from the book's `tax_categories` list — edit both via PATCH book / PATCH transaction).
+
+### Sharing
+
+Book audience follows the Assets model. Entry: `{target: <name>|team|household|role:<r>, access: read|contribute|edit, caps?}`. Personal shares are **requests** (target gets an Accept/Decline bell notification; the book is invisible until accepted). Pool books take `contributors` instead (no handshake; `shared_with` is rejected). `hidden_from` (names + `role:<r>`) beats shares. **Contribute caps** `{add: [expense|income], edit_own, see_balances, see_all_tx}` default to expense-submission-only; enforcement is server-side (balance-stripped responses, own-entries transaction filter, sign-gated writes, 403 on reports/planning/invoicing reads without `see_balances`). Specificity: a by-name entry fully overrides group/role entries; an account-level entry overrides the book-level one for that account.
+
+| Method | Path | Access | Notes |
+|--------|------|--------|-------|
+| `PUT` | `/finance/books/{id}/access` | owner (personal) / admin (pool) | `{shared_with?, hidden_from?, contributors?}` — new targets are notified (action `finance_share`); re-sharing preserves prior acceptances |
+| `PUT` | `/finance/books/{id}/accounts/{aid}/access` | owner / admin | per-account override entries (no `hidden_from` here) |
+| `POST` | `/finance/shares/respond` | recipient | `{notif_id, accept}` — accept adds the viewer to `accepted[]` across book + account entries; decline drops a by-name entry entirely |
+| `POST` | `/finance/books/{id}/leave` | share recipient | remove self from a book shared with you |
+| `GET` | `/finance/members` · `/finance/roles` | module users | names / role list for the share pickers |
+
+---
+
 ## Push Notifications
 
 ### `GET /push/vapid-key`

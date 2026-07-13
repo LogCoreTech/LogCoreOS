@@ -149,6 +149,22 @@ def m006_seed_folder_template(brain: Path) -> None:
     write_json(tpl_file, data)
 
 
+def m007_finance_guest_disabled(brain: Path) -> None:
+    """Disable the new finance module for the built-in guest role on existing
+    installs. Money data is the most sensitive in the app — guests must be
+    granted access explicitly. Runs once; an admin re-enabling it sticks."""
+    features_file = brain / "_system" / "features.json"
+    if not features_file.exists():
+        return  # fresh install — init_features() seeds guest with finance off
+    data = read_json(features_file, default={})
+    roles = data.get("roles") or {}
+    guest = roles.get("guest")
+    if guest is None or "finance" in guest:
+        return
+    guest["finance"] = False
+    write_json(features_file, data)
+
+
 # Ordered list — append new migrations here; never reorder or remove
 MIGRATIONS: list[tuple[str, MigrationFn]] = [
     ("m001_task_type_field", m001_task_type_field),
@@ -157,6 +173,7 @@ MIGRATIONS: list[tuple[str, MigrationFn]] = [
     ("m004_task_due_time_field", m004_task_due_time_field),
     ("m005_asset_template_ids", m005_asset_template_ids),
     ("m006_seed_folder_template", m006_seed_folder_template),
+    ("m007_finance_guest_disabled", m007_finance_guest_disabled),
 ]
 
 # ── Runner ─────────────────────────────────────────────────────────────────────
