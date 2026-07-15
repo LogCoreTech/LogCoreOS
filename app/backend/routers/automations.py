@@ -25,6 +25,7 @@ router = APIRouter()
 class N8nConfigRequest(BaseModel):
     url: str
     api_key: str
+    force_on: bool | None = None
 
 
 class InboxItemIn(BaseModel):
@@ -78,7 +79,12 @@ def save_n8n_config(
     current_user: dict = Depends(require_admin),
     _rl: None = Depends(_write_limit),
 ):
-    n8n_service.save_config({"url": req.url.strip(), "api_key": req.api_key.strip()})
+    n8n_service.save_config(
+        {"url": req.url.strip(), "api_key": req.api_key.strip(), "force_on": req.force_on}
+    )
+    # Attaching an external instance stops the bundled container; the force-on
+    # override / stored-workflow count decide otherwise.
+    n8n_service.reconcile()
     return {"ok": True}
 
 
@@ -171,6 +177,7 @@ async def import_workflow(
         logger.warning("n8n import failed: %s", exc)
         raise HTTPException(status_code=502, detail=f"n8n import failed: {exc}")
 
+    n8n_service.reconcile()  # first stored workflow → ensure the bundled n8n is up
     return record
 
 
@@ -381,6 +388,8 @@ def delete_automation(
     except Exception as exc:
         logger.warning("Delete workflow failed: %s", exc)
         raise HTTPException(status_code=502, detail=f"Delete failed: {exc}")
+
+    n8n_service.reconcile()  # last workflow removed + no external → stop the bundled n8n
 
 
 @router.post("/{record_id}/run")

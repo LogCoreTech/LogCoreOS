@@ -518,11 +518,24 @@ Download the current user's entire brain folder as a `.zip` file.
 
 All endpoints require the `notes` module to be enabled.
 
+Notes support **asset-style sharing**: the response of `GET /notes` includes the viewer's own notes plus **pool** (household/team) and **shared-to-me** notes/folders, each annotated `_owner`/`_access`. Share metadata lives in a sidecar `Notes/_shares.json` (content stays plain `.md`). A share on a folder cascades to its subtree. Every read/write resolves access server-side (`read` < `contribute` (edit content) < `edit` (move/delete/reshare)).
+
 ### `GET /notes`
-List all notes files and folders for the current user.
+List all notes and folders visible to the current user (own + pool + shared), annotated `_owner`/`_access`.
 
 ### `GET /notes/file/{path}`
-Read a note file. Path is relative to the user's Notes folder.
+Read a note file. Resolves the note's store (own/pool/shared) and requires read access.
+
+### Sharing
+
+| Method | Path | Access | Notes |
+|--------|------|--------|-------|
+| `PUT` | `/notes/access` | owner / pool admin | `{path, shared_with?, hidden_from?, contributors?}` — new targets notified (action `notes_share`); pool paths take `contributors` (no handshake), personal take `shared_with` (accept/decline) |
+| `POST` | `/notes/shares/respond` | recipient | `{notif_id, accept}` |
+| `POST` | `/notes/leave` | recipient | `{path}` — remove self from a note shared with you |
+| `GET` | `/notes/members` · `/notes/roles` | module users | share pickers |
+
+`POST /notes/file` and `/notes/folder` accept an optional `pool: true` (admin) to create in the household/team pool store.
 
 ### `POST /notes/file`
 Create a new note file.
@@ -823,7 +836,7 @@ Router mounted at `/api/v1/finance`. Requires the `finance` module (disabled for
 | `POST` | `/finance/books/{id}/accounts` | edit | `{name, type: checking\|savings\|credit\|cash\|other, opening_balance_cents?, opening_date?}` |
 | `PATCH`/`DELETE` | `/finance/books/{id}/accounts/{aid}` | edit | DELETE `409` while the account has transactions (archive instead); archived accounts reject new transactions |
 | `GET` | `/finance/books/{id}/transactions?from&to&account&category&q&limit&offset` | read | newest first; returns `{items, total}` |
-| `POST` | `/finance/books/{id}/transactions` | edit | `{date, amount_cents, account_id, category?, payee?, notes?, deductible?, tax_category?}`; category must exist on the book or be `""` |
+| `POST` | `/finance/books/{id}/transactions` | edit | `{date, amount_cents, account_id, category?, payee?, payee_contact_id?, notes?, deductible?, tax_category?}`; category must exist on the book or be `""`. `payee_contact_id` links the payee to a CRM Contact (bank/CSV imports auto-suggest one) |
 | `PATCH`/`DELETE` | `/finance/books/{id}/transactions/{tid}` | edit | date edits across a year boundary move the record between year shards transparently |
 | `GET` | `/finance/books/{id}/reports/monthly?month=YYYY-MM` | read | income/expense/net + per-category breakdown, computed on read |
 | `GET` | `/finance/networth` | module users | total + per-book totals across all visible books in the workspace |
@@ -901,6 +914,41 @@ Book audience follows the Assets model. Entry: `{target: <name>|team|household|r
 
 ---
 
+## Contacts (CRM)
+
+Router mounted at `/api/v1/contacts`. Requires the `contacts` module (both workspaces, `X-Workspace`-scoped; **disabled for `guest`** by default). The **Contact** is the canonical person/company; Finance payees (`payee_contact_id`) and invoice clients (`contact_id`) link to it. Storage: `ws_path/Contacts/{contacts,interactions,deals,pipeline}.json`; admin custom-field defs at `_system/contact_fields.json`; pool contacts in `_household`/`_team`. Contact responses are annotated `_owner`/`_access`. Sharing mirrors Finance/Assets (read/contribute/edit; **contribute = log interactions + create/advance deals only**; personal = accept handshake, pool = contributors; `hidden_from` beats shares).
+
+| Method | Path | Access | Notes |
+|--------|------|--------|-------|
+| `GET` | `/contacts?include_archived=` | module users | own + pool + shared-to-me contacts |
+| `POST` | `/contacts` | module users | `{type, name, emails?, phones?, address?, tags?, birthday?, status?, notes?, custom?, pool?}`; `pool:true` = admin, creates in the workspace pool |
+| `GET`/`PATCH`/`DELETE` | `/contacts/{id}` | per access | PATCH needs edit; DELETE cascades interactions+deals (pool DELETE admin-only) |
+| `POST` | `/contacts/{id}/archive` · `/unarchive` | edit | |
+| `GET`/`POST` | `/contacts/{id}/interactions` | read / contribute | `{type: call\|email\|meeting\|text\|note, summary, date?, follow_up?}` |
+| `PATCH`/`DELETE` | `/contacts/{id}/interactions/{iid}` | contribute / edit | |
+| `GET`/`POST` | `/contacts/{id}/deals` | read / contribute | `{title, value_cents, stage?, expected_close?, follow_up?, notes?}`; stage must exist in the pipeline |
+| `PATCH`/`DELETE` | `/contacts/{id}/deals/{did}` | contribute / edit | |
+| `GET`/`PUT` | `/contacts/pipeline` | module users | `{stages:[...]}` per-store deal pipeline (default Lead→Contacted→Proposal→Negotiation→Won→Lost) |
+| `GET` | `/contacts/fields` · `PUT` (admin) | module users / admin | instance-level custom field definitions |
+| `GET` | `/contacts/{id}/finance` | module users | invoices/AR + payee spend/receive totals for this contact, **scoped to the viewer's finance access** |
+| `PUT` | `/contacts/{id}/access` | owner / pool admin | `{shared_with?, hidden_from?, contributors?}` — new targets notified (action `contacts_share`) |
+| `POST` | `/contacts/shares/respond` · `/contacts/{id}/leave` | recipient | accept/decline · leave a shared contact |
+| `GET` | `/contacts/members` · `/contacts/roles` | module users | share pickers |
+| `POST` | `/contacts/import/csv` · `/import/csv/commit` | module users | preview + column-mapped import (dedup on name/email) |
+| `GET` | `/contacts/export/csv` | module users | CSV of visible contacts |
+
+**Automation API** (`X-Automation-Token`, rate 30/min — **write-focused, no bulk export**):
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `GET` | `/contacts/automation/lookup?user=&workspace=&email=&name=` | single-contact dedup lookup → `{found, contact_id}`. Deliberately NOT a list endpoint |
+| `POST` | `/contacts/automation/contacts` | create/update by name/email match; `{user, workspace, name, type?, emails?, phones?, tags?, notes?}` |
+| `POST` | `/contacts/automation/interactions` · `/deals` | append an interaction / deal to a contact |
+
+**Agent tools**: `list_contacts`/`get_contact` (read) + `create_contact`/`update_contact`/`log_interaction`/`create_deal` (approval-gated; create searches for a match first to avoid duplicates).
+
+---
+
 ## Push Notifications
 
 ### `GET /push/vapid-key`
@@ -929,9 +977,9 @@ Router mounted at `/api/v1/automations`. Requires the `automations` module to be
 Get n8n connection status and workflow count. Admin only.
 
 #### `POST /automations/n8n/config`
-Save n8n URL and API key. Admin only.
+Save n8n URL and API key. Admin only. Triggers a container reconcile: attaching an **external** n8n (URL not the bundled `n8n:5678`) stops the bundled `logcore-n8n`; `force_on: true` keeps the bundled container running even with no workflows. Otherwise the bundled container runs only while ≥1 workflow is stored (started on first import, stopped on last delete + boot reconcile).
 
-**Body** `{ "url": "http://logcore-n8n:5678", "api_key": "n8n_api_..." }`
+**Body** `{ "url": "http://logcore-n8n:5678", "api_key": "n8n_api_...", "force_on": false }`
 
 #### `POST /automations/n8n/sync-workflows`
 Trigger an immediate business workflow sync from the remote stub source. Admin only.

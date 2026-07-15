@@ -22,6 +22,7 @@ from routers import (
     brain,
     calendar,
     chat,
+    contacts,
     export,
     features,
     finance,
@@ -73,6 +74,18 @@ def _warm_share_index() -> None:
         rebuild_finance_index()
     except Exception:
         logger.exception("finance share index rebuild failed (will lazy-build on first use)")
+    try:
+        from services.contacts_index import rebuild_share_index as rebuild_contacts_index
+
+        rebuild_contacts_index()
+    except Exception:
+        logger.exception("contacts share index rebuild failed (will lazy-build on first use)")
+    try:
+        from services.notes_index import rebuild_share_index as rebuild_notes_index
+
+        rebuild_notes_index()
+    except Exception:
+        logger.exception("notes share index rebuild failed (will lazy-build on first use)")
 
 
 def _startup_checks() -> None:
@@ -210,6 +223,7 @@ app.include_router(finance_planning.router, prefix="/api/v1/finance", tags=["fin
 app.include_router(finance_invoicing.router, prefix="/api/v1/finance", tags=["finance-invoicing"])
 app.include_router(finance_sharing.router, prefix="/api/v1/finance", tags=["finance-sharing"])
 app.include_router(assets.router, prefix="/api/v1/assets", tags=["assets"])
+app.include_router(contacts.router, prefix="/api/v1/contacts", tags=["contacts"])
 app.include_router(home.router, prefix="/api/v1/home", tags=["home"])
 app.include_router(team.router, prefix="/api/v1/team", tags=["team"])
 app.include_router(update.router, prefix="/api/v1/update", tags=["update"])

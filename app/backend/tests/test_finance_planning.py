@@ -369,3 +369,109 @@ def test_on_transactions_added_matches_and_alerts(brain, book, checking, notify_
     items = plan.list_recurring("Alice", "personal", book["id"])
     assert items[0]["last_paid"] == "2026-07-05"
     assert any("over budget" in t.lower() for _r, t in notify_log)
+
+
+# ---------------------------------------------------------------------------
+# Tax flags on recurring + planned (Phase 1 items 10 & 11)
+# ---------------------------------------------------------------------------
+
+
+def test_recurring_accepts_and_defaults_tax_flags(brain, book, checking):
+    item = plan.add_recurring(
+        "Alice",
+        "personal",
+        book,
+        {
+            "name": "Office rent",
+            "amount_cents": -500_00,
+            "account_id": checking["id"],
+            "category": "",
+            "cadence": "monthly",
+            "next_due": "2026-07-15",
+            "deductible": True,
+            "tax_category": "Business Expense",
+        },
+        "Alice",
+    )
+    assert item["deductible"] is True
+    assert item["tax_category"] == "Business Expense"
+    # Defaults when omitted
+    plain = plan.add_recurring(
+        "Alice",
+        "personal",
+        book,
+        {
+            "name": "Netflix",
+            "amount_cents": -15_99,
+            "account_id": checking["id"],
+            "category": "",
+            "cadence": "monthly",
+            "next_due": "2026-07-20",
+        },
+        "Alice",
+    )
+    assert plain["deductible"] is False
+    assert plain["tax_category"] is None
+
+
+def test_recurring_rejects_unknown_tax_bucket(brain, book, checking):
+    with pytest.raises(ValueError):
+        plan.add_recurring(
+            "Alice",
+            "personal",
+            book,
+            {
+                "name": "Bad bucket",
+                "amount_cents": -10_00,
+                "account_id": checking["id"],
+                "cadence": "monthly",
+                "next_due": "2026-07-15",
+                "tax_category": "Not A Real Bucket",
+            },
+            "Alice",
+        )
+
+
+def test_planned_accepts_tax_flags(brain, book, checking):
+    item = plan.add_planned(
+        "Alice",
+        "personal",
+        book,
+        {
+            "name": "Annual license",
+            "date": "2026-08-01",
+            "amount_cents": -300_00,
+            "account_id": checking["id"],
+            "deductible": True,
+            "tax_category": "Business Expense",
+        },
+        "Alice",
+    )
+    assert item["deductible"] is True
+    assert item["tax_category"] == "Business Expense"
+
+
+def test_bill_match_propagates_tax_flags_to_tx(brain, book, checking):
+    plan.add_recurring(
+        "Alice",
+        "personal",
+        book,
+        {
+            "name": "Office rent",
+            "amount_cents": -500_00,
+            "account_id": checking["id"],
+            "category": "",
+            "cadence": "monthly",
+            "next_due": "2026-07-15",
+            "deductible": True,
+            "tax_category": "Business Expense",
+        },
+        "Alice",
+    )
+    tx = _spend(book, checking, 500_00, day="2026-07-16", category="")
+    assert tx.get("deductible") is False
+    plan.match_bill("Alice", "personal", _fresh(book), tx)
+    items, _ = fin.list_transactions("Alice", "personal", book["id"])
+    saved = next(t for t in items if t["id"] == tx["id"])
+    assert saved["deductible"] is True
+    assert saved["tax_category"] == "Business Expense"

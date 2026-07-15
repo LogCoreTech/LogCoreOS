@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { finance as financeApi } from '../../lib/api'
 import { fmtMoney, toCents, centsToInput, todayStr } from './money'
+import ContactPicker from '../contacts/ContactPicker'
 
 const STATUS_STYLE = {
   draft: 'bg-charcoal-100 text-charcoal-600 dark:bg-charcoal-700 dark:text-charcoal-300',
@@ -14,7 +15,6 @@ export default function InvoicesPanel({ book, canEdit }) {
   const [clients, setClients] = useState([])
   const [ar, setAr] = useState([])
   const [invoiceModal, setInvoiceModal] = useState(null)   // null | {invoice: null|obj}
-  const [clientModal, setClientModal] = useState(null)     // null | {client: null|obj}
   const [printInvoice, setPrintInvoice] = useState(null)
   const [error, setError] = useState('')
 
@@ -67,18 +67,15 @@ export default function InvoicesPanel({ book, canEdit }) {
             Invoices
           </h2>
           {canEdit && (
-            <div className="flex gap-2">
-              <button onClick={() => setClientModal({ client: null })} className="btn-ghost text-xs">＋ Client</button>
-              <button onClick={() => setInvoiceModal({ invoice: null })} className="btn-primary text-xs" disabled={clients.length === 0 && invoices.length === 0 && false}>
-                ＋ Invoice
-              </button>
-            </div>
+            <button onClick={() => setInvoiceModal({ invoice: null })} className="btn-primary text-xs">
+              ＋ Invoice
+            </button>
           )}
         </div>
 
         {invoices.length === 0 ? (
           <p className="text-sm text-charcoal-500 dark:text-charcoal-400">
-            No invoices yet.{canEdit && clients.length === 0 ? ' Add a client first, then create your first invoice.' : ''}
+            No invoices yet.{canEdit ? ' Create one and pick a contact as the client.' : ''}
           </p>
         ) : (
           <div className="space-y-2">
@@ -102,22 +99,6 @@ export default function InvoicesPanel({ book, canEdit }) {
           </div>
         )}
 
-        {/* Clients quick list */}
-        {clients.length > 0 && (
-          <div className="pt-2 border-t border-charcoal-100 dark:border-charcoal-700/60">
-            <div className="flex flex-wrap gap-1.5">
-              {clients.filter(c => !c.archived).map(c => (
-                <button
-                  key={c.id}
-                  onClick={() => canEdit && setClientModal({ client: c })}
-                  className="badge bg-charcoal-100 text-charcoal-600 dark:bg-charcoal-700 dark:text-charcoal-300 hover:text-orange-500"
-                >
-                  {c.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {error && <p className="text-sm text-red-500">{error}</p>}
@@ -134,15 +115,6 @@ export default function InvoicesPanel({ book, canEdit }) {
           onPrint={inv => setPrintInvoice(inv)}
         />
       )}
-      {clientModal && (
-        <ClientModal
-          key={clientModal.client?.id || 'new'}
-          book={book}
-          client={clientModal.client}
-          onClose={() => setClientModal(null)}
-          onChanged={() => { setClientModal(null); load() }}
-        />
-      )}
       {printInvoice && (
         <InvoicePrint
           book={book}
@@ -155,79 +127,24 @@ export default function InvoicesPanel({ book, canEdit }) {
   )
 }
 
-function ClientModal({ book, client, onClose, onChanged }) {
-  const [form, setForm] = useState({
-    name: client?.name || '', email: client?.email || '',
-    phone: client?.phone || '', notes: client?.notes || '',
-  })
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
-
-  async function submit(e) {
-    e.preventDefault()
-    setBusy(true); setError('')
-    try {
-      if (client) await financeApi.updateClient(book.id, client.id, form)
-      else await financeApi.addClient(book.id, form)
-      onChanged()
-    } catch (err) {
-      setError(err.message || 'Save failed'); setBusy(false)
-    }
-  }
-
-  async function remove() {
-    if (!window.confirm(`Delete client "${client.name}"?`)) return
-    try {
-      await financeApi.removeClient(book.id, client.id)
-      onChanged()
-    } catch (err) {
-      setError(err.message) // 409 if they have invoices
-    }
-  }
-
-  async function toggleArchived() {
-    try {
-      await financeApi.updateClient(book.id, client.id, { archived: !client.archived })
-      onChanged()
-    } catch (err) { setError(err.message) }
-  }
-
-  return (
-    <div className="modal-overlay">
-      <div className="modal-card max-w-sm w-full p-5">
-        <h3 className="font-semibold mb-4">{client ? 'Edit client' : 'New client'}</h3>
-        <form onSubmit={submit} className="space-y-3">
-          <input className="input" placeholder="Name" value={form.name}
-            onChange={e => setForm({ ...form, name: e.target.value })} maxLength={120} required autoFocus />
-          <input className="input" placeholder="Email (optional)" value={form.email}
-            onChange={e => setForm({ ...form, email: e.target.value })} maxLength={200} />
-          <input className="input" placeholder="Phone (optional)" value={form.phone}
-            onChange={e => setForm({ ...form, phone: e.target.value })} maxLength={40} />
-          <input className="input" placeholder="Notes" value={form.notes}
-            onChange={e => setForm({ ...form, notes: e.target.value })} maxLength={2000} />
-          {error && <p className="text-sm text-red-500">{error}</p>}
-          <div className="flex gap-2 pt-1">
-            {client && (
-              <>
-                <button type="button" onClick={remove} className="btn-ghost text-red-500 text-xs">Delete</button>
-                <button type="button" onClick={toggleArchived} className="btn-ghost text-xs">
-                  {client.archived ? 'Unarchive' : 'Archive'}
-                </button>
-              </>
-            )}
-            <div className="flex-1" />
-            <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
-            <button type="submit" disabled={busy} className="btn-primary">{busy ? '…' : 'Save'}</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
-
 function InvoiceModal({ book, invoice, clients, canEdit, onClose, onChanged, onPrint }) {
   const editing = !!invoice
-  const [clientId, setClientId] = useState(invoice?.client_id || clients[0]?.id || '')
+  const [clientId, setClientId] = useState(invoice?.client_id || '')
+  const [clientName, setClientName] = useState(clients.find(c => c.id === invoice?.client_id)?.name || '')
+
+  // Pick or quick-create a CRM contact, then find-or-create the matching book
+  // client so invoices + AR keep working while Contacts is the entry point.
+  async function chooseClient(name, contactId) {
+    setClientName(name)
+    if (!name) { setClientId(''); return }
+    const existing = clients.find(c => (contactId && c.contact_id === contactId) || c.name === name)
+    if (existing) { setClientId(existing.id); return }
+    try {
+      const c = await financeApi.addClient(book.id, { name, contact_id: contactId || null })
+      setClientId(c.id)
+    } catch { /* leave clientId as-is */ }
+  }
+
   const [issueDate, setIssueDate] = useState(invoice?.issue_date || todayStr())
   const [dueDate, setDueDate] = useState(invoice?.due_date || '')
   const [taxPct, setTaxPct] = useState(invoice?.tax_pct ?? 0)
@@ -324,15 +241,12 @@ function InvoiceModal({ book, invoice, clients, canEdit, onClose, onChanged, onP
 
         <form onSubmit={save} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Client</label>
-              <select className="input" value={clientId} onChange={e => setClientId(e.target.value)}>
-                <option value="">(no client)</option>
-                {clients.filter(c => !c.archived || c.id === clientId).map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
+            <ContactPicker
+              label="Client (contact)"
+              placeholder="Pick or add a contact…"
+              value={{ name: clientName, contactId: null }}
+              onChange={chooseClient}
+            />
             <div>
               <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Tax %</label>
               <input className="input" inputMode="decimal" value={taxPct} onChange={e => setTaxPct(e.target.value)} />

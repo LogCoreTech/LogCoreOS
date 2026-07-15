@@ -42,6 +42,8 @@ class RecurringCreate(BaseModel):
     cadence: str = Field(default="monthly", pattern="^(weekly|monthly|yearly)$")
     next_due: str
     autopay: bool = False
+    deductible: bool = False
+    tax_category: str | None = Field(default=None, max_length=60)
 
 
 class RecurringUpdate(BaseModel):
@@ -53,6 +55,8 @@ class RecurringUpdate(BaseModel):
     next_due: str | None = None
     autopay: bool | None = None
     active: bool | None = None
+    deductible: bool | None = None
+    tax_category: str | None = Field(default=None, max_length=60)
 
 
 class PlannedCreate(BaseModel):
@@ -60,6 +64,8 @@ class PlannedCreate(BaseModel):
     date: str
     amount_cents: int
     account_id: str
+    deductible: bool = False
+    tax_category: str | None = Field(default=None, max_length=60)
 
 
 class PlannedUpdate(BaseModel):
@@ -68,6 +74,8 @@ class PlannedUpdate(BaseModel):
     amount_cents: int | None = None
     account_id: str | None = None
     done: bool | None = None
+    deductible: bool | None = None
+    tax_category: str | None = Field(default=None, max_length=60)
 
 
 # ---------------------------------------------------------------------------

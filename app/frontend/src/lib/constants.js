@@ -1,4 +1,5 @@
 export const CATEGORY_COLORS = {
+  Religion:         'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
   God:              'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
   Family:           'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
   Job:              'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
@@ -31,6 +32,7 @@ export const ALL_MODULES = [
   { id: 'team',                 to: '/team',         icon: '🧑‍🤝‍🧑',  label: 'Team',        workspace: 'business' },
   { id: 'assets',               to: '/assets',       icon: '🗂️',         label: 'Assets'                },
   { id: 'finance',              to: '/finance',      icon: '💵',          label: 'Finance'               },
+  { id: 'contacts',             to: '/contacts',     icon: '👥',          label: 'Contacts'              },
 ]
 
 export const DEFAULT_SHORTCUTS = ['dashboard', 'tasks', 'chat']

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { finance as financeApi } from '../../lib/api'
 import { toCents, centsToInput, todayStr } from './money'
+import ContactPicker from '../contacts/ContactPicker'
 
 export default function TransactionModal({ book, tx, allowedKinds, onClose, onSaved, onDeleted }) {
   const editing = !!tx
@@ -14,6 +15,7 @@ export default function TransactionModal({ book, tx, allowedKinds, onClose, onSa
   const [accountId, setAccountId] = useState(tx?.account_id || accounts[0]?.id || '')
   const [category, setCategory] = useState(tx?.category ?? '')
   const [payee, setPayee] = useState(tx?.payee || '')
+  const [payeeContactId, setPayeeContactId] = useState(tx?.payee_contact_id || null)
   const [notes, setNotes] = useState(tx?.notes || '')
   const [deductible, setDeductible] = useState(!!tx?.deductible)
   const [taxCategory, setTaxCategory] = useState(tx?.tax_category || '')
@@ -36,7 +38,9 @@ export default function TransactionModal({ book, tx, allowedKinds, onClose, onSa
       amount_cents: kind === 'expense' ? -cents : cents,
       account_id: accountId,
       category: categoryValid ? category : '',
-      payee, notes,
+      payee,
+      payee_contact_id: payeeContactId,
+      notes,
       deductible,
       tax_category: deductible && taxCategory ? taxCategory : null,
     }
@@ -115,10 +119,12 @@ export default function TransactionModal({ book, tx, allowedKinds, onClose, onSa
             </select>
           </div>
 
-          <div>
-            <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Payee</label>
-            <input className="input" placeholder="Who was paid / who paid you" value={payee} onChange={e => setPayee(e.target.value)} maxLength={120} />
-          </div>
+          <ContactPicker
+            label={kind === 'expense' ? 'Paid to' : 'Pay from'}
+            placeholder={kind === 'expense' ? 'Who was paid' : 'Who paid you'}
+            value={{ name: payee, contactId: payeeContactId }}
+            onChange={(name, contactId) => { setPayee(name); setPayeeContactId(contactId) }}
+          />
 
           <div>
             <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Notes</label>

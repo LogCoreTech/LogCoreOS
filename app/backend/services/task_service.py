@@ -84,6 +84,25 @@ def delete_task(user_name: str, task_id: str, workspace: str = "personal") -> bo
     return True
 
 
+def cleanup_done_goals(user_name: str, workspace: str = "personal") -> int:
+    """Archive all completed goals to history (the Goals 'Clear completed' action).
+
+    Goals are excluded from the nightly sweep, so they accumulate in the Done view
+    until the user clears them here. Returns the number archived.
+    """
+    data = read_json(tasks_path(user_name, workspace), default={"tasks": []})
+    to_archive = [t for t in data["tasks"] if t.get("type") == "goal" and t.get("status") == "done"]
+    if not to_archive:
+        return 0
+    hist = read_json(history_path(user_name, workspace), default={"tasks": []})
+    hist["tasks"].extend(to_archive)
+    write_json(history_path(user_name, workspace), hist)
+    archive_ids = {t["id"] for t in to_archive}
+    data["tasks"] = [t for t in data["tasks"] if t["id"] not in archive_ids]
+    write_json(tasks_path(user_name, workspace), data)
+    return len(to_archive)
+
+
 def list_history(
     user_name: str, limit: int = 50, offset: int = 0, workspace: str = "personal"
 ) -> list[dict]:

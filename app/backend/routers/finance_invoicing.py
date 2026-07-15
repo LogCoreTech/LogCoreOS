@@ -30,6 +30,7 @@ class ClientCreate(BaseModel):
     email: str = Field(default="", max_length=200)
     phone: str = Field(default="", max_length=40)
     notes: str = Field(default="", max_length=2000)
+    contact_id: str | None = Field(default=None, max_length=64)
 
 
 class ClientUpdate(BaseModel):
@@ -37,6 +38,7 @@ class ClientUpdate(BaseModel):
     email: str | None = Field(default=None, max_length=200)
     phone: str | None = Field(default=None, max_length=40)
     notes: str | None = Field(default=None, max_length=2000)
+    contact_id: str | None = Field(default=None, max_length=64)
     archived: bool | None = None
 
 

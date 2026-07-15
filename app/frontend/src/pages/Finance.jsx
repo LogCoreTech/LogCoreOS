@@ -24,6 +24,7 @@ export default function Finance() {
   const [showSettings, setShowSettings] = useState(false)
   const [showBank, setShowBank] = useState(false)
   const [txModal, setTxModal] = useState(null) // null | {tx: null|obj}
+  const [showArchived, setShowArchived] = useState(false)
 
   const isAdmin = user?.role === 'admin'
   const active = books.find(b => b.id === activeId) || books[0] || null
@@ -45,10 +46,11 @@ export default function Finance() {
   async function load(keepActive = true) {
     setLoading(true)
     try {
-      const list = await financeApi.listBooks()
-      setBooks(Array.isArray(list) ? list : [])
-      if (!keepActive || !list.some(b => b.id === activeId)) {
-        setActiveId(list[0]?.id || null)
+      const list = await financeApi.listBooks(showArchived)
+      const arr = Array.isArray(list) ? list : []
+      setBooks(arr)
+      if (!keepActive || !arr.some(b => b.id === activeId)) {
+        setActiveId(arr.find(b => !b.archived)?.id || arr[0]?.id || null)
       }
     } catch {
       setBooks([])
@@ -57,7 +59,7 @@ export default function Finance() {
     }
   }
 
-  useEffect(() => { load(false) }, [workspace]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(true) }, [workspace, showArchived]) // eslint-disable-line react-hooks/exhaustive-deps
   // Consume deep-link params (?book=&view=) — also fires when a bell action
   // navigates here while the page is already mounted.
   useEffect(() => {
@@ -74,6 +76,13 @@ export default function Finance() {
     setView('overview')
   }
 
+  async function unarchiveBook() {
+    try {
+      await financeApi.updateBook(active.id, { archived: false })
+      load(true)
+    } catch { /* surfaced by reload */ }
+  }
+
   return (
     <div key={workspace} className="w-full max-w-3xl mx-auto space-y-5 overflow-x-hidden">
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -83,9 +92,19 @@ export default function Finance() {
           {active && isSharedToMe && (
             <button onClick={leaveBook} className="btn-ghost text-sm text-red-500">Leave</button>
           )}
-          {active && canEdit && (
+          {active?.archived && canEdit && (
+            <button onClick={unarchiveBook} className="btn-ghost text-sm">Unarchive</button>
+          )}
+          {active && canEdit && !active.archived && (
             <button onClick={() => setShowSettings(true)} className="btn-ghost text-sm">⚙ Settings</button>
           )}
+          <button
+            onClick={() => setShowArchived(s => !s)}
+            className="btn-ghost text-sm whitespace-nowrap"
+            title={showArchived ? 'Hide archived books' : 'Show archived books'}
+          >
+            {showArchived ? 'Hide archived' : 'Show archived'}
+          </button>
           <button onClick={() => setShowNewBook(true)} className="btn-primary whitespace-nowrap">＋ New book</button>
         </div>
       </div>
@@ -101,9 +120,10 @@ export default function Finance() {
                 active?.id === b.id
                   ? 'border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400'
                   : 'border-charcoal-200 dark:border-charcoal-700 text-charcoal-600 dark:text-charcoal-300'
-              }`}
+              } ${b.archived ? 'opacity-50' : ''}`}
             >
               {b.icon} {b.name}
+              {b.archived && ' 🗄'}
               {b._owner === 'household' && ' 🏠'}
               {b._owner === 'team' && ' 🧑‍🤝‍🧑'}
             </button>
@@ -139,7 +159,7 @@ export default function Finance() {
           </div>
 
           {view === 'overview' && (
-            <OverviewView book={active} canEdit={canEdit} onAddTx={() => setTxModal({ tx: null })} />
+            <OverviewView book={active} canEdit={canEdit} onAddTx={() => setTxModal({ tx: null })} onAddAccount={() => setShowSettings(true)} />
           )}
           {view === 'transactions' && (
             <TransactionsView
@@ -202,7 +222,7 @@ function plusDays(days) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function OverviewView({ book, canEdit, onAddTx }) {
+function OverviewView({ book, canEdit, onAddTx, onAddAccount }) {
   const [report, setReport] = useState(null)
   const [projAccount, setProjAccount] = useState('')
   const [projDate, setProjDate] = useState(plusDays(30))
@@ -235,13 +255,19 @@ function OverviewView({ book, canEdit, onAddTx }) {
     <div className="space-y-4">
       {/* Balance summary */}
       <div className="card p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-sm uppercase tracking-wide text-charcoal-500 dark:text-charcoal-400">Balance</h2>
-          <span className="text-xl font-bold">{fmtMoney(book.total_cents, book.currency)}</span>
+        <div className="flex items-center justify-between mb-3 gap-2">
+          <h2 className="font-semibold text-sm uppercase tracking-wide text-charcoal-500 dark:text-charcoal-400">
+            {book._owner === 'household' ? 'Household balance' : book._owner === 'team' ? 'Team balance' : 'Balance'}
+          </h2>
+          <div className="flex items-center gap-2">
+            {canEdit && <button onClick={onAddAccount} className="btn-ghost text-xs">＋ Account</button>}
+            <span className="text-xl font-bold">{fmtMoney(book.total_cents, book.currency)}</span>
+          </div>
         </div>
         {accounts.length === 0 ? (
           <p className="text-sm text-charcoal-500 dark:text-charcoal-400">
-            No accounts yet.{canEdit && ' Open ⚙ Settings to add your first account.'}
+            No accounts yet.{canEdit && ' Add a bank or cash account with ＋ Account above.'}
+            {book._owner && canEdit && ' Bank-linked accounts on shared books are admin-managed.'}
           </p>
         ) : !book.balances ? (
           <p className="text-sm text-charcoal-500 dark:text-charcoal-400">

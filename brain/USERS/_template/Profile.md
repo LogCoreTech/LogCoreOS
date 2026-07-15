@@ -12,7 +12,7 @@
 ## Life Priorities
 
 Base categories in order (highest to lowest):
-1. God
+1. Religion
 2. Family
 3. Job
 4. Personal Growth

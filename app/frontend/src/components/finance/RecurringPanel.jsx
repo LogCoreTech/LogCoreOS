@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { finance as financeApi } from '../../lib/api'
 import { fmtMoney, toCents, centsToInput, todayStr } from './money'
 
-const EMPTY_FORM = { name: '', amount: '', kind: 'expense', account_id: '', category: '', cadence: 'monthly', next_due: '', autopay: false }
+const EMPTY_FORM = { name: '', amount: '', kind: 'expense', account_id: '', category: '', cadence: 'monthly', next_due: '', autopay: false, deductible: false, tax_category: '' }
 
 export default function RecurringPanel({ book, canEdit }) {
   const [items, setItems] = useState([])
@@ -30,6 +30,7 @@ export default function RecurringPanel({ book, canEdit }) {
         kind: item.amount_cents > 0 ? 'income' : 'expense',
         account_id: item.account_id, category: item.category || '',
         cadence: item.cadence, next_due: item.next_due, autopay: !!item.autopay,
+        deductible: !!item.deductible, tax_category: item.tax_category || '',
       })
     } else {
       setForm({ ...EMPTY_FORM, account_id: accounts[0]?.id || '', next_due: today })
@@ -44,6 +45,8 @@ export default function RecurringPanel({ book, canEdit }) {
       name: form.name, amount_cents: form.kind === 'expense' ? -cents : cents,
       account_id: form.account_id, category: form.category, cadence: form.cadence,
       next_due: form.next_due, autopay: form.autopay,
+      deductible: form.kind === 'expense' ? form.deductible : false,
+      tax_category: form.kind === 'expense' && form.deductible ? (form.tax_category || null) : null,
     }
     setBusy(true); setError('')
     try {
@@ -76,6 +79,8 @@ export default function RecurringPanel({ book, canEdit }) {
         name: plannedForm.name, date: plannedForm.date,
         amount_cents: plannedForm.kind === 'expense' ? -cents : cents,
         account_id: plannedForm.account_id,
+        deductible: plannedForm.kind === 'expense' ? plannedForm.deductible : false,
+        tax_category: plannedForm.kind === 'expense' && plannedForm.deductible ? (plannedForm.tax_category || null) : null,
       })
       setPlannedForm(null); load()
     } catch (err) {
@@ -154,7 +159,7 @@ export default function RecurringPanel({ book, canEdit }) {
           </h2>
           {canEdit && (
             <button
-              onClick={() => setPlannedForm({ name: '', amount: '', kind: 'expense', date: today, account_id: accounts[0]?.id || '' })}
+              onClick={() => setPlannedForm({ name: '', amount: '', kind: 'expense', date: today, account_id: accounts[0]?.id || '', deductible: false, tax_category: '' })}
               className="btn-ghost text-xs"
             >＋ Add</button>
           )}
@@ -225,6 +230,22 @@ export default function RecurringPanel({ book, canEdit }) {
                   <option key={c.name} value={c.name}>{c.name}</option>
                 ))}
               </select>
+              {form.kind === 'expense' && (
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 text-sm shrink-0">
+                    <input type="checkbox" checked={form.deductible}
+                      onChange={e => setForm({ ...form, deductible: e.target.checked })} />
+                    Deductible
+                  </label>
+                  {form.deductible && (
+                    <select className="input flex-1" value={form.tax_category}
+                      onChange={e => setForm({ ...form, tax_category: e.target.value })}>
+                      <option value="">Tax bucket…</option>
+                      {(book.tax_categories || []).map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  )}
+                </div>
+              )}
               {error && <p className="text-sm text-red-500">{error}</p>}
               <div className="flex gap-2 pt-1">
                 <button type="button" onClick={() => setForm(null)} className="btn-ghost flex-1">Cancel</button>
@@ -258,6 +279,22 @@ export default function RecurringPanel({ book, canEdit }) {
                   {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </select>
               </div>
+              {plannedForm.kind === 'expense' && (
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 text-sm shrink-0">
+                    <input type="checkbox" checked={plannedForm.deductible}
+                      onChange={e => setPlannedForm({ ...plannedForm, deductible: e.target.checked })} />
+                    Deductible
+                  </label>
+                  {plannedForm.deductible && (
+                    <select className="input flex-1" value={plannedForm.tax_category}
+                      onChange={e => setPlannedForm({ ...plannedForm, tax_category: e.target.value })}>
+                      <option value="">Tax bucket…</option>
+                      {(book.tax_categories || []).map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  )}
+                </div>
+              )}
               {error && <p className="text-sm text-red-500">{error}</p>}
               <div className="flex gap-2 pt-1">
                 <button type="button" onClick={() => setPlannedForm(null)} className="btn-ghost flex-1">Cancel</button>

@@ -61,6 +61,7 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
   async function submit(e) {
     e.preventDefault()
     if (!form.title.trim()) { setError('Title is required'); return }
+    if (form.type === 'goal' && !form.due_date) { setError('A goal needs a target date'); return }
     setLoading(true)
     setError('')
     try {
@@ -178,7 +179,10 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
           {/* Due date + optional time */}
           <div>
             <label className="block text-sm font-medium mb-1">
-              Due Date <span className="text-charcoal-400 font-normal">(optional)</span>
+              {form.type === 'goal' ? 'Target Date' : 'Due Date'}{' '}
+              <span className="text-charcoal-400 font-normal">
+                ({form.type === 'goal' ? 'required' : 'optional'})
+              </span>
             </label>
             <div className="space-y-2">
               <input
@@ -189,6 +193,7 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
                   if (!e.target.value) set('due_time', '')
                 }}
                 className="input"
+                required={form.type === 'goal'}
               />
               {form.due_date && (
                 <div className="flex items-center gap-1.5">

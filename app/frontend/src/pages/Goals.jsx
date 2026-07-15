@@ -9,6 +9,7 @@ export default function Goals() {
   const [goals, setGoals] = useState([])
   const [categories, setCategories] = useState([])
   const [filter, setFilter] = useState('pending')
+  const [timeframe, setTimeframe] = useState('month')
   const [editTask, setEditTask] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
@@ -27,8 +28,8 @@ export default function Goals() {
 
   useEffect(() => { load() }, [workspace])
 
-  async function markDone(id) {
-    await tasksApi.update(id, { status: 'done' })
+  async function toggleDone(goal) {
+    await tasksApi.update(goal.id, { status: goal.status === 'done' ? 'pending' : 'done' })
     load()
   }
 
@@ -38,15 +39,41 @@ export default function Goals() {
     load()
   }
 
-  const filtered = goals.filter(g =>
-    filter === 'all'     ? true :
+  async function clearCompleted() {
+    if (!window.confirm('Archive all completed goals? They move to history and leave the Done list.')) return
+    await tasksApi.cleanupGoals()
+    load()
+  }
+
+  // Timeline window: goals due on or before the end of the selected period.
+  // Overdue goals (due in the past) fall inside every window; undated goals
+  // (legacy — new goals require a date) only surface under "All".
+  const fmt = dt => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+  function periodEnd(tf) {
+    const d = new Date()
+    if (tf === 'day') return fmt(d)
+    if (tf === 'week') { const e = new Date(d); e.setDate(d.getDate() + 6); return fmt(e) }
+    if (tf === 'month') return fmt(new Date(d.getFullYear(), d.getMonth() + 1, 0))
+    if (tf === 'quarter') { const q = Math.floor(d.getMonth() / 3); return fmt(new Date(d.getFullYear(), q * 3 + 3, 0)) }
+    if (tf === 'year') return `${d.getFullYear()}-12-31`
+    return null // 'all'
+  }
+  const horizon = periodEnd(timeframe)
+  const inWindow = g => {
+    if (!g.due_date) return timeframe === 'all'
+    return horizon === null || g.due_date <= horizon
+  }
+
+  const windowGoals = goals.filter(inWindow)
+  const filtered = windowGoals.filter(g =>
     filter === 'pending' ? g.status === 'pending' :
     filter === 'done'    ? g.status === 'done' : true
   )
 
-  const total = goals.length
-  const done  = goals.filter(g => g.status === 'done').length
+  const total = windowGoals.length
+  const done  = windowGoals.filter(g => g.status === 'done').length
   const pct   = total === 0 ? 0 : Math.round((done / total) * 100)
+  const doneCount = goals.filter(g => g.status === 'done').length
 
   const grouped = categories.map(cat => ({
     cat,
@@ -58,7 +85,12 @@ export default function Goals() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        {doneCount > 0 && (
+          <button onClick={clearCompleted} className="btn-ghost text-sm">
+            Clear completed
+          </button>
+        )}
         <button
           onClick={() => { setEditTask(null); setShowModal(true) }}
           className="btn-primary text-sm"
@@ -67,7 +99,24 @@ export default function Goals() {
         </button>
       </div>
 
-      {/* Progress summary */}
+      {/* Timeline filter */}
+      <div className="flex gap-1 bg-charcoal-100 dark:bg-charcoal-800 rounded-lg p-1 overflow-x-auto">
+        {[['day', 'Day'], ['week', 'Week'], ['month', 'Month'], ['quarter', 'Quarter'], ['year', 'Year'], ['all', 'All']].map(([tf, label]) => (
+          <button
+            key={tf}
+            onClick={() => setTimeframe(tf)}
+            className={`flex-1 py-1 px-2 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
+              timeframe === tf
+                ? 'bg-white dark:bg-charcoal-600 text-charcoal-900 dark:text-gray-100 shadow-sm'
+                : 'text-charcoal-500 dark:text-charcoal-400'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Progress summary — reflects the selected timeline window */}
       {total > 0 && (
         <div className="bg-charcoal-50 dark:bg-charcoal-800 rounded-lg p-3">
           <div className="flex items-center justify-between text-sm mb-2">
@@ -83,7 +132,7 @@ export default function Goals() {
         </div>
       )}
 
-      {/* Filter tabs */}
+      {/* Status tabs */}
       <div className="flex gap-1 bg-charcoal-100 dark:bg-charcoal-800 rounded-lg p-1">
         {['pending', 'done', 'all'].map(f => (
           <button
@@ -127,7 +176,7 @@ export default function Goals() {
                     key={goal.id}
                     goal={goal}
                     color={catColor(goal.category)}
-                    onDone={() => markDone(goal.id)}
+                    onDone={() => toggleDone(goal)}
                     onEdit={() => { setEditTask(goal); setShowModal(true) }}
                     onDelete={() => setConfirmDeleteId(goal.id)}
                   />
@@ -144,7 +193,7 @@ export default function Goals() {
                     key={goal.id}
                     goal={goal}
                     color={catColor(goal.category)}
-                    onDone={() => markDone(goal.id)}
+                    onDone={() => toggleDone(goal)}
                     onEdit={() => { setEditTask(goal); setShowModal(true) }}
                     onDelete={() => setConfirmDeleteId(goal.id)}
                   />
@@ -194,10 +243,11 @@ function GoalCard({ goal, color, onDone, onEdit, onDelete }) {
   return (
     <div className={`card p-4 flex items-start gap-3 ${overdue ? 'border-red-500/40' : ''}`}>
       <button
-        onClick={done ? undefined : onDone}
+        onClick={onDone}
+        title={done ? 'Mark as not done' : 'Mark done'}
         className={`mt-0.5 shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
           done
-            ? 'border-orange-500 bg-orange-500 text-white'
+            ? 'border-orange-500 bg-orange-500 text-white hover:bg-orange-600'
             : 'border-charcoal-300 dark:border-charcoal-600 hover:border-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20'
         }`}
       >

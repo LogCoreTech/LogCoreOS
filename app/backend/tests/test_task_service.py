@@ -174,3 +174,43 @@ def test_skipped_task_stays_in_active_list(user_brain):
     task_service.update_task(USER, task["id"], {"status": "skipped"})
     active_ids = [t["id"] for t in task_service.list_tasks(USER)]
     assert task["id"] in active_ids
+
+
+def _make_goal(title="Ship v1", category="Work", due_date="2026-12-31"):
+    return {
+        "title": title,
+        "category": category,
+        "priority": "High",
+        "type": "goal",
+        "recurrence": None,
+        "due_date": due_date,
+        "due_time": None,
+        "notes": None,
+    }
+
+
+def test_completed_goals_survive_nightly_sweep(user_brain):
+    goal = task_service.add_task(USER, _make_goal())
+    task_service.update_task(USER, goal["id"], {"status": "done"})
+    _backdate_completed(goal["id"])  # completed "yesterday"
+    process_user(USER)  # nightly job runs
+    # Goal must still be in tasks.json (Goals "Done" view), NOT swept to history
+    active = task_service.list_tasks(USER)
+    assert any(t["id"] == goal["id"] for t in active)
+    assert task_service.list_history(USER) == []
+
+
+def test_cleanup_done_goals_archives_only_done_goals(user_brain):
+    done_goal = task_service.add_task(USER, _make_goal("Done goal"))
+    task_service.update_task(USER, done_goal["id"], {"status": "done"})
+    pending_goal = task_service.add_task(USER, _make_goal("Pending goal"))
+    done_todo = task_service.add_task(USER, _make_task("Done todo"))
+    task_service.update_task(USER, done_todo["id"], {"status": "done"})
+
+    archived = task_service.cleanup_done_goals(USER)
+    assert archived == 1
+    ids = {t["id"] for t in task_service.list_tasks(USER)}
+    assert done_goal["id"] not in ids        # archived
+    assert pending_goal["id"] in ids         # untouched
+    assert done_todo["id"] in ids            # not a goal — untouched
+    assert any(t["id"] == done_goal["id"] for t in task_service.list_history(USER))

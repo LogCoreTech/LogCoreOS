@@ -4,8 +4,8 @@ import { useNavigate } from 'react-router-dom'
 import { useWorkspace } from '../lib/workspace'
 import GoalsSection from './Goals'
 
-const DEFAULT_PRIORITY_ORDER = ['God', 'Family', 'Job', 'Personal Growth', 'Hobbies']
-const BASE_CATS = ['God', 'Family', 'Job', 'Personal Growth', 'Hobbies']
+const DEFAULT_PRIORITY_ORDER = ['Religion', 'Family', 'Job', 'Personal Growth', 'Hobbies']
+const BASE_CATS = ['Religion', 'Family', 'Job', 'Personal Growth', 'Hobbies']
 
 function Accordion({ title, children }) {
   const [open, setOpen] = useState(false)

@@ -1612,6 +1612,7 @@ function AutomationTokenRow() {
 function N8nCard() {
   const [url, setUrl]               = useState('http://n8n:5678')
   const [apiKey, setApiKey]         = useState('')
+  const [forceOn, setForceOn]       = useState(false)
   const [testing, setTesting]       = useState(false)
   const [saving, setSaving]         = useState(false)
   const [syncing, setSyncing]       = useState(false)
@@ -1641,7 +1642,7 @@ function N8nCard() {
     setSaving(true)
     setMsg(null)
     try {
-      await automationsApi.saveN8nConfig({ url: url.trim(), api_key: apiKey.trim() })
+      await automationsApi.saveN8nConfig({ url: url.trim(), api_key: apiKey.trim(), force_on: forceOn })
       flash(true, 'n8n configuration saved.')
     } catch (err) {
       flash(false, err.message || 'Save failed')
@@ -1713,6 +1714,11 @@ function N8nCard() {
             {saving ? 'Saving…' : 'Save Config'}
           </button>
         </div>
+        <label className="flex items-center gap-2 text-xs text-charcoal-500 dark:text-charcoal-400 mt-2">
+          <input type="checkbox" checked={forceOn} onChange={e => setForceOn(e.target.checked)} />
+          Keep the bundled n8n running even with no workflows (it otherwise auto-stops when idle,
+          and stops entirely when an external instance is attached).
+        </label>
       </form>
 
       <div className="mt-3 flex gap-2">

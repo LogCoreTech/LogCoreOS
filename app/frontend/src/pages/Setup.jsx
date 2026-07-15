@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { setup as setupApi } from '../lib/api'
 
-const BASE_CATEGORIES = ['God', 'Family', 'Job', 'Personal Growth', 'Hobbies']
+const BASE_CATEGORIES = ['Religion', 'Family', 'Job', 'Personal Growth', 'Hobbies']
 const BASE_CATEGORIES_BUSINESS = ['Revenue', 'Team', 'Clients', 'Operations', 'Growth']
 
 export default function Setup() {
@@ -59,6 +59,15 @@ export default function Setup() {
     setDragIdx(i)
   }
   function onDragEnd() { setDragIdx(null) }
+
+  // Arrow reorder — works on touch devices where HTML5 drag doesn't fire.
+  function move(i, dir) {
+    const j = i + dir
+    if (j < 0 || j >= categories.length) return
+    const next = [...categories]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    setCategories(next)
+  }
 
   async function finish() {
     setLoading(true)
@@ -175,7 +184,8 @@ export default function Setup() {
             <div className="space-y-4">
               <h2 className="font-semibold text-lg">Your Life Priorities</h2>
               <p className="text-sm text-charcoal-500 dark:text-charcoal-400">
-                Drag to reorder. The top item has the highest weight when scoring your tasks.
+                Reorder with the ↑/↓ arrows (or drag). The top item has the highest weight when
+                scoring your tasks. You can change this any time later, or skip it for now.
               </p>
 
               <ul className="space-y-2">
@@ -186,7 +196,7 @@ export default function Setup() {
                     onDragStart={() => onDragStart(i)}
                     onDragOver={e => onDragOver(e, i)}
                     onDragEnd={onDragEnd}
-                    className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-grab active:cursor-grabbing transition-colors ${
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors ${
                       dragIdx === i
                         ? 'border-orange-500 bg-orange-500/10'
                         : 'border-charcoal-200 dark:border-charcoal-700 bg-white dark:bg-charcoal-800'
@@ -196,13 +206,30 @@ export default function Setup() {
                       {i + 1}
                     </span>
                     <span className="flex-1 text-sm font-medium">{cat}</span>
+                    <div className="flex items-center">
+                      <button
+                        type="button"
+                        onClick={() => move(i, -1)}
+                        disabled={i === 0}
+                        aria-label="Move up"
+                        className="px-1.5 text-charcoal-400 hover:text-orange-500 disabled:opacity-30 disabled:hover:text-charcoal-400"
+                      >↑</button>
+                      <button
+                        type="button"
+                        onClick={() => move(i, 1)}
+                        disabled={i === categories.length - 1}
+                        aria-label="Move down"
+                        className="px-1.5 text-charcoal-400 hover:text-orange-500 disabled:opacity-30 disabled:hover:text-charcoal-400"
+                      >↓</button>
+                    </div>
                     {!BASE_CATEGORIES.includes(cat) && (
                       <button
+                        type="button"
                         onClick={() => removeCategory(cat)}
-                        className="text-charcoal-400 hover:text-red-500 text-xs"
+                        className="text-charcoal-400 hover:text-red-500 text-xs pl-1"
                       >✕</button>
                     )}
-                    <span className="text-charcoal-300 dark:text-charcoal-600">⠿</span>
+                    <span className="text-charcoal-300 dark:text-charcoal-600 cursor-grab active:cursor-grabbing hidden sm:inline">⠿</span>
                   </li>
                 ))}
               </ul>
@@ -221,8 +248,14 @@ export default function Setup() {
 
               <div className="flex gap-2">
                 <button onClick={() => setStep(1)} className="btn-ghost flex-1">← Back</button>
-                <button onClick={() => setStep(3)} className="btn-primary flex-1">Next →</button>
+                <button onClick={() => setStep(3)} className="btn-primary flex-1">Save & Continue →</button>
               </div>
+              <button
+                onClick={() => setStep(3)}
+                className="w-full text-xs text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200 pt-1"
+              >
+                Skip — use the default order
+              </button>
             </div>
           )}
 

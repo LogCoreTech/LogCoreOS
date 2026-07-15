@@ -36,11 +36,86 @@ def get_config() -> dict:
 
 
 def save_config(cfg: dict) -> None:
-    write_json(_CONFIG_PATH(), cfg)
+    """Merge into the stored config (preserves force_on unless supplied)."""
+    existing = read_json(_CONFIG_PATH(), default={})
+    existing.update({k: v for k, v in cfg.items() if v is not None})
+    write_json(_CONFIG_PATH(), existing)
 
 
 def is_configured() -> bool:
     return bool(get_config().get("api_key"))
+
+
+# ── Bundled-container lifecycle ────────────────────────────────────────────────
+# The bundled logcore-n8n container is only kept running when it is needed:
+# when at least one workflow is stored, or the admin forces it on. Attaching an
+# external n8n instance stops the bundled one. The app controls the container via
+# the Docker socket (same mechanism as restart_n8n / the tunnel container).
+
+_BUNDLED_HOSTS = ("n8n:5678", "logcore-n8n:5678", "localhost:5678", "127.0.0.1:5678")
+
+
+def is_external() -> bool:
+    """True when the configured URL points at an EXTERNAL n8n (not the bundled one)."""
+    cfg = read_json(_CONFIG_PATH(), default={})
+    url = (cfg.get("url") or "").strip()
+    if not url:
+        return False
+    return not any(h in url for h in _BUNDLED_HOSTS)
+
+
+def force_on() -> bool:
+    return bool(read_json(_CONFIG_PATH(), default={}).get("force_on"))
+
+
+def count_workflows() -> int:
+    """Total stored workflows across all users (personal) + the business index."""
+    total = len(read_json(system_automations_path(), default=[]) or [])
+    users_dir = brain_path() / "USERS"
+    if users_dir.exists():
+        for d in users_dir.iterdir():
+            if d.is_dir() and not d.name.startswith("_"):
+                total += len(read_json(automations_path(d.name), default=[]) or [])
+    return total
+
+
+def _bundled_container():
+    return docker_sdk.from_env().containers.get("logcore-n8n")
+
+
+def start_n8n() -> None:
+    try:
+        c = _bundled_container()
+        if c.status != "running":
+            c.start()
+    except Exception:
+        logger.exception("could not start logcore-n8n container")
+
+
+def stop_n8n() -> None:
+    try:
+        c = _bundled_container()
+        if c.status == "running":
+            c.stop()
+    except Exception:
+        logger.exception("could not stop logcore-n8n container")
+
+
+def reconcile() -> str:
+    """Start/stop the bundled n8n from the two signals + the admin override.
+    Returns a short decision string. Never raises."""
+    try:
+        if is_external():
+            stop_n8n()
+            return "stopped:external"
+        if force_on() or count_workflows() > 0:
+            start_n8n()
+            return "started"
+        stop_n8n()
+        return "stopped:idle"
+    except Exception:
+        logger.exception("n8n reconcile failed")
+        return "error"
 
 
 def _client() -> httpx.Client:

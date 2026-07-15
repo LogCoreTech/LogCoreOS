@@ -37,6 +37,7 @@ ALL_MODULE_IDS = [
     "team",
     "assets",
     "finance",
+    "contacts",
 ]
 
 _PERSONAL_MEMBER = {m: True for m in ALL_MODULE_IDS if m not in ("automations_business", "team")}
@@ -56,14 +57,17 @@ _BUSINESS_MEMBER = {
     "team": True,
     "assets": True,
     "finance": True,
+    "contacts": True,
 }
 
 
 def _guest_map(base: dict) -> dict:
-    """Guests never get finance by default — money data is the most sensitive
-    in the app, so it's opt-in per guest (m007 applies this to existing installs)."""
+    """Guests never get finance or contacts by default — money and people/PII
+    data are the most sensitive in the app, so they're opt-in per guest
+    (m007/m008 apply this to existing installs)."""
     guest = base.copy()
     guest["finance"] = False
+    guest["contacts"] = False
     return guest
 
 

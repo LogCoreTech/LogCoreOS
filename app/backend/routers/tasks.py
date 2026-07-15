@@ -90,6 +90,16 @@ def add_task(
     return task_service.add_task(current_user["name"], req.model_dump(), workspace)
 
 
+@router.post("/goals/cleanup")
+def cleanup_goals(
+    current_user: dict = Depends(_require_tasks),
+    workspace: str = Depends(get_workspace),
+):
+    """Archive all completed goals to history (the Goals 'Clear completed' action)."""
+    archived = task_service.cleanup_done_goals(current_user["name"], workspace)
+    return {"ok": True, "archived": archived}
+
+
 def _validate_task_id(task_id: str) -> str:
     try:
         UUID(task_id)

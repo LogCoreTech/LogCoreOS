@@ -10,6 +10,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+**Contacts (CRM) module**
+- New **Contacts** module (personal & business) for people and organizations — clients, leads, vendors, friends. Rich records (type, multiple emails/phones, address, company link, tags, birthday, status, notes) plus **admin-defined custom fields**
+- **Interactions timeline** (call/email/meeting/text/note) and a **deals pipeline** (customizable stages, kanban + list). Optional **follow-up dates** surface as reminders. Marking a deal *Won* links out to create an invoice in Finance
+- **Contact-linked payees**: pick or quick-create a contact when logging a transaction; bank/CSV imports auto-suggest a matching contact. A contact's card shows what you've spent/received with them, scoped to the finance books you can actually see
+- **Invoicing now uses contacts** — the old add-client form is replaced by a contact picker
+- **Sharing** like the rest of the app: share a contact (read/contribute/edit) with a person, the household/team pool, or a role; contribute = log interactions & advance deals without editing the core record; hidden-from beats sharing; personal shares are accept/decline requests
+- **AI + automations**: the AI can look up, create, and update contacts, log interactions, and add deals (writes behind the approval prompt, and it searches first to avoid duplicates); n8n workflows get a **write-focused** API (create/append/dedup-lookup, **no bulk export** — a leaked token can't dump your contact list)
+- **CSV import/export** to onboard an existing contact list
+
+**Goals**
+- Completed goals **no longer disappear** — they stay in Done until you click **Clear completed** (which archives them). A **timeline filter** (Today / Week / Month / Quarter / Year) shows only goals due in that window, and the progress count follows it. Creating a goal now **requires a target date**, and the AI asks for one if you don't give it
+
+**Automations (n8n)**
+- The bundled n8n now **only runs when needed** — it starts on your first workflow, stops when idle, and stands aside entirely when you attach an external n8n instance (with an admin override to keep it on)
+
+**Notes**
+- **Share notes and folders** (read / edit-content / full) with people, the household/team pool, or a role — sharing a folder shares everything inside it. Household & team shared notes; accept/decline requests; leave anytime; read-only view for view-only shares
+- **Drag a note into a folder** on desktop and mobile
+
+**Finance**
+- New books seed **workspace-aware** categories and tax buckets (personal vs business), plus more income options than just Salary. Recurring bills and one-off planned items can now carry a **deductible flag + tax bucket**
+- **Archived books** are reachable again via a *Show archived* toggle (with Unarchive)
+- Household/team books have a clear **＋ Account** affordance
+
+**Setup & misc**
+- The Setup **Life Priorities** step now has ↑/↓ reorder buttons (works on touch) and a **Skip** option — fixing a spot where a beta tester got stuck
+- Default life priority renamed **God → Religion** (new setups only; existing users unchanged)
+- Transaction payee field reads **"Paid to"** for expenses and **"Pay from"** for income
+- AI chat: cleaner toolbar (icon memory buttons, fixed-width mode selector with a Plan icon) and a simpler greeting
+
 **Finance module (Phase E — sharing & employee access)**
 - **Share a book** with a person, the whole team/household, or a role — as read, edit, or **contribute**. Sharing is a request: each person gets an Accept/Decline notification and the book only appears for them once they accept (and they can Leave later)
 - **Contribute access is the employee expense-submission mode**: you pick exactly what the person can do — add expenses and/or income, edit their own entries, see balances, see everyone's entries. Defaults are the tightest: submit expenses only, see only their own entries, **no balances**. All enforced server-side: capped viewers get balance-stripped responses and filtered transaction lists, not hidden UI

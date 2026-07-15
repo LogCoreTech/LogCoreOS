@@ -41,12 +41,29 @@ def _build_context(user_name: str, workspace: str = "personal") -> str:
 
     Profile.md is personal-only. Memory and tasks are scoped to the active workspace.
     """
+    from services import profile_service
+
     parts = []
     base = ws_path(user_name, workspace)
 
     pf = profile_path(user_name)
     if pf.exists():
         parts.append(f"# User Profile\n\n{_safe(read_markdown(pf))}")
+
+    # Life priorities for the ACTIVE workspace (personal profile order in personal;
+    # business profile order in business) plus the relevant shared-pool order. The
+    # agent must weigh these before creating tasks or goals.
+    try:
+        own_order = profile_service.get_priority_order(user_name, workspace)
+        pool_user = "_team" if workspace == "business" else "_household"
+        pool_label = "Team" if workspace == "business" else "Household"
+        pool_order = profile_service.get_priority_order(pool_user)
+        prio_lines = f"Your {workspace} priorities (highest first): {', '.join(own_order)}"
+        if pool_order:
+            prio_lines += f"\n{pool_label} pool priorities: {', '.join(pool_order)}"
+        parts.append(f"# Life Priorities\n\n{_safe(prio_lines)}")
+    except Exception:
+        pass
 
     ltm = base / "Long_Term_Memory.md"
     if ltm.exists():
@@ -149,7 +166,12 @@ async def chat(
     tool_guidance = (
         (
             "Tool guidance:\n"
-            "- Goals the user wants to complete (lose weight, learn Spanish) → tasks with type='goal'\n"
+            "- BEFORE creating any task or goal, consult the Life Priorities list above for the "
+            "active context (the user's own priorities; use the Household/Team pool priorities when "
+            "the item belongs to that shared pool). Align the task's category with those priorities.\n"
+            "- Goals the user wants to complete (lose weight, learn Spanish) → tasks with type='goal'. "
+            "A goal MUST have a target date (due_date). If the user hasn't given one, ask for it "
+            "before creating the goal — never invent a date.\n"
             "- Calendar appointments/events → tasks with type='appointment', due_date, and optionally due_time\n"
             "- Notes → use list_notes, create_note, update_note, delete_note\n"
             "- Profile details (occupation, health, family, life mission, values, AI preferences) → get_profile then update_profile\n"

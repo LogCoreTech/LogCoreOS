@@ -172,6 +172,7 @@ class TransactionCreate(BaseModel):
     account_id: str
     category: str = Field(default="", max_length=40)
     payee: str = Field(default="", max_length=120)
+    payee_contact_id: str | None = Field(default=None, max_length=64)
     notes: str = Field(default="", max_length=2000)
     deductible: bool = False
     tax_category: str | None = Field(default=None, max_length=60)
@@ -183,6 +184,7 @@ class TransactionUpdate(BaseModel):
     account_id: str | None = None
     category: str | None = Field(default=None, max_length=40)
     payee: str | None = Field(default=None, max_length=120)
+    payee_contact_id: str | None = Field(default=None, max_length=64)
     notes: str | None = Field(default=None, max_length=2000)
     deductible: bool | None = None
     tax_category: str | None = Field(default=None, max_length=60)

@@ -167,6 +167,16 @@ def job_simplefin_sync():
         logger.exception("simplefin sync failed")
 
 
+def job_n8n_reconcile():
+    """Boot reconcile: keep the bundled n8n running only when needed."""
+    try:
+        from services import n8n_service
+
+        logger.info("n8n reconcile: %s", n8n_service.reconcile())
+    except Exception:
+        logger.exception("n8n reconcile failed")
+
+
 def job_finance_nightly():
     """Missed-bill flags, budget alerts and balance-deviation checks."""
     try:
@@ -175,6 +185,16 @@ def job_finance_nightly():
         run_nightly()
     except Exception:
         logger.exception("finance nightly failed")
+
+
+def job_contacts_followups():
+    """Notify owners of due CRM follow-ups (interactions + deals)."""
+    try:
+        from services.contacts_service import run_followup_reminders
+
+        run_followup_reminders()
+    except Exception:
+        logger.exception("contacts follow-up sweep failed")
 
 
 def _custom_job_id(user_name: str, suggestion_id: str) -> str:
@@ -274,6 +294,12 @@ def start():
     )
     scheduler.add_job(job_simplefin_sync, IntervalTrigger(hours=12), id="simplefin_periodic")
     scheduler.add_job(job_finance_nightly, CronTrigger(hour=7, minute=30), id="finance_nightly")
+    scheduler.add_job(
+        job_contacts_followups, CronTrigger(hour=8, minute=0), id="contacts_followups"
+    )
+    scheduler.add_job(
+        job_n8n_reconcile, "date", run_date=_dt.now() + _td(seconds=100), id="n8n_reconcile_boot"
+    )
     scheduler.start()
     _load_custom_jobs()
     logger.info(

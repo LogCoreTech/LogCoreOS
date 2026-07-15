@@ -6,7 +6,7 @@ from pathlib import Path
 
 from services.file_service import read_json, user_path, write_json, write_markdown, ws_path
 
-DEFAULT_PRIORITY_ORDER = ["God", "Family", "Job", "Personal Growth", "Hobbies"]
+DEFAULT_PRIORITY_ORDER = ["Religion", "Family", "Job", "Personal Growth", "Hobbies"]
 
 
 def _json_path(user_name: str, workspace: str = "personal") -> Path:

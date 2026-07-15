@@ -31,17 +31,21 @@ function allFolderPaths(items) {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function TreeNode({ node, depth, selectedPath, openFolders, onSelectNote, onToggleFolder, onAction }) {
+function TreeNode({ node, depth, selectedPath, openFolders, onSelectNote, onToggleFolder, onAction, onNotePointerDown, dragActive, overFolder }) {
   const isOpen = openFolders.has(node.path)
   const isSelected = selectedPath === node.path
   const indent = depth * 16
+  const isDropTarget = dragActive && overFolder === node.path
 
   if (node.type === 'folder') {
     return (
       <div>
         <div
+          data-folder-path={node.path}
           className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg cursor-pointer group transition-colors ${
-            isSelected
+            isDropTarget
+              ? 'ring-2 ring-orange-500 bg-orange-500/15'
+              : isSelected
               ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400'
               : 'hover:bg-charcoal-100 dark:hover:bg-charcoal-800'
           }`}
@@ -53,6 +57,7 @@ function TreeNode({ node, depth, selectedPath, openFolders, onSelectNote, onTogg
           </span>
           <span className="text-base leading-none shrink-0">{isOpen ? '📂' : '📁'}</span>
           <span className="flex-1 text-sm font-medium truncate">{node.name}</span>
+          {node._owner && <span className="text-[10px] shrink-0 text-blue-500" title={`Shared: ${node._owner}`}>{node._owner === 'household' ? '🏠' : node._owner === 'team' ? '🧑‍🤝‍🧑' : '↗'}</span>}
           <button
             onClick={e => { e.stopPropagation(); onAction('folderMenu', node) }}
             className="opacity-0 group-hover:opacity-100 text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200 px-1 text-xs shrink-0 transition-opacity"
@@ -71,6 +76,9 @@ function TreeNode({ node, depth, selectedPath, openFolders, onSelectNote, onTogg
             onSelectNote={onSelectNote}
             onToggleFolder={onToggleFolder}
             onAction={onAction}
+            onNotePointerDown={onNotePointerDown}
+            dragActive={dragActive}
+            overFolder={overFolder}
           />
         ))}
       </div>
@@ -79,16 +87,18 @@ function TreeNode({ node, depth, selectedPath, openFolders, onSelectNote, onTogg
 
   return (
     <div
+      onPointerDown={e => onNotePointerDown(e, node)}
+      style={{ paddingLeft: `${8 + indent}px`, touchAction: dragActive ? 'none' : undefined }}
       className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg cursor-pointer group transition-colors ${
         isSelected
           ? 'bg-orange-500/15 border border-orange-500/30 text-orange-700 dark:text-orange-300'
           : 'hover:bg-charcoal-100 dark:hover:bg-charcoal-800'
       }`}
-      style={{ paddingLeft: `${8 + indent}px` }}
       onClick={() => onSelectNote(node.path)}
     >
       <span className="text-base leading-none shrink-0">📝</span>
       <span className="flex-1 text-sm truncate">{node.name}</span>
+      {node._owner && <span className="text-[10px] shrink-0 text-blue-500" title={`Shared: ${node._owner}`}>{node._owner === 'household' ? '🏠' : node._owner === 'team' ? '🧑‍🤝‍🧑' : '↗'}</span>}
       <button
         onClick={e => { e.stopPropagation(); onAction('noteMenu', node) }}
         className="opacity-0 group-hover:opacity-100 text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200 px-1 text-xs shrink-0 transition-opacity"
@@ -102,31 +112,77 @@ function TreeNode({ node, depth, selectedPath, openFolders, onSelectNote, onTogg
 
 // ── Context menu ──────────────────────────────────────────────────────────────
 
-function ContextMenu({ node, folders, onClose, onRename, onMove, onDelete }) {
+function ContextMenu({ node, folders, onClose, onRename, onMove, onDelete, onShare, onLeave }) {
+  // You can only reshare/manage your OWN items (no _owner). Shared-to-you items
+  // offer Leave instead.
+  const own = !node._owner
+  const btn = 'w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-charcoal-100 dark:hover:bg-charcoal-700'
+  const danger = 'w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400'
   if (node.type === 'folder') {
     return (
       <div className="card p-1 w-44 shadow-lg z-50">
-        <button onClick={() => { onClose(); onRename(node) }} className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-charcoal-100 dark:hover:bg-charcoal-700">
-          Rename folder
-        </button>
-        <button onClick={() => { onClose(); onDelete(node) }} className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400">
-          Delete folder…
-        </button>
+        {own && <button onClick={() => { onClose(); onRename(node) }} className={btn}>Rename folder</button>}
+        {own && <button onClick={() => { onClose(); onShare(node) }} className={btn}>Share…</button>}
+        {own && <button onClick={() => { onClose(); onDelete(node) }} className={danger}>Delete folder…</button>}
+        {!own && <button onClick={() => { onClose(); onLeave(node) }} className={danger}>Leave</button>}
       </div>
     )
   }
   return (
     <div className="card p-1 w-44 shadow-lg z-50">
-      <button onClick={() => { onClose(); onRename(node) }} className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-charcoal-100 dark:hover:bg-charcoal-700">
-        Rename note
-      </button>
-      <button onClick={() => { onClose(); onMove(node) }} className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-charcoal-100 dark:hover:bg-charcoal-700">
-        Move to folder
-      </button>
-      <button onClick={() => { onClose(); onDelete(node) }} className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400">
-        Delete note…
-      </button>
+      {own && <button onClick={() => { onClose(); onRename(node) }} className={btn}>Rename note</button>}
+      {own && <button onClick={() => { onClose(); onMove(node) }} className={btn}>Move to folder</button>}
+      {own && <button onClick={() => { onClose(); onShare(node) }} className={btn}>Share…</button>}
+      {own && <button onClick={() => { onClose(); onDelete(node) }} className={danger}>Delete note…</button>}
+      {!own && <button onClick={() => { onClose(); onLeave(node) }} className={danger}>Leave</button>}
     </div>
+  )
+}
+
+// ── Share modal ─────────────────────────────────────────────────────────────
+function NoteShareModal({ node, onClose, onSaved }) {
+  const [members, setMembers] = useState([])
+  const [target, setTarget] = useState('')
+  const [access, setAccess] = useState('read')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    notesApi.members().then(r => setMembers(Array.isArray(r) ? r : [])).catch(() => {})
+  }, [])
+
+  async function save() {
+    if (!target) { setError('Pick who to share with'); return }
+    setBusy(true); setError('')
+    try {
+      await notesApi.updateAccess({ path: node.path, shared_with: [{ target, access }] })
+      onSaved()
+    } catch (e) { setError(e.message || 'Share failed'); setBusy(false) }
+  }
+
+  return (
+    <Modal title={`Share “${node.name}”`} onClose={onClose}>
+      <div className="space-y-3">
+        <p className="text-xs text-charcoal-500 dark:text-charcoal-400">
+          Sharing a folder shares everything inside it. They get a request to accept.
+        </p>
+        <select className="input" value={target} onChange={e => setTarget(e.target.value)}>
+          <option value="">Who…</option>
+          <option value="household">Everyone (household)</option>
+          {members.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
+        </select>
+        <select className="input" value={access} onChange={e => setAccess(e.target.value)}>
+          <option value="read">Can view</option>
+          <option value="contribute">Can edit content</option>
+          <option value="edit">Full access</option>
+        </select>
+        {error && <p className="text-sm text-red-500">{error}</p>}
+        <div className="flex gap-2">
+          <button onClick={onClose} className="btn-ghost flex-1">Cancel</button>
+          <button onClick={save} disabled={busy} className="btn-primary flex-1">{busy ? 'Sharing…' : 'Share'}</button>
+        </div>
+      </div>
+    </Modal>
   )
 }
 
@@ -158,12 +214,17 @@ export default function Notes() {
   const [saved, setSaved]           = useState(false)
   const [error, setError]           = useState('')
   const [contextMenu, setContextMenu] = useState(null)  // {node, x, y}
+  const [shareModal, setShareModal] = useState(null)    // {node}
   const [modal, setModal]           = useState(null)    // {type, item?}
   const [modalInput, setModalInput] = useState('')
   const [modalTarget, setModalTarget] = useState('')
   const [modalBusy, setModalBusy]   = useState(false)
   const [showSidebar, setShowSidebar] = useState(true)
+  const [dragActive, setDragActive] = useState(false)
+  const [overFolder, setOverFolder] = useState(null)   // folder path ('' = root) under the pointer
   const autoSaveTimer = useRef(null)
+  const dragRef = useRef(null)
+  const overFolderRef = useRef(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -179,6 +240,76 @@ export default function Notes() {
   }, [workspace])
 
   useEffect(() => { load() }, [load])
+
+  // ── Drag a note into a folder (desktop pointer + touch long-press) ────────────
+  async function moveNoteTo(node, targetFolder) {
+    if (!node || node.type !== 'note') return
+    if (parentOf(node.path) === targetFolder) return  // already there
+    const toPath = targetFolder ? `${targetFolder}/${node.name}` : node.name
+    try {
+      await notesApi.move(node.path, toPath, 'note')
+      if (note?.path === node.path) {
+        setNote(prev => ({ ...prev, path: toPath }))
+        setSelectedPath(toPath)
+      }
+      await load()
+    } catch (e) {
+      setError(e.message || 'Could not move note.')
+    }
+  }
+
+  function startNoteDrag(e, node) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    dragRef.current = { node, startX: e.clientX, startY: e.clientY, active: false }
+    let longPress = null
+
+    const begin = () => {
+      if (!dragRef.current) return
+      dragRef.current.active = true
+      setDragActive(true)
+      document.body.style.userSelect = 'none'
+    }
+    if (e.pointerType === 'touch') longPress = setTimeout(begin, 350)
+
+    const onMove = ev => {
+      const d = dragRef.current
+      if (!d) return
+      const dist = Math.hypot(ev.clientX - d.startX, ev.clientY - d.startY)
+      if (!d.active) {
+        if (e.pointerType === 'touch') {
+          if (dist > 10) cleanup()   // moved before long-press → treat as scroll, abort
+          return
+        }
+        if (dist < 8) return          // mouse: small movement, not a drag yet
+        begin()
+      }
+      ev.preventDefault()
+      const el = document.elementFromPoint(ev.clientX, ev.clientY)
+      const holder = el && el.closest('[data-folder-path]')
+      const path = holder ? holder.getAttribute('data-folder-path') : null
+      overFolderRef.current = path
+      setOverFolder(path)
+    }
+    const onUp = () => {
+      const d = dragRef.current
+      if (d && d.active && overFolderRef.current !== null) moveNoteTo(d.node, overFolderRef.current)
+      cleanup()
+    }
+    function cleanup() {
+      clearTimeout(longPress)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+      dragRef.current = null
+      overFolderRef.current = null
+      setDragActive(false)
+      setOverFolder(null)
+      document.body.style.userSelect = ''
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+  }
 
   // Auto-save 1.5 s after the user stops typing
   useEffect(() => {
@@ -209,8 +340,11 @@ export default function Notes() {
     }
   }
 
+  const selectedItem = items.find(i => i.path === selectedPath)
+  const readOnly = selectedItem?._access === 'read'
+
   async function save() {
-    if (!note) return
+    if (!note || readOnly) return
     setSaving(true)
     setError('')
     try {
@@ -222,6 +356,12 @@ export default function Notes() {
     } finally {
       setSaving(false)
     }
+  }
+
+  async function handleLeave(node) {
+    if (!window.confirm(`Leave "${node.name}"? You'll lose access unless re-shared.`)) return
+    try { await notesApi.leave(node.path); if (note?.path === node.path) setNote(null); load() }
+    catch (e) { setError(e.message || 'Could not leave.') }
   }
 
   function toggleFolder(path) {
@@ -394,8 +534,14 @@ export default function Notes() {
         </button>
       </div>
 
-      {/* Tree */}
-      <div className="flex-1 overflow-y-auto px-1 py-2">
+      {/* Tree — the container is the root ("no folder") drop target */}
+      <div
+        data-folder-path=""
+        style={{ touchAction: dragActive ? 'none' : undefined }}
+        className={`flex-1 overflow-y-auto px-1 py-2 ${
+          dragActive && overFolder === '' ? 'ring-2 ring-inset ring-orange-500/60 rounded-lg' : ''
+        }`}
+      >
         {loading ? (
           <div className="space-y-1 px-2">
             {[1,2,3].map(i => <div key={i} className="h-8 rounded-lg bg-charcoal-100 dark:bg-charcoal-800 animate-pulse" />)}
@@ -419,6 +565,9 @@ export default function Notes() {
               onAction={(type, n) => {
                 setContextMenu({ node: n })
               }}
+              onNotePointerDown={startNoteDrag}
+              dragActive={dragActive}
+              overFolder={overFolder}
             />
           ))
         )}
@@ -434,8 +583,17 @@ export default function Notes() {
             onRename={node => openModal('rename', node)}
             onMove={node => openModal('move', node)}
             onDelete={node => openModal(node.type === 'folder' ? 'deleteFolder' : 'deleteNote', node)}
+            onShare={node => setShareModal({ node })}
+            onLeave={handleLeave}
           />
         </div>
+      )}
+      {shareModal && (
+        <NoteShareModal
+          node={shareModal.node}
+          onClose={() => setShareModal(null)}
+          onSaved={() => { setShareModal(null); load() }}
+        />
       )}
     </div>
   )
@@ -456,7 +614,7 @@ export default function Notes() {
           {note.path}
         </p>
         <span className="text-xs text-charcoal-400 dark:text-charcoal-500 shrink-0">
-          {saving ? 'Saving…' : saved ? 'Saved ✓' : ''}
+          {readOnly ? 'Read-only' : saving ? 'Saving…' : saved ? 'Saved ✓' : ''}
         </span>
       </div>
 
@@ -466,6 +624,7 @@ export default function Notes() {
         value={editContent}
         onChange={e => setEditContent(e.target.value)}
         spellCheck={false}
+        readOnly={readOnly}
         placeholder="Start writing…"
         className="flex-1 w-full font-mono text-sm p-4 bg-white dark:bg-charcoal-900 resize-none focus:outline-none leading-relaxed overflow-x-hidden"
       />

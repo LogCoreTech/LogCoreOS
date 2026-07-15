@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
 import { ALL_MODULES, getShortcutsForUser } from '../lib/constants'
-import { suggestions as sugApi, assets as assetsApi, finance as financeApi } from '../lib/api'
+import { suggestions as sugApi, assets as assetsApi, finance as financeApi, contacts as contactsApi, notes as notesApi } from '../lib/api'
 
 const ADMIN_NAV = { to: '/admin', icon: '⬡', label: 'Admin' }
 
@@ -21,6 +21,8 @@ function NotifBell() {
     if (action?.type === 'open_inbox') return `/automations?view=inbox&inbox=${action.inbox_id || ''}`
     if (action?.type === 'open_admin_banking') return '/admin'
     if (action?.type === 'open_finance_book') return `/finance?book=${action.book_id || ''}`
+    if (action?.type === 'open_contact') return '/contacts'
+    if (action?.type === 'notes_share') return null  // request → Accept/Decline, not a nav
     return null
   }
 
@@ -67,6 +69,8 @@ function NotifBell() {
     setNotifs(prev => prev.map(x => x.id === n.id ? { ...x, status: 'resolved', read: true } : x))
     try {
       if (n.action?.type === 'finance_share') await financeApi.respondShare(n.id, accept)
+      else if (n.action?.type === 'contacts_share') await contactsApi.respondShare(n.id, accept)
+      else if (n.action?.type === 'notes_share') await notesApi.respondShare(n.id, accept)
       else await assetsApi.respondShare(n.id, accept)
     } catch { /* keep resolved locally */ }
     load()

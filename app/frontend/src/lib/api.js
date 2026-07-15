@@ -113,6 +113,7 @@ export const tasks = {
   add:      (task)                         => post('/tasks', task),
   update:   (id, updates)                  => patch(`/tasks/${id}`, updates),
   remove:   (id)                           => del(`/tasks/${id}`),
+  cleanupGoals: ()                         => post('/tasks/goals/cleanup', {}),
 }
 
 export const priorities = {
@@ -362,6 +363,47 @@ export const finance = {
   },
 }
 
+export const contacts = {
+  list:         (includeArchived = false) => get(`/contacts${includeArchived ? '?include_archived=true' : ''}`),
+  get:          (id)                => get(`/contacts/${id}`),
+  create:       (data)              => post('/contacts', data),
+  update:       (id, data)          => patch(`/contacts/${id}`, data),
+  remove:       (id)                => del(`/contacts/${id}`),
+  archive:      (id)                => post(`/contacts/${id}/archive`, {}),
+  unarchive:    (id)                => post(`/contacts/${id}/unarchive`, {}),
+  interactions: (id)                => get(`/contacts/${id}/interactions`),
+  addInteraction:    (id, data)     => post(`/contacts/${id}/interactions`, data),
+  updateInteraction: (id, iid, data) => patch(`/contacts/${id}/interactions/${iid}`, data),
+  removeInteraction: (id, iid)      => del(`/contacts/${id}/interactions/${iid}`),
+  deals:        (id)                => get(`/contacts/${id}/deals`),
+  addDeal:      (id, data)          => post(`/contacts/${id}/deals`, data),
+  updateDeal:   (id, did, data)     => patch(`/contacts/${id}/deals/${did}`, data),
+  removeDeal:   (id, did)           => del(`/contacts/${id}/deals/${did}`),
+  finance:      (id)                => get(`/contacts/${id}/finance`),
+  pipeline:     ()                  => get('/contacts/pipeline'),
+  setPipeline:  (stages)            => request('PUT', '/contacts/pipeline', { stages }),
+  fields:       ()                  => get('/contacts/fields'),
+  setFields:    (fields)            => request('PUT', '/contacts/fields', { fields }),
+  updateAccess: (id, data)          => request('PUT', `/contacts/${id}/access`, data),
+  respondShare: (notifId, accept)   => post('/contacts/shares/respond', { notif_id: notifId, accept }),
+  leave:        (id)                => post(`/contacts/${id}/leave`, {}),
+  members:      ()                  => get('/contacts/members'),
+  roles:        ()                  => get('/contacts/roles'),
+  csvPreview:   (file)              => requestFile('POST', '/contacts/import/csv', file),
+  csvCommit:    (rows)              => post('/contacts/import/csv/commit', { rows }),
+  exportCsv:    async () => {
+    const res = await fetch(`${BASE}/contacts/export/csv`, { credentials: 'include', headers: headers() })
+    if (!res.ok) throw new Error('Export failed')
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'contacts.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  },
+}
+
 export const notes = {
   list:         ()                            => get('/notes'),
   get:          (path)                        => get(`/notes/file/${encodePath(path)}`),
@@ -371,6 +413,11 @@ export const notes = {
   createFolder: (path)                        => post('/notes/folder', { path }),
   removeFolder: (path)                        => del(`/notes/folder/${encodePath(path)}`),
   move:         (from_path, to_path, type)    => post('/notes/move', { from_path, to_path, type }),
+  updateAccess: (data)                        => request('PUT', '/notes/access', data),
+  respondShare: (notifId, accept)            => post('/notes/shares/respond', { notif_id: notifId, accept }),
+  leave:        (path)                        => post('/notes/leave', { path }),
+  members:      ()                            => get('/notes/members'),
+  roles:        ()                            => get('/notes/roles'),
 }
 
 export const journal = {

@@ -238,6 +238,13 @@ def _validate_recurring(book: dict, data: dict, partial: bool = False) -> dict:
         out["autopay"] = bool(data["autopay"])
     if "active" in data:
         out["active"] = bool(data["active"])
+    if "deductible" in data:
+        out["deductible"] = bool(data["deductible"])
+    if "tax_category" in data:
+        tc = (data.get("tax_category") or "").strip()
+        if tc and tc not in book.get("tax_categories", []):
+            raise ValueError(f"Unknown tax bucket: {tc!r}")
+        out["tax_category"] = tc or None
     return out
 
 
@@ -250,6 +257,8 @@ def add_recurring(store_user: str, workspace: str, book: dict, data: dict, creat
         "active": True,
         "last_paid": None,
         "missed_notified_for": None,
+        "deductible": False,
+        "tax_category": None,
         "created_by": created_by,
         "created_at": _now(),
         **fields,
@@ -329,6 +338,19 @@ def match_bill(store_user: str, workspace: str, book: dict, tx: dict) -> dict | 
         item["missed_notified_for"] = None
         items[i] = item
         _save_recurring(store_user, workspace, book["id"], items)
+        # Carry the recurring item's tax flags onto the matched tx if it lacks them.
+        prop: dict = {}
+        if item.get("deductible") and not tx.get("deductible"):
+            prop["deductible"] = True
+        if item.get("tax_category") and not tx.get("tax_category"):
+            prop["tax_category"] = item["tax_category"]
+        if prop:
+            try:
+                finance_service.update_transaction(
+                    store_user, workspace, book["id"], tx["id"], prop
+                )
+            except Exception:
+                logger.exception("recurring tax propagation failed")
         return item
     return None
 
@@ -414,6 +436,10 @@ def add_planned(store_user: str, workspace: str, book: dict, data: dict, created
         item_date = date.fromisoformat(data.get("date") or "").isoformat()
     except (TypeError, ValueError):
         raise ValueError("date must be YYYY-MM-DD")
+    deductible = bool(data.get("deductible", False))
+    tax_category = (data.get("tax_category") or "").strip() or None
+    if tax_category and tax_category not in book.get("tax_categories", []):
+        raise ValueError(f"Unknown tax bucket: {tax_category!r}")
     item = {
         "id": str(uuid.uuid4()),
         "name": name,
@@ -421,6 +447,8 @@ def add_planned(store_user: str, workspace: str, book: dict, data: dict, created
         "amount_cents": amount,
         "account_id": data["account_id"],
         "done": False,
+        "deductible": deductible,
+        "tax_category": tax_category,
         "created_by": created_by,
         "created_at": _now(),
     }
@@ -460,6 +488,13 @@ def update_planned(
             allowed["account_id"] = updates["account_id"]
         if "done" in updates:
             allowed["done"] = bool(updates["done"])
+        if "deductible" in updates:
+            allowed["deductible"] = bool(updates["deductible"])
+        if "tax_category" in updates:
+            tc = (updates["tax_category"] or "").strip() or None
+            if tc and tc not in book.get("tax_categories", []):
+                raise ValueError(f"Unknown tax bucket: {tc!r}")
+            allowed["tax_category"] = tc
         items[i] = {**item, **allowed}
         _save_planned(store_user, workspace, book["id"], items)
         return items[i]

@@ -165,6 +165,22 @@ def m007_finance_guest_disabled(brain: Path) -> None:
     write_json(features_file, data)
 
 
+def m008_contacts_guest_disabled(brain: Path) -> None:
+    """Disable the new Contacts (CRM) module for the built-in guest role on
+    existing installs — contacts hold PII, so guests must be granted access
+    explicitly. Runs once; an admin re-enabling it sticks."""
+    features_file = brain / "_system" / "features.json"
+    if not features_file.exists():
+        return  # fresh install — init_features() seeds guest with contacts off
+    data = read_json(features_file, default={})
+    roles = data.get("roles") or {}
+    guest = roles.get("guest")
+    if guest is None or "contacts" in guest:
+        return
+    guest["contacts"] = False
+    write_json(features_file, data)
+
+
 # Ordered list — append new migrations here; never reorder or remove
 MIGRATIONS: list[tuple[str, MigrationFn]] = [
     ("m001_task_type_field", m001_task_type_field),
@@ -174,6 +190,7 @@ MIGRATIONS: list[tuple[str, MigrationFn]] = [
     ("m005_asset_template_ids", m005_asset_template_ids),
     ("m006_seed_folder_template", m006_seed_folder_template),
     ("m007_finance_guest_disabled", m007_finance_guest_disabled),
+    ("m008_contacts_guest_disabled", m008_contacts_guest_disabled),
 ]
 
 # ── Runner ─────────────────────────────────────────────────────────────────────

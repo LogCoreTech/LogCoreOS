@@ -130,7 +130,7 @@ The module registry lives in `app/frontend/src/lib/constants.js` (`ALL_MODULES`)
 
 Backend enforcement: `require_module("module_id")` is a FastAPI dependency factory that returns 403 if the module is in `user["disabled_modules"]` for the current workspace.
 
-Valid module IDs: `dashboard`, `tasks`, `goals`, `calendar`, `household`, `notes`, `journal`, `chat`, `automations`, `automations_business`, `home`, `team`, `assets`, `finance`
+Valid module IDs: `dashboard`, `tasks`, `goals`, `calendar`, `household`, `notes`, `journal`, `chat`, `automations`, `automations_business`, `home`, `team`, `assets`, `finance`, `contacts`
 
 ### Workspace Switching
 Users can have one or both of two workspaces: `personal` and `business`. The active workspace is stored in `localStorage('lc_ws')` and sent on every API call as the `X-Workspace: personal|business` request header.
@@ -399,11 +399,26 @@ Inside the Automations module (no separate module — owner decision 2026-07-12)
 - **Notifications**: one batched notification per POST per recipient via `suggestions_service.notify_user()` — action `{type:"open_inbox", workspace, inbox_id}` (NotifBell **View →** switches workspace if needed) + push deep link `/automations?view=inbox&inbox=<id>`; `Automations.jsx` consumes those query params.
 - **Gating**: same as the rest of the router — `require_module("automations")`; the business tab is hidden client-side by `automations_business` (established pattern).
 
+## Contacts (CRM) Module
+
+The Contacts module (`pages/Contacts.jsx`, `routers/contacts.py`, `services/contacts_service.py`, `services/contacts_index.py`) is the CRM — both workspaces, member-default-on / **guest-off** (m008). The **Contact is the canonical person/company**; Finance payees (`payee_contact_id` on transactions) and invoice clients (book client `contact_id`) both link to it (the invoice client form is a `ContactPicker`). Storage `ws_path/Contacts/{contacts,interactions,deals,pipeline}.json`; admin custom-field defs at `_system/contact_fields.json`; pool contacts in `_household`/`_team`.
+
+- **Sharing mirrors Finance/Assets** — `resolve_access` returns read/contribute/edit; by-name overrides group; `hidden_from` beats shares; personal = accept handshake, pool = `contributors` (no handshake). **contribute = log interactions + create/advance deals only** (never edit-core/delete/reshare — enforced in the router). Cross-store visibility routes through `contacts_index.py` (warmed at boot).
+- **Security**: the n8n automation API is **write-focused with a single-contact dedup lookup — no list/export**; agent reads free / writes approval-gated with a **dedup search on create**; the contact money view (`GET /contacts/{id}/finance`) is computed against the viewer's own finance access.
+- **Follow-ups**: interactions/deals carry an optional `follow_up` date; `run_followup_reminders` (nightly `job_contacts_followups`) notifies the owner (dedup via `followup_notified_for`).
+- Deals: customizable pipeline per store; stage "Won" (case-insensitive) is terminal → "Create invoice from deal" links to Finance.
+
 ## Notes Module
 
 - Auto-save: 1.5 s debounce after user stops typing. No explicit Save button.
-- Getting Started note: created automatically if user has no notes.
+- Getting Started note: created automatically if user has no notes (own store only — `list_notes(create_default=False)` for pool/foreign stores).
 - Folder deselection: clicking a selected folder deselects it (notes created at root).
+- Drag-and-drop: pointer-based (mouse threshold + touch long-press); drop a note onto a folder to move; the "Move to folder" menu is the fallback.
+- **Sharing**: sidecar `Notes/_shares.json` index (content stays plain `.md`); a folder share cascades to its subtree; household/team pool notes (`_household`/`_team` Notes); read/contribute(edit-content)/edit; personal = handshake, pool = contributors. Every read/write routes through `find_note_store` access resolution (`_validate_path` rejects traversal); cross-store routing via `notes_index.py`. Frontend: Share modal + Leave + read-only editor + owner badges; NotifBell handles `notes_share`.
+
+## n8n Bundled-Container Lifecycle
+
+`n8n_service.reconcile()` keeps `logcore-n8n` running only when needed: started on the first stored workflow, stopped when the last is removed AND no external instance, stopped when an **external** n8n is attached (URL not in `_BUNDLED_HOSTS`). Admin **force_on** (in `n8n_config.json`) overrides. Triggers: `POST /n8n/config`, workflow import, workflow delete, + boot reconcile (`job_n8n_reconcile`). Container ops go through the Docker socket (same as `restart_n8n`) and are all try/excepted so dev/test without Docker never breaks. `save_config` **merges** to preserve `force_on`.
 
 ---
 

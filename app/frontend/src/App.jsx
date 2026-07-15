@@ -22,6 +22,7 @@ import Automations from './pages/Automations'
 import Home from './pages/Home'
 import Assets from './pages/Assets'
 import Finance from './pages/Finance'
+import Contacts from './pages/Contacts'
 
 function Protected({ children }) {
   const { user } = useAuth()
@@ -65,6 +66,7 @@ export default function App() {
                 <Route path="/home"        element={<ModuleRoute moduleId="home"><Home /></ModuleRoute>} />
                 <Route path="/assets"      element={<ModuleRoute moduleId="assets"><Assets /></ModuleRoute>} />
                 <Route path="/finance"     element={<ModuleRoute moduleId="finance"><Finance /></ModuleRoute>} />
+                <Route path="/contacts"    element={<ModuleRoute moduleId="contacts"><Contacts /></ModuleRoute>} />
                 <Route path="/brain"     element={<Brain />} />
                 <Route path="/profile"   element={<Profile />} />
                 <Route path="/settings" element={<Settings />} />

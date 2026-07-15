@@ -94,6 +94,28 @@ def profile_path(user_name: str) -> Path:
     return user_path(user_name) / "Profile.md"
 
 
+def contacts_path(user_name: str, workspace: str = "personal") -> Path:
+    return ws_path(user_name, workspace) / "Contacts" / "contacts.json"
+
+
+def contact_interactions_path(user_name: str, workspace: str = "personal") -> Path:
+    return ws_path(user_name, workspace) / "Contacts" / "interactions.json"
+
+
+def contact_deals_path(user_name: str, workspace: str = "personal") -> Path:
+    return ws_path(user_name, workspace) / "Contacts" / "deals.json"
+
+
+def contact_fields_path() -> Path:
+    """Instance-level admin-defined custom contact field definitions."""
+    return brain_path() / "_system" / "contact_fields.json"
+
+
+def contact_pipeline_path(user_name: str, workspace: str = "personal") -> Path:
+    """Per-store customizable deal pipeline stages."""
+    return ws_path(user_name, workspace) / "Contacts" / "pipeline.json"
+
+
 def finance_books_path(user_name: str, workspace: str = "personal") -> Path:
     return ws_path(user_name, workspace) / "Finance" / "books.json"
 

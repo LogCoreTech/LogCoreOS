@@ -54,6 +54,12 @@ class TaskCreateBase(BaseModel):
             raise ValueError("due_time can only be set when due_date is also provided")
         return self
 
+    @model_validator(mode="after")
+    def goal_requires_due_date(self):
+        if self.type == "goal" and not self.due_date:
+            raise ValueError("A goal must have a target date (due_date)")
+        return self
+
 
 class TaskUpdateBase(BaseModel):
     title: str | None = Field(None, max_length=255)

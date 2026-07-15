@@ -14,7 +14,7 @@ Life gets busy. This skill ensures the most important things — based on what t
 
 Each user defines their priority order in their `Profile.md` under `## Life Priorities`. The base categories are:
 
-- God
+- Religion
 - Family
 - Job
 - Personal Growth
@@ -48,7 +48,7 @@ Top 3 = the 3 highest-scoring tasks with `status: pending`.
     {
       "id": "uuid-v4",
       "title": "Read Bible for 30 minutes",
-      "category": "God",
+      "category": "Religion",
       "priority": "High",
       "type": "recurring",
       "recurrence": "daily",
@@ -96,7 +96,7 @@ File: `USERS/{name}/Tasks/daily_override.json`
 ```json
 {
   "date": "2026-06-14",
-  "order": ["Job", "God", "Family", "Personal Growth", "Hobbies"]
+  "order": ["Job", "Religion", "Family", "Personal Growth", "Hobbies"]
 }
 ```
 

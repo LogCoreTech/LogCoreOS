@@ -161,6 +161,8 @@ The App currently provides:
 - Smart Home (Home Assistant) — entity tiles, scene control, HA automation management, per-user starred favourites on dashboard widget; admin config panel
 - Team module — business-workspace shared task + event pool (`_team`), structurally separate from Household (`_household`); no data can cross between the two
 - Assets module — template-driven nestable object tracking (subdivisions → parcels, vehicles, equipment): admin-curated typed field templates, subtree sharing + per-user hide, pool conversion (survives account deletion), archive-first lifecycle, change history, attachments, task linking, AI tools, and a token-authenticated n8n automation API
+- Finance module — books/accounts/transactions, SimpleFIN bank sync + CSV, budgets/recurring/projection/deviation alerts, invoicing/AR/tax/receipts, asset-style sharing with caps (both workspaces)
+- Contacts (CRM) module — rich contacts + admin custom fields, interaction timeline, customizable deals pipeline (kanban+list), follow-up reminders, asset-style sharing, Contact-linked payees + invoice clients, write-focused n8n automation API + agent tools (both workspaces)
 
 **Phase 4 (partial — shipped early):**
 
@@ -440,7 +442,7 @@ Remaining:
 - Family dashboard
 - Shared shopping lists
 - Chore management with assignments
-- Business-specific features (project tracking, client management, etc.)
+- Business-specific features (project tracking, ~~client management~~ → shipped as the Finance invoicing + **Contacts (CRM)** modules, etc.)
 - Household/Team automation via LogCore Workflows
 
 ---

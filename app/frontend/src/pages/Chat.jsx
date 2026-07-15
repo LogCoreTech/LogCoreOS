@@ -136,7 +136,7 @@ export default function Chat() {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: `Hi ${user?.name?.split(' ')[0] || 'there'}! I know your priorities and tasks. What's on your mind?`,
+      content: `Hi, ${user?.name?.split(' ')[0] || 'there'}, what can I help you with today?`,
       steps: [],
     }
   ])
@@ -254,7 +254,7 @@ export default function Chat() {
   function newChat() {
     setMessages([{
       role: 'assistant',
-      content: `Hi ${user?.name?.split(' ')[0] || 'there'}! I know your priorities and tasks. What's on your mind?`,
+      content: `Hi, ${user?.name?.split(' ')[0] || 'there'}, what can I help you with today?`,
       steps: [],
     }])
     setContinuedFromFile(null)
@@ -428,22 +428,22 @@ export default function Chat() {
 
       {/* Memory shortcuts + mode selector */}
       <div className="flex items-center gap-2 shrink-0 pt-2 pb-1">
-        {/* Mode drawer */}
+        {/* Mode drawer — fixed width so the row never reflows between modes */}
         <div className="relative" ref={modeRef}>
           <button
             type="button"
             onClick={() => setShowModeDrawer(o => !o)}
-            className="btn-ghost text-xs px-2 py-1 flex items-center gap-1"
+            className="btn-ghost text-xs px-2 py-1 flex items-center justify-between gap-1 w-[112px]"
             title="Switch chat mode"
           >
-            <span>{chatMode === 'approve' ? '✓ Approve Mode' : chatMode === 'plan' ? 'Plan Mode' : chatMode === 'auto' ? '⚡ Auto Mode' : '🔍 Research Mode'}</span>
+            <span>{chatMode === 'approve' ? '✓ Approve' : chatMode === 'plan' ? '📋 Plan' : chatMode === 'auto' ? '⚡ Auto' : '🔍 Research'}</span>
             <span className="text-[10px] opacity-60">▾</span>
           </button>
           {showModeDrawer && (
             <div className="absolute bottom-full mb-1 left-0 bg-white dark:bg-charcoal-900 border border-charcoal-200 dark:border-charcoal-700 rounded-xl shadow-lg z-50 overflow-hidden min-w-[150px]">
               {[
                 { id: 'approve',  label: '✓ Approve',   title: 'AI asks before each change' },
-                { id: 'plan',     label: 'Plan',        title: 'AI proposes before acting' },
+                { id: 'plan',     label: '📋 Plan',      title: 'AI proposes before acting' },
                 { id: 'auto',     label: '⚡ Auto',     title: 'AI executes without asking' },
                 { id: 'research', label: '🔍 Research',  title: 'Read-only analysis and web search' },
               ].map(m => (
@@ -465,33 +465,41 @@ export default function Chat() {
           )}
         </div>
 
+        {/* Icon memory controls — fixed-size, tooltip on hover */}
         {hasBothWorkspaces && (
           <button
             type="button"
             onClick={() => setCrossWorkspace(x => !x)}
-            title={crossWorkspace ? 'AI is reading both personal and business Brain files — click to limit to current workspace' : 'AI is only reading current workspace Brain files — click to include both'}
-            className={`text-xs px-2 py-1 rounded border font-medium transition-colors ${
+            title={crossWorkspace
+              ? 'Brain scope: Both workspaces — click to limit to the current one'
+              : `Brain scope: ${workspace === 'business' ? 'Business' : 'Personal'} only — click to include both`}
+            aria-label="Toggle Brain scope"
+            className={`w-8 h-8 flex items-center justify-center rounded border transition-colors ${
               crossWorkspace
                 ? 'bg-blue-500 border-blue-500 text-white'
                 : 'btn-ghost border-transparent'
             }`}
           >
-            {crossWorkspace ? '🧠 Both' : `🧠 ${workspace === 'business' ? 'Business' : 'Personal'}`}
+            🧠
           </button>
         )}
         <button
           type="button"
           onClick={() => navigate('/brain?file=Short_Term_Memory.md', { state: { from: '/chat' } })}
-          className="btn-ghost text-xs px-2 py-1"
+          className="btn-ghost w-8 h-8 flex items-center justify-center"
+          title="Short-term memory"
+          aria-label="Short-term memory"
         >
-          Short-term memory
+          ⏳
         </button>
         <button
           type="button"
           onClick={() => navigate('/brain?file=Long_Term_Memory.md', { state: { from: '/chat' } })}
-          className="btn-ghost text-xs px-2 py-1"
+          className="btn-ghost w-8 h-8 flex items-center justify-center"
+          title="Long-term memory"
+          aria-label="Long-term memory"
         >
-          Long-term memory
+          📚
         </button>
       </div>
 

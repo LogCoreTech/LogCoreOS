@@ -341,3 +341,28 @@ def test_m007_disables_finance_for_existing_guest_role(brain):
     write_json(features_file, data)
     m007_finance_guest_disabled(brain)
     assert read_json(features_file)["roles"]["guest"]["finance"] is True
+
+
+# ---------------------------------------------------------------------------
+# Workspace-aware seed categories + tax buckets (Phase 1 items 5 & 9)
+# ---------------------------------------------------------------------------
+
+
+def test_personal_book_seed_defaults(brain):
+    b = svc.create_book("Alice", "personal", name="Home", created_by="Alice")
+    names = {c["name"] for c in b["categories"]}
+    assert "Groceries" in names and "Salary" in names
+    assert "Payroll" not in names  # business-only bucket
+    # Personal tax buckets
+    assert "Medical" in b["tax_categories"]
+    assert "Home Office" not in b["tax_categories"]
+
+
+def test_business_book_seed_defaults(brain):
+    b = svc.create_book("Alice", "business", name="LogCore", created_by="Alice")
+    names = {c["name"] for c in b["categories"]}
+    assert "Payroll" in names and "Product Sales" in names
+    assert "Groceries" not in names
+    # Business tax buckets (Schedule-C flavored)
+    assert "Home Office" in b["tax_categories"]
+    assert "Medical" not in b["tax_categories"]

@@ -55,6 +55,8 @@ def _validate_client(data: dict, partial: bool = False) -> dict:
     for key, cap in (("email", 200), ("phone", 40), ("notes", 2000)):
         if key in data:
             out[key] = (data.get(key) or "").strip()[:cap]
+    if "contact_id" in data:
+        out["contact_id"] = (data.get("contact_id") or None) or None  # CRM contact link
     if "archived" in data:
         out["archived"] = bool(data["archived"])
     return out

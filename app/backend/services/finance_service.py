@@ -36,7 +36,9 @@ POOL_TEAM = "_team"
 ACCOUNT_TYPES = {"checking", "savings", "credit", "cash", "other"}
 CATEGORY_KINDS = {"expense", "income"}
 
-DEFAULT_CATEGORIES = [
+# Workspace-aware seed categories. Personal keeps Groceries + Salary (relied on by
+# existing tests / muscle memory); business gets accounting-flavored buckets.
+_PERSONAL_CATEGORIES = [
     {"name": "Groceries", "kind": "expense"},
     {"name": "Housing", "kind": "expense"},
     {"name": "Transportation", "kind": "expense"},
@@ -44,10 +46,63 @@ DEFAULT_CATEGORIES = [
     {"name": "Dining", "kind": "expense"},
     {"name": "Health", "kind": "expense"},
     {"name": "Shopping", "kind": "expense"},
+    {"name": "Entertainment", "kind": "expense"},
+    {"name": "Insurance", "kind": "expense"},
     {"name": "Other", "kind": "expense"},
     {"name": "Salary", "kind": "income"},
+    {"name": "Freelance", "kind": "income"},
+    {"name": "Investments", "kind": "income"},
+    {"name": "Interest", "kind": "income"},
+    {"name": "Gifts", "kind": "income"},
+    {"name": "Refunds", "kind": "income"},
     {"name": "Other Income", "kind": "income"},
 ]
+
+_BUSINESS_CATEGORIES = [
+    {"name": "Payroll", "kind": "expense"},
+    {"name": "Contractors", "kind": "expense"},
+    {"name": "Software/SaaS", "kind": "expense"},
+    {"name": "Advertising", "kind": "expense"},
+    {"name": "Office/Rent", "kind": "expense"},
+    {"name": "Supplies", "kind": "expense"},
+    {"name": "Travel", "kind": "expense"},
+    {"name": "Meals", "kind": "expense"},
+    {"name": "Equipment", "kind": "expense"},
+    {"name": "Professional Services", "kind": "expense"},
+    {"name": "Other", "kind": "expense"},
+    {"name": "Product Sales", "kind": "income"},
+    {"name": "Services", "kind": "income"},
+    {"name": "Consulting", "kind": "income"},
+    {"name": "Interest", "kind": "income"},
+    {"name": "Other Income", "kind": "income"},
+]
+
+# Back-compat alias (personal set) for any external importer of this name.
+DEFAULT_CATEGORIES = _PERSONAL_CATEGORIES
+
+_PERSONAL_TAX_BUCKETS = ["Medical", "Charitable", "Business Expense", "Education"]
+_BUSINESS_TAX_BUCKETS = [
+    "Advertising",
+    "Supplies",
+    "Travel",
+    "Meals",
+    "Home Office",
+    "Equipment",
+    "Contract Labor",
+    "Vehicle/Mileage",
+]
+
+
+def default_categories(workspace: str) -> list[dict]:
+    """Workspace-aware seed categories for a new book (business vs personal)."""
+    src = _BUSINESS_CATEGORIES if workspace == "business" else _PERSONAL_CATEGORIES
+    return [dict(c) for c in src]
+
+
+def default_tax_categories(workspace: str) -> list[str]:
+    """Workspace-aware seed tax buckets for a new book."""
+    return list(_BUSINESS_TAX_BUCKETS if workspace == "business" else _PERSONAL_TAX_BUCKETS)
+
 
 # Guard against absurd amounts (1 trillion dollars in cents)
 MAX_AMOUNT_CENTS = 10**14
@@ -418,7 +473,7 @@ def create_book(
     currency = (currency or "USD").strip().upper()
     if len(currency) != 3 or not currency.isalpha():
         raise ValueError("Currency must be a 3-letter code")
-    cats = _validate_categories(categories) if categories else [dict(c) for c in DEFAULT_CATEGORIES]
+    cats = _validate_categories(categories) if categories else default_categories(workspace)
 
     book = {
         "id": str(uuid.uuid4()),
@@ -426,7 +481,7 @@ def create_book(
         "icon": icon or "💰",
         "currency": currency,
         "categories": cats,
-        "tax_categories": [],
+        "tax_categories": default_tax_categories(workspace),
         "budget_warn_pct": 80,
         "accounts": [],
         "shared_with": [],
@@ -788,6 +843,7 @@ def add_transaction(
         "account_id": account["id"],
         "category": category,
         "payee": (tx_data.get("payee") or "").strip()[:120],
+        "payee_contact_id": (tx_data.get("payee_contact_id") or None) or None,
         "notes": (tx_data.get("notes") or "").strip()[:2000],
         "deductible": bool(tx_data.get("deductible", False)),
         "tax_category": tx_data.get("tax_category"),
@@ -830,6 +886,8 @@ def update_transaction(
                 allowed["category"] = _require_category(book, updates["category"])
             if "payee" in updates:
                 allowed["payee"] = (updates["payee"] or "").strip()[:120]
+            if "payee_contact_id" in updates:
+                allowed["payee_contact_id"] = (updates["payee_contact_id"] or None) or None
             if "notes" in updates:
                 allowed["notes"] = (updates["notes"] or "").strip()[:2000]
             if "deductible" in updates:
@@ -896,6 +954,20 @@ def book_summary(store_user: str, workspace: str, book: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _suggest_payee_contact(store_user: str, workspace: str, payee: str) -> str | None:
+    """Best-effort: match an imported payee string to a CRM contact so bank/CSV
+    transactions auto-link. Never raises — Finance must work without Contacts."""
+    if not payee or is_pool(store_user):
+        return None
+    try:
+        from services import contacts_service
+
+        match = contacts_service.find_match(store_user, workspace, name=payee)
+        return match["id"] if match else None
+    except Exception:
+        return None
+
+
 def bulk_add_transactions(
     store_user: str,
     workspace: str,
@@ -918,6 +990,7 @@ def bulk_add_transactions(
         if account.get("archived"):
             raise ValueError("Cannot add transactions to an archived account")
         category = _require_category(book, tx_data.get("category", ""))
+        payee = (tx_data.get("payee") or "").strip()[:120]
         records.append(
             {
                 "id": str(uuid.uuid4()),
@@ -925,7 +998,8 @@ def bulk_add_transactions(
                 "amount_cents": amount,
                 "account_id": account["id"],
                 "category": category,
-                "payee": (tx_data.get("payee") or "").strip()[:120],
+                "payee": payee,
+                "payee_contact_id": _suggest_payee_contact(store_user, workspace, payee),
                 "notes": (tx_data.get("notes") or "").strip()[:2000],
                 "deductible": False,
                 "tax_category": None,
