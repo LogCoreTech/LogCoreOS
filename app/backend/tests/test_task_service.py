@@ -210,7 +210,7 @@ def test_cleanup_done_goals_archives_only_done_goals(user_brain):
     archived = task_service.cleanup_done_goals(USER)
     assert archived == 1
     ids = {t["id"] for t in task_service.list_tasks(USER)}
-    assert done_goal["id"] not in ids        # archived
-    assert pending_goal["id"] in ids         # untouched
-    assert done_todo["id"] in ids            # not a goal — untouched
+    assert done_goal["id"] not in ids  # archived
+    assert pending_goal["id"] in ids  # untouched
+    assert done_todo["id"] in ids  # not a goal — untouched
     assert any(t["id"] == done_goal["id"] for t in task_service.list_history(USER))

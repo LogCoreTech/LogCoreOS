@@ -65,7 +65,12 @@ def test_delete_cascades_interactions_and_deals(brain):
 def test_custom_fields_validation(brain):
     crm.set_custom_fields(
         [
-            {"key": "Lead Source", "label": "Lead Source", "type": "select", "options": ["Ref", "Ad"]},
+            {
+                "key": "Lead Source",
+                "label": "Lead Source",
+                "type": "select",
+                "options": ["Ref", "Ad"],
+            },
             {"key": "score", "label": "Score", "type": "number"},
         ]
     )
@@ -89,7 +94,13 @@ def test_pipeline_default_and_set(brain):
 
 def test_deal_stage_validation_and_won(brain):
     c = _contact()
-    d = crm.add_deal("Owner", "personal", c["id"], {"title": "Sale", "value_cents": 5000, "stage": "Lead"}, "Owner")
+    d = crm.add_deal(
+        "Owner",
+        "personal",
+        c["id"],
+        {"title": "Sale", "value_cents": 5000, "stage": "Lead"},
+        "Owner",
+    )
     assert d["stage"] == "Lead" and not crm.is_won(d)
     d2 = crm.update_deal("Owner", "personal", d["id"], {"stage": "Won"})
     assert crm.is_won(d2)
@@ -102,7 +113,13 @@ def test_deal_stage_validation_and_won(brain):
 
 def test_interactions_and_followups(brain):
     c = _contact()
-    crm.add_interaction("Owner", "personal", c["id"], {"type": "call", "summary": "called", "follow_up": "2026-01-01"}, "Owner")
+    crm.add_interaction(
+        "Owner",
+        "personal",
+        c["id"],
+        {"type": "call", "summary": "called", "follow_up": "2026-01-01"},
+        "Owner",
+    )
     items = crm.list_interactions("Owner", "personal", c["id"])
     assert len(items) == 1 and items[0]["type"] == "call"
     due = crm.due_followups("Owner", "personal", "2026-06-01")
@@ -124,7 +141,9 @@ def test_find_match_by_name_and_email(brain):
 
 def test_personal_share_requires_handshake(brain):
     c = _contact()
-    _rec, notify = crm.update_access("Owner", "personal", c["id"], shared_with=[{"target": "Worker", "access": "read"}])
+    _rec, notify = crm.update_access(
+        "Owner", "personal", c["id"], shared_with=[{"target": "Worker", "access": "read"}]
+    )
     assert "Worker" in notify
     # Not visible until accepted
     assert _access("Worker", c["id"]) is None
@@ -138,8 +157,13 @@ def test_personal_share_requires_handshake(brain):
 def test_by_name_overrides_group(brain):
     c = _contact()
     crm.update_access(
-        "Owner", "personal", c["id"],
-        shared_with=[{"target": "household", "access": "edit"}, {"target": "Worker", "access": "read"}],
+        "Owner",
+        "personal",
+        c["id"],
+        shared_with=[
+            {"target": "household", "access": "edit"},
+            {"target": "Worker", "access": "read"},
+        ],
     )
     crm.respond_share("Worker", "Owner", "personal", c["id"], accept=True)
     # by-name read overrides the household edit
@@ -148,7 +172,13 @@ def test_by_name_overrides_group(brain):
 
 def test_hidden_from_beats_share(brain):
     c = _contact()
-    crm.update_access("Owner", "personal", c["id"], shared_with=[{"target": "household", "access": "edit"}], hidden_from=["Worker"])
+    crm.update_access(
+        "Owner",
+        "personal",
+        c["id"],
+        shared_with=[{"target": "household", "access": "edit"}],
+        hidden_from=["Worker"],
+    )
     crm.respond_share("Worker", "Owner", "personal", c["id"], accept=True)
     assert _access("Worker", c["id"]) is None
 
@@ -159,17 +189,26 @@ def test_pool_contributors_and_admin(brain):
     assert _access("Owner", c["id"], admin=True) == "edit"
     assert _access("Worker", c["id"]) == "read"
     # Contributor grant lifts a member to contribute
-    crm.update_access("_household", "personal", c["id"], contributors=[{"target": "Worker", "access": "contribute"}])
+    crm.update_access(
+        "_household",
+        "personal",
+        c["id"],
+        contributors=[{"target": "Worker", "access": "contribute"}],
+    )
     assert _access("Worker", c["id"]) == "contribute"
     # shared_with is rejected on pool contacts
     with pytest.raises(ValueError):
-        crm.update_access("_household", "personal", c["id"], shared_with=[{"target": "Worker", "access": "read"}])
+        crm.update_access(
+            "_household", "personal", c["id"], shared_with=[{"target": "Worker", "access": "read"}]
+        )
 
 
 def test_share_index_routes_visibility(brain):
     contacts_index.rebuild_share_index()
     c = _contact()
-    crm.update_access("Owner", "personal", c["id"], shared_with=[{"target": "Worker", "access": "read"}])
+    crm.update_access(
+        "Owner", "personal", c["id"], shared_with=[{"target": "Worker", "access": "read"}]
+    )
     crm.respond_share("Worker", "Owner", "personal", c["id"], accept=True)
     # Worker's visible list includes the shared contact via the index
     visible = crm.list_visible_contacts("Worker", "member", False, "personal")

@@ -8,8 +8,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import pytest
 from fastapi import HTTPException
 
+from services import auth_service
 from services import automation_inbox_service as svc
-from services import auth_service, automations_config, suggestions_service
+from services import automations_config, suggestions_service
 
 
 @pytest.fixture()

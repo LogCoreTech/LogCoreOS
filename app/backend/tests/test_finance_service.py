@@ -2,7 +2,8 @@
 
 import pytest
 
-from services import finance_reports, finance_service as svc
+from services import finance_reports
+from services import finance_service as svc
 from services.file_service import finance_books_path, finance_tx_path
 
 

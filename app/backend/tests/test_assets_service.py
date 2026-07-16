@@ -907,6 +907,7 @@ def test_comment_posting_rights(parcel, users):
 
 def test_comment_delete_permissions(parcel, users):
     from fastapi import HTTPException
+
     from routers.assets import delete_comment as route_delete_comment
 
     sub, _ = _tree(users)
@@ -1100,6 +1101,7 @@ def test_pool_contributor_user_entry_beats_group_entry(parcel, users):
 
 def test_comments_hidden_blocks_posting_and_manager_gated(parcel, users):
     from fastapi import HTTPException
+
     from routers.assets import CommentsVisibility, set_comments_visibility
 
     sub, _ = _tree(users)
