@@ -32,7 +32,15 @@ cd LogCoreOS
 bash launch.sh --install-deps
 ```
 
-`--install-deps` automatically installs Docker, Node.js, and curl if they are missing, then launches the app. Safe to re-run — nothing is reinstalled if already present.
+`--install-deps` automatically installs Docker, Node.js, and curl if they are missing, then launches the app. Safe to re-run — nothing is reinstalled if already present. Works as root on a fresh VPS — the script fixes `brain/` ownership for the app container automatically.
+
+**Deploying on a remote VPS?** Add your [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) token and the instance comes up publicly reachable in one shot — no ports to open:
+
+```bash
+bash launch.sh --install-deps --tunnel-token <your-tunnel-token>
+```
+
+(Create the tunnel in Cloudflare Zero Trust → Networks → Tunnels, add a public hostname pointing to `HTTP localhost:8000`, and copy the token from the connector install command.)
 
 ### macOS / Windows
 
@@ -71,6 +79,7 @@ bash launch.sh                  # rebuild frontend + restart containers
 bash launch.sh --install-deps   # install any missing deps, then launch
 bash launch.sh --skip-build     # restart only (skip npm build if nothing changed)
 bash launch.sh --reconfigure    # reset docker/.env and start fresh
+bash launch.sh --tunnel-token <token>   # set/replace the Cloudflare Tunnel token
 ```
 
 ---

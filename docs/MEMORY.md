@@ -65,6 +65,7 @@ Auth roles (`admin`, `member`, `guest`) control who can access admin endpoints. 
 8. **Self-hosters must never see the Infisical card** in Admin unless a token was configured at deploy time. Env var tokens cannot be cleared via UI — only file-sourced tokens can be cleared.
 9. **Rate limits are enforced on all endpoints.** Login: 5/5 min; register: 3/hour; general reads: 30/min; writes: 10/min; admin ops: 20/min. Always apply `rate_limit(count, window_secs)` to new endpoints.
 10. **Security headers are added by `SecurityHeadersMiddleware`** in `main.py`: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Cache-Control: no-store` on all `/api/*` responses.
+11. **No customer/tenant details in this repo — ever.** LogCoreOS is public. Beta tester / hosted-customer names, server IPs, hostnames, SSH details, and account info go ONLY in the private Business repo (owner rule, 2026-07-17). Docs here may reference tenants generically ("first managed-hosting beta instance") with a pointer to the Business repo.
 
 ---
 
@@ -142,6 +143,9 @@ After `POST /auth/login`, there is a timing gap before the cookie is available f
 
 **Never define React components inside other components:**
 A component function defined inside another component (e.g. `function Foo() { function Bar() {...} }`) gets a new identity on every render of the outer component. React sees a new component type at the same tree position and unmounts + remounts it — dismissing keyboard focus, resetting state, etc. Always define sub-components at module level and pass state/handlers as props.
+
+**brain/ ownership must match the app container user (uid 1000):**
+The app container runs as `appuser` (uid/gid 1000). If `brain/` on the host is owned by anyone else (typical after a root clone on a VPS), the app crash-loops at startup with `PermissionError: [Errno 13] /data/brain/_system`. `launch.sh` fixes this automatically when run as root (`fix_brain_ownership()`); for other uid mismatches it prints the `chown -R 1000:1000 brain/` command. Symptom signature: `logcore-app: Restarting` + that PermissionError in `docker logs logcore-app`.
 
 **Docker tunnel container conflict:**
 If a container named `logcore-tunnel` is orphaned (from a crashed session), `launch.sh` will fail with a "container name already in use" conflict. Fix: `echo "12345" | sudo -S docker rm -f logcore-tunnel` then relaunch.

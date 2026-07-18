@@ -19,6 +19,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **First-run Getting Started checklist** on the Dashboard to help new users find their way (dismissible)
 - **What's New broadcast**: after LogCore updates, every user gets a "what's new" note in their inbox and a dismissible banner for a few days, sourced from an authored release-highlights list
 
+- **`launch.sh --tunnel-token <token>`** — pass your Cloudflare Tunnel token straight into the launch command, so a fresh VPS goes from empty to publicly reachable in two commands (`git clone` + `bash launch.sh --install-deps --tunnel-token <token>`). No UI access needed to bootstrap the tunnel; the Admin → Hosting panel still works for changing it later
+
+### Fixed
+
+- **launch.sh as root no longer crash-loops the app** — on a fresh VPS the repo is typically cloned by root, leaving `brain/` root-owned while the app container runs as uid 1000; startup died with `PermissionError` on `/data/brain`. `launch.sh` now fixes `brain/` ownership automatically when run as root (and prints the exact `chown` command when run as a non-root user with mismatched ownership)
+
 ## [0.3.0] — 2026-07-16
 
 ### Added
