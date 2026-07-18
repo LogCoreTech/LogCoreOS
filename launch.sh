@@ -7,6 +7,8 @@
 #   bash launch.sh --install-deps   # auto-install prerequisites (Linux only), then launch
 #   bash launch.sh --reconfigure    # re-run setup even if docker/.env already exists
 #   bash launch.sh --skip-build     # skip npm build (requires app/frontend/dist/ to exist)
+#   bash launch.sh --tunnel-token <token>   # set/replace the Cloudflare Tunnel token
+#                                           # (also accepted as --tunnel-token=<token>)
 #
 # Updates are managed from Admin → Updates in the app. launch.sh installs the update
 # cron daemon automatically on every run. Toggle auto-update on/off from the Admin panel.
@@ -31,22 +33,35 @@ HEALTH_INTERVAL=3
 FLAG_RECONFIGURE=false
 FLAG_SKIP_BUILD=false
 FLAG_INSTALL_DEPS=false
+FLAG_TUNNEL_TOKEN=""
 
 # ── Flags ─────────────────────────────────────────────────────────────────────
 
 parse_flags() {
+  local expect_token=false
   for arg in "$@"; do
+    if [[ "$expect_token" == "true" ]]; then
+      FLAG_TUNNEL_TOKEN="$arg"
+      expect_token=false
+      continue
+    fi
     case "$arg" in
-      --reconfigure)   FLAG_RECONFIGURE=true   ;;
-      --skip-build)    FLAG_SKIP_BUILD=true     ;;
-      --install-deps)  FLAG_INSTALL_DEPS=true   ;;
+      --reconfigure)     FLAG_RECONFIGURE=true    ;;
+      --skip-build)      FLAG_SKIP_BUILD=true     ;;
+      --install-deps)    FLAG_INSTALL_DEPS=true   ;;
+      --tunnel-token)    expect_token=true        ;;
+      --tunnel-token=*)  FLAG_TUNNEL_TOKEN="${arg#*=}" ;;
       *)
         echo "ERROR: Unknown flag: $arg"
-        echo "Usage: bash launch.sh [--install-deps] [--reconfigure] [--skip-build]"
+        echo "Usage: bash launch.sh [--install-deps] [--reconfigure] [--skip-build] [--tunnel-token <token>]"
         exit 1
         ;;
     esac
   done
+  if [[ "$expect_token" == "true" ]]; then
+    echo "ERROR: --tunnel-token requires a value."
+    exit 1
+  fi
 }
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -295,6 +310,26 @@ sync_tunnel_token() {
   fi
 }
 
+# ── Brain ownership ───────────────────────────────────────────────────────────
+
+fix_brain_ownership() {
+  # The app container runs as appuser (uid 1000). When the repo is cloned by
+  # root — the default on a fresh VPS — brain/ is root-owned and the app
+  # crash-loops at startup with PermissionError on /data/brain.
+  local app_uid=1000 app_gid=1000 owner
+  owner="$(stat -c '%u' "$REPO_ROOT/brain" 2>/dev/null || echo "")"
+  [[ -n "$owner" && "$owner" != "$app_uid" ]] || return 0
+
+  if [[ "$(id -u)" -eq 0 ]]; then
+    chown -R "$app_uid:$app_gid" "$REPO_ROOT/brain"
+    log_info "brain/ ownership set to uid $app_uid (app container user)."
+  else
+    log_warn "brain/ is owned by uid $owner but the app container runs as uid $app_uid."
+    log_warn "If the app fails to start with a brain/ PermissionError, run:"
+    log_warn "  sudo chown -R $app_uid:$app_gid \"$REPO_ROOT/brain\""
+  fi
+}
+
 # ── Frontend build ────────────────────────────────────────────────────────────
 
 build_frontend() {
@@ -452,9 +487,16 @@ main() {
 
   sync_tunnel_token
 
+  # --tunnel-token flag wins over brain/hosting.json
+  if [[ -n "$FLAG_TUNNEL_TOKEN" ]]; then
+    env_set CLOUDFLARE_TUNNEL_TOKEN "$FLAG_TUNNEL_TOKEN"
+    log_info "Cloudflare tunnel token set from --tunnel-token."
+  fi
+
   # Keep DOCKER_GID current (socket GID can vary by host/distro)
   env_set DOCKER_GID "$(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo '999')"
 
+  fix_brain_ownership
   build_frontend
   launch_containers
   wait_for_health

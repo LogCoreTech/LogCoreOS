@@ -225,6 +225,7 @@ bash launch.sh                  # first-time or normal restart
 bash launch.sh --install-deps   # auto-install prerequisites (Linux only), then launch
 bash launch.sh --skip-build     # skip npm build if dist/ already exists
 bash launch.sh --reconfigure    # reset docker/.env
+bash launch.sh --tunnel-token <token>   # set/replace the Cloudflare Tunnel token (also --tunnel-token=<token>)
 ```
 
 ---
