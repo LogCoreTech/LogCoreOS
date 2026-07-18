@@ -402,6 +402,17 @@
   },
   "whats_new": [
     {
+      "version": "0.3.1",
+      "date": "2026-07-18",
+      "highlights": [
+        "In-app Help & Guide — press ? anywhere, or tap the ⓘ on any page. The AI reads the same guide, so just ask it how anything works.",
+        "Faster first-time setup — one page instead of three; Life Priorities start from a sensible default you can tune in Profile.",
+        "Your setup choice (Personal or Business) now shapes the whole instance — the workspace you didn't pick stays off until an admin enables it.",
+        "Mobile polish — the header no longer hides behind the notch on phones.",
+        "Smoother self-hosting — launch.sh works as root on a fresh VPS and accepts your Cloudflare Tunnel token directly."
+      ]
+    },
+    {
       "version": "0.3.0",
       "date": "2026-07-16",
       "highlights": [

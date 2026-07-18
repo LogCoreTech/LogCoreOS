@@ -6,7 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [Unreleased]
+## [0.3.1] — 2026-07-18
 
 ### Added
 
@@ -21,8 +21,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`launch.sh --tunnel-token <token>`** — pass your Cloudflare Tunnel token straight into the launch command, so a fresh VPS goes from empty to publicly reachable in two commands (`git clone` + `bash launch.sh --install-deps --tunnel-token <token>`). No UI access needed to bootstrap the tunnel; the Admin → Hosting panel still works for changing it later
 
+### Changed
+
+- **Setup wizard slimmed to a single page** — the Life Priorities step (and the summary page repeating it) is gone. New users just confirm profile type + timezone and launch; priorities start from the sensible default and are fine-tuned anytime on the Profile page (which the wizard now points out)
+
 ### Fixed
 
+- **First-user setup now applies the Personal/Business choice instance-wide** — picking Personal (or Business) in the wizard disables the other workspace for the whole instance (`enabled_workspaces`), instead of leaving both visible in Admin. Admins can re-enable the other workspace anytime from Admin → Workspaces
+- **Mobile: the app header no longer hides behind the phone notch/bezel** — the top bar now respects the device safe area (matching the bottom nav, which already did); the All Modules drawer also respects the bottom inset
 - **launch.sh as root no longer crash-loops the app** — on a fresh VPS the repo is typically cloned by root, leaving `brain/` root-owned while the app container runs as uid 1000; startup died with `PermissionError` on `/data/brain`. `launch.sh` now fixes `brain/` ownership automatically when run as root (and prints the exact `chown` command when run as a non-root user with mismatched ownership)
 
 ## [0.3.0] — 2026-07-16

@@ -6,14 +6,10 @@ const BASE_CATEGORIES = ['Religion', 'Family', 'Job', 'Personal Growth', 'Hobbie
 const BASE_CATEGORIES_BUSINESS = ['Revenue', 'Team', 'Clients', 'Operations', 'Growth']
 
 export default function Setup() {
-  const [step, setStep] = useState(1)
   const [profile, setProfile] = useState('personal')
   const [timezone, setTimezone] = useState(() => {
     try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Chicago' } catch { return 'America/Chicago' }
   })
-  const [categories, setCategories] = useState([...BASE_CATEGORIES])
-  const [customCat, setCustomCat] = useState('')
-  const [dragIdx, setDragIdx] = useState(null)
   const [showProfileType, setShowProfileType] = useState(false)
   const [enabledWorkspaces, setEnabledWorkspaces] = useState(['personal', 'business'])
   const [loading, setLoading] = useState(false)
@@ -25,58 +21,17 @@ export default function Setup() {
   useEffect(() => {
     setupApi.status().then(s => {
       setShowProfileType(s.show_profile_type ?? false)
-      const ws = s.enabled_workspaces || ['personal', 'business']
-      setEnabledWorkspaces(ws)
-      if (ws.length === 1 && ws[0] === 'business') {
-        setCategories([...BASE_CATEGORIES_BUSINESS])
-      }
+      setEnabledWorkspaces(s.enabled_workspaces || ['personal', 'business'])
     }).catch(() => {})
   }, [])
-
-  function addCustom() {
-    const v = customCat.trim()
-    if (v && !categories.includes(v)) {
-      setCategories([...categories, v])
-      setCustomCat('')
-    }
-  }
-
-  function removeCategory(cat) {
-    const baseCats = isBusinessOnly ? BASE_CATEGORIES_BUSINESS : BASE_CATEGORIES
-    if (baseCats.includes(cat)) return
-    setCategories(categories.filter(c => c !== cat))
-  }
-
-  // Drag-to-reorder
-  function onDragStart(i) { setDragIdx(i) }
-  function onDragOver(e, i) {
-    e.preventDefault()
-    if (dragIdx === null || dragIdx === i) return
-    const next = [...categories]
-    const [moved] = next.splice(dragIdx, 1)
-    next.splice(i, 0, moved)
-    setCategories(next)
-    setDragIdx(i)
-  }
-  function onDragEnd() { setDragIdx(null) }
-
-  // Arrow reorder — works on touch devices where HTML5 drag doesn't fire.
-  function move(i, dir) {
-    const j = i + dir
-    if (j < 0 || j >= categories.length) return
-    const next = [...categories]
-    ;[next[i], next[j]] = [next[j], next[i]]
-    setCategories(next)
-  }
 
   async function finish() {
     setLoading(true)
     setError('')
     try {
-      const baseCats = isBusinessOnly ? BASE_CATEGORIES_BUSINESS : BASE_CATEGORIES
       await setupApi.create({
-        priority_order: categories,
-        custom_categories: categories.filter(c => !baseCats.includes(c)),
+        priority_order: isBusinessOnly ? BASE_CATEGORIES_BUSINESS : BASE_CATEGORIES,
+        custom_categories: [],
         timezone,
         profile,
       })
@@ -96,203 +51,83 @@ export default function Setup() {
           <p className="text-charcoal-500 dark:text-charcoal-400 text-sm mt-2">Let's set up your Brain</p>
         </div>
 
-        {/* Step indicators */}
-        <div className="flex gap-2 mb-6">
-          {[1,2,3].map(s => (
-            <div
-              key={s}
-              className={`flex-1 h-1.5 rounded-full transition-colors ${
-                s <= step ? 'bg-orange-500' : 'bg-charcoal-200 dark:bg-charcoal-700'
-              }`}
-            />
-          ))}
-        </div>
-
         <div className="card p-6">
-          {step === 1 && (
-            <div className="space-y-4">
-              <h2 className="font-semibold text-lg">About You</h2>
+          <div className="space-y-4">
+            <h2 className="font-semibold text-lg">About You</h2>
 
-              {/* Profile type — only shown for the first user (before features.json is created) */}
-              {showProfileType && (
-                <div>
-                  <p className="block text-sm font-medium mb-2 text-charcoal-700 dark:text-charcoal-300">
-                    How will you use LogCore?
-                  </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { value: 'personal', label: '🏠 Personal', desc: 'For yourself and household' },
-                      { value: 'business', label: '💼 Business', desc: 'For teams and employees' },
-                    ].map(opt => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => setProfile(opt.value)}
-                        className={`rounded-lg border-2 p-3 text-left transition-colors ${
-                          profile === opt.value
-                            ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
-                            : 'border-charcoal-200 dark:border-charcoal-700 hover:border-charcoal-300 dark:hover:border-charcoal-600'
-                        }`}
-                      >
-                        <p className="text-sm font-medium">{opt.label}</p>
-                        <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mt-0.5">{opt.desc}</p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
+            {/* Profile type — only shown for the first user (before features.json is created) */}
+            {showProfileType && (
               <div>
-                <label className="block text-sm font-medium mb-1 text-charcoal-700 dark:text-charcoal-300">
-                  Timezone
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={timezone}
-                    onChange={e => setTimezone(e.target.value)}
-                    placeholder="e.g. America/Chicago"
-                    className="input flex-1"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      try { setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone) } catch {}
-                    }}
-                    className="btn-ghost text-xs px-3 whitespace-nowrap"
-                  >
-                    Detect
-                  </button>
-                </div>
-                <p className="text-xs text-charcoal-400 dark:text-charcoal-500 mt-1">
-                  Auto-detected from your device. Use any{' '}
-                  <a
-                    href="https://en.wikipedia.org/wiki/List_of_tz_database_time_zones"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-orange-500 hover:underline"
-                  >IANA timezone name</a>.
+                <p className="block text-sm font-medium mb-2 text-charcoal-700 dark:text-charcoal-300">
+                  How will you use LogCore?
                 </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { value: 'personal', label: '🏠 Personal', desc: 'For yourself and household' },
+                    { value: 'business', label: '💼 Business', desc: 'For teams and employees' },
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setProfile(opt.value)}
+                      className={`rounded-lg border-2 p-3 text-left transition-colors ${
+                        profile === opt.value
+                          ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
+                          : 'border-charcoal-200 dark:border-charcoal-700 hover:border-charcoal-300 dark:hover:border-charcoal-600'
+                      }`}
+                    >
+                      <p className="text-sm font-medium">{opt.label}</p>
+                      <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mt-0.5">{opt.desc}</p>
+                    </button>
+                  ))}
+                </div>
               </div>
-              <button onClick={() => setStep(isBusinessOnly ? 3 : 2)} className="btn-primary w-full mt-2">
-                Next →
-              </button>
-            </div>
-          )}
+            )}
 
-          {step === 2 && (
-            <div className="space-y-4">
-              <h2 className="font-semibold text-lg">Your Life Priorities</h2>
-              <p className="text-sm text-charcoal-500 dark:text-charcoal-400">
-                Reorder with the ↑/↓ arrows (or drag). The top item has the highest weight when
-                scoring your tasks. You can change this any time later, or skip it for now.
-              </p>
-
-              <ul className="space-y-2">
-                {categories.map((cat, i) => (
-                  <li
-                    key={cat}
-                    draggable
-                    onDragStart={() => onDragStart(i)}
-                    onDragOver={e => onDragOver(e, i)}
-                    onDragEnd={onDragEnd}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors ${
-                      dragIdx === i
-                        ? 'border-orange-500 bg-orange-500/10'
-                        : 'border-charcoal-200 dark:border-charcoal-700 bg-white dark:bg-charcoal-800'
-                    }`}
-                  >
-                    <span className="text-charcoal-400 dark:text-charcoal-500 text-xs font-mono w-4">
-                      {i + 1}
-                    </span>
-                    <span className="flex-1 text-sm font-medium">{cat}</span>
-                    <div className="flex items-center">
-                      <button
-                        type="button"
-                        onClick={() => move(i, -1)}
-                        disabled={i === 0}
-                        aria-label="Move up"
-                        className="px-1.5 text-charcoal-400 hover:text-orange-500 disabled:opacity-30 disabled:hover:text-charcoal-400"
-                      >↑</button>
-                      <button
-                        type="button"
-                        onClick={() => move(i, 1)}
-                        disabled={i === categories.length - 1}
-                        aria-label="Move down"
-                        className="px-1.5 text-charcoal-400 hover:text-orange-500 disabled:opacity-30 disabled:hover:text-charcoal-400"
-                      >↓</button>
-                    </div>
-                    {!BASE_CATEGORIES.includes(cat) && (
-                      <button
-                        type="button"
-                        onClick={() => removeCategory(cat)}
-                        className="text-charcoal-400 hover:text-red-500 text-xs pl-1"
-                      >✕</button>
-                    )}
-                    <span className="text-charcoal-300 dark:text-charcoal-600 cursor-grab active:cursor-grabbing hidden sm:inline">⠿</span>
-                  </li>
-                ))}
-              </ul>
-
+            <div>
+              <label className="block text-sm font-medium mb-1 text-charcoal-700 dark:text-charcoal-300">
+                Timezone
+              </label>
               <div className="flex gap-2">
                 <input
                   type="text"
-                  value={customCat}
-                  onChange={e => setCustomCat(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && addCustom()}
-                  placeholder="Add custom category…"
-                  className="input"
+                  value={timezone}
+                  onChange={e => setTimezone(e.target.value)}
+                  placeholder="e.g. America/Chicago"
+                  className="input flex-1"
                 />
-                <button onClick={addCustom} className="btn-primary px-3">+</button>
-              </div>
-
-              <div className="flex gap-2">
-                <button onClick={() => setStep(1)} className="btn-ghost flex-1">← Back</button>
-                <button onClick={() => setStep(3)} className="btn-primary flex-1">Save & Continue →</button>
-              </div>
-              <button
-                onClick={() => setStep(3)}
-                className="w-full text-xs text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200 pt-1"
-              >
-                Skip — use the default order
-              </button>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div className="space-y-4">
-              <h2 className="font-semibold text-lg">Ready to Go</h2>
-              <p className="text-sm text-charcoal-500 dark:text-charcoal-400">
-                We'll set up your personal Brain folder with your priorities.
-              </p>
-
-              <div className="bg-charcoal-100 dark:bg-charcoal-700 rounded-lg p-4 space-y-1">
-                {showProfileType && (
-                  <p className="text-sm"><span className="text-charcoal-500">Profile:</span> {profile === 'business' ? 'Business' : 'Personal'}</p>
-                )}
-                <p className="text-sm"><span className="text-charcoal-500">Timezone:</span> {timezone}</p>
-                {!isBusinessOnly && (
-                  <>
-                    <p className="text-sm font-medium mt-2">Priority order:</p>
-                    {categories.map((cat, i) => (
-                      <p key={cat} className="text-sm text-charcoal-600 dark:text-charcoal-300">
-                        {i + 1}. {cat}
-                      </p>
-                    ))}
-                  </>
-                )}
-              </div>
-
-              {error && <p className="text-red-500 text-sm">{error}</p>}
-
-              <div className="flex gap-2">
-                <button onClick={() => setStep(isBusinessOnly ? 1 : 2)} className="btn-ghost flex-1">← Back</button>
-                <button onClick={finish} disabled={loading} className="btn-primary flex-1">
-                  {loading ? 'Setting up…' : 'Launch LogCore'}
+                <button
+                  type="button"
+                  onClick={() => {
+                    try { setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone) } catch {}
+                  }}
+                  className="btn-ghost text-xs px-3 whitespace-nowrap"
+                >
+                  Detect
                 </button>
               </div>
+              <p className="text-xs text-charcoal-400 dark:text-charcoal-500 mt-1">
+                Auto-detected from your device. Use any{' '}
+                <a
+                  href="https://en.wikipedia.org/wiki/List_of_tz_database_time_zones"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-orange-500 hover:underline"
+                >IANA timezone name</a>.
+              </p>
             </div>
-          )}
+
+            {error && <p className="text-red-500 text-sm">{error}</p>}
+
+            <button onClick={finish} disabled={loading} className="btn-primary w-full mt-2">
+              {loading ? 'Setting up…' : 'Launch LogCore'}
+            </button>
+            {!isBusinessOnly && (
+              <p className="text-xs text-charcoal-400 dark:text-charcoal-500 text-center">
+                Your Life Priorities start with a sensible default — fine-tune them anytime on the Profile page.
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </div>

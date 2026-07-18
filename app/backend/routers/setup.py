@@ -150,7 +150,15 @@ def setup_user(req: SetupRequest, current_user: dict = Depends(get_current_user)
         )
         write_markdown(users_md, users_content)
 
+    # First-user setup only (features.json not yet created): the chosen profile decides
+    # which workspace this instance starts with — the other is disabled instance-wide.
+    # Admins can re-enable it anytime from Admin → Workspaces.
+    first_user_setup = not (brain_path() / "_system" / "features.json").exists()
+
     # Initialise feature flags with chosen profile (no-op if features.json already exists)
     init_features(req.profile)
+
+    if first_user_setup:
+        auth_service.update_system_settings({"enabled_workspaces": [req.profile]})
 
     return {"ok": True, "message": f"Brain folder created for {name}"}
