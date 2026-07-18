@@ -381,7 +381,7 @@ export default function Layout() {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Mobile-only top bar with brand + bell */}
-        <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white dark:bg-charcoal-950 border-b border-charcoal-200 dark:border-charcoal-800 shrink-0">
+        <header className="md:hidden flex items-center justify-between px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] bg-white dark:bg-charcoal-950 border-b border-charcoal-200 dark:border-charcoal-800 shrink-0">
           <span className="text-orange-500 font-bold text-xl tracking-tight">LogCore</span>
           <NotifBell />
         </header>
@@ -430,7 +430,7 @@ export default function Layout() {
             className="fixed inset-0 bg-black/50 z-50 md:hidden"
             onClick={() => setShowDrawer(false)}
           />
-          <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-charcoal-950 z-50 md:hidden rounded-t-2xl shadow-xl">
+          <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-charcoal-950 z-50 md:hidden rounded-t-2xl shadow-xl pb-[env(safe-area-inset-bottom)]">
             <div className="flex items-center justify-between px-5 pt-5 pb-3">
               <h3 className="font-semibold text-base">All Modules</h3>
               <button
