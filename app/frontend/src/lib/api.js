@@ -522,6 +522,7 @@ export const home = {
 
 export const update = {
   status:        ()           => get('/update/status'),
+  check:         ()           => post('/update/check', {}),
   apply:         ()           => post('/update/apply', {}),
   log:           (lines = 100) => get(`/update/log?lines=${lines}`),
   patchSettings: (body)       => patch('/update/settings', body),

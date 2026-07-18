@@ -128,6 +128,12 @@ def job_update_check():
         )
 
         refresh_version_cache()
+        # Catch-up announce: update.sh stamps installed_version.json AFTER the app
+        # restarts, so the boot-time announce can read the old version and stay
+        # silent. Re-checking here (and in the boot+180s one-shot) closes that gap.
+        from services.whats_new_service import announce_if_updated
+
+        announce_if_updated()
         if not get_auto_update_enabled():
             return
         status = get_update_status()
@@ -143,6 +149,16 @@ def job_update_check():
             trigger_update()
     except Exception:
         logger.exception("update check failed")
+
+
+def job_whats_new_recheck():
+    """Boot+180s: re-run the What's-New announce after update.sh has stamped the version."""
+    try:
+        from services.whats_new_service import announce_if_updated
+
+        announce_if_updated()
+    except Exception:
+        logger.exception("whats-new recheck failed")
 
 
 def job_workflow_sync():
@@ -299,6 +315,12 @@ def start():
     )
     scheduler.add_job(
         job_n8n_reconcile, "date", run_date=_dt.now() + _td(seconds=100), id="n8n_reconcile_boot"
+    )
+    # What's-New catch-up: update.sh stamps installed_version.json only after the
+    # restarted app passes its health check, so the in-lifespan announce misses
+    # fresh updates. One-shot re-check well after the stamp has landed.
+    scheduler.add_job(
+        job_whats_new_recheck, "date", run_date=_dt.now() + _td(seconds=180), id="whats_new_boot"
     )
     scheduler.start()
     _load_custom_jobs()
