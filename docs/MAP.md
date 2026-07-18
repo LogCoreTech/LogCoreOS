@@ -53,6 +53,7 @@ LogCoreOS/
 │   │   │   ├── finance_sharing.py → book/account audience (shares + contributors + hidden_from), share handshake respond, leave, member/role pickers
 │   │   │   ├── contacts.py        → Contacts (CRM): contacts/interactions/deals CRUD, pipeline, admin custom fields, sharing handshake, CSV import/export, contact money view, write-focused n8n automation API
 │   │   │   ├── home.py           → Home Assistant module: entity control, scenes, automations, favourites, admin config
+│   │   │   ├── help.py            → Help system: GET /help/content (authored guide), /help/whats-new (banner state), GET/PUT /help/onboarding (first-run checklist); auth required, NO module gate (like Settings)
 │   │   │   └── update.py         → update status check + trigger (admin only); works with update.sh on host
 │   │   ├── services/
 │   │   │   ├── file_service.py        → atomic Brain file reads/writes — ALWAYS use this, never open(...,'w')
@@ -91,7 +92,11 @@ LogCoreOS/
 │   │   │   ├── automation_inbox_service.py → Automation Inbox: named inboxes (notify/reviewers/workflow routing), item dedup by (workflow_key, external_id), status lifecycle, trim, batched notifications
 │   │   │   ├── n8n_service.py         → n8n REST API client; import/execute/delete/activate workflows; write docker/n8n.env; sync_business_workflows() for auto-sync
 │   │   │   ├── ha_service.py          → Home Assistant REST API client; config CRUD, entity states, service calls, scenes, automations, user favourites
+│   │   │   ├── help_service.py        → Help content single source (loads content/help.json): get_content, as_text (markdown for the AI, incl. /help#id anchors), capabilities_index (enabled-modules index for chat context), onboarding state get/set
+│   │   │   ├── whats_new_service.py    → on version bump, notify every user once (announce_if_updated at boot) + drive the few-day What's-New banner (get_banner); state in _system/whats_new_state.json
 │   │   │   └── update_service.py      → GitHub release check (cached 4h), pending_update flag trigger, update log reader
+│   │   ├── content/
+│   │   │   └── help.json         → authored Help content (sections + FAQ + support + whats_new); SINGLE source read by the Help page, the ⓘ buttons, and the AI's get_help tool
 │   │   ├── automations_stubs/    → committed stub files (*.stub.json) that drive business workflow auto-sync; each has name/key/tags only — no workflow logic ever committed here
 │   │   ├── migrations/
 │   │   │   └── runner.py         → runs pending Brain schema migrations at startup
@@ -121,6 +126,7 @@ LogCoreOS/
 │           │   ├── Assets.jsx      → assets: template-driven object tree (expand/collapse, filters, archived toggle), both workspaces
 │           │   ├── Finance.jsx     → finance: book chips, Overview (balances + monthly summary) | Transactions (filters, add/edit) views, both workspaces
 │           │   ├── Contacts.jsx    → Contacts (CRM): list + search, detail (fields/interactions/deals/money), ContactModal, CSV import/export; both workspaces
+│           │   ├── Help.jsx        → Help & Guide page: fetches /help/content; TOC chips, per-section cards (blurb/how-to/tips), search, "only my modules" filter, What's New, FAQ, Contact & Support (mailto); hash-scrolls to #section from ⓘ deep-links
 │           │   ├── Home.jsx        → Smart Home: entity tiles by domain, scenes panel, HA automations, favourite stars
 │           │   ├── Admin.jsx      → admin panel (users, feature roles, workspace access, AI settings, web search, hosting, Infisical, n8n, Smart Home)
 │           │   ├── Settings.jsx   → user settings (appearance, timezone, session, notifications, background upload, shortcuts — server-side per-workspace via PATCH /auth/me)
@@ -140,6 +146,9 @@ LogCoreOS/
 │               ├── contacts/      → ContactPicker.jsx (search-first contact autocomplete + quick-create; reused by transaction payee + invoice client)
 │               ├── EventModal.jsx → create/edit calendar event form (title, dates, times, all_day, color, notes)
 │               ├── CalendarGrid.jsx → month view: day cells with event/task indicators, click to open detail
+│               ├── HelpButton.jsx  → small ⓘ affordance next to a page title; deep-links to /help#<section>
+│               ├── WhatsNewBanner.jsx → dismissible bar shown for a few days after an update (reads /help/whats-new); per-version localStorage dismiss; links to /help#whats-new
+│               ├── GettingStarted.jsx → first-run checklist card on the Dashboard (reads/writes /help/onboarding); hides when dismissed or all steps done
 │               └── ErrorBoundary.jsx → catch React render errors, display fallback UI
 │
 ├── brain/                         → starter Brain (mounted at /data/brain in Docker)

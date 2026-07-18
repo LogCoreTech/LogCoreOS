@@ -60,6 +60,7 @@ After every turn where real work was done, check each item:
 4. `CHANGELOG.md` — add an entry if a user-visible feature, fix, or breaking change shipped
 5. `docs/PROJECT.md` — update if architecture, phases, or the roadmap moved
 6. `docs/TESTING.md` — update if test patterns, fixtures, or coverage guidance changed
+7. `app/backend/content/help.json` — if a module's user-facing behavior changed, update its Help guide/FAQ; on a release, add a `whats_new` entry
 
 Skip only if the turn was purely Q&A — no files changed, no decisions made. After updating (or skipping), respond with one line: what you updated or `Q&A only, skipped.`
 
@@ -263,7 +264,7 @@ All API calls go through `lib/api.js`. The `request()` function handles 401 by c
 `useAuth()` returns `{ user, login, logout, updateUserField }`. `user` has `{ name, role, disabledModules, timezone, accentColor, darkMode, background, density, cornerStyle, workspaces, shortcuts }`. Use `updateUserField(key, value)` for immediate optimistic updates after a successful PATCH /me (e.g. `updateUserField('shortcuts', newShortcuts)`).
 
 ### Pages
-19 pages in `pages/`: `Dashboard.jsx`, `Tasks.jsx`, `Goals.jsx`, `Chat.jsx`, `Calendar.jsx`, `Household.jsx`, `Team.jsx`, `Notes.jsx`, `Journal.jsx`, `Brain.jsx`, `Profile.jsx`, `Admin.jsx`, `Settings.jsx`, `Login.jsx`, `Setup.jsx`, `Automations.jsx`, `Home.jsx`, `Assets.jsx`, `Finance.jsx`.
+21 pages in `pages/`: `Dashboard.jsx`, `Tasks.jsx`, `Goals.jsx`, `Chat.jsx`, `Calendar.jsx`, `Household.jsx`, `Team.jsx`, `Notes.jsx`, `Journal.jsx`, `Brain.jsx`, `Profile.jsx`, `Admin.jsx`, `Settings.jsx`, `Login.jsx`, `Setup.jsx`, `Automations.jsx`, `Home.jsx`, `Assets.jsx`, `Finance.jsx`, `Contacts.jsx`, `Help.jsx`. `Help.jsx` (like `Settings.jsx`) is a hardcoded footer nav entry, **not** a module — it has no `require_module` guard and no `ALL_MODULES` entry.
 
 ### Admin-Only Pages
 The `/admin` route is wrapped in `<AdminOnly>` which redirects non-admins to `/`. Admin UI lives in `pages/Admin.jsx`. Render order: UsersCard → RegistrationCard → WorkspaceVisibilityCard → RolesCard → AiProviderCard → WebSearchCard → HostingCard → InfisicalCard → N8nCard → HomeAssistantCard → PoolPrioritiesCard.
@@ -407,6 +408,18 @@ The Contacts module (`pages/Contacts.jsx`, `routers/contacts.py`, `services/cont
 - **Security**: the n8n automation API is **write-focused with a single-contact dedup lookup — no list/export**; agent reads free / writes approval-gated with a **dedup search on create**; the contact money view (`GET /contacts/{id}/finance`) is computed against the viewer's own finance access.
 - **Follow-ups**: interactions/deals carry an optional `follow_up` date; `run_followup_reminders` (nightly `job_contacts_followups`) notifies the owner (dedup via `followup_notified_for`).
 - Deals: customizable pipeline per store; stage "Won" (case-insensitive) is terminal → "Create invoice from deal" links to Finance.
+
+## Help System
+
+In-app help + AI-readable product knowledge. Help is **not a module** — it's a hardcoded nav entry below Settings, visible to everyone (auth required, no module gate).
+
+- **Single source of truth**: `app/backend/content/help.json` (authored, shipped with the release — NOT user-editable Brain data). Shape: `{ sections[], faq[], support{}, whats_new[] }`; each section `{ id, icon, title, blurb, howto[], tips[], modules[], admin_only? }`. Three consumers read it: the Help page, the module-page ⓘ buttons, and the AI. **When a module's user-facing behavior changes, update this file** (the Stop hook nudges when a page/router changes).
+- **`services/help_service.py`**: `get_content()` (cached), `as_text(section?)` → Markdown for the LLM with `/help#<id>` anchors, `capabilities_index(enabled_modules)` → compact module index for the chat context (respects the user's enabled modules; skips `admin_only`), `get/set_onboarding(user)`.
+- **`routers/help.py`** (`/api/v1/help`): `GET /content`, `GET /whats-new`, `GET/PUT /onboarding`.
+- **AI**: `get_help` is a read-only agent tool (in `_RESEARCH_TOOLS`/`_READ_TOOLS`, so it runs in every mode). `chat._build_context`'s system prompt injects the capability index + guidance to call `get_help` and cite `/help#<section>` when the user is confused.
+- **Frontend**: `pages/Help.jsx` (TOC, search, "only my modules" filter, What's New, FAQ, mailto support), `components/HelpButton.jsx` (ⓘ on each module page → `/help#<id>`), global `?` shortcut in `Layout.jsx`.
+- **What's-New broadcast**: `services/whats_new_service.py.announce_if_updated()` runs at boot (in `main.py` lifespan). On a version bump (installed version vs `_system/whats_new_state.json`) with a matching `whats_new` entry, it notifies **every user's** inbox once; `get_banner()` drives a `WHATS_NEW_DAYS`-day dismissible banner (`components/WhatsNewBanner.jsx`). **Add a `whats_new` entry to `help.json` every release.**
+- **Onboarding**: first-run checklist card (`components/GettingStarted.jsx`) on the Dashboard; state in `USERS/{name}/onboarding.json`.
 
 ## Notes Module
 

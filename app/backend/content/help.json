@@ -1,0 +1,415 @@
+{
+  "sections": [
+    {
+      "id": "getting-started",
+      "icon": "🚀",
+      "title": "Getting Started",
+      "blurb": "LogCore is your private, self-hosted life operating system. Everything you add lives in your own Brain (plain files you own), and an AI layer can read it and help you act on it.",
+      "howto": [
+        "Use the left sidebar (or the bottom bar on your phone) to move between modules like Tasks, Notes, Calendar, and Chat.",
+        "Set your life priorities in Profile — LogCore uses them to score your tasks so the most important ones rise to the top.",
+        "Open Chat and just talk to your AI: ask it to plan your week, add tasks, or explain any feature.",
+        "Pin the modules you use most to the bottom bar (phone) in Settings → Shortcuts.",
+        "Every module page has an ⓘ button next to its title — tap it to jump straight to that module's help."
+      ],
+      "tips": [
+        "Not sure where something belongs? Ask the AI in Chat — it knows every module and will point you to the right one.",
+        "Your data never leaves your server unless you explicitly export or share it."
+      ],
+      "modules": []
+    },
+    {
+      "id": "dashboard",
+      "icon": "🏠",
+      "title": "Dashboard",
+      "blurb": "Your home screen. It surfaces the few things that matter right now: your top-3 scored tasks, what's due today, your streaks, and smart-home favourites.",
+      "howto": [
+        "The Top 3 card shows the highest-priority tasks based on your life priorities, urgency, and due dates.",
+        "Check tasks off directly from the dashboard — completed items drop off automatically.",
+        "The dashboard changes with your workspace: personal shows Smart Home favourites, business shows your team's tasks.",
+        "New here? The Getting Started card walks you through first steps and hides once you're set up."
+      ],
+      "tips": [
+        "The Top 3 is recomputed every time you open it — complete one and the next most important task takes its place."
+      ],
+      "modules": ["dashboard"]
+    },
+    {
+      "id": "tasks",
+      "icon": "✅",
+      "title": "Tasks",
+      "blurb": "Tasks are your day-to-day to-dos. LogCore scores them by your life priorities so the most important ones rise to the top automatically.",
+      "howto": [
+        "Click \"+ New Task\", give it a title, and pick a category and priority (High/Medium/Low).",
+        "Add a due date and time if it matters — overdue and due-today tasks score highest.",
+        "Set Type to \"Recurring\" for repeating tasks; completing them on schedule builds a streak.",
+        "Check a task off to complete it. Non-recurring done tasks move to History during the nightly tidy-up.",
+        "Tasks assigned to you from a shared Household or Team pool show up here with a 🏠 badge."
+      ],
+      "tips": [
+        "Your Dashboard shows the top 3 tasks to focus on right now — a filtered view of this list.",
+        "Reorder your category priorities in Profile; it directly changes which tasks surface first.",
+        "You can also ask the AI in Chat to \"add three tasks for the move\" and approve them in one step."
+      ],
+      "modules": ["tasks"]
+    },
+    {
+      "id": "goals",
+      "icon": "🎯",
+      "title": "Goals",
+      "blurb": "Goals are the bigger outcomes you're working toward (lose weight, launch the site). Unlike tasks, they always carry a target date and aren't swept away when completed.",
+      "howto": [
+        "Open Goals and create one — a target date is required so you can track it on a timeline.",
+        "Use the timeline filter (Today / Week / Month / Quarter / Year) to focus on the horizon you care about.",
+        "The \"X of Y\" progress reflects the goals inside the current timeline window.",
+        "Finished goals stay visible under Done; use \"Clear completed\" to archive them to history when you want a clean slate."
+      ],
+      "tips": [
+        "Ask the AI to \"break this goal into tasks\" — it proposes concrete subtasks you can create in one approval.",
+        "Goals are kept out of the daily task surfaces on purpose, so they don't crowd out your day-to-day."
+      ],
+      "modules": ["goals"]
+    },
+    {
+      "id": "calendar",
+      "icon": "📅",
+      "title": "Calendar",
+      "blurb": "A month view of your world: events you create plus any tasks that have a due date, all on one grid.",
+      "howto": [
+        "Click a day to see its detail, or click \"+ New Event\" to add one with a title, date, colour, and notes.",
+        "Tasks with due dates appear as pills on their day automatically — no need to add them twice.",
+        "Toggle the 🏠 / 🧑‍🤝‍🧑 pill to overlay shared Household (personal) or Team (business) events and tasks.",
+        "Use the \"Add to Household\" toggle in the event editor to move a personal event into the shared pool."
+      ],
+      "tips": [
+        "The calendar follows your active workspace — personal and business each have their own events."
+      ],
+      "modules": ["calendar"]
+    },
+    {
+      "id": "household",
+      "icon": "🏡",
+      "title": "Household",
+      "blurb": "A shared pool of tasks and events for your family or household. Everyone with the module can see it; managing it can be granted per person.",
+      "howto": [
+        "Open Household to see all shared tasks and events in one place.",
+        "Any member can complete or un-complete shared tasks.",
+        "Adding, editing, deleting, or assigning items requires pool-management rights — an admin grants \"Can manage\" per user.",
+        "Assign a task to a member and it shows up on their personal Tasks and Calendar with a 🏠 badge."
+      ],
+      "tips": [
+        "Household is personal-workspace only and completely separate from the business Team pool — data never crosses between them."
+      ],
+      "modules": ["household"]
+    },
+    {
+      "id": "team",
+      "icon": "🧑‍🤝‍🧑",
+      "title": "Team",
+      "blurb": "The business-workspace equivalent of Household: a shared task and event pool for your team, kept structurally separate from any personal/family data.",
+      "howto": [
+        "Switch to the business workspace, then open Team to see shared tasks and events.",
+        "Members read and complete; adding/editing/assigning needs admin or a \"Can manage\" grant.",
+        "Assign work to a teammate and it appears on their Tasks and Calendar."
+      ],
+      "tips": [
+        "Team lives only in the business workspace. Personal/Household data can never leak into it."
+      ],
+      "modules": ["team"]
+    },
+    {
+      "id": "notes",
+      "icon": "📝",
+      "title": "Notes",
+      "blurb": "Markdown notes organized in folders. They save themselves as you type and stay plain, portable files in your Brain.",
+      "howto": [
+        "Create a note or folder from the sidebar; click a note to edit it in Markdown.",
+        "There's no Save button — notes auto-save about a second and a half after you stop typing.",
+        "Drag a note onto a folder to move it, or use the \"Move to folder\" menu.",
+        "Share a note or a whole folder with another user or a pool from the Share menu."
+      ],
+      "tips": [
+        "Sharing a folder cascades to everything inside it.",
+        "Shared notes stay plain Markdown — the sharing info is kept separately so your files remain portable."
+      ],
+      "modules": ["notes"]
+    },
+    {
+      "id": "journal",
+      "icon": "📔",
+      "title": "Journal",
+      "blurb": "A private daily journal — one Markdown entry per day, stored by date in your Brain.",
+      "howto": [
+        "Pick a date (defaults to today) and write your entry in Markdown.",
+        "Entries auto-save; use the History button to jump back to a previous day.",
+        "Your AI can read journal entries when you ask it to reflect on patterns or summarize a period."
+      ],
+      "tips": [
+        "Journal is personal-workspace only."
+      ],
+      "modules": ["journal"]
+    },
+    {
+      "id": "chat",
+      "icon": "💬",
+      "title": "AI Chat",
+      "blurb": "Talk to your LogCore AI. It can read your Brain (tasks, notes, journal, priorities, and more) and, with your approval, make changes for you.",
+      "howto": [
+        "Type what you need — \"plan my week\", \"summarize my month\", \"add three tasks for the move\", or \"how do I use Finance?\"",
+        "Approve mode (the default): the AI reads freely but pauses for your OK before any change.",
+        "Switch modes with the selector — Plan proposes a plan first, Auto acts directly, Research adds web search (read-only).",
+        "Use the 🧠 / ⏳ / 📚 buttons to save what matters to the AI's long-term or short-term memory.",
+        "Chats auto-save; reopen a past chat to continue it."
+      ],
+      "tips": [
+        "Stuck on any feature? Just ask — the AI reads this Help guide and will explain it and link you to the right section.",
+        "In Approve mode, nothing is changed until you click Approve, so it's safe to let it try things."
+      ],
+      "modules": ["chat"]
+    },
+    {
+      "id": "assets",
+      "icon": "📦",
+      "title": "Assets",
+      "blurb": "Track anything you own — property, vehicles, equipment — as flexible, nestable objects built from templates. Great for organizing and for handing employees limited access.",
+      "howto": [
+        "Pick a template (an admin sets up the field structure, e.g. a Vehicle or Folder) and create an asset.",
+        "Nest assets under each other (a parcel under a subdivision, equipment under a building) to build a tree.",
+        "Attach images or PDFs, add notes, and link related tasks.",
+        "Click an asset to read it first; hit ✎ Edit to change it. Share a subtree with a user, your team, or your household.",
+        "Give a contributor limited \"contribute\" access — pick exactly which fields they can change and whether they can add comments, files, or child assets."
+      ],
+      "tips": [
+        "Comments on an asset are an attributed log — a good way for a crew to leave notes that notify the owner.",
+        "Archiving hides an asset without deleting it; hard delete is admin-only and blocked while it still has children."
+      ],
+      "modules": ["assets"]
+    },
+    {
+      "id": "finance",
+      "icon": "💰",
+      "title": "Finance",
+      "blurb": "Personal and business finances: books with accounts and transactions, bank sync, budgets, recurring bills, invoicing, and sharing with tight controls.",
+      "howto": [
+        "Create a Book, then add accounts (checking, savings, credit, cash) and customize its categories.",
+        "Add transactions by hand, import a CSV, or have an admin connect your bank via SimpleFIN (read-only).",
+        "Set budgets and recurring bills to get alerts and a projected balance; deviations from your bank balance flag early.",
+        "Invoice clients, record partial payments, and see who's behind under Invoices → AR.",
+        "Share a book or a single account with someone — \"contribute\" access can be limited to submitting expenses with no visibility into balances."
+      ],
+      "tips": [
+        "Your personal books are private — even admins can't see them unless you share them.",
+        "Everything derived (balances, reports, AR) is computed live; you never have to reconcile stored totals."
+      ],
+      "modules": ["finance"]
+    },
+    {
+      "id": "contacts",
+      "icon": "👥",
+      "title": "Contacts (CRM)",
+      "blurb": "Your address book and light CRM. The Contact is the canonical person or company that Finance payees and invoice clients link back to.",
+      "howto": [
+        "Add a contact with emails, phones, tags, and any admin-defined custom fields.",
+        "Log interactions (calls, emails, meetings, notes) to keep a timeline for each contact.",
+        "Track opportunities on the deals pipeline (Lead → Contacted → … → Won/Lost).",
+        "Set a follow-up date on an interaction or deal to get reminded.",
+        "Share contacts like assets and finance — \"contribute\" lets someone log interactions and advance deals without editing the core record."
+      ],
+      "tips": [
+        "Link a payee or an invoice client to a contact to see all their spend/receive activity in one place.",
+        "Won deals offer a shortcut to create an invoice in Finance."
+      ],
+      "modules": ["contacts"]
+    },
+    {
+      "id": "automations",
+      "icon": "⚙️",
+      "title": "Automations",
+      "blurb": "Run background workflows with n8n, and review what they surface in a built-in Inbox.",
+      "howto": [
+        "Under Workflows, import an n8n workflow JSON, then run it, activate it, or view its logs.",
+        "Switch to the Inbox to review items your workflows post (e.g. leads to qualify).",
+        "Act on each item — Interested / Pass / Offer Made / Closed — and it's recorded with your name.",
+        "Named inboxes route items from specific workflows and notify the right people."
+      ],
+      "tips": [
+        "Business workflows live in the shared team scope; personal ones are yours alone.",
+        "The bundled n8n only runs when you actually have workflows, keeping things lightweight."
+      ],
+      "modules": ["automations"]
+    },
+    {
+      "id": "home",
+      "icon": "🏡",
+      "title": "Smart Home",
+      "blurb": "Control your Home Assistant devices from LogCore — lights, switches, sensors, climate, scenes, and automations.",
+      "howto": [
+        "An admin connects your Home Assistant URL and token in Admin → Smart Home.",
+        "Browse entities by domain and toggle or adjust them from the tiles.",
+        "Activate scenes or trigger HA automations from their panels.",
+        "Star your favourites to pin them to the Dashboard widget for quick access."
+      ],
+      "tips": [
+        "You can also ask the AI to \"turn off the living room lights\" once Home Assistant is connected.",
+        "Smart Home is personal-workspace only."
+      ],
+      "modules": ["home"]
+    },
+    {
+      "id": "workspaces",
+      "icon": "🔀",
+      "title": "Personal vs Business",
+      "blurb": "LogCore keeps your personal life and your business fully separated into two workspaces, each with its own data, modules, and priorities.",
+      "howto": [
+        "If you have both, a toggle pill appears in the sidebar — switch between Personal and Business anytime.",
+        "Each workspace has its own tasks, calendar, notes, finance, contacts, and shared pool (Household vs Team).",
+        "Modules can differ per workspace — Journal, Household, and Smart Home are personal; Team is business.",
+        "Your AI chat and priorities are scoped to the workspace you're currently in."
+      ],
+      "tips": [
+        "Nothing crosses between workspaces automatically — that separation is the whole point.",
+        "An admin decides which workspaces you have access to."
+      ],
+      "modules": []
+    },
+    {
+      "id": "sharing",
+      "icon": "🤝",
+      "title": "Sharing & Permissions",
+      "blurb": "Assets, Finance, Contacts, and Notes all share the same model: you decide who sees what, and at which level.",
+      "howto": [
+        "Pick an access level: Read (view), Contribute (limited add/edit), or Edit (full, including re-sharing).",
+        "Sharing something personal sends the other person a request — they Accept or Decline from their notification bell.",
+        "Shared pool items (Household/Team) don't need a handshake since the pool is already visible to the group.",
+        "\"Hidden from\" excludes specific people (or a whole role) and always beats a share."
+      ],
+      "tips": [
+        "Contribute access is configurable — for example, an employee who can only submit expenses, with no view of balances.",
+        "A rule targeting someone by name overrides any group- or role-level rule for them."
+      ],
+      "modules": []
+    },
+    {
+      "id": "notifications",
+      "icon": "🔔",
+      "title": "Notifications",
+      "blurb": "LogCore reaches you through an in-app inbox (the bell), self-hosted push via ntfy, and web push on your devices.",
+      "howto": [
+        "Click the bell to see your notification inbox; actionable items (like share requests) have Accept/Decline right there.",
+        "Enable browser/web push in Settings → Notifications to get alerts on your devices.",
+        "For phone notifications, install the ntfy app and subscribe to your channel (shown in Settings).",
+        "Proactive digests (morning summary, overdue alerts, weekly review) are configurable in Settings."
+      ],
+      "tips": [
+        "ntfy is fully self-hosted — no third-party notification service is involved."
+      ],
+      "modules": []
+    },
+    {
+      "id": "data",
+      "icon": "🧠",
+      "title": "Your Data & the Brain",
+      "blurb": "Everything you create is stored as plain Markdown and JSON files in your Brain. There's no database — the files are the source of truth, and they're yours.",
+      "howto": [
+        "Export your entire Brain as a zip anytime from Settings → Account → Export Brain.",
+        "Because it's just files, any AI or text editor can read your Brain — no lock-in.",
+        "Admins can browse and edit raw Brain files under the Brain page."
+      ],
+      "tips": [
+        "Self-hosting means your data stays on your server; it only leaves when you export or explicitly share it.",
+        "Back up your Brain folder regularly — it contains everything."
+      ],
+      "modules": []
+    },
+    {
+      "id": "appearance",
+      "icon": "🎨",
+      "title": "Appearance & Settings",
+      "blurb": "Make LogCore yours: theme, accent colour, background, density, and the shortcuts on your phone's bottom bar.",
+      "howto": [
+        "In Settings, set light/dark/system mode, an accent colour, a background, density, and corner style.",
+        "Pin up to four modules per workspace to the mobile bottom bar under Shortcuts.",
+        "Set your timezone and session length so schedules and logins behave the way you expect."
+      ],
+      "tips": [
+        "Appearance settings are saved to your account and follow you across devices."
+      ],
+      "modules": []
+    },
+    {
+      "id": "admin",
+      "icon": "🛡️",
+      "title": "Admin",
+      "blurb": "Admin-only controls for the whole instance: users, roles, workspaces, and integrations.",
+      "howto": [
+        "Add users and set their role (admin/member), workspaces, and per-user module access.",
+        "Create feature roles (e.g. cleaner, crew) to control which modules groups of users can see.",
+        "Configure the AI provider, web search, hosting, Smart Home, bank connections, and n8n from their cards.",
+        "Grant \"Can manage\" on Household/Team pools to specific users."
+      ],
+      "tips": [
+        "The first registered user becomes admin; after that, registration is closed by default so accounts are added deliberately."
+      ],
+      "modules": [],
+      "admin_only": true
+    }
+  ],
+  "faq": [
+    {
+      "q": "How do I get the AI to actually do things for me?",
+      "a": "Open Chat and ask in plain language. In the default Approve mode the AI reads your Brain freely and, whenever it wants to make a change, pauses and shows it to you — nothing happens until you click Approve."
+    },
+    {
+      "q": "Where is my data stored? Is it private?",
+      "a": "Everything lives as plain Markdown and JSON files in your Brain, on your own server. There's no external database. Your data only leaves when you export it or explicitly share it with someone."
+    },
+    {
+      "q": "How do I export or back up everything?",
+      "a": "Settings → Account → Export Brain downloads your entire Brain as a zip. Because it's just files, you can also back up the Brain folder directly on the server."
+    },
+    {
+      "q": "What's the difference between the Personal and Business workspaces?",
+      "a": "They're fully separate spaces with their own data, modules, and priorities. If you have both, switch with the toggle in the sidebar. Nothing crosses between them automatically."
+    },
+    {
+      "q": "Why can't I see a module another user has?",
+      "a": "Modules can be turned on or off per user, per workspace, and per feature role by an admin. Some modules are also workspace-specific (Journal, Household, and Smart Home are personal; Team is business)."
+    },
+    {
+      "q": "How does task priority scoring work?",
+      "a": "Each task is scored from your life-priority order (set in Profile), its priority level, and urgency (overdue and due-today rank highest). The Dashboard shows the top 3 that result."
+    },
+    {
+      "q": "What do Read, Contribute, and Edit mean when I share something?",
+      "a": "Read = view only. Contribute = a limited set of adds/edits you choose (for example, submit expenses only). Edit = full control including re-sharing. Sharing personal items sends a request the other person accepts or declines."
+    },
+    {
+      "q": "How do I get notifications on my phone?",
+      "a": "Enable web push in Settings → Notifications, and/or install the ntfy app and subscribe to your channel shown in Settings. ntfy is self-hosted, so no third-party service is involved."
+    },
+    {
+      "q": "Do I need n8n or Home Assistant to use LogCore?",
+      "a": "No. Automations (n8n) and Smart Home (Home Assistant) are optional integrations. Everything else works without them."
+    },
+    {
+      "q": "I found a bug or have an idea. How do I tell you?",
+      "a": "See Contact & Support at the bottom of this page — email support@logcoretech.com with what happened (and steps to reproduce for bugs). We read everything."
+    }
+  ],
+  "support": {
+    "email": "support@logcoretech.com",
+    "note": "Found a bug, want a feature, or have a complaint? Email us and we'll take a look. For bug reports, include what you did, what you expected, and what happened (a screenshot helps a lot)."
+  },
+  "whats_new": [
+    {
+      "version": "0.3.0",
+      "date": "2026-07-16",
+      "highlights": [
+        "New Finance module — books, accounts, bank sync, budgets, recurring bills, invoicing, and sharing with tight controls.",
+        "New Contacts (CRM) module — people and companies with interaction timelines, a deals pipeline, and follow-up reminders.",
+        "Goals overhaul — timeline filter, mandatory target dates, and completed goals stay until you clear them.",
+        "Share notes and folders with people, your household/team, or a role."
+      ]
+    }
+  ]
+}

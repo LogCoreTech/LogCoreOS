@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import HelpButton from '../components/HelpButton'
+import GettingStarted from '../components/GettingStarted'
 import { Link } from 'react-router-dom'
 import { tasks as tasksApi, auth as authApi, home as homeApi, team as teamApi, assets as assetsApi, finance as financeApi } from '../lib/api'
 import { fmtMoney } from '../components/finance/money'
@@ -61,9 +63,11 @@ export default function Dashboard() {
     <div key={workspace} className="max-w-2xl mx-auto space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">Good {greeting()}, {user?.name?.split(' ')[0]}</h1>
+        <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">Good {greeting()}, {user?.name?.split(' ')[0]}</h1><HelpButton section="dashboard" /></span>
         <p className="text-charcoal-500 dark:text-charcoal-400 text-sm mt-0.5">{todayDate}</p>
       </div>
+
+      <GettingStarted />
 
       {error && (
         <p className="text-sm text-red-500 dark:text-red-400">{error}</p>

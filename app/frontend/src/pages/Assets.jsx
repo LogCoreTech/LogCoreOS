@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import HelpButton from '../components/HelpButton'
 import { useSearchParams } from 'react-router-dom'
 import { assets as assetsApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -243,7 +244,7 @@ export default function Assets() {
   return (
     <div className="w-full max-w-3xl mx-auto space-y-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h1 className="text-xl font-bold">Assets</h1>
+        <span className="flex items-center gap-2"><h1 className="text-xl font-bold">Assets</h1><HelpButton section="assets" /></span>
         <div className="flex items-center gap-2">
           <button onClick={() => setShowTemplates(true)} className="btn-ghost text-xs px-3 py-1.5">
             Templates

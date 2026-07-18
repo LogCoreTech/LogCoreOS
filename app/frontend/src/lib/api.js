@@ -57,6 +57,7 @@ async function request(method, path, body) {
 
 const get    = (path)       => request('GET',    path)
 const post   = (path, body) => request('POST',   path, body)
+const put    = (path, body) => request('PUT',    path, body)
 const patch  = (path, body) => request('PATCH',  path, body)
 const del    = (path)       => request('DELETE', path)
 
@@ -102,6 +103,13 @@ export const auth = {
   updateMe:         (data)            => patch('/auth/me', data),
   uploadBackground: (file)            => requestFile('POST', '/auth/me/background', file),
   deleteBackground: ()                => del('/auth/me/background'),
+}
+
+export const help = {
+  content:       ()     => get('/help/content'),
+  whatsNew:      ()     => get('/help/whats-new'),
+  getOnboarding: ()     => get('/help/onboarding'),
+  setOnboarding: (data) => put('/help/onboarding', data),
 }
 
 export const tasks = {

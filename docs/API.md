@@ -1142,6 +1142,35 @@ Assign a feature role to a user.
 
 ---
 
+## Help
+
+Router mounted at `/api/v1/help`. Auth required but **no module gate** (like Settings) — every
+signed-in user can read it. The authored content lives in `app/backend/content/help.json` (a single
+source read by the Help page, the module-page ⓘ buttons, and the AI's `get_help` tool).
+
+### `GET /help/content`
+Full authored guide: `{ sections, faq, support, whats_new }`. Each section is
+`{ id, icon, title, blurb, howto[], tips[], modules[], admin_only? }`. `modules[]` powers the "only
+my modules" filter; `admin_only` sections are hidden from non-admins client-side.
+
+### `GET /help/whats-new`
+Banner state for the current session: `{ version, until, highlights, date }` after an update, or
+`{ version: null }` once the window (`WHATS_NEW_DAYS`, default 5) has passed or nothing was announced.
+
+### `GET /help/onboarding`
+The current user's first-run checklist state: `{ dismissed, done: [step_ids] }`.
+
+### `PUT /help/onboarding`
+Merge-update the checklist. Body `{ dismissed?: bool, done?: [step_id] }` — `done` is unioned into
+the existing list (de-duplicated, capped).
+
+**AI integration:** the chat agent has a read-only `get_help` tool (`{ section? }` → the guide as
+Markdown with `/help#<id>` anchors), in the `_READ_TOOLS`/`_RESEARCH_TOOLS` allowlists so it runs in
+every mode. The chat system prompt also injects a compact capability index of the user's enabled
+modules so the AI can point them to the right one.
+
+---
+
 ## Health
 
 ### `GET /health`

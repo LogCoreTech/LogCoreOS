@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import HelpButton from '../components/HelpButton'
 import { shared as sharedApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import TaskModal from '../components/TaskModal'
@@ -110,7 +111,7 @@ export default function Household() {
 
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">Household</h1>
+        <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">Household</h1><HelpButton section="household" /></span>
         <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mt-0.5">Shared space for everyone</p>
       </div>
 

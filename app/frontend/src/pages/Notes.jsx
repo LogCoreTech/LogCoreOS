@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
+import HelpButton from '../components/HelpButton'
 import { notes as notesApi } from '../lib/api'
 import { useWorkspace } from '../lib/workspace'
 
@@ -517,7 +518,7 @@ export default function Notes() {
     <div className="flex flex-col h-full">
       {/* Sidebar header */}
       <div className="flex items-center gap-2 px-3 py-3 border-b border-charcoal-200 dark:border-charcoal-700 shrink-0">
-        <span className="font-semibold text-sm flex-1">Notes</span>
+        <span className="font-semibold text-sm flex-1 flex items-center gap-1.5">Notes<HelpButton section="notes" /></span>
         <button
           onClick={() => { setModalInput(''); openModal('newNote') }}
           className="text-xs px-2 py-1 rounded-md bg-orange-500 hover:bg-orange-600 text-white font-medium transition-colors"

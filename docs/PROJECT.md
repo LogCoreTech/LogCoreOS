@@ -146,6 +146,7 @@ The App currently provides:
 - Per-user appearance theming: accent color (8 presets + any hex), dark/light/system mode, background (7 gradient presets + custom image upload), density (comfortable/compact), corner radius (rounded/sharp) — all persisted in `auth.json` and applied via CSS variables with FOUC prevention
 - Collapsible sidebar (desktop) with collapse state persisted to `localStorage`
 - Frosted card blur, left-border active nav highlight, CSS variable-driven corner radii
+- Help system — an in-app Help & Guide page (per-module how-to, FAQ, search, "only my modules" filter, `?` shortcut), an ⓘ button on every module page, a first-run Getting Started checklist, and a What's-New broadcast (inbox note + banner) after each update. All authored in one source (`content/help.json`) that the AI also reads via a `get_help` tool + a capability index injected into chat, so the assistant can explain any feature and point users to the right module
 
 **Phase 2 (complete):**
 

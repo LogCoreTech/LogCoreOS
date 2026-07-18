@@ -29,6 +29,7 @@ if [ "$LAST_STOP" -gt 0 ]; then
   for f in "$DOCS_DIR/TASKS.md" "$DOCS_DIR/MEMORY.md" "$DOCS_DIR/AGENTS.md" \
             "$DOCS_DIR/MAP.md" "$DOCS_DIR/API.md" "$DOCS_DIR/PROJECT.md" \
             "$DOCS_DIR/TESTING.md" "$REPO_DIR/CHANGELOG.md" \
+            "$REPO_DIR/app/backend/content/help.json" \
             "$DOCS_DIR/Daily Notes/$TODAY.md"; do
     if [ -f "$f" ]; then
       FILE_MTIME=$(stat -c %Y "$f")
@@ -91,6 +92,15 @@ ${ITEM_NUM}. docs/MAP.md — new app file(s): ${NAMES} — update the navigation
   if [ -n "$ROUTER_CHANGES" ]; then
     EXTRA="${EXTRA}
 ${ITEM_NUM}. docs/API.md — router(s) changed: ${ROUTER_CHANGES} — update if new endpoints or signatures changed."
+    ITEM_NUM=$((ITEM_NUM + 1))
+  fi
+
+  # Frontend page or backend router changed → the Help guide may be stale
+  HELP_TOUCH=$(echo "$CHANGED_FILES" | grep -E "app/frontend/src/pages/|app/backend/routers/" \
+    | grep -vE "/help\.py|/Help\.jsx" | head -1)
+  if [ -n "$HELP_TOUCH" ]; then
+    EXTRA="${EXTRA}
+${ITEM_NUM}. app/backend/content/help.json — a module page/router changed; update the Help guide + FAQ (single source read by the Help page AND the AI) if user-facing behavior changed."
     ITEM_NUM=$((ITEM_NUM + 1))
   fi
 
@@ -164,6 +174,17 @@ ${ITEM_NUM}. docs/PROJECT.md (Docker services table) — docker-compose.yml chan
   if [ -n "$BACKEND_CODE_CHANGES" ] && [ -z "$TEST_CHANGES" ]; then
     EXTRA="${EXTRA}
 ${ITEM_NUM}. TESTS MISSING — backend code changed (${BACKEND_CODE_CHANGES}) but no file in app/backend/tests/ did. Write or extend tests for the new behavior (see docs/TESTING.md for the brain fixture pattern), then run pytest before committing."
+    ITEM_NUM=$((ITEM_NUM + 1))
+  fi
+fi
+
+# VERSION bumped this turn → remind to add the matching What's-New entry.
+# (VERSION lives at the repo root, outside the find paths above, so check it directly.)
+if [ "$LAST_STOP" -gt 0 ] && [ -f "$REPO_DIR/VERSION" ]; then
+  V_MTIME=$(stat -c %Y "$REPO_DIR/VERSION")
+  if [ "$V_MTIME" -gt "$LAST_STOP" ]; then
+    EXTRA="${EXTRA}
+${ITEM_NUM}. VERSION bumped — add a matching whats_new entry (version + date + highlights) to app/backend/content/help.json so users get a What's-New inbox note + banner on update."
     ITEM_NUM=$((ITEM_NUM + 1))
   fi
 fi
