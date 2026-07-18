@@ -30,6 +30,11 @@ def get_installed_version() -> str:
         return "0.1.0"
 
 
+def _normalize_tag(tag: str) -> str:
+    """Strip the leading v/V from a release tag ('V0.3.0' → '0.3.0')."""
+    return tag.lstrip("vV")
+
+
 def check_latest_version() -> dict:
     """Fetch latest GitHub release. Caches result for CACHE_TTL seconds."""
     cache_path = _sys() / "update_cache.json"
@@ -59,7 +64,7 @@ def check_latest_version() -> dict:
             data = json.loads(resp.read().decode())
         tag = data.get("tag_name", "")
         result = {
-            "latest_version": tag.lstrip("v"),
+            "latest_version": _normalize_tag(tag),
             "release_url": data.get("html_url", ""),
             "release_name": data.get("name", tag),
             "cached_at": time.time(),

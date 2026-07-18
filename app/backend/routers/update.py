@@ -20,6 +20,15 @@ def update_status(_: dict = Depends(_admin)) -> dict:
     return get_update_status()
 
 
+@router.post("/check")
+def check_now(_: dict = Depends(_admin)) -> dict:
+    """Force-refresh the GitHub version cache (bypasses the 4h TTL), return fresh status."""
+    from services.update_service import get_update_status, refresh_version_cache
+
+    refresh_version_cache()
+    return get_update_status()
+
+
 @router.post("/apply")
 def apply_update(_: dict = Depends(_admin)) -> dict:
     """Write the pending_update flag. Requires update.sh --watch running on the host."""

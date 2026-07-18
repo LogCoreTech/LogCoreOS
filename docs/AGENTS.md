@@ -313,7 +313,8 @@ APScheduler runs 8 fixed jobs plus dynamic per-user custom jobs (all times in `s
 | Weekly review | Sunday 19:00 | Runs `weekly_review` suggestion for each user |
 | Goal drift | Daily 19:30 | Runs `goal_drift` suggestion for each user |
 | JTI cleanup | Nightly 03:00 | Removes expired revoked JWT token IDs from `auth.json` |
-| Update check | Daily 12:00 | Refreshes GitHub release cache → Admin → Updates card reads result |
+| Update check | Daily 12:00 | Refreshes GitHub release cache → Admin → Updates card reads result; also re-runs the What's-New announce |
+| What's-New recheck | Boot+180s one-shot | Re-runs `announce_if_updated()` after update.sh has stamped `installed_version.json` (the stamp lands after the app restarts, so the lifespan announce alone misses in-place updates) |
 | SimpleFIN sync | Boot+2min, then every 12h | Pulls bank transactions for every user with a connection (`sync_all_users()`) |
 | Finance nightly | Daily 07:30 | Missed-bill flags, budget alerts, balance-deviation checks across all stores + pools |
 | Custom jobs | User-configured (daily/weekly/interval) | Per-user custom suggestion schedules registered dynamically via `add_custom_job()` |

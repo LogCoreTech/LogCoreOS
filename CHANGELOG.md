@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **What's-New broadcast now fires after in-place updates** — `update.sh` stamps the installed version only after the restarted app passes its health check, so the boot-time announce saw the old version and stayed silent. The scheduler now re-checks 3 minutes after boot and during the daily update check
+- **Release tags with a capital V are parsed correctly** (`V0.3.0` previously broke version comparison, hiding updates)
+- **Updates card ↺ now really checks** — the refresh button hits a new cache-busting endpoint (`POST /update/check`) instead of re-reading the 4-hour cache, so a fresh release is visible immediately
+
 ## [0.3.1] — 2026-07-18
 
 ### Added

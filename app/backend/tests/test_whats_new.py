@@ -107,3 +107,34 @@ def test_banner_within_and_after_window(brain, monkeypatch):
         {"announced_version": "0.3.0", "announced_at": None},
     )
     assert wn.get_banner()["version"] is None
+
+
+def test_late_version_stamp_announces_on_recheck(brain, monkeypatch):
+    """The update.sh race: at boot the stamp still shows the old version (silent),
+    then update.sh writes the new one — the scheduler re-check must announce."""
+    write_json(
+        brain / "_system" / "whats_new_state.json",
+        {"announced_version": "0.3.0", "announced_at": None},
+    )
+    _set_version(brain, "0.3.0")  # boot happens before update.sh stamps
+    calls = []
+    monkeypatch.setattr("services.auth_service.list_users", lambda: [{"name": "A"}])
+    monkeypatch.setattr(
+        "services.suggestions_service.notify_user", lambda name, *a, **k: calls.append(name)
+    )
+    monkeypatch.setattr(help_service, "get_content", lambda: _content_with("0.3.1", "0.3.0"))
+
+    assert wn.announce_if_updated()["announced"] is False  # boot-time: not newer yet
+
+    _set_version(brain, "0.3.1")  # update.sh stamps after health check
+    res = wn.announce_if_updated()  # boot+180s one-shot / daily job
+    assert res["announced"] is True and calls == ["A"]
+
+
+def test_release_tag_normalization():
+    from services.update_service import _normalize_tag, _version_gt
+
+    assert _normalize_tag("v0.3.1") == "0.3.1"
+    assert _normalize_tag("V0.3.0") == "0.3.0"
+    # The capital-V bug: unstripped tag parsed as (0,) and broke comparisons
+    assert _version_gt(_normalize_tag("V0.3.1"), "0.3.0") is True

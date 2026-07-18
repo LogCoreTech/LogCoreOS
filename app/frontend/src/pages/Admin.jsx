@@ -2186,10 +2186,14 @@ function UpdateCard() {
               {showLog ? 'Hide Log' : 'View Log'}
             </button>
             <button
-              onClick={async () => { setRefreshing(true); await loadStatus(); setRefreshing(false) }}
+              onClick={async () => {
+                setRefreshing(true)
+                try { setStatus(await updateApi.check()) } catch { await loadStatus() }
+                setRefreshing(false)
+              }}
               disabled={refreshing}
               className="text-sm text-charcoal-500 hover:text-orange-500 transition-colors disabled:opacity-50 px-2"
-              title="Refresh"
+              title="Check for updates now (bypasses the cache)"
             >
               {refreshing ? '…' : '↺'}
             </button>
