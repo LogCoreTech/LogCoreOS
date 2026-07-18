@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import HelpButton from '../components/HelpButton'
 import { journal as journalApi } from '../lib/api'
 
 function _todayStr() {
@@ -71,7 +72,7 @@ export default function Journal() {
     <div className="max-w-2xl mx-auto space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Journal</h1>
+        <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">Journal</h1><HelpButton section="journal" /></span>
         <button
           onClick={() => setShowHistory(h => !h)}
           className="btn-ghost text-sm"

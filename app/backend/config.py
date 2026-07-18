@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     # Notifications
     ntfy_url: str = "http://ntfy:80"
 
+    # How many days the "What's New" banner stays visible after an app update.
+    whats_new_days: int = Field(5, ge=0, le=60)
+
     # Web Push / VAPID
     # Must be a mailto: or https: URL identifying the push sender
     vapid_subject: str = "logcore@localhost"

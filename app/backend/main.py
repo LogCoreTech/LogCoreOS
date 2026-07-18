@@ -31,6 +31,7 @@ from routers import (
     finance_planning,
     finance_sharing,
     health,
+    help,
     home,
     infisical,
     journal,
@@ -56,8 +57,19 @@ async def lifespan(app: FastAPI):
     _startup_checks()
     run_migrations()
     _warm_share_index()
+    _announce_whats_new()
     start_scheduler()
     yield
+
+
+def _announce_whats_new() -> None:
+    """On a version bump, notify every user's inbox once and open the banner window."""
+    try:
+        from services.whats_new_service import announce_if_updated
+
+        announce_if_updated()
+    except Exception:
+        logger.exception("whats-new announcement failed")
 
 
 def _warm_share_index() -> None:
@@ -227,6 +239,7 @@ app.include_router(contacts.router, prefix="/api/v1/contacts", tags=["contacts"]
 app.include_router(home.router, prefix="/api/v1/home", tags=["home"])
 app.include_router(team.router, prefix="/api/v1/team", tags=["team"])
 app.include_router(update.router, prefix="/api/v1/update", tags=["update"])
+app.include_router(help.router, prefix="/api/v1/help", tags=["help"])
 
 # Serve React frontend — must come last
 static_dir = Path(__file__).parent.parent / "frontend" / "dist"

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import HelpButton from '../components/HelpButton'
 import { calendar as calendarApi, shared as sharedApi, team as teamApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
@@ -118,7 +119,7 @@ export default function Calendar() {
     <div className="w-full max-w-4xl mx-auto space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-2xl font-bold">Calendar</h1>
+        <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">Calendar</h1><HelpButton section="calendar" /></span>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex gap-1">
             {['High', 'Medium', 'Low'].map(p => (

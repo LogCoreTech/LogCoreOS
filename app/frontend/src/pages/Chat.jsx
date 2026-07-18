@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import HelpButton from '../components/HelpButton'
 import { useNavigate } from 'react-router-dom'
 import { chat as chatApi, suggestions as sugApi, brain as brainApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -342,7 +343,7 @@ export default function Chat() {
   return (
     <div className="max-w-2xl mx-auto w-full flex flex-col flex-1 min-h-0">
       <div className="flex items-center justify-between mb-4 shrink-0">
-        <h1 className="text-2xl font-bold">AI Chat</h1>
+        <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">AI Chat</h1><HelpButton section="chat" /></span>
         <div className="flex items-center gap-2">
           <button
             onClick={newChat}

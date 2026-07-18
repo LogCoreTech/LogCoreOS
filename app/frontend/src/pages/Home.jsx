@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import HelpButton from '../components/HelpButton'
 import { home as homeApi } from '../lib/api'
 
 const DOMAIN_TABS = [
@@ -324,7 +325,7 @@ export default function Home() {
 
   return (
     <div className="max-w-2xl mx-auto p-4 space-y-4">
-      <h1 className="text-2xl font-bold">Smart Home</h1>
+      <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">Smart Home</h1><HelpButton section="home" /></span>
 
       {/* Toast */}
       {toast && (

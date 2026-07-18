@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import HelpButton from '../components/HelpButton'
 import { useNavigate } from 'react-router-dom'
 import { contacts as contactsApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -309,7 +310,7 @@ export default function Contacts() {
   return (
     <div key={workspace} className="w-full max-w-3xl mx-auto space-y-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h1 className="text-2xl font-bold">Contacts</h1>
+        <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">Contacts</h1><HelpButton section="contacts" /></span>
         <div className="flex gap-2">
           <button onClick={() => setShowArchived(s => !s)} className="btn-ghost text-sm">{showArchived ? 'Hide archived' : 'Show archived'}</button>
           <label className="btn-ghost text-sm cursor-pointer">Import

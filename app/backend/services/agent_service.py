@@ -56,6 +56,7 @@ _RESEARCH_TOOLS = {
     "get_priorities",
     "list_contacts",
     "get_contact",
+    "get_help",
     # admin read-only
     "list_users",
     "list_household_members",
@@ -288,6 +289,26 @@ _USER_TOOLS: list[dict] = [
             "type": "object",
             "properties": {
                 "scope": {"type": "string", "enum": ["user", "household", "team"]},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "get_help",
+        "description": (
+            "Read LogCore's in-app help guide to explain how a feature or module works. Call this "
+            "whenever the user asks how to do something, seems confused, or asks what LogCore can do. "
+            "Answer from what it returns and point them to the cited /help#<section> anchor. Pass a "
+            "section id (e.g. 'finance', 'tasks', 'sharing', 'chat') to focus on one topic, or omit "
+            "it to get the whole guide including the FAQ."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "section": {
+                    "type": "string",
+                    "description": "Optional help section id to focus on (e.g. finance, tasks, sharing).",
+                },
             },
             "required": [],
         },
@@ -1345,6 +1366,11 @@ def _execute_tool(
 
             case "get_profile":
                 return profile_service.load_profile(user["name"])
+
+            case "get_help":
+                from services import help_service
+
+                return {"help": help_service.as_text(inputs.get("section") or None)}
 
             case "get_priorities":
                 scope = inputs.get("scope", "user")

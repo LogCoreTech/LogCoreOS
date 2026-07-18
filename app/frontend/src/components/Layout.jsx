@@ -4,6 +4,7 @@ import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
 import { ALL_MODULES, getShortcutsForUser } from '../lib/constants'
 import { suggestions as sugApi, assets as assetsApi, finance as financeApi, contacts as contactsApi, notes as notesApi } from '../lib/api'
+import WhatsNewBanner from './WhatsNewBanner'
 
 const ADMIN_NAV = { to: '/admin', icon: '⬡', label: 'Admin' }
 
@@ -204,6 +205,20 @@ export default function Layout() {
     localStorage.setItem('lc_sidebar', next ? 'collapsed' : 'expanded')
   }
 
+  // Global "?" shortcut → open Help (ignored while typing in a field).
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key !== '?' || e.metaKey || e.ctrlKey || e.altKey) return
+      const t = e.target
+      const tag = t?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || t?.isContentEditable) return
+      e.preventDefault()
+      navigate('/help')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [navigate])
+
   const disabledIds = new Set(user?.disabledModules || [])
   const visibleModules = ALL_MODULES.filter(m =>
     m.nav !== false && m.to && !disabledIds.has(m.id) &&
@@ -331,6 +346,20 @@ export default function Layout() {
             <span className="text-base shrink-0">⚙</span>
             {!collapsed && 'Settings'}
           </NavLink>
+          <NavLink
+            to="/help"
+            title={collapsed ? 'Help' : undefined}
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-3 py-2 text-sm font-medium transition-colors border-l-2 rounded-r-lg ${
+                isActive
+                  ? 'border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400'
+                  : 'border-transparent text-charcoal-600 dark:text-charcoal-400 hover:bg-charcoal-100 dark:hover:bg-charcoal-800'
+              } ${collapsed ? 'justify-center' : ''}`
+            }
+          >
+            <span className="text-base shrink-0">❔</span>
+            {!collapsed && 'Help'}
+          </NavLink>
           <button
             onClick={logout}
             title={collapsed ? 'Sign out' : undefined}
@@ -356,6 +385,8 @@ export default function Layout() {
           <span className="text-orange-500 font-bold text-xl tracking-tight">LogCore</span>
           <NotifBell />
         </header>
+
+        <WhatsNewBanner />
 
         <main className="flex-1 min-h-0 overflow-y-scroll overflow-x-hidden p-4 md:p-6 flex flex-col">
           <Outlet />
@@ -463,6 +494,13 @@ export default function Layout() {
               >
                 <span className="text-base">⚙</span>
                 Settings
+              </button>
+              <button
+                onClick={() => navTo('/help')}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-charcoal-600 dark:text-charcoal-400 hover:bg-charcoal-100 dark:hover:bg-charcoal-800 transition-colors"
+              >
+                <span className="text-base">❔</span>
+                Help
               </button>
               <button
                 onClick={() => { setShowDrawer(false); logout() }}

@@ -23,6 +23,7 @@ import Home from './pages/Home'
 import Assets from './pages/Assets'
 import Finance from './pages/Finance'
 import Contacts from './pages/Contacts'
+import Help from './pages/Help'
 
 function Protected({ children }) {
   const { user } = useAuth()
@@ -70,6 +71,7 @@ export default function App() {
                 <Route path="/brain"     element={<Brain />} />
                 <Route path="/profile"   element={<Profile />} />
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/help"     element={<Help />} />
                 <Route path="/admin"    element={<AdminOnly><Admin /></AdminOnly>} />
               </Route>
             </Routes>

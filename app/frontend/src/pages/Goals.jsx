@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import HelpButton from '../components/HelpButton'
 import { tasks as tasksApi, priorities as prioritiesApi } from '../lib/api'
 import { useWorkspace } from '../lib/workspace'
 import TaskModal from '../components/TaskModal'
@@ -85,18 +86,24 @@ export default function Goals() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end gap-2">
-        {doneCount > 0 && (
-          <button onClick={clearCompleted} className="btn-ghost text-sm">
-            Clear completed
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold">Goals</h1>
+          <HelpButton section="goals" />
+        </span>
+        <div className="flex gap-2">
+          {doneCount > 0 && (
+            <button onClick={clearCompleted} className="btn-ghost text-sm">
+              Clear completed
+            </button>
+          )}
+          <button
+            onClick={() => { setEditTask(null); setShowModal(true) }}
+            className="btn-primary text-sm"
+          >
+            + Add Goal
           </button>
-        )}
-        <button
-          onClick={() => { setEditTask(null); setShowModal(true) }}
-          className="btn-primary text-sm"
-        >
-          + Add Goal
-        </button>
+        </div>
       </div>
 
       {/* Timeline filter */}

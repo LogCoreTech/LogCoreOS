@@ -186,6 +186,25 @@ async def chat(
         else ""
     )
 
+    # Help awareness — works in every mode (including research): the AI knows what
+    # LogCore can do, points the user to the right module, and reads the Help guide
+    # (get_help) when they're confused or ask how to do something.
+    from services import help_service
+    from services.features_service import ALL_MODULE_IDS
+
+    disabled = set(current_user.get("disabled_modules", []))
+    enabled = {m for m in ALL_MODULE_IDS if m not in disabled}
+    cap_index = help_service.capabilities_index(enabled)
+    help_guidance = (
+        "Helping the user use LogCore:\n"
+        "- If they ask how to do something, seem confused, or ask what LogCore can do, call "
+        "get_help (optionally with a section id like 'finance' or 'sharing') and answer from it, "
+        "citing the /help#<section> anchor so they can read more.\n"
+        "- When a request fits a module, point them to it by name.\n"
+        + (cap_index + "\n" if cap_index else "")
+        + "\n"
+    )
+
     system_prompt = (
         f"You are the AI layer of LogCore Brain — a personal life operating system. "
         f"Today is {today_str}. "
@@ -194,6 +213,7 @@ async def chat(
         "When the user asks you to take an action, use the appropriate tool.\n\n"
         + mode_block
         + tool_guidance
+        + help_guidance
         + _build_context(current_user["name"], workspace)
     )
 

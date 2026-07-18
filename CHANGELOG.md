@@ -8,6 +8,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+**Help section (with AI-readable guides)**
+- New **Help** entry in the sidebar and mobile menu (below Settings) opening a full **Help & Guide** page: what every module does and how to use it, a searchable FAQ, and how to reach support
+- Every module page gets an **ⓘ button** next to its title that jumps straight to that module's help section
+- **The AI knows the help too** — ask "how do I use Finance?" in Chat and the assistant reads the same guide, answers, and links you to the right section; it also proactively points you to the right module for what you're trying to do
+- **Search** the guide, filter to **only your modules**, or press **?** anywhere to open Help
+- **Contact & support**: email support@logcoretech.com with pre-filled buttons for bug reports, feature requests, and feedback
+- **First-run Getting Started checklist** on the Dashboard to help new users find their way (dismissible)
+- **What's New broadcast**: after LogCore updates, every user gets a "what's new" note in their inbox and a dismissible banner for a few days, sourced from an authored release-highlights list
+
 ## [0.3.0] — 2026-07-16
 
 ### Added

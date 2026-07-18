@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import HelpButton from '../components/HelpButton'
 import { tasks as tasksApi, priorities as prioritiesApi, shared as sharedApi, team as teamApi, assets as assetsApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
@@ -120,7 +121,7 @@ export default function Tasks() {
     <div className="w-full max-w-2xl mx-auto space-y-5 overflow-x-hidden">
       {/* Header */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h1 className="text-2xl font-bold">Tasks</h1>
+        <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">Tasks</h1><HelpButton section="tasks" /></span>
         <div className="flex gap-2 shrink-0">
           <button
             onClick={() => setShowReorder(true)}
