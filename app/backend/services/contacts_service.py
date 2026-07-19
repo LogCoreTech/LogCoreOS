@@ -667,6 +667,28 @@ def list_deals(store_user: str, workspace: str, contact_id: str | None = None) -
     return items
 
 
+def find_deal(
+    viewer: str, viewer_role: str, is_admin: bool, workspace: str, deal_id: str
+) -> tuple[str, dict, dict, str] | None:
+    """Locate a deal across viewer + pool + sharer stores. A deal has no access
+    of its own — it inherits the parent contact's resolve_access result.
+    Returns (store_user, deal, contact, access) or None."""
+    from services.contacts_index import sharers_for
+
+    stores = [viewer, pool_for(workspace)]
+    stores += [s for s in sharers_for(viewer, viewer_role, workspace) if s not in stores]
+    for store_user in stores:
+        deal = next((d for d in _list_deals(store_user, workspace) if d["id"] == deal_id), None)
+        if deal is None:
+            continue
+        contact = get_contact(store_user, workspace, deal.get("contact_id") or "")
+        if contact is None:
+            return None
+        access = resolve_access(viewer, viewer_role, is_admin, store_user, contact, workspace)
+        return (store_user, deal, contact, access) if access else None
+    return None
+
+
 def _validate_deal(store_user: str, workspace: str, data: dict, partial: bool = False) -> dict:
     out: dict = {}
     stages = get_pipeline(store_user, workspace)
@@ -711,6 +733,7 @@ def add_deal(store_user: str, workspace: str, contact_id: str, data: dict, creat
         "follow_up": None,
         "notes": "",
         "invoice_id": None,
+        "linked_asset_ids": [],
         "created_by": created_by,
         "created_at": _now(),
         "updated_at": _now(),
@@ -742,6 +765,35 @@ def delete_deal(store_user: str, workspace: str, deal_id: str) -> bool:
         return False
     _save_deals(store_user, workspace, remaining)
     return True
+
+
+def link_asset(store_user: str, workspace: str, deal_id: str, asset_id: str) -> dict | None:
+    """Append an Asset id to a deal's linked_asset_ids (idempotent). The caller
+    (router) must have already resolved the asset for the acting user via
+    assets_service.find_asset() — this is a pure data mutation."""
+    items = _list_deals(store_user, workspace)
+    for i, d in enumerate(items):
+        if d["id"] != deal_id:
+            continue
+        ids = list(d.get("linked_asset_ids") or [])
+        if asset_id not in ids:
+            ids.append(asset_id)
+        items[i] = {**d, "linked_asset_ids": ids, "updated_at": _now()}
+        _save_deals(store_user, workspace, items)
+        return items[i]
+    return None
+
+
+def unlink_asset(store_user: str, workspace: str, deal_id: str, asset_id: str) -> dict | None:
+    items = _list_deals(store_user, workspace)
+    for i, d in enumerate(items):
+        if d["id"] != deal_id:
+            continue
+        ids = [a for a in (d.get("linked_asset_ids") or []) if a != asset_id]
+        items[i] = {**d, "linked_asset_ids": ids, "updated_at": _now()}
+        _save_deals(store_user, workspace, items)
+        return items[i]
+    return None
 
 
 # ---------------------------------------------------------------------------

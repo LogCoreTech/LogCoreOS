@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import HelpButton from '../components/HelpButton'
 import { useSearchParams } from 'react-router-dom'
-import { finance as financeApi } from '../lib/api'
+import { finance as financeApi, assets as assetsApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
 import TransactionModal from '../components/finance/TransactionModal'
@@ -26,6 +26,12 @@ export default function Finance() {
   const [showBank, setShowBank] = useState(false)
   const [txModal, setTxModal] = useState(null) // null | {tx: null|obj}
   const [showArchived, setShowArchived] = useState(false)
+  const [assetList, setAssetList] = useState([]) // for the tx linked-asset picker; [] if assets module off
+  const [invoicePrefill, setInvoicePrefill] = useState(null) // {contactId, amountCents, title, dealId} from a deal
+
+  useEffect(() => {
+    assetsApi.list().then(r => setAssetList(Array.isArray(r) ? r : [])).catch(() => setAssetList([]))
+  }, [workspace])
 
   const isAdmin = user?.role === 'admin'
   const active = books.find(b => b.id === activeId) || books[0] || null
@@ -66,9 +72,20 @@ export default function Finance() {
   useEffect(() => {
     const bookParam = searchParams.get('book')
     const viewParam = searchParams.get('view')
-    if (!bookParam && !viewParam) return
+    const clientContact = searchParams.get('client_contact')
+    if (!bookParam && !viewParam && !clientContact) return
     if (bookParam) setActiveId(bookParam)
     if (viewParam) setView(viewParam)
+    // Deal → invoice deep-prefill (from Contacts). No book param on purpose —
+    // the user picks which book to invoice from, then confirms in the modal.
+    if (clientContact && searchParams.get('deal_id')) {
+      setInvoicePrefill({
+        contactId: clientContact,
+        amountCents: parseInt(searchParams.get('amount') || '0', 10) || 0,
+        title: searchParams.get('title') || '',
+        dealId: searchParams.get('deal_id'),
+      })
+    }
     setSearchParams({}, { replace: true })
   }, [searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -174,7 +191,16 @@ export default function Finance() {
           )}
           {view === 'budgets' && <BudgetsPanel key={active.id} book={active} canEdit={canEdit} />}
           {view === 'recurring' && <RecurringPanel key={active.id} book={active} canEdit={canEdit} />}
-          {view === 'invoices' && <InvoicesPanel key={active.id} book={active} canEdit={canEdit} />}
+          {view === 'invoices' && (
+            <InvoicesPanel
+              key={active.id}
+              book={active}
+              canEdit={canEdit}
+              assets={assetList}
+              prefill={invoicePrefill}
+              onPrefillConsumed={() => setInvoicePrefill(null)}
+            />
+          )}
           {view === 'reports' && <ReportsPanel key={active.id} book={active} />}
         </>
       )}
@@ -209,6 +235,7 @@ export default function Finance() {
           book={active}
           tx={txModal.tx}
           allowedKinds={canEdit ? ['expense', 'income'] : (caps.add || [])}
+          assets={assetList}
           onClose={() => setTxModal(null)}
           onSaved={() => { setTxModal(null); load() }}
           onDeleted={() => { setTxModal(null); load() }}

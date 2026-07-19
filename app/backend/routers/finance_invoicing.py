@@ -50,6 +50,7 @@ class LineItem(BaseModel):
 
 class InvoiceCreate(BaseModel):
     client_id: str | None = None
+    deal_id: str | None = Field(default=None, max_length=64)
     issue_date: str | None = None
     due_date: str
     line_items: list[LineItem] = Field(..., min_length=1, max_length=50)
@@ -74,6 +75,24 @@ class PaymentCreate(BaseModel):
     # When set, an income transaction is created in this account and linked
     account_id: str | None = None
     category: str = Field(default="", max_length=40)
+
+
+@router.get("/deals/{deal_id}/invoices")
+def deal_invoices(
+    deal_id: str,
+    current_user: dict = Depends(_require_finance),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_read_limit),
+):
+    """All invoices billing this deal, across every book the viewer can see."""
+    _validate_uuid(deal_id, "deal ID")
+    return invoicing.list_invoices_for_deal(
+        current_user["name"],
+        current_user.get("feature_role", "member"),
+        current_user.get("role") == "admin",
+        workspace,
+        deal_id,
+    )
 
 
 # ---------------------------------------------------------------------------

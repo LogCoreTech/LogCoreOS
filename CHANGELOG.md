@@ -8,6 +8,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+**Link your deals, assets, and money together**
+- **Link assets to a deal** — every deal row in Contacts now has a 🔗 panel: attach the assets a job involves (the client's property, equipment used), see them at a glance, and get a running total of the linked assets' finance activity
+- **Tag transactions with an asset** — the transaction form gets an optional "Linked asset" picker, and every asset's page now shows a **Finance activity** section with **income, expenses, and net** for that asset, across every book you can see
+- **Create an invoice straight from a Won deal** — the 🧾 button now opens Finance with the invoice pre-filled (the deal's contact as the client, the deal value as a line item); you pick the book, review, and save — the invoice remembers which deal it bills
+- **A deal can bill multiple invoices** — deposits, progress billing, final invoices all show under the deal, with a **Job P&L**: invoiced, collected, expenses from the linked assets, and net job profit
+- **Change invoice status freely** — a status dropdown (draft/sent/paid/void) on the invoice and in the list replaces the one-way buttons; full payments still auto-mark paid
+- **Finish payment transactions on the spot** — recording a payment that logs a ledger transaction now opens that transaction immediately so you can set category, asset, and notes without hunting for it
+- **Everything links back** — invoices show the deal (and its assets) they came from; transactions show "from invoice / deal" chips; asset pages, deals, and invoices all click through to each other
+- **Contacts on assets** — asset templates get a "contact" field type (pick a person/company from your CRM); the contact's page gains a **References** section showing every asset, invoice, and dollar tied to them, plus per-deal job profit
+
 ### Fixed
 
 - **What's-New broadcast now fires after in-place updates** — `update.sh` stamps the installed version only after the restarted app passes its health check, so the boot-time announce saw the old version and stayed silent. The scheduler now re-checks 3 minutes after boot and during the daily update check

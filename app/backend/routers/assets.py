@@ -520,6 +520,24 @@ def list_roles(current_user: dict = Depends(_require_assets)):
     return sorted((load_features().get("roles") or {}).keys())
 
 
+@router.get("/by-contact/{contact_id}")
+def assets_by_contact(
+    contact_id: str,
+    current_user: dict = Depends(_require_assets),
+    workspace: str = Depends(get_workspace),
+):
+    """Viewer-visible assets referencing this contact in a contact-type field.
+    Feeds the contact References section."""
+    return assets_service.list_assets_for_contact(
+        current_user["name"],
+        workspace,
+        contact_id,
+        is_admin=current_user.get("role") == "admin",
+        pool_edit=current_user.get("pool_edit") or [],
+        viewer_role=current_user.get("feature_role") or "",
+    )
+
+
 @router.post("/shares/respond")
 def respond_share(
     req: ShareRespond,

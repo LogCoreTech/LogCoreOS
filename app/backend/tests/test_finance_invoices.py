@@ -357,3 +357,87 @@ def test_delete_transaction_removes_receipts(brain, book, checking):
     fin.delete_transaction("Alice", "business", book["id"], tx["id"])
     assert not receipt_dir.exists()
     assert meta["id"]  # (referenced to satisfy lints)
+
+
+# ---------------------------------------------------------------------------
+# Deal-billed invoices (deal_id) + payment tx stamping + cross-book scan
+# ---------------------------------------------------------------------------
+
+
+def _deal_with_assets(asset_ids):
+    from services import contacts_service as crm
+
+    c = crm.create_contact("Alice", "business", {"name": "Acme"}, "Alice")
+    d = crm.add_deal("Alice", "business", c["id"], {"title": "Job"}, "Alice")
+    for aid in asset_ids:
+        crm.link_asset("Alice", "business", d["id"], aid)
+    return crm.list_deals("Alice", "business", c["id"])[0]
+
+
+def _deal_invoice(book, client, deal_id):
+    return inv.create_invoice(
+        "Alice",
+        "business",
+        book["id"],
+        {
+            "client_id": client["id"],
+            "deal_id": deal_id,
+            "due_date": (date.today() + timedelta(days=10)).isoformat(),
+            "line_items": [{"description": "Work", "qty": 1, "unit_cents": 100_00}],
+        },
+        "Alice",
+    )
+
+
+def test_invoice_deal_id_stored(brain, book, client):
+    d = _deal_with_assets([])
+    made = _deal_invoice(book, client, d["id"])
+    assert made["deal_id"] == d["id"]
+    # Invoices without a deal stay None
+    assert _invoice(book, client)["deal_id"] is None
+
+
+def test_payment_tx_stamps_deal_and_single_asset(brain, book, checking, client):
+    d = _deal_with_assets(["asset-1"])
+    made = _deal_invoice(book, client, d["id"])
+    updated = inv.record_payment(
+        "Alice",
+        "business",
+        book["id"],
+        made["id"],
+        {"amount_cents": 100_00, "account_id": checking["id"]},
+        "Alice",
+    )
+    tx_id = updated["payments"][-1]["tx_id"]
+    items, _total = fin.list_transactions("Alice", "business", book["id"])
+    tx = next(t for t in items if t["id"] == tx_id)
+    assert tx["deal_id"] == d["id"]
+    assert tx["asset_id"] == "asset-1"  # exactly one linked asset → auto-linked
+
+
+def test_payment_tx_no_asset_when_deal_has_zero_or_many(brain, book, checking, client):
+    d = _deal_with_assets(["a1", "a2"])
+    made = _deal_invoice(book, client, d["id"])
+    updated = inv.record_payment(
+        "Alice",
+        "business",
+        book["id"],
+        made["id"],
+        {"amount_cents": 50_00, "account_id": checking["id"]},
+        "Alice",
+    )
+    items, _total = fin.list_transactions("Alice", "business", book["id"])
+    tx = next(t for t in items if t["id"] == updated["payments"][-1]["tx_id"])
+    assert tx["deal_id"] == d["id"]
+    assert tx["asset_id"] is None  # ambiguous — user picks in the tx modal
+
+
+def test_deal_invoices_scan_scoped_to_viewer(brain, book, client):
+    d = _deal_with_assets([])
+    _deal_invoice(book, client, d["id"])
+    mine = inv.list_invoices_for_deal("Alice", "member", False, "business", d["id"])
+    assert len(mine) == 1
+    assert mine[0]["book_name"] == "LLC books"
+    assert mine[0]["total_cents"] == 100_00
+    # Another user must never see invoices from a book not visible to them
+    assert inv.list_invoices_for_deal("Bob", "member", False, "business", d["id"]) == []

@@ -1,6 +1,8 @@
-import { useState } from 'react'
-import { assets as assetsApi } from '../lib/api'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { assets as assetsApi, contacts as contactsApi } from '../lib/api'
 import { AttachmentThumb, formatChanges, fieldDisplay, FieldInput } from './assetDisplay'
+import { fmtMoney } from './finance/money'
 
 const OWNER_CHIP = { team: '🧑‍🤝‍🧑 Team', household: '🏠 Household' }
 
@@ -21,7 +23,7 @@ function fmtWhen(iso) {
 // Contribute-level viewers (employees) work entirely from here: quick status,
 // inline controls for their granted fields, comments, capped file upload.
 export default function AssetView({
-  asset, template, linkedTasks, childAssets,
+  asset, template, linkedTasks, financeActivity, childAssets,
   canEdit, canManage, user, onEdit, onClose, onOpenAsset, onAssetUpdated,
 }) {
   const [showHistory, setShowHistory] = useState(false)
@@ -45,6 +47,18 @@ export default function AssetView({
   const status = asset.fields?.status
   const fieldDefs = (template?.fields || []).filter(f => f.key !== 'status')
   const statusDef = (template?.fields || []).find(f => f.key === 'status')
+  const navigate = useNavigate()
+
+  // Contact-type fields render the contact's name as a jump link — resolve
+  // names once, only when the template actually has a contact field.
+  const hasContactField = (template?.fields || []).some(f => f.type === 'contact')
+  const [contactNames, setContactNames] = useState({})
+  useEffect(() => {
+    if (!hasContactField) return
+    contactsApi.list()
+      .then(r => setContactNames(Object.fromEntries((Array.isArray(r) ? r : []).map(c => [c.id, c.name]))))
+      .catch(() => {})
+  }, [hasContactField])
   const notes = (asset.notes || '').trim()
   const attachments = asset.attachments || []
   const shares = (asset.shared_with || []).filter(s => s.target)
@@ -245,12 +259,19 @@ export default function AssetView({
           {fieldDefs.length > 0 && (
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
               {fieldDefs.map(def => {
-                const val = fieldDisplay(def, asset.fields?.[def.key])
+                const raw = asset.fields?.[def.key]
+                const val = fieldDisplay(def, raw)
                 return (
                   <div key={def.key} className="min-w-0">
                     <dt className="text-[11px] uppercase tracking-wide text-charcoal-400">{def.label}</dt>
                     <dd className={`text-sm break-words ${val == null ? 'text-charcoal-300 dark:text-charcoal-600' : ''}`}>
-                      {val == null ? '—' : val}
+                      {val == null ? '—' : def.type === 'contact' ? (
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/contacts?contact=${raw}`)}
+                          className="text-orange-500 hover:underline"
+                        >🧑 {contactNames[raw] || '(contact)'}</button>
+                      ) : val}
                     </dd>
                   </div>
                 )
@@ -303,6 +324,37 @@ export default function AssetView({
               </ul>
             </div>
           )}
+
+          {/* Finance activity — transactions tagged with this asset, across
+              every book the viewer can see (server-side access-scoped) */}
+          {(financeActivity || []).length > 0 && (() => {
+            const income = financeActivity.reduce((s, t) => s + Math.max(t.amount_cents || 0, 0), 0)
+            const expenses = financeActivity.reduce((s, t) => s + Math.min(t.amount_cents || 0, 0), 0)
+            const net = income + expenses
+            return (
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-charcoal-400 mb-1">
+                  Finance activity ({financeActivity.length})
+                </div>
+                <div className="flex gap-4 text-sm mb-1.5">
+                  <span>Income <b className="text-green-600">{fmtMoney(income)}</b></span>
+                  <span>Expenses <b className="text-red-500">{fmtMoney(expenses)}</b></span>
+                  <span>Net <b className={net < 0 ? 'text-red-500' : 'text-green-600'}>{fmtMoney(net)}</b></span>
+                </div>
+                <ul className="text-sm space-y-1">
+                  {financeActivity.map(t => (
+                    <li key={t.id} className="flex items-center gap-2">
+                      <span className="truncate">{t.payee || t.category || '(uncategorized)'}</span>
+                      <span className={`shrink-0 ${t.amount_cents < 0 ? 'text-red-500' : 'text-green-600'}`}>
+                        {fmtMoney(t.amount_cents)}
+                      </span>
+                      <span className="text-xs text-charcoal-400 ml-auto shrink-0">{t.book_name} · {t.date}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )
+          })()}
 
           {/* Comments — attributed job log; edit-level users get notified.
               Any user can collapse the section for themselves (resets on

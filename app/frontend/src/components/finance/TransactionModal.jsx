@@ -1,9 +1,10 @@
-import { useState } from 'react'
-import { finance as financeApi } from '../../lib/api'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { finance as financeApi, contacts as contactsApi } from '../../lib/api'
 import { toCents, centsToInput, todayStr } from './money'
 import ContactPicker from '../contacts/ContactPicker'
 
-export default function TransactionModal({ book, tx, allowedKinds, onClose, onSaved, onDeleted }) {
+export default function TransactionModal({ book, tx, allowedKinds, assets, onClose, onSaved, onDeleted }) {
   const editing = !!tx
   const kinds = allowedKinds?.length ? allowedKinds : ['expense', 'income']
   const accounts = (book?.accounts || []).filter(a => !a.archived || (tx && tx.account_id === a.id))
@@ -16,6 +17,7 @@ export default function TransactionModal({ book, tx, allowedKinds, onClose, onSa
   const [category, setCategory] = useState(tx?.category ?? '')
   const [payee, setPayee] = useState(tx?.payee || '')
   const [payeeContactId, setPayeeContactId] = useState(tx?.payee_contact_id || null)
+  const [assetId, setAssetId] = useState(tx?.asset_id || '')
   const [notes, setNotes] = useState(tx?.notes || '')
   const [deductible, setDeductible] = useState(!!tx?.deductible)
   const [taxCategory, setTaxCategory] = useState(tx?.tax_category || '')
@@ -23,6 +25,17 @@ export default function TransactionModal({ book, tx, allowedKinds, onClose, onSa
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const taxCategories = book?.tax_categories || []
+  const navigate = useNavigate()
+  const [sourceDeal, setSourceDeal] = useState(null) // resolved when the tx carries a deal_id
+
+  useEffect(() => {
+    if (!tx?.deal_id) return
+    let alive = true
+    contactsApi.getDeal(tx.deal_id)
+      .then(d => { if (alive && d?.id) setSourceDeal(d) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [tx?.deal_id])
 
   const categories = (book?.categories || []).filter(c => c.kind === kind)
   const categoryValid = category === '' || categories.some(c => c.name === category)
@@ -40,6 +53,7 @@ export default function TransactionModal({ book, tx, allowedKinds, onClose, onSa
       category: categoryValid ? category : '',
       payee,
       payee_contact_id: payeeContactId,
+      asset_id: assetId || null,
       notes,
       deductible,
       tax_category: deductible && taxCategory ? taxCategory : null,
@@ -72,6 +86,27 @@ export default function TransactionModal({ book, tx, allowedKinds, onClose, onSa
     <div className="modal-overlay">
       <div className="modal-card max-w-md w-full p-5">
         <h3 className="font-semibold mb-4">{editing ? 'Edit transaction' : 'Add transaction'}</h3>
+
+        {/* Source chips — where this transaction came from */}
+        {editing && (tx.invoice_id || sourceDeal) && (
+          <div className="text-xs flex gap-2 flex-wrap -mt-2 mb-3">
+            {tx.invoice_id && (
+              <button
+                type="button"
+                onClick={() => { onClose(); navigate(`/finance?book=${book.id}&view=invoices`) }}
+                className="badge bg-charcoal-100 dark:bg-charcoal-700 hover:underline"
+              >🧾 From invoice</button>
+            )}
+            {sourceDeal && (
+              <button
+                type="button"
+                onClick={() => navigate(`/contacts?contact=${sourceDeal._contact_id}`)}
+                className="badge bg-charcoal-100 dark:bg-charcoal-700 hover:underline"
+              >Deal: {sourceDeal.title}</button>
+            )}
+          </div>
+        )}
+
         <form onSubmit={submit} className="space-y-3">
           {/* Expense / Income toggle (contribute caps can limit the options) */}
           <div className="flex gap-1 bg-charcoal-100 dark:bg-charcoal-800 rounded-lg p-1">
@@ -125,6 +160,22 @@ export default function TransactionModal({ book, tx, allowedKinds, onClose, onSa
             value={{ name: payee, contactId: payeeContactId }}
             onChange={(name, contactId) => { setPayee(name); setPayeeContactId(contactId) }}
           />
+
+          {/* Linked asset — only shown when an assets list is provided (assets module on) */}
+          {assets && assets.length > 0 && (
+            <div>
+              <label className="text-xs text-charcoal-500 dark:text-charcoal-400">
+                Linked asset <span className="text-charcoal-400">(optional)</span>
+              </label>
+              <select className="input" value={assetId} onChange={e => setAssetId(e.target.value)}>
+                <option value="">None</option>
+                {assetId && !assets.some(a => a.id === assetId) && (
+                  <option value={assetId}>(linked asset)</option>
+                )}
+                {assets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Notes</label>

@@ -125,6 +125,10 @@ class DealUpdate(BaseModel):
     invoice_id: str | None = None
 
 
+class DealAssetLink(BaseModel):
+    asset_id: str = Field(..., min_length=1, max_length=64)
+
+
 class ShareEntry(BaseModel):
     target: str = Field(..., min_length=1, max_length=80)
     access: str = Field(default="read", pattern="^(read|contribute|edit)$")
@@ -545,6 +549,83 @@ def delete_deal(
     return {"ok": True}
 
 
+@router.get("/deals/{deal_id}")
+def get_deal_by_id(
+    deal_id: str,
+    current_user: dict = Depends(_require_contacts),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_read_limit),
+):
+    """Deal lookup by id alone — used by Finance surfaces (invoice/tx context
+    chips) that only hold a deal_id. Access inherits from the parent contact."""
+    _validate_id(deal_id, "deal ID")
+    found = contacts_service.find_deal(
+        current_user["name"],
+        current_user.get("feature_role", "member"),
+        current_user.get("role") == "admin",
+        workspace,
+        deal_id,
+    )
+    if not found:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    _store_user, deal, contact, access = found
+    return {
+        **deal,
+        "_access": access,
+        "_contact_id": contact["id"],
+        "_contact_name": contact.get("name", ""),
+    }
+
+
+@router.post("/{contact_id}/deals/{deal_id}/assets")
+def link_deal_asset(
+    contact_id: str,
+    deal_id: str,
+    req: DealAssetLink,
+    current_user: dict = Depends(_require_contacts),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_write_limit),
+):
+    """Link an existing Asset to a deal. Contribute-level (same bucket as deal
+    create/advance). Read access on the asset is enough — the gated write is
+    the deal mutation, not the asset."""
+    store_user, _contact, access = _find_or_404(current_user, workspace, contact_id)
+    _require_contribute(access)
+    from services import assets_service
+
+    found = assets_service.find_asset(
+        current_user["name"],
+        workspace,
+        req.asset_id,
+        is_admin=current_user.get("role") == "admin",
+        pool_edit=current_user.get("pool_edit") or [],
+        viewer_role=current_user.get("feature_role", "member"),
+    )
+    if found is None:
+        raise HTTPException(status_code=404, detail="Asset not found or not visible to you")
+    updated = contacts_service.link_asset(store_user, workspace, deal_id, req.asset_id)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    return updated
+
+
+@router.delete("/{contact_id}/deals/{deal_id}/assets/{asset_id}")
+def unlink_deal_asset(
+    contact_id: str,
+    deal_id: str,
+    asset_id: str,
+    current_user: dict = Depends(_require_contacts),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_write_limit),
+):
+    store_user, _contact, access = _find_or_404(current_user, workspace, contact_id)
+    _require_contribute(access)
+    updated = contacts_service.unlink_asset(store_user, workspace, deal_id, asset_id)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    return updated
+
+
 # ---------------------------------------------------------------------------
 # Contact money view (cross-module read, scoped to the viewer's finance access)
 # ---------------------------------------------------------------------------
@@ -557,24 +638,25 @@ def contact_finance(
     workspace: str = Depends(get_workspace),
     _rl: None = Depends(_read_limit),
 ):
-    """Invoices/AR + payee spend/receive totals for this contact, drawn ONLY from
-    finance books the viewer can access (personal books stay invisible to others)."""
-    _store_user, _contact, _access = _find_or_404(current_user, workspace, contact_id)
+    """Money references for this contact — payee totals, invoices billing them,
+    and per-deal job profit — drawn ONLY from finance books the viewer can
+    access (personal books stay invisible to others)."""
+    store_user, _contact, _access = _find_or_404(current_user, workspace, contact_id)
     if "finance" in (current_user.get("disabled_modules") or []):
         return {"available": False}
-    from services import finance_service
+    from services import finance_invoice_service, finance_service
+
+    viewer = current_user["name"]
+    viewer_role = current_user.get("feature_role", "member")
+    is_admin = current_user.get("role") == "admin"
 
     spent, received, tx_count = 0, 0, 0
+    invoices_out: list[dict] = []
     invoices_total, outstanding = 0, 0
     try:
-        books = finance_service.list_visible_books(
-            current_user["name"],
-            current_user.get("feature_role", "member"),
-            current_user.get("role") == "admin",
-            workspace,
-        )
+        books = finance_service.list_visible_books(viewer, viewer_role, is_admin, workspace)
         for b in books:
-            store = finance_service.store_for_annotated(b, current_user["name"], workspace)
+            store = finance_service.store_for_annotated(b, viewer, workspace)
             txs, _total = finance_service.list_transactions(store, workspace, b["id"])
             for t in txs:
                 if t.get("payee_contact_id") == contact_id:
@@ -583,8 +665,57 @@ def contact_finance(
                         spent += -t["amount_cents"]
                     else:
                         received += t["amount_cents"]
+            # Invoice data follows the see_balances rule (mirrors _require_full_read)
+            if b.get("_access") == "contribute" and not (b.get("_caps") or {}).get("see_balances"):
+                continue
+            client_ids = {
+                c["id"]
+                for c in finance_invoice_service.list_clients(store, workspace, b["id"])
+                if c.get("contact_id") == contact_id
+            }
+            if not client_ids:
+                continue
+            for inv in finance_invoice_service.list_invoices(store, workspace, b["id"]):
+                if inv.get("client_id") not in client_ids:
+                    continue
+                invoices_out.append({**inv, "book_id": b["id"], "book_name": b["name"]})
+                if inv.get("status") != "void":
+                    invoices_total += inv.get("total_cents", 0)
+                    if inv.get("status") == "sent":
+                        outstanding += inv.get("balance_cents", 0)
     except Exception:
         pass
+
+    # Per-deal job profit: invoiced/collected from deal-billed invoices,
+    # expenses from the deal's linked assets — all viewer-scoped.
+    deals_out: list[dict] = []
+    try:
+        for deal in contacts_service.list_deals(store_user, workspace, contact_id):
+            d_invs = finance_invoice_service.list_invoices_for_deal(
+                viewer, viewer_role, is_admin, workspace, deal["id"]
+            )
+            live = [i for i in d_invs if i.get("status") != "void"]
+            expenses = 0
+            for aid in deal.get("linked_asset_ids") or []:
+                for t in finance_service.list_transactions_for_asset(
+                    viewer, viewer_role, is_admin, workspace, aid
+                ):
+                    if t.get("amount_cents", 0) < 0:
+                        expenses += -t["amount_cents"]
+            collected = sum(i.get("paid_cents", 0) for i in live)
+            deals_out.append(
+                {
+                    "deal_id": deal["id"],
+                    "title": deal.get("title", ""),
+                    "invoiced_cents": sum(i.get("total_cents", 0) for i in live),
+                    "collected_cents": collected,
+                    "expenses_cents": expenses,
+                    "net_cents": collected - expenses,
+                }
+            )
+    except Exception:
+        pass
+
     return {
         "available": True,
         "spent_cents": spent,
@@ -592,6 +723,8 @@ def contact_finance(
         "tx_count": tx_count,
         "invoices_total_cents": invoices_total,
         "outstanding_cents": outstanding,
+        "invoices": invoices_out,
+        "deals": deals_out,
     }
 
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { assets as assetsApi } from '../lib/api'
+import { assets as assetsApi, contacts as contactsApi } from '../lib/api'
+import ContactPicker from './contacts/ContactPicker'
 
 // Shared asset display helpers used by both the read-only AssetView and the
 // AssetModal editor. Kept in their own module so neither component imports the
@@ -30,9 +31,31 @@ export function fieldDisplay(def, value) {
   return String(value)
 }
 
+// Contact-type field: picker over CRM contacts, stores the contact id.
+// Self-contained (fetches the list itself) so every FieldInput caller gets it
+// without prop drilling; falls back to plain text when Contacts is off.
+export function ContactFieldInput({ def, value, onChange }) {
+  const [all, setAll] = useState([])
+  useEffect(() => {
+    contactsApi.list().then(r => setAll(Array.isArray(r) ? r : [])).catch(() => {})
+  }, [])
+  const name = all.find(c => c.id === value)?.name || (value ? '(contact)' : '')
+  return (
+    <ContactPicker
+      label={def.label}
+      placeholder="Pick a contact…"
+      value={{ name, contactId: value || null }}
+      onChange={(_n, contactId) => onChange(contactId || '')}
+    />
+  )
+}
+
 // Field input for one template field definition — shared by the editor form and
 // the read-first view's inline contribute controls. Module-level per MEMORY.md rule.
 export function FieldInput({ def, value, onChange }) {
+  if (def.type === 'contact') {
+    return <ContactFieldInput def={def} value={value} onChange={onChange} />
+  }
   if (def.type === 'boolean') {
     return (
       <label className="flex items-center gap-2 text-sm py-2 cursor-pointer">

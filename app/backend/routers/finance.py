@@ -173,6 +173,7 @@ class TransactionCreate(BaseModel):
     category: str = Field(default="", max_length=40)
     payee: str = Field(default="", max_length=120)
     payee_contact_id: str | None = Field(default=None, max_length=64)
+    asset_id: str | None = Field(default=None, max_length=64)
     notes: str = Field(default="", max_length=2000)
     deductible: bool = False
     tax_category: str | None = Field(default=None, max_length=60)
@@ -185,6 +186,7 @@ class TransactionUpdate(BaseModel):
     category: str | None = Field(default=None, max_length=40)
     payee: str | None = Field(default=None, max_length=120)
     payee_contact_id: str | None = Field(default=None, max_length=64)
+    asset_id: str | None = Field(default=None, max_length=64)
     notes: str | None = Field(default=None, max_length=2000)
     deductible: bool | None = None
     tax_category: str | None = Field(default=None, max_length=60)
@@ -660,4 +662,22 @@ def net_worth(
         current_user.get("feature_role", "member"),
         current_user.get("role") == "admin",
         workspace,
+    )
+
+
+@router.get("/assets/{asset_id}/transactions")
+def asset_transactions(
+    asset_id: str,
+    current_user: dict = Depends(_require_finance),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_read_limit),
+):
+    """Transactions tagged with this asset, across every book the viewer can see."""
+    _validate_id(asset_id, "asset ID")
+    return finance_service.list_transactions_for_asset(
+        current_user["name"],
+        current_user.get("feature_role", "member"),
+        current_user.get("role") == "admin",
+        workspace,
+        asset_id,
     )
