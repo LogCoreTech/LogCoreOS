@@ -12,9 +12,11 @@
 | Severity | Count |
 |----------|-------|
 | CRITICAL | 1 |
-| HIGH     | 4 |
+| HIGH     | 5 |
 | MEDIUM   | 6 |
 | LOW      | 3 |
+
+> **Update — data-theft / cross-tenant threat pass (added after initial report).** A follow-up pass focused specifically on a *malicious authenticated user (or hostile self-registrant) trying to steal another user's data* — the most important threat for an app that holds people's whole lives. Result: the core cross-tenant isolation is **well-built and was verified sound** (see "Cross-Tenant Data-Theft Threat Model" under Verified Sound). One new HIGH finding surfaced — a bulk asset-export endpoint reachable with the shared automation token (A2 below).
 
 **Overall verdict: NEEDS ATTENTION.**
 
@@ -27,6 +29,10 @@ The **application code is genuinely strong** — the core auth/authorization/pat
 ### [HIGH] [rate-limiting] app/backend/routers/auth.py:280
 **Issue:** `POST /auth/token` (CLI/programmatic Bearer-token login) calls `auth_service.authenticate(email, password)` with **no rate-limit dependency**. Its sibling `POST /auth/login` (auth.py:244) is throttled at `_login_limit` = 5 attempts / 5 min. Because both endpoints perform the identical credential check, an attacker can brute-force passwords through `/auth/token` at unlimited speed, completely bypassing the login throttle.
 **Fix:** Add `_rl: None = Depends(_login_limit)` to `get_token()` exactly as `/login` has it. Consider sharing one rate-limit bucket keyed on email so the two endpoints can't be used to double the allowance.
+
+### [HIGH] [data-exfiltration / broken-object-authorization] app/backend/routers/assets.py:337-349 (+ _automation_store, assets.py:315-321)
+**Issue:** `GET /automation/assets?user=<name>&workspace=<ws>` returns `assets_service.list_assets(store, store_ws)` — a **full dump of the named user's entire assets store** — gated only by the shared instance-wide automation token. `_automation_store()` accepts **any real user's name** (it only checks the user exists), so a single valid token reads *every* user's assets: subdivisions, parcels, vehicles, equipment, linked contact IDs, comments, and template field values. This directly contradicts the app's own stated posture: the Contacts automation API was *deliberately* built as write-only with only a single-contact dedup lookup and no list/export — its docstring says "a leaked token cannot dump the contact base" (contacts.py:874-875). Assets has exactly the bulk-export endpoint that Contacts refuses to have. The automation token is one static secret shared across the whole instance, stored in `brain/_system/automations_config.json` and provisioned to the n8n container — and the infra findings in Section B (n8n exposed on `:5678` with default keys, Infisical secrets fanned out into `docker/n8n.env`, unencrypted `brain/` backups) give it several realistic leak paths. Once the token leaks, this endpoint is a turnkey "download every user's assets" tool. (Rated HIGH rather than CRITICAL only because it requires the token, which is admin-only to retrieve, timing-safe compared, and rotatable.)
+**Fix:** Bring Assets in line with Contacts — remove the arbitrary-`user` list endpoint, or restrict `_automation_store()` to the pool pseudo-users (`_team`/`_household`) only for read operations, or replace the bulk list with a narrow dedup/lookup-by-external-id call. If a per-user automation read is genuinely required, scope the token per-user instead of one instance-wide master token.
 
 ### [MEDIUM] [transport-security] app/backend/main.py (SecurityHeadersMiddleware)
 **Issue:** `SecurityHeadersMiddleware` sets `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, and `Cache-Control: no-store` on `/api/*`, but sets **no `Content-Security-Policy`, no `Strict-Transport-Security` (HSTS), and no `Permissions-Policy`.** The SPA loads Google Fonts from external origins with no CSP, so any future XSS in the React app has zero CSP containment, and with no HSTS a downgrade/plain-HTTP session (the installer default — see A/MEDIUM cookie note) is never force-upgraded.
@@ -92,6 +98,21 @@ The **application code is genuinely strong** — the core auth/authorization/pat
 
 ## Verified Sound (checked, not flagged)
 
+### Cross-Tenant Data-Theft Threat Model (verified)
+
+Threat: an authenticated user (or a hostile self-registrant) trying to read another user's Brain — tasks, finance, contacts/PII, notes, journal, assets. This was traced directly in code and holds up:
+
+- **No IDOR on any data module.** Finance (`finance_service.find_book`:432), Assets (`assets_service.find_asset`:1303), Contacts (`contacts_service.find_contact`:339), and Notes (`notes_service.find_note_store`:368) all use the identical confined-lookup pattern: a supplied resource ID is only ever looked up within `stores = [viewer, workspace_pool] + sharers_for(viewer)`, and access is re-resolved per record via the module's access gate. Passing a stranger's `book_id` / `asset_id` / `contact_id` / note path resolves to nothing — there is no "scan all users for this ID" path anywhere.
+- **The share index can't be poisoned.** `sharers_for(...)` (finance/assets/contacts index) is a derived cache of "who has shared *with* this viewer." Only a resource's owner can write share entries, so an attacker cannot insert themselves as a recipient of a victim's data to make the victim appear in their `sharers_for` set.
+- **Access gates enforce the specificity ladder in code, not just docs.** `_resolve_book_access` (finance_service.py:278), `_resolve_grant`/`_share_access` (assets_service.py:570), and `resolve_access` (contacts_service.py:258) all implement the by-name-overrides-group / hidden_from-beats-shares / admin-vs-pool_edit ladders that MEMORY.md records as previously-buggy — re-verified consistent here.
+- **The AI agent cannot be steered cross-tenant.** `_execute_tool` (agent_service.py:1262) binds every store operation to `user["name"]` (the authenticated caller); the model's tool `inputs` supply only data and IDs, never the store owner. `list_brain_files`/`read_brain_file` use `ws_path(user["name"], ...)`. A prompt-injection payload in shared/Brain content cannot make the agent read another user's store.
+- **Export is self-scoped.** `GET /api/v1/user/export` (export.py:19) zips `user_path(current_user["name"])` only — no user parameter — and is rate-limited 2/hour. Contacts CSV export (`contacts.py:253`) returns only `list_visible_contacts(...)` for the caller.
+- **User-listing endpoints strip secrets** (auth_service.py:194-198, routers/auth.py:477-482) — password hashes never leave the server.
+
+The **one** hole in this threat model is finding **A2** above: the Assets automation list endpoint, which is a bulk cross-user read — but reachable only with the shared automation token, not via a normal user session.
+
+### Other defenses reviewed and sound
+
 These were actively reviewed this pass and hold up — recording them so the audit's coverage is auditable and to avoid re-flagging intentional design:
 
 - **JWT handling** (auth_service.py:227-250): HS256 only; `decode_token()` rejects a mismatched unverified-header `alg` *before* verifying (algorithm-confusion guard), pins `algorithms=[...]`, and checks JTI revocation. JTI revocation is persisted to `auth.json` and re-bootstrapped at startup.
@@ -113,7 +134,8 @@ These were actively reviewed this pass and hold up — recording them so the aud
 ## Recommended Remediation Order
 
 1. **B/CRITICAL** — constrain the Docker socket (socket-proxy or privileged broker); it's the one issue where a single app bug becomes host root.
-2. **A/HIGH** — add the rate limit to `POST /auth/token` (one-line fix, closes a live brute-force path).
-3. **B/HIGH** — scope the Infisical→`n8n.env` fan-out to an allow-list; set/require strong n8n keys and bind its port to loopback; bump `python-jose` and `python-multipart`.
+2. **A2/HIGH** — remove or pool-restrict the `GET /automation/assets` bulk export so a leaked automation token can't dump every user's assets (align with the Contacts write-only design).
+3. **A/HIGH** — add the rate limit to `POST /auth/token` (one-line fix, closes a live brute-force path).
+4. **B/HIGH** — scope the Infisical→`n8n.env` fan-out to an allow-list; set/require strong n8n keys and bind its port to loopback; bump `python-jose` and `python-multipart`.
 4. **A/MEDIUM + B/MEDIUM** — add CSP/HSTS, harden startup to fail-closed on the default `SECRET_KEY`, flip the insecure installer defaults, pin third-party images, encrypt backups.
 5. **LOW** — supply-chain/dev-tooling hygiene on the next maintenance pass.
