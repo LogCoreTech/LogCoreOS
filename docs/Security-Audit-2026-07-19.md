@@ -13,10 +13,12 @@
 |----------|-------|
 | CRITICAL | 1 |
 | HIGH     | 5 |
-| MEDIUM   | 6 |
-| LOW      | 3 |
+| MEDIUM   | 7 |
+| LOW      | 4 |
 
 > **Update — data-theft / cross-tenant threat pass (added after initial report).** A follow-up pass focused specifically on a *malicious authenticated user (or hostile self-registrant) trying to steal another user's data* — the most important threat for an app that holds people's whole lives. Result: the core cross-tenant isolation is **well-built and was verified sound** (see "Cross-Tenant Data-Theft Threat Model" under Verified Sound). One new HIGH finding surfaced — a bulk asset-export endpoint reachable with the shared automation token (A2 below).
+
+> **Update — outsider / account-takeover threat pass.** A further pass focused on an *unauthenticated outsider trying to break in or steal a user's credentials/session*. Result: the account-security fundamentals are largely sound (no stored-XSS content path, httpOnly cookies, JWT alg-confusion guarded, no abusable password-reset flow, generic login errors — see "Outsider / Account-Takeover Threat Model" under Verified Sound). The real outsider exposure is concentrated in **operator misconfiguration** (default `SECRET_KEY` → forgeable tokens, `COOKIE_SECURE=false` → sniffable session on plain HTTP — already B-flagged) plus the **`/auth/token` brute-force gap (A1)**. Two new findings added: a stored-XSS sink in the automation inbox (A3, MEDIUM) and login timing-based user enumeration (A4, LOW).
 
 **Overall verdict: NEEDS ATTENTION.**
 
@@ -26,13 +28,21 @@ The **application code is genuinely strong** — the core auth/authorization/pat
 
 ## Section A — Application-Level Security
 
-### [HIGH] [rate-limiting] app/backend/routers/auth.py:280
+### A1 · [HIGH] [rate-limiting] app/backend/routers/auth.py:280
 **Issue:** `POST /auth/token` (CLI/programmatic Bearer-token login) calls `auth_service.authenticate(email, password)` with **no rate-limit dependency**. Its sibling `POST /auth/login` (auth.py:244) is throttled at `_login_limit` = 5 attempts / 5 min. Because both endpoints perform the identical credential check, an attacker can brute-force passwords through `/auth/token` at unlimited speed, completely bypassing the login throttle.
 **Fix:** Add `_rl: None = Depends(_login_limit)` to `get_token()` exactly as `/login` has it. Consider sharing one rate-limit bucket keyed on email so the two endpoints can't be used to double the allowance.
 
-### [HIGH] [data-exfiltration / broken-object-authorization] app/backend/routers/assets.py:337-349 (+ _automation_store, assets.py:315-321)
+### A2 · [HIGH] [data-exfiltration / broken-object-authorization] app/backend/routers/assets.py:337-349 (+ _automation_store, assets.py:315-321)
 **Issue:** `GET /automation/assets?user=<name>&workspace=<ws>` returns `assets_service.list_assets(store, store_ws)` — a **full dump of the named user's entire assets store** — gated only by the shared instance-wide automation token. `_automation_store()` accepts **any real user's name** (it only checks the user exists), so a single valid token reads *every* user's assets: subdivisions, parcels, vehicles, equipment, linked contact IDs, comments, and template field values. This directly contradicts the app's own stated posture: the Contacts automation API was *deliberately* built as write-only with only a single-contact dedup lookup and no list/export — its docstring says "a leaked token cannot dump the contact base" (contacts.py:874-875). Assets has exactly the bulk-export endpoint that Contacts refuses to have. The automation token is one static secret shared across the whole instance, stored in `brain/_system/automations_config.json` and provisioned to the n8n container — and the infra findings in Section B (n8n exposed on `:5678` with default keys, Infisical secrets fanned out into `docker/n8n.env`, unencrypted `brain/` backups) give it several realistic leak paths. Once the token leaks, this endpoint is a turnkey "download every user's assets" tool. (Rated HIGH rather than CRITICAL only because it requires the token, which is admin-only to retrieve, timing-safe compared, and rotatable.)
 **Fix:** Bring Assets in line with Contacts — remove the arbitrary-`user` list endpoint, or restrict `_automation_store()` to the pool pseudo-users (`_team`/`_household`) only for read operations, or replace the bulk list with a narrow dedup/lookup-by-external-id call. If a per-user automation read is genuinely required, scope the token per-user instead of one instance-wide master token.
+
+### A3 · [MEDIUM] [stored-xss] app/backend/routers/automations.py:35 → app/frontend/src/pages/Automations.jsx:53
+**Issue:** `InboxItemIn.url` is validated only as `str | None`, `max_length=1000` — **no URL-scheme check** — and `automation_inbox_service.add_items` stores it verbatim (service line ~163). The frontend renders it directly as a clickable link: `<a href={item.url} target="_blank" rel="noreferrer">`. A `javascript:` URL (e.g. `javascript:fetch('/api/v1/auth/admin/users',{method:'POST',...})`) therefore executes in the reviewer's authenticated origin the moment they click the ↗ link. Because the reviewer is typically an admin or a business reviewer and the session cookie is httpOnly, the highest-value payload is same-origin `fetch()` calls that ride the victim's cookie to act as them (create an admin user, exfiltrate data, etc.). Posting to the inbox requires the shared automation token — so this chains directly off the token-leak paths in Section B: leak token → post one `javascript:` inbox item → an admin clicks → code runs in the admin session. (This is the one content-driven XSS sink in the app; all other user/Brain content is rendered as React-escaped plain text — see Verified Sound.)
+**Fix:** Reject any `url` whose scheme isn't `http`/`https` at the Pydantic boundary (e.g. a validator, or `AnyHttpUrl`), and/or guard the render (`href={/^https?:\/\//.test(item.url) ? item.url : '#'}`). Add `rel="noopener noreferrer"` while there.
+
+### A4 · [LOW] [user-enumeration] app/backend/services/auth_service.py:220-224
+**Issue:** `authenticate()` does `if not user or not verify_password(...)`. When the email is unknown, `user` is `None` and the expensive bcrypt `verify_password` call is skipped, so the response returns measurably faster than for a known email (where bcrypt runs ~100 ms). An outsider can time `/auth/login` (or the unthrottled `/auth/token`) to enumerate which email addresses have accounts, building a target list for credential-stuffing or phishing. The error *message* is correctly generic ("Invalid email or password"), so only the timing side-channel leaks.
+**Fix:** Always perform a bcrypt comparison against a fixed dummy hash when the user is not found, so both paths take constant time. (Fixing the A1 rate-limit gap also blunts the practicality of large-scale timing enumeration.)
 
 ### [MEDIUM] [transport-security] app/backend/main.py (SecurityHeadersMiddleware)
 **Issue:** `SecurityHeadersMiddleware` sets `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, and `Cache-Control: no-store` on `/api/*`, but sets **no `Content-Security-Policy`, no `Strict-Transport-Security` (HSTS), and no `Permissions-Policy`.** The SPA loads Google Fonts from external origins with no CSP, so any future XSS in the React app has zero CSP containment, and with no HSTS a downgrade/plain-HTTP session (the installer default — see A/MEDIUM cookie note) is never force-upgraded.
@@ -111,6 +121,21 @@ Threat: an authenticated user (or a hostile self-registrant) trying to read anot
 
 The **one** hole in this threat model is finding **A2** above: the Assets automation list endpoint, which is a bulk cross-user read — but reachable only with the shared automation token, not via a normal user session.
 
+### Outsider / Account-Takeover Threat Model (verified)
+
+Threat: an unauthenticated outsider trying to break in or steal a user's credentials/session. The fundamentals hold; the real exposure is operator misconfiguration + the findings above.
+
+- **No stored-XSS content path.** The frontend has **no** `dangerouslySetInnerHTML`, no markdown-to-HTML renderer (`react-markdown`/`marked`/`remark`), and no HTML sanitizer — because it never needs one: Brain markdown, notes, chat output, and all user/shared content are rendered as React-escaped plain text. A malicious note/asset/contact/chat message shared with a victim cannot inject script. (The single exception is the automation-inbox `url` link — finding A3.)
+- **Session token is httpOnly** (routers/auth.py:62). Even if script ran in the page, it cannot read the JWT out of the cookie, so the token itself can't be exfiltrated to an attacker server.
+- **No password-reset flow exists.** There is no forgot-password / reset-token endpoint anywhere — which removes an entire class of account-takeover (reset-token guessing, host-header poisoning, reset-link interception). Password recovery is admin-mediated by design.
+- **Login does not leak via error message.** `/auth/login` returns a generic "Invalid email or password" for both bad-email and bad-password (routers/auth.py:247). (Only a *timing* side-channel remains — finding A4.)
+- **JWT is forgery-resistant when configured.** HS256 pinned; `decode_token` rejects a mismatched `alg` before verifying (auth_service.py:239-250). The only forgery path is the **default `SECRET_KEY`** (Section A/MEDIUM fail-open startup + B): if the operator never changes it, an outsider can mint a valid admin token offline. That is the single most important outsider takeover risk and is config-driven.
+- **Session cookie hardening is correct in code**: `httponly`, `samesite="lax"`, `secure=effective_cookie_secure()`. `samesite=lax` blocks cross-site POST/PATCH/DELETE from carrying the cookie, so CSRF on state-changing endpoints is mitigated (no state-changing GET endpoints were found). The gap is purely the **`COOKIE_SECURE=false` installer default** (Section B): on plain HTTP the cookie travels in cleartext and a same-network attacker can capture and replay it — session theft without ever knowing the password.
+- **Registration is closed by default** (`ALLOW_OPEN_REGISTRATION=False`); non-first-user registration requires a valid admin token (routers/auth.py:194-205). Only the genuine first-run user is auto-promoted to admin.
+- **Passwords are bcrypt-hashed**, self-registration enforces an 8-char minimum (routers/auth.py:44).
+
+**Residual outsider weaknesses** (beyond the numbered findings): there is **no account lockout** after repeated failures — only per-IP rate limiting — so distributed credential-stuffing from many IPs is not stopped by the login throttle; and there is **no 2FA** (app-level 2FA is on the v1.0 backlog per `docs/TASKS.md`), so a single stolen/guessed password is full access with no second factor. Both are defense-in-depth gaps rather than distinct vulnerabilities, but they raise the stakes of A1 and the `SECRET_KEY`/`COOKIE_SECURE` defaults.
+
 ### Other defenses reviewed and sound
 
 These were actively reviewed this pass and hold up — recording them so the audit's coverage is auditable and to avoid re-flagging intentional design:
@@ -137,5 +162,6 @@ These were actively reviewed this pass and hold up — recording them so the aud
 2. **A2/HIGH** — remove or pool-restrict the `GET /automation/assets` bulk export so a leaked automation token can't dump every user's assets (align with the Contacts write-only design).
 3. **A/HIGH** — add the rate limit to `POST /auth/token` (one-line fix, closes a live brute-force path).
 4. **B/HIGH** — scope the Infisical→`n8n.env` fan-out to an allow-list; set/require strong n8n keys and bind its port to loopback; bump `python-jose` and `python-multipart`.
-4. **A/MEDIUM + B/MEDIUM** — add CSP/HSTS, harden startup to fail-closed on the default `SECRET_KEY`, flip the insecure installer defaults, pin third-party images, encrypt backups.
-5. **LOW** — supply-chain/dev-tooling hygiene on the next maintenance pass.
+4. **A3/MEDIUM** — scheme-validate the automation-inbox `url` (kill the `javascript:` XSS sink).
+5. **A/MEDIUM + B/MEDIUM** — add CSP/HSTS, harden startup to fail-closed on the default `SECRET_KEY` (the top outsider takeover risk), flip the insecure installer defaults (`COOKIE_SECURE=true`), pin third-party images, encrypt backups.
+6. **LOW** — constant-time login (A4), supply-chain/dev-tooling hygiene; consider account lockout + 2FA as defense-in-depth.
