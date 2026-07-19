@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react'
-import { finance as financeApi } from '../../lib/api'
+import { useNavigate } from 'react-router-dom'
+import { finance as financeApi, contacts as contactsApi } from '../../lib/api'
 import { fmtMoney, toCents, centsToInput, todayStr } from './money'
 import ContactPicker from '../contacts/ContactPicker'
+import TransactionModal from './TransactionModal'
+
+const INVOICE_STATUSES = ['draft', 'sent', 'paid', 'void']
 
 const STATUS_STYLE = {
   draft: 'bg-charcoal-100 text-charcoal-600 dark:bg-charcoal-700 dark:text-charcoal-300',
@@ -10,12 +14,13 @@ const STATUS_STYLE = {
   void: 'bg-charcoal-100 text-charcoal-400 dark:bg-charcoal-800 dark:text-charcoal-500 line-through',
 }
 
-export default function InvoicesPanel({ book, canEdit }) {
+export default function InvoicesPanel({ book, canEdit, assets, prefill, onPrefillConsumed }) {
   const [invoices, setInvoices] = useState([])
   const [clients, setClients] = useState([])
   const [ar, setAr] = useState([])
   const [invoiceModal, setInvoiceModal] = useState(null)   // null | {invoice: null|obj}
   const [printInvoice, setPrintInvoice] = useState(null)
+  const [txEdit, setTxEdit] = useState(null)               // tx opened right after a payment logs it
   const [error, setError] = useState('')
 
   function load() {
@@ -24,6 +29,23 @@ export default function InvoicesPanel({ book, canEdit }) {
     financeApi.arSummary(book.id).then(r => setAr(Array.isArray(r) ? r : [])).catch(() => {})
   }
   useEffect(() => { load() }, [book.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Payment logged a ledger transaction — open it immediately so the user can
+  // finish category/asset/notes without hunting for it in the Transactions view.
+  async function openPaymentTx(txId) {
+    try {
+      const res = await financeApi.transactions(book.id, { limit: 50 })
+      const tx = (res?.items || []).find(t => t.id === txId)
+      if (tx) setTxEdit(tx)
+    } catch { /* the tx exists regardless — user can find it in Transactions */ }
+  }
+
+  async function setRowStatus(invoice, status) {
+    try {
+      await financeApi.updateInvoice(book.id, invoice.id, { status })
+      load()
+    } catch (err) { setError(err.message) }
+  }
 
   const clientName = Object.fromEntries(clients.map(c => [c.id, c.name]))
   const behind = ar.filter(e => e.overdue_cents > 0)
@@ -60,6 +82,19 @@ export default function InvoicesPanel({ book, canEdit }) {
         </div>
       )}
 
+      {/* Deal → invoice prefill banner (from Contacts) */}
+      {prefill && canEdit && (
+        <div className="card p-3 flex items-center gap-2 text-sm border-orange-300 dark:border-orange-700">
+          <span className="flex-1 min-w-0 truncate">
+            🧾 Creating an invoice for <b>“{prefill.title}”</b> in this book — review and save.
+          </span>
+          <button onClick={() => setInvoiceModal({ invoice: null })} className="btn-primary text-xs shrink-0">
+            Continue
+          </button>
+          <button onClick={onPrefillConsumed} className="btn-ghost text-xs shrink-0" title="Dismiss">✕</button>
+        </div>
+      )}
+
       {/* Invoices */}
       <div className="card p-5 space-y-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -80,21 +115,36 @@ export default function InvoicesPanel({ book, canEdit }) {
         ) : (
           <div className="space-y-2">
             {invoices.map(invoice => (
-              <button
+              <div
                 key={invoice.id}
                 onClick={() => setInvoiceModal({ invoice })}
-                className="w-full flex items-center gap-2 text-left text-sm hover:bg-charcoal-50 dark:hover:bg-charcoal-800/60 rounded-lg px-2 py-1.5 transition-colors"
+                role="button"
+                tabIndex={0}
+                onKeyDown={e => { if (e.key === 'Enter') setInvoiceModal({ invoice }) }}
+                className="w-full flex items-center gap-2 text-left text-sm cursor-pointer hover:bg-charcoal-50 dark:hover:bg-charcoal-800/60 rounded-lg px-2 py-1.5 transition-colors"
               >
                 <span className="font-mono text-xs text-charcoal-500 dark:text-charcoal-400 shrink-0">{invoice.number}</span>
                 <span className="flex-1 min-w-0 truncate">{clientName[invoice.client_id] || '(no client)'}</span>
                 {invoice.overdue && <span className="text-red-500 text-xs font-medium shrink-0">OVERDUE</span>}
-                <span className={`badge shrink-0 ${STATUS_STYLE[invoice.status] || ''}`}>{invoice.status}</span>
+                {canEdit ? (
+                  <select
+                    className={`badge shrink-0 cursor-pointer appearance-none border-0 ${STATUS_STYLE[invoice.status] || ''}`}
+                    value={invoice.status}
+                    onClick={e => e.stopPropagation()}
+                    onChange={e => setRowStatus(invoice, e.target.value)}
+                    title="Change status"
+                  >
+                    {INVOICE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                ) : (
+                  <span className={`badge shrink-0 ${STATUS_STYLE[invoice.status] || ''}`}>{invoice.status}</span>
+                )}
                 <span className="font-medium shrink-0">
                   {invoice.balance_cents > 0 && invoice.status !== 'draft'
                     ? `${fmtMoney(invoice.balance_cents, book.currency)} due`
                     : fmtMoney(invoice.total_cents, book.currency)}
                 </span>
-              </button>
+              </div>
             ))}
           </div>
         )}
@@ -110,9 +160,24 @@ export default function InvoicesPanel({ book, canEdit }) {
           invoice={invoiceModal.invoice}
           clients={clients}
           canEdit={canEdit}
+          prefill={invoiceModal.invoice ? null : prefill}
+          onPrefillConsumed={onPrefillConsumed}
           onClose={() => setInvoiceModal(null)}
           onChanged={() => { setInvoiceModal(null); load() }}
+          onPaymentTx={openPaymentTx}
           onPrint={inv => setPrintInvoice(inv)}
+        />
+      )}
+      {txEdit && (
+        <TransactionModal
+          key={txEdit.id}
+          book={book}
+          tx={txEdit}
+          allowedKinds={['expense', 'income']}
+          assets={assets}
+          onClose={() => setTxEdit(null)}
+          onSaved={() => { setTxEdit(null); load() }}
+          onDeleted={() => { setTxEdit(null); load() }}
         />
       )}
       {printInvoice && (
@@ -127,10 +192,51 @@ export default function InvoicesPanel({ book, canEdit }) {
   )
 }
 
-function InvoiceModal({ book, invoice, clients, canEdit, onClose, onChanged, onPrint }) {
+function InvoiceModal({ book, invoice, clients, canEdit, prefill, onPrefillConsumed, onClose, onChanged, onPaymentTx, onPrint }) {
+  const navigate = useNavigate()
   const editing = !!invoice
   const [clientId, setClientId] = useState(invoice?.client_id || '')
   const [clientName, setClientName] = useState(clients.find(c => c.id === invoice?.client_id)?.name || '')
+  const [dealCtx, setDealCtx] = useState(null)          // resolved source deal, when invoice.deal_id set
+  const [dealExpenses, setDealExpenses] = useState(null) // Σ expenses across the deal's linked assets
+
+  // Deal → invoice prefill: resolve the contact once and find-or-create the
+  // matching book client through the same chooseClient path a manual pick uses.
+  useEffect(() => {
+    if (editing || !prefill?.contactId) return
+    let alive = true
+    contactsApi.get(prefill.contactId)
+      .then(c => { if (alive && c?.name) chooseClient(c.name, prefill.contactId) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Source-deal context strip (existing invoices billed from a deal)
+  useEffect(() => {
+    const dealId = invoice?.deal_id
+    if (!dealId) return
+    let alive = true
+    contactsApi.getDeal(dealId)
+      .then(d => {
+        if (!alive || !d?.id) return
+        setDealCtx(d)
+        const ids = d.linked_asset_ids || []
+        if (ids.length === 0) return
+        Promise.all(ids.map(id => financeApi.assetTransactions(id).catch(() => [])))
+          .then(lists => {
+            if (!alive) return
+            let expenses = 0
+            for (const list of lists) {
+              for (const t of (Array.isArray(list) ? list : [])) {
+                if ((t.amount_cents || 0) < 0) expenses += -t.amount_cents
+              }
+            }
+            setDealExpenses(expenses)
+          })
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [invoice?.deal_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pick or quick-create a CRM contact, then find-or-create the matching book
   // client so invoices + AR keep working while Contacts is the entry point.
@@ -151,7 +257,9 @@ function InvoiceModal({ book, invoice, clients, canEdit, onClose, onChanged, onP
   const [notes, setNotes] = useState(invoice?.notes || '')
   const [items, setItems] = useState(
     invoice?.line_items?.map(i => ({ description: i.description, qty: String(i.qty), unit: centsToInput(i.unit_cents) }))
-    || [{ description: '', qty: '1', unit: '' }]
+    || (prefill?.title
+      ? [{ description: prefill.title, qty: '1', unit: centsToInput(prefill.amountCents || 0) }]
+      : [{ description: '', qty: '1', unit: '' }])
   )
   const [payAmount, setPayAmount] = useState('')
   const [payAccount, setPayAccount] = useState('')
@@ -181,8 +289,14 @@ function InvoiceModal({ book, invoice, clients, canEdit, onClose, onChanged, onP
         client_id: clientId || null, issue_date: issueDate, due_date: dueDate,
         line_items: buildLineItems(), tax_pct: parseFloat(taxPct) || 0, notes,
       }
-      if (editing) await financeApi.updateInvoice(book.id, invoice.id, payload)
-      else await financeApi.createInvoice(book.id, payload)
+      if (editing) {
+        await financeApi.updateInvoice(book.id, invoice.id, payload)
+      } else {
+        // deal_id lives ON the invoice (a deal can bill many invoices); the
+        // deal's invoice list is derived by scan, nothing written back to it.
+        await financeApi.createInvoice(book.id, { ...payload, deal_id: prefill?.dealId || null })
+        if (prefill?.dealId) onPrefillConsumed?.()
+      }
       onChanged()
     } catch (err) {
       setError(err.message || 'Save failed'); setBusy(false)
@@ -201,11 +315,17 @@ function InvoiceModal({ book, invoice, clients, canEdit, onClose, onChanged, onP
     if (Number.isNaN(cents) || cents <= 0) { setError('Enter a valid payment amount.'); return }
     setBusy(true); setError('')
     try {
-      await financeApi.recordPayment(book.id, invoice.id, {
+      const updated = await financeApi.recordPayment(book.id, invoice.id, {
         amount_cents: cents,
         account_id: payAccount || null,
       })
       onChanged()
+      // A ledger transaction was logged — open it so the user can finish it
+      if (payAccount) {
+        const pays = updated?.payments || []
+        const txId = pays[pays.length - 1]?.tx_id
+        if (txId) onPaymentTx?.(txId)
+      }
     } catch (err) {
       setError(err.message || 'Payment failed'); setBusy(false)
     }
@@ -234,10 +354,47 @@ function InvoiceModal({ book, invoice, clients, canEdit, onClose, onChanged, onP
           {editing && (
             <div className="flex items-center gap-2">
               {invoice.overdue && <span className="text-red-500 text-xs font-medium">OVERDUE</span>}
-              <span className={`badge ${STATUS_STYLE[invoice.status] || ''}`}>{invoice.status}</span>
+              {canEdit ? (
+                <select
+                  className={`badge cursor-pointer appearance-none border-0 ${STATUS_STYLE[invoice.status] || ''}`}
+                  value={invoice.status}
+                  onChange={e => setStatus(e.target.value)}
+                  title="Change status"
+                >
+                  {INVOICE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              ) : (
+                <span className={`badge ${STATUS_STYLE[invoice.status] || ''}`}>{invoice.status}</span>
+              )}
             </div>
           )}
         </div>
+
+        {/* Source deal context (invoice billed from a CRM deal) */}
+        {dealCtx && (
+          <div className="text-xs flex items-center gap-2 flex-wrap bg-charcoal-50 dark:bg-charcoal-800/60 rounded-lg px-2 py-1.5">
+            <button
+              type="button"
+              onClick={() => navigate(`/contacts?contact=${dealCtx._contact_id}`)}
+              className="text-orange-500 hover:underline"
+            >
+              From deal: {dealCtx.title} ({dealCtx._contact_name})
+            </button>
+            {(dealCtx.linked_asset_ids || []).map(aid => (
+              <button
+                key={aid}
+                type="button"
+                onClick={() => navigate(`/assets?asset=${aid}`)}
+                className="badge bg-charcoal-100 dark:bg-charcoal-700 hover:underline"
+              >🔗 asset</button>
+            ))}
+            {dealExpenses != null && dealExpenses > 0 && (
+              <span className="text-charcoal-500 ml-auto">
+                Asset expenses: {fmtMoney(-dealExpenses, book.currency)}
+              </span>
+            )}
+          </div>
+        )}
 
         <form onSubmit={save} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
@@ -306,14 +463,8 @@ function InvoiceModal({ book, invoice, clients, canEdit, onClose, onChanged, onP
 
         {editing && (
           <div className="pt-3 border-t border-charcoal-200 dark:border-charcoal-700 space-y-3">
-            {/* Lifecycle + print */}
+            {/* Print (status changes live in the header dropdown) */}
             <div className="flex gap-1.5 flex-wrap">
-              {canEdit && invoice.status === 'draft' && (
-                <button onClick={() => setStatus('sent')} className="btn-ghost text-xs">Mark sent</button>
-              )}
-              {canEdit && invoice.status !== 'void' && invoice.status !== 'paid' && (
-                <button onClick={() => setStatus('void')} className="btn-ghost text-xs">Void</button>
-              )}
               <button onClick={() => onPrint(invoice)} className="btn-ghost text-xs">🖨 Print / PDF</button>
             </div>
 

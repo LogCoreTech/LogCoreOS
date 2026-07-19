@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { assets as assetsApi, tasks as tasksApi } from '../lib/api'
+import { assets as assetsApi, tasks as tasksApi, finance as financeApi } from '../lib/api'
 import TaskModal from './TaskModal'
 import TagInput from './TagInput'
 import AssetTreePicker from './AssetTreePicker'
@@ -37,6 +37,7 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [linkedTasks, setLinkedTasks] = useState([])
+  const [financeActivity, setFinanceActivity] = useState([])
   const [showTaskModal, setShowTaskModal] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [access, setAccess] = useState({
@@ -100,6 +101,10 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
     tasksApi.list()
       .then(all => setLinkedTasks((all || []).filter(t => t.asset_id === asset.id)))
       .catch(() => {})
+    // Finance activity for this asset — silent no-op when finance is disabled (403)
+    financeApi.assetTransactions(asset.id)
+      .then(list => setFinanceActivity(Array.isArray(list) ? list : []))
+      .catch(() => setFinanceActivity([]))
   }, [asset?.id])
 
   function set(field, value) {
@@ -317,6 +322,7 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
         asset={asset}
         template={template}
         linkedTasks={linkedTasks}
+        financeActivity={financeActivity}
         childAssets={allAssets.filter(a => a.parent_id === asset.id)}
         canEdit={!readOnly}
         canManage={canManage}

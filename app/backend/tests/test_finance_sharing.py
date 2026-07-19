@@ -307,3 +307,42 @@ def test_contribute_created_by_filter(brain, book, checking):
     )
     own_only, total = fin.list_transactions("Owner", "personal", book["id"], created_by="Worker")
     assert total == 1 and own_only[0]["created_by"] == "Worker"
+
+
+def test_asset_transactions_contribute_sees_own_entries_only(brain, book, checking):
+    """list_transactions_for_asset applies the same caps rule as the tx list:
+    a contribute viewer without see_all_tx gets only their own entries."""
+    _share(book["id"], [{"target": "Worker", "access": "contribute", "caps": {"add": ["expense"]}}])
+    fin.respond_share("Worker", "Owner", "personal", book["id"], accept=True)
+    fin.add_transaction(
+        "Owner",
+        "personal",
+        book["id"],
+        {
+            "date": "2026-07-01",
+            "amount_cents": -20_00,
+            "account_id": checking["id"],
+            "category": "",
+            "asset_id": "asset-1",
+        },
+        created_by="Owner",
+    )
+    fin.add_transaction(
+        "Owner",
+        "personal",
+        book["id"],
+        {
+            "date": "2026-07-02",
+            "amount_cents": -10_00,
+            "account_id": checking["id"],
+            "category": "",
+            "asset_id": "asset-1",
+        },
+        created_by="Worker",
+    )
+    seen = fin.list_transactions_for_asset("Worker", "crew", False, "personal", "asset-1")
+    assert [t["created_by"] for t in seen] == ["Worker"]
+    # The owner still sees both
+    assert (
+        len(fin.list_transactions_for_asset("Owner", "member", False, "personal", "asset-1")) == 2
+    )

@@ -367,3 +367,78 @@ def test_business_book_seed_defaults(brain):
     # Business tax buckets (Schedule-C flavored)
     assert "Home Office" in b["tax_categories"]
     assert "Medical" not in b["tax_categories"]
+
+
+# ---------------------------------------------------------------------------
+# Asset linking on transactions (asset_id) + cross-book asset activity query
+# ---------------------------------------------------------------------------
+
+
+def test_transaction_asset_id_persists_and_updates(brain, book, checking):
+    tx = svc.add_transaction(
+        "Alice",
+        "personal",
+        book["id"],
+        _tx(checking["id"], -5_00, asset_id="asset-1"),
+        created_by="Alice",
+    )
+    assert tx["asset_id"] == "asset-1"
+    updated = svc.update_transaction("Alice", "personal", book["id"], tx["id"], {"asset_id": None})
+    assert updated["asset_id"] is None
+    updated = svc.update_transaction(
+        "Alice", "personal", book["id"], tx["id"], {"asset_id": "asset-2"}
+    )
+    assert updated["asset_id"] == "asset-2"
+    # An unrelated PATCH must not clear the link
+    updated = svc.update_transaction(
+        "Alice", "personal", book["id"], tx["id"], {"notes": "unrelated"}
+    )
+    assert updated["asset_id"] == "asset-2"
+
+
+def test_bulk_add_defaults_asset_id_none(brain, book, checking):
+    recs = svc.bulk_add_transactions(
+        "Alice",
+        "personal",
+        book["id"],
+        [_tx(checking["id"], -1_00)],
+        created_by="Alice",
+        source="csv",
+    )
+    assert recs[0]["asset_id"] is None
+
+
+def test_list_transactions_for_asset_scoped_to_visible_books(brain, book, checking):
+    svc.add_transaction(
+        "Alice",
+        "personal",
+        book["id"],
+        _tx(checking["id"], -5_00, asset_id="asset-1"),
+        created_by="Alice",
+    )
+    svc.add_transaction(
+        "Alice", "personal", book["id"], _tx(checking["id"], -3_00), created_by="Alice"
+    )
+    mine = svc.list_transactions_for_asset("Alice", "member", False, "personal", "asset-1")
+    assert len(mine) == 1
+    assert mine[0]["book_id"] == book["id"]
+    assert mine[0]["book_name"] == "Family budget"
+    # Another user must never see transactions from a book not visible to them
+    assert svc.list_transactions_for_asset("Bob", "member", False, "personal", "asset-1") == []
+
+
+def test_list_transactions_for_asset_includes_pool_books(brain):
+    pool_book = svc.create_book("_household", "personal", name="House fund", created_by="Admin")
+    acct = svc.add_account(
+        "_household", "personal", pool_book["id"], {"name": "Cash", "type": "cash"}
+    )
+    svc.add_transaction(
+        "_household",
+        "personal",
+        pool_book["id"],
+        _tx(acct["id"], -7_00, asset_id="asset-9"),
+        created_by="Admin",
+    )
+    seen = svc.list_transactions_for_asset("Alice", "member", False, "personal", "asset-9")
+    assert len(seen) == 1
+    assert seen[0]["book_name"] == "House fund"

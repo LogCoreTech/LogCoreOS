@@ -156,3 +156,47 @@ def test_legacy_asset_by_key_still_resolves(users):
     svc._save("Alice", "personal", store)
     asset = svc.get_asset("Alice", "leg-1")
     assert svc.resolve_template(asset)["key"] == "parcel"
+
+
+# ---------------------------------------------------------------------------
+# Contact-type template fields + assets-by-contact reverse lookup
+# ---------------------------------------------------------------------------
+
+
+def test_contact_field_type_validates(users):
+    t = svc.create_template(
+        {"key": "job", "label": "Job", "fields": [{"key": "client", "type": "contact"}]},
+        owner="Alice",
+    )
+    a = svc.create_asset(
+        "Alice",
+        {"template_id": t["id"], "name": "Fence job", "fields": {"client": "contact-123"}},
+        created_by="Alice",
+    )
+    assert a["fields"]["client"] == "contact-123"
+    with pytest.raises(ValueError):
+        svc.create_asset(
+            "Alice",
+            {"template_id": t["id"], "name": "Bad", "fields": {"client": 42}},
+            created_by="Alice",
+        )
+
+
+def test_list_assets_for_contact_scoped(users):
+    t = svc.create_template(
+        {"key": "job2", "label": "Job", "fields": [{"key": "client", "type": "contact"}]},
+        owner="Alice",
+    )
+    a = svc.create_asset(
+        "Alice",
+        {"template_id": t["id"], "name": "Fence job", "fields": {"client": "c-9"}},
+        created_by="Alice",
+    )
+    svc.create_asset(
+        "Alice", {"template_id": t["id"], "name": "Other job", "fields": {}}, created_by="Alice"
+    )
+    mine = svc.list_assets_for_contact("Alice", "personal", "c-9")
+    assert [x["id"] for x in mine] == [a["id"]]
+    assert mine[0]["name"] == "Fence job"
+    # Not visible to a user the asset isn't shared with
+    assert svc.list_assets_for_contact("Bob", "personal", "c-9") == []

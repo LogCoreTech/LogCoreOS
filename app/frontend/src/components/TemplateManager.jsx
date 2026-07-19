@@ -3,7 +3,7 @@ import { assets as assetsApi } from '../lib/api'
 import EmojiPicker from './EmojiPicker'
 import TagInput from './TagInput'
 
-const FIELD_TYPES = ['text', 'number', 'date', 'boolean', 'select']
+const FIELD_TYPES = ['text', 'number', 'date', 'boolean', 'select', 'contact']
 const BLANK_FIELD = { key: '', label: '', type: 'text', options: [], default: '' }
 
 function coerceDefault(f) {

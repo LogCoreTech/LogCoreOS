@@ -189,6 +189,28 @@ def get_invoice(store_user: str, workspace: str, book_id: str, invoice_id: str) 
     return annotate_invoice(inv) if inv else None
 
 
+def list_invoices_for_deal(
+    viewer: str, viewer_role: str, is_admin: bool, workspace: str, deal_id: str
+) -> list[dict]:
+    """Invoices billing this deal across every book the viewer can see, newest
+    first. Contribute-capped books without see_balances are skipped — the same
+    rule _require_full_read applies to per-book invoice reads."""
+    results: list[dict] = []
+    for book in finance_service.list_visible_books(viewer, viewer_role, is_admin, workspace):
+        if book.get("_access") == "contribute" and not (book.get("_caps") or {}).get(
+            "see_balances"
+        ):
+            continue
+        store_user = finance_service.store_for_annotated(book, viewer, workspace)
+        for inv in _raw_invoices(store_user, workspace, book["id"]):
+            if inv.get("deal_id") == deal_id:
+                results.append(
+                    {**annotate_invoice(inv), "book_id": book["id"], "book_name": book["name"]}
+                )
+    results.sort(key=lambda i: (i.get("issue_date") or "", i.get("number") or ""), reverse=True)
+    return results
+
+
 def create_invoice(
     store_user: str, workspace: str, book_id: str, data: dict, created_by: str
 ) -> dict:
@@ -207,6 +229,7 @@ def create_invoice(
         "id": str(uuid.uuid4()),
         "number": finance_service.next_invoice_number(store_user, workspace, book_id),
         "client_id": client_id,
+        "deal_id": (str(data.get("deal_id") or "")[:64] or None),  # CRM deal this invoice bills
         "status": "draft",
         "issue_date": _parse_date(data.get("issue_date") or date.today().isoformat(), "issue_date"),
         "due_date": _parse_date(data.get("due_date"), "due_date"),
@@ -329,6 +352,8 @@ def record_payment(
                     "notes": f"Payment on {invoice.get('number')}",
                     "invoice_id": invoice_id,
                     "client_id": invoice.get("client_id"),
+                    "deal_id": invoice.get("deal_id"),
+                    "asset_id": _deal_single_asset(created_by, workspace, invoice.get("deal_id")),
                 },
                 created_by=created_by,
                 source="manual",
@@ -343,6 +368,25 @@ def record_payment(
         _save_invoices(store_user, workspace, book_id, invoices)
         return annotate_invoice(invoice)
     return None
+
+
+def _deal_single_asset(viewer: str, workspace: str, deal_id: str | None) -> str | None:
+    """Best-effort: when the invoice's deal has exactly one linked asset, the
+    payment's transaction auto-links it. Never raises — Finance must work
+    without Contacts (same guard pattern as _suggest_payee_contact)."""
+    if not deal_id:
+        return None
+    try:
+        from services import contacts_service
+
+        found = contacts_service.find_deal(viewer, "member", False, workspace, deal_id)
+        if not found:
+            return None
+        _store, deal, _contact, _access = found
+        ids = deal.get("linked_asset_ids") or []
+        return ids[0] if len(ids) == 1 else None
+    except Exception:
+        return None
 
 
 def delete_payment(

@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import HelpButton from '../components/HelpButton'
-import { useNavigate } from 'react-router-dom'
-import { contacts as contactsApi } from '../lib/api'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { contacts as contactsApi, assets as assetsApi, finance as financeApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
 
@@ -110,13 +110,43 @@ function ContactDetail({ contact, fields, pipeline, onClose, onEdit, onChanged }
   const [fin, setFin] = useState(null)
   const [iForm, setIForm] = useState({ type: 'note', summary: '', date: '', follow_up: '' })
   const [dForm, setDForm] = useState(null)
+  const [assetList, setAssetList] = useState([])          // for deal asset linking; [] if assets module off
+  const [expandedDeal, setExpandedDeal] = useState(null)  // deal id whose panel is open
+  const [linkSelect, setLinkSelect] = useState('')
+  const [dealInvs, setDealInvs] = useState([])            // invoices billing the expanded deal
+  const [refAssets, setRefAssets] = useState([])          // assets referencing this contact (contact-type fields)
 
   const load = useCallback(() => {
     contactsApi.interactions(contact.id).then(r => setInteractions(Array.isArray(r) ? r : [])).catch(() => {})
     contactsApi.deals(contact.id).then(r => setDeals(Array.isArray(r) ? r : [])).catch(() => {})
     contactsApi.finance(contact.id).then(setFin).catch(() => {})
+    assetsApi.byContact(contact.id).then(r => setRefAssets(Array.isArray(r) ? r : [])).catch(() => {})
   }, [contact.id])
   useEffect(() => { load() }, [load])
+
+  // Assets list feeds the deal link picker — silent no-op when the module is off
+  useEffect(() => {
+    assetsApi.list().then(r => setAssetList(Array.isArray(r) ? r : [])).catch(() => {})
+  }, [])
+
+  // Invoices billing the expanded deal (viewer-scoped server-side)
+  useEffect(() => {
+    if (!expandedDeal) { setDealInvs([]); return }
+    let alive = true
+    financeApi.dealInvoices(expandedDeal)
+      .then(r => { if (alive) setDealInvs(Array.isArray(r) ? r : []) })
+      .catch(() => { if (alive) setDealInvs([]) })
+    return () => { alive = false }
+  }, [expandedDeal])
+
+  async function linkAssetToDeal(dealId) {
+    if (!linkSelect) return
+    try { await contactsApi.linkAsset(contact.id, dealId, linkSelect); setLinkSelect(''); load() } catch { /* ignore */ }
+  }
+
+  async function unlinkAssetFromDeal(dealId, assetId) {
+    try { await contactsApi.unlinkAsset(contact.id, dealId, assetId); load() } catch { /* ignore */ }
+  }
 
   async function addInteraction(e) {
     e.preventDefault()
@@ -172,12 +202,50 @@ function ContactDetail({ contact, fields, pipeline, onClose, onEdit, onChanged }
           {contact.notes && <p className="text-charcoal-500 whitespace-pre-wrap mt-2">{contact.notes}</p>}
         </div>
 
-        {/* Money */}
-        {fin?.available && (fin.tx_count > 0 || fin.spent_cents > 0 || fin.received_cents > 0) && (
-          <div className="card p-3 mb-4 text-sm flex gap-4 flex-wrap">
-            <span>💸 Spent: <b>{money(fin.spent_cents)}</b></span>
-            <span>💰 Received: <b>{money(fin.received_cents)}</b></span>
-            <span className="text-charcoal-500">{fin.tx_count} transactions</span>
+        {/* References — money + every record linked to this contact */}
+        {((fin?.available && (fin.tx_count > 0 || (fin.invoices || []).length > 0)) || refAssets.length > 0) && (
+          <div className="card p-3 mb-4 text-sm space-y-2">
+            {fin?.available && (fin.tx_count > 0 || fin.spent_cents > 0 || fin.received_cents > 0) && (
+              <div className="flex gap-4 flex-wrap">
+                <span>💸 Spent: <b>{money(fin.spent_cents)}</b></span>
+                <span>💰 Received: <b>{money(fin.received_cents)}</b></span>
+                <span className="text-charcoal-500">{fin.tx_count} transactions</span>
+                {fin.outstanding_cents > 0 && (
+                  <span className="text-orange-500">Outstanding: <b>{money(fin.outstanding_cents)}</b></span>
+                )}
+              </div>
+            )}
+            {refAssets.length > 0 && (
+              <div className="flex gap-1 flex-wrap items-center">
+                <span className="text-xs text-charcoal-500 shrink-0">Assets:</span>
+                {refAssets.map(a => (
+                  <button
+                    key={a.id}
+                    onClick={() => navigate(`/assets?asset=${a.id}`)}
+                    className="badge bg-charcoal-100 dark:bg-charcoal-700 hover:underline"
+                    title={a.template_label}
+                  >{a.icon} {a.name}</button>
+                ))}
+              </div>
+            )}
+            {(fin?.invoices || []).length > 0 && (
+              <div className="space-y-1">
+                <span className="text-xs text-charcoal-500">Invoices:</span>
+                {fin.invoices.map(inv => (
+                  <div key={inv.id} className="flex items-center gap-2 text-xs">
+                    <button onClick={() => navigate(`/finance?book=${inv.book_id}&view=invoices`)} className="font-mono text-orange-500 hover:underline">{inv.number}</button>
+                    <span className="badge bg-charcoal-100 dark:bg-charcoal-700">{inv.status}</span>
+                    {inv.overdue && <span className="text-red-500 font-medium">OVERDUE</span>}
+                    <span className="ml-auto">
+                      {inv.balance_cents > 0 && inv.status !== 'draft'
+                        ? `${money(inv.balance_cents)} due`
+                        : money(inv.total_cents)}
+                    </span>
+                    <span className="text-charcoal-400">{inv.book_name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -190,18 +258,92 @@ function ContactDetail({ contact, fields, pipeline, onClose, onEdit, onChanged }
           {deals.length === 0 ? <p className="text-xs text-charcoal-400">No deals yet.</p> : (
             <div className="space-y-2">
               {deals.map(d => (
-                <div key={d.id} className="flex items-center gap-2 text-sm">
-                  <span className="flex-1 min-w-0 truncate">{d.title}</span>
-                  <span className="font-medium">{money(d.value_cents)}</span>
-                  {canContribute ? (
-                    <select className="input !w-auto !py-1 text-xs" value={d.stage} onChange={e => moveDeal(d, e.target.value)}>
-                      {pipeline.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  ) : <span className="badge bg-charcoal-100 dark:bg-charcoal-700">{d.stage}</span>}
-                  {canEdit && d.stage?.toLowerCase() === 'won' && (
-                    <button onClick={() => navigate('/finance?view=invoices')} className="btn-ghost text-xs" title="Create invoice in Finance">🧾</button>
-                  )}
-                  {canEdit && <button onClick={() => contactsApi.removeDeal(contact.id, d.id).then(load)} className="btn-ghost text-xs text-red-500">×</button>}
+                <div key={d.id}>
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="flex-1 min-w-0 truncate">{d.title}</span>
+                    <span className="font-medium">{money(d.value_cents)}</span>
+                    {canContribute ? (
+                      <select className="input !w-auto !py-1 text-xs" value={d.stage} onChange={e => moveDeal(d, e.target.value)}>
+                        {pipeline.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    ) : <span className="badge bg-charcoal-100 dark:bg-charcoal-700">{d.stage}</span>}
+                    <button
+                      onClick={() => { setExpandedDeal(expandedDeal === d.id ? null : d.id); setLinkSelect('') }}
+                      className={`btn-ghost text-xs ${expandedDeal === d.id ? 'text-orange-500' : ''}`}
+                      title="Linked assets"
+                    >
+                      🔗{(d.linked_asset_ids || []).length > 0 ? (d.linked_asset_ids || []).length : ''}
+                    </button>
+                    {canEdit && d.stage?.toLowerCase() === 'won' && (
+                      <button
+                        onClick={() => navigate(`/finance?view=invoices&client_contact=${contact.id}&amount=${d.value_cents || 0}&title=${encodeURIComponent(d.title)}&deal_id=${d.id}`)}
+                        className="btn-ghost text-xs" title="Create invoice in Finance"
+                      >🧾</button>
+                    )}
+                    {canEdit && <button onClick={() => contactsApi.removeDeal(contact.id, d.id).then(load)} className="btn-ghost text-xs text-red-500">×</button>}
+                  </div>
+                  {expandedDeal === d.id && (() => {
+                    const jp = (fin?.deals || []).find(x => x.deal_id === d.id)
+                    return (
+                      <div className="ml-3 mt-1 mb-2 pl-3 border-l-2 border-charcoal-200 dark:border-charcoal-700 space-y-2 text-sm">
+                        <div className="flex gap-1 flex-wrap items-center">
+                          {(d.linked_asset_ids || []).length === 0 && (
+                            <span className="text-xs text-charcoal-400">No linked assets.</span>
+                          )}
+                          {(d.linked_asset_ids || []).map(aid => {
+                            const a = assetList.find(x => x.id === aid)
+                            return (
+                              <span key={aid} className="badge bg-charcoal-100 dark:bg-charcoal-700 flex items-center gap-1">
+                                <button onClick={() => navigate(`/assets?asset=${aid}`)} className="hover:underline" title="Open asset">
+                                  {a ? a.name : '(asset)'}
+                                </button>
+                                {canContribute && (
+                                  <button onClick={() => unlinkAssetFromDeal(d.id, aid)} className="text-red-500" title="Unlink">×</button>
+                                )}
+                              </span>
+                            )
+                          })}
+                        </div>
+                        {canContribute && assetList.length > 0 && (
+                          <div className="flex gap-2 items-center">
+                            <select className="input !w-auto !py-1 text-xs flex-1 min-w-0" value={linkSelect} onChange={e => setLinkSelect(e.target.value)}>
+                              <option value="">Link an asset…</option>
+                              {assetList.filter(a => !(d.linked_asset_ids || []).includes(a.id)).map(a => (
+                                <option key={a.id} value={a.id}>{a.name}</option>
+                              ))}
+                            </select>
+                            <button onClick={() => linkAssetToDeal(d.id)} disabled={!linkSelect} className="btn-ghost text-xs shrink-0">＋ Link</button>
+                          </div>
+                        )}
+                        {dealInvs.length > 0 && (
+                          <div className="space-y-1">
+                            <span className="text-xs text-charcoal-500">Invoices from this deal:</span>
+                            {dealInvs.map(inv => (
+                              <div key={inv.id} className="flex items-center gap-2 text-xs">
+                                <button onClick={() => navigate(`/finance?book=${inv.book_id}&view=invoices`)} className="font-mono text-orange-500 hover:underline">{inv.number}</button>
+                                <span className="badge bg-charcoal-100 dark:bg-charcoal-700">{inv.status}</span>
+                                {inv.overdue && <span className="text-red-500 font-medium">OVERDUE</span>}
+                                <span className="ml-auto">
+                                  {inv.balance_cents > 0 && inv.status !== 'draft'
+                                    ? `${money(inv.balance_cents)} due`
+                                    : money(inv.total_cents)}
+                                </span>
+                                <span className="text-charcoal-400">{inv.book_name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {jp && (jp.invoiced_cents > 0 || jp.expenses_cents > 0) && (
+                          <div className="text-xs text-charcoal-500 flex gap-3 flex-wrap border-t border-charcoal-200 dark:border-charcoal-700 pt-1.5">
+                            <span>Invoiced <b>{money(jp.invoiced_cents)}</b></span>
+                            <span>Collected <b className="text-green-600">{money(jp.collected_cents)}</b></span>
+                            <span>Expenses <b className="text-red-500">{money(jp.expenses_cents)}</b></span>
+                            <span>Net job profit <b className={jp.net_cents < 0 ? 'text-red-500' : 'text-green-600'}>{money(jp.net_cents)}</b></span>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
               ))}
             </div>
@@ -278,6 +420,17 @@ export default function Contacts() {
     } finally { setLoading(false) }
   }, [workspace, showArchived])
   useEffect(() => { load() }, [load])
+
+  // ?contact=<id> deep link (from asset contact fields, invoice/tx source chips)
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    const target = searchParams.get('contact')
+    if (!target || loading) return
+    const found = items.find(c => c.id === target)
+    if (found) setDetail(found)
+    searchParams.delete('contact')
+    setSearchParams(searchParams, { replace: true })
+  }, [loading, items, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const q = search.trim().toLowerCase()
   const filtered = items.filter(c => !q ||

@@ -213,3 +213,72 @@ def test_share_index_routes_visibility(brain):
     # Worker's visible list includes the shared contact via the index
     visible = crm.list_visible_contacts("Worker", "member", False, "personal")
     assert any(x["id"] == c["id"] for x in visible)
+
+
+# --- Deal asset linking ----------------------------------------------------
+
+
+def test_deal_link_unlink_asset_idempotent(brain):
+    c = _contact()
+    d = crm.add_deal("Owner", "personal", c["id"], {"title": "Job"}, "Owner")
+    assert d["linked_asset_ids"] == []
+    assert crm.link_asset("Owner", "personal", d["id"], "asset-1")["linked_asset_ids"] == [
+        "asset-1"
+    ]
+    # Linking twice never duplicates
+    assert crm.link_asset("Owner", "personal", d["id"], "asset-1")["linked_asset_ids"] == [
+        "asset-1"
+    ]
+    assert crm.link_asset("Owner", "personal", d["id"], "asset-2")["linked_asset_ids"] == [
+        "asset-1",
+        "asset-2",
+    ]
+    assert crm.unlink_asset("Owner", "personal", d["id"], "asset-1")["linked_asset_ids"] == [
+        "asset-2"
+    ]
+    # Unknown deal → None (router turns this into a 404)
+    assert crm.link_asset("Owner", "personal", "nope", "x") is None
+    assert crm.unlink_asset("Owner", "personal", "nope", "x") is None
+
+
+def test_deal_linked_assets_survive_partial_update(brain):
+    c = _contact()
+    d = crm.add_deal("Owner", "personal", c["id"], {"title": "Job"}, "Owner")
+    crm.link_asset("Owner", "personal", d["id"], "asset-1")
+    updated = crm.update_deal("Owner", "personal", d["id"], {"title": "Renamed"})
+    assert updated["linked_asset_ids"] == ["asset-1"]
+
+
+def test_link_asset_on_legacy_deal_without_field(brain):
+    """Deals created before asset linking have no linked_asset_ids key."""
+    c = _contact()
+    d = crm.add_deal("Owner", "personal", c["id"], {"title": "Old"}, "Owner")
+    items = crm._list_deals("Owner", "personal")
+    for it in items:
+        it.pop("linked_asset_ids", None)
+    crm._save_deals("Owner", "personal", items)
+    updated = crm.link_asset("Owner", "personal", d["id"], "a1")
+    assert updated["linked_asset_ids"] == ["a1"]
+
+
+# --- Deal lookup by id (find_deal) ----------------------------------------
+
+
+def test_find_deal_inherits_contact_access(brain):
+    c = _contact()
+    d = crm.add_deal("Owner", "personal", c["id"], {"title": "Job"}, "Owner")
+    found = crm.find_deal("Owner", "member", False, "personal", d["id"])
+    assert found is not None
+    store, deal, contact, access = found
+    assert store == "Owner" and deal["id"] == d["id"]
+    assert contact["id"] == c["id"] and access == "edit"
+    # Another user's personal deal stays invisible
+    assert crm.find_deal("Worker", "member", False, "personal", d["id"]) is None
+
+
+def test_find_deal_pool_readable_by_members(brain):
+    pc = crm.create_contact("_household", "personal", {"name": "Pool Co"}, "Owner")
+    pd = crm.add_deal("_household", "personal", pc["id"], {"title": "Pool job"}, "Owner")
+    found = crm.find_deal("Worker", "member", False, "personal", pd["id"])
+    assert found is not None
+    assert found[3] == "read"

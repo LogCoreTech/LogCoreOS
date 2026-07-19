@@ -255,6 +255,7 @@ export const assets = {
   setCommentsHidden: (id, hidden)   => request('PUT', `/assets/${id}/comments/visibility`, { hidden }),
   muteState:      (id)              => get(`/assets/${id}/mute`),
   setMute:        (id, muted)       => request('PUT', `/assets/${id}/mute`, { muted }),
+  byContact:      (contactId)       => get(`/assets/by-contact/${contactId}`),
   automationToken:       ()         => get('/assets/automation/token'),
   rotateAutomationToken: ()         => post('/assets/automation/token/rotate', {}),
 }
@@ -285,6 +286,8 @@ export const finance = {
   removeTransaction: (bookId, id)       => del(`/finance/books/${bookId}/transactions/${id}`),
   monthlyReport:     (bookId, month)    => get(`/finance/books/${bookId}/reports/monthly?month=${month}`),
   netWorth:          ()                 => get('/finance/networth'),
+  assetTransactions: (assetId)          => get(`/finance/assets/${assetId}/transactions`),
+  dealInvoices:      (dealId)           => get(`/finance/deals/${dealId}/invoices`),
   pnl: (bookId, opts) => {
     const params = new URLSearchParams({ year: opts.year, period: opts.period || 'year' })
     if (opts.quarter) params.set('quarter', opts.quarter)
@@ -387,6 +390,9 @@ export const contacts = {
   addDeal:      (id, data)          => post(`/contacts/${id}/deals`, data),
   updateDeal:   (id, did, data)     => patch(`/contacts/${id}/deals/${did}`, data),
   removeDeal:   (id, did)           => del(`/contacts/${id}/deals/${did}`),
+  linkAsset:    (id, did, assetId)  => post(`/contacts/${id}/deals/${did}/assets`, { asset_id: assetId }),
+  unlinkAsset:  (id, did, assetId)  => del(`/contacts/${id}/deals/${did}/assets/${assetId}`),
+  getDeal:      (dealId)            => get(`/contacts/deals/${dealId}`),
   finance:      (id)                => get(`/contacts/${id}/finance`),
   pipeline:     ()                  => get('/contacts/pipeline'),
   setPipeline:  (stages)            => request('PUT', '/contacts/pipeline', { stages }),

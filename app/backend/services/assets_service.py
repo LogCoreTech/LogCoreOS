@@ -28,7 +28,7 @@ from services.file_service import (
     write_json,
 )
 
-FIELD_TYPES = {"text", "number", "date", "boolean", "select"}
+FIELD_TYPES = {"text", "number", "date", "boolean", "select", "contact"}
 ATTACHMENT_TYPES = {
     "image/jpeg": "jpg",
     "image/png": "png",
@@ -425,6 +425,13 @@ def _validate_value(fdef: dict, value: Any) -> Any:
         if value not in fdef.get("options", []):
             raise ValueError(f"Field {key!r} must be one of: {', '.join(fdef.get('options', []))}")
         return value
+    if ftype == "contact":
+        # Stores a CRM contact id. No cross-store existence check — the UI
+        # validates at pick time; stale ids render as "(contact)" (same
+        # tolerance as deals' linked_asset_ids).
+        if not isinstance(value, str) or not value.strip() or len(value) > 64:
+            raise ValueError(f"Field {key!r} must be a contact id")
+        return value.strip()
     raise ValueError(f"Unknown field type {ftype!r}")
 
 
@@ -1257,6 +1264,40 @@ def list_visible(
             result.append(entry)
 
     return result
+
+
+def list_assets_for_contact(
+    viewer: str,
+    workspace: str,
+    contact_id: str,
+    is_admin: bool = False,
+    pool_edit: tuple | list = (),
+    viewer_role: str = "",
+) -> list[dict]:
+    """Viewer-visible assets referencing this contact in any contact-type
+    template field. Compact records for the contact References section."""
+    results: list[dict] = []
+    visible = attach_templates(
+        list_visible(
+            viewer, workspace, is_admin=is_admin, pool_edit=pool_edit, viewer_role=viewer_role
+        )
+    )
+    for a in visible:
+        tmpl = a.get("_template") or {}
+        contact_keys = [f["key"] for f in tmpl.get("fields", []) if f.get("type") == "contact"]
+        if not contact_keys:
+            continue
+        fields = a.get("fields") or {}
+        if any(fields.get(k) == contact_id for k in contact_keys):
+            results.append(
+                {
+                    "id": a["id"],
+                    "name": a.get("name", ""),
+                    "icon": tmpl.get("icon", ""),
+                    "template_label": tmpl.get("label", ""),
+                }
+            )
+    return results
 
 
 def find_asset(

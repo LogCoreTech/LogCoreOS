@@ -453,6 +453,29 @@ def find_book(
     return None
 
 
+def list_transactions_for_asset(
+    viewer: str, viewer_role: str, is_admin: bool, workspace: str, asset_id: str
+) -> list[dict]:
+    """All transactions tagged with this asset_id across every book the viewer
+    can see, newest first. Contribute-capped books follow the same rule as the
+    tx-list endpoint: own entries only unless caps grant see_all_tx."""
+    results: list[dict] = []
+    for book in list_visible_books(viewer, viewer_role, is_admin, workspace):
+        own_only = book.get("_access") == "contribute" and not (book.get("_caps") or {}).get(
+            "see_all_tx"
+        )
+        store_user = store_for_annotated(book, viewer, workspace)
+        for year in _shard_years(store_user, workspace, book["id"]):
+            for tx in _read_shard(store_user, workspace, book["id"], year).get("transactions", []):
+                if tx.get("asset_id") != asset_id:
+                    continue
+                if own_only and tx.get("created_by") != viewer:
+                    continue
+                results.append({**tx, "book_id": book["id"], "book_name": book["name"]})
+    results.sort(key=lambda t: t.get("date", ""), reverse=True)
+    return results
+
+
 # ---------------------------------------------------------------------------
 # Books
 # ---------------------------------------------------------------------------
@@ -844,6 +867,8 @@ def add_transaction(
         "category": category,
         "payee": (tx_data.get("payee") or "").strip()[:120],
         "payee_contact_id": (tx_data.get("payee_contact_id") or None) or None,
+        "asset_id": (tx_data.get("asset_id") or None) or None,
+        "deal_id": (tx_data.get("deal_id") or None) or None,
         "notes": (tx_data.get("notes") or "").strip()[:2000],
         "deductible": bool(tx_data.get("deductible", False)),
         "tax_category": tx_data.get("tax_category"),
@@ -888,6 +913,10 @@ def update_transaction(
                 allowed["payee"] = (updates["payee"] or "").strip()[:120]
             if "payee_contact_id" in updates:
                 allowed["payee_contact_id"] = (updates["payee_contact_id"] or None) or None
+            if "asset_id" in updates:
+                allowed["asset_id"] = (updates["asset_id"] or None) or None
+            if "deal_id" in updates:
+                allowed["deal_id"] = (updates["deal_id"] or None) or None
             if "notes" in updates:
                 allowed["notes"] = (updates["notes"] or "").strip()[:2000]
             if "deductible" in updates:
@@ -1000,6 +1029,8 @@ def bulk_add_transactions(
                 "category": category,
                 "payee": payee,
                 "payee_contact_id": _suggest_payee_contact(store_user, workspace, payee),
+                "asset_id": None,
+                "deal_id": None,
                 "notes": (tx_data.get("notes") or "").strip()[:2000],
                 "deductible": False,
                 "tax_category": None,
