@@ -44,7 +44,10 @@
 >
 > **Deploy verification checklist (run on a real host):** `docker compose config` parses; `socket-proxy` starts; Admin → Automations can start/stop/restart n8n; Admin → Hosting → Apply recreates the tunnel; n8n reachable at `http://n8n:5678` from the app but NOT on the host's public IP. If the n8n version jump (→2.31.3) misbehaves, pin back to the version the instance was last on.
 >
-> **Still open (LOW, deferred):** `curl|sh` installer bootstrap, unsigned `update.sh` git pull, `vite`/`eslint` dev-tooling staleness — low runtime risk, revisit on a maintenance pass.
+> **Remediation pass 4 — 2026-07-20 (residual account-security). Tested — full backend suite green (467 passed), app imports clean.**
+> - ✅ **Residual: account lockout** — added an account-scoped (email-keyed) temporary lockout underneath the per-IP limiter: 10 failed attempts within 15 min → that account is refused (HTTP 429) until the oldest failure ages out. Stops distributed credential-stuffing (many IPs, one account) that per-IP limits miss, and backstops A1. Sliding-window and never permanent — the lock is checked *before* authenticating so attempts-while-locked don't extend it, which prevents a victim-lockout DoS. Both `/auth/login` and `/auth/token` route through the new `auth_service.login_attempt()`. 6 new tests in `test_auth_service.py`.
+>
+> **Still open (deferred):** **2FA** (the other residual — real feature, on the v1.0 backlog, needs its own design pass); and the LOW items — `curl|sh` installer bootstrap, unsigned `update.sh` git pull, `vite`/`eslint` dev-tooling staleness — low runtime risk, revisit on a maintenance pass.
 
 The **application code is genuinely strong** — the core auth/authorization/path-traversal/injection defenses are well built and were verified sound (see "Verified Sound" at the end). Every material risk is concentrated in the **deployment/infrastructure layer** (the bundled Docker stack, secret handling, and installer defaults) plus **one application finding** (an unthrottled login endpoint) and **stale dependencies**. Nothing here indicates a currently-exploited hole; these are hardening gaps that matter most the moment an instance is exposed to the public internet.
 
@@ -158,7 +161,7 @@ Threat: an unauthenticated outsider trying to break in or steal a user's credent
 - **Registration is closed by default** (`ALLOW_OPEN_REGISTRATION=False`); non-first-user registration requires a valid admin token (routers/auth.py:194-205). Only the genuine first-run user is auto-promoted to admin.
 - **Passwords are bcrypt-hashed**, self-registration enforces an 8-char minimum (routers/auth.py:44).
 
-**Residual outsider weaknesses** (beyond the numbered findings): there is **no account lockout** after repeated failures — only per-IP rate limiting — so distributed credential-stuffing from many IPs is not stopped by the login throttle; and there is **no 2FA** (app-level 2FA is on the v1.0 backlog per `docs/TASKS.md`), so a single stolen/guessed password is full access with no second factor. Both are defense-in-depth gaps rather than distinct vulnerabilities, but they raise the stakes of A1 and the `SECRET_KEY`/`COOKIE_SECURE` defaults.
+**Residual outsider weaknesses** (beyond the numbered findings): ~~there is **no account lockout** after repeated failures — only per-IP rate limiting — so distributed credential-stuffing from many IPs is not stopped by the login throttle~~ **[CLOSED 2026-07-20 — account-scoped temporary lockout added; see Remediation Status]**; and there is **no 2FA** (app-level 2FA is on the v1.0 backlog per `docs/TASKS.md`), so a single stolen/guessed password is full access with no second factor. 2FA remains a defense-in-depth gap that raises the stakes of the `SECRET_KEY`/`COOKIE_SECURE` defaults.
 
 ### Other defenses reviewed and sound
 

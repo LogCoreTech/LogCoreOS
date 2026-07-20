@@ -242,7 +242,12 @@ def register(
 
 @router.post("/login")
 def login(req: LoginRequest, response: Response, _rl: None = Depends(_login_limit)):
-    user = auth_service.authenticate(req.email, req.password)
+    user, locked = auth_service.login_attempt(req.email, req.password)
+    if locked:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many failed login attempts. Try again in {locked} seconds.",
+        )
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = auth_service.create_token(user)
@@ -281,7 +286,12 @@ def logout(response: Response, current_user: dict = Depends(get_current_user)):
 def get_token(req: LoginRequest, _rl: None = Depends(_login_limit)):
     """Return a plain Bearer token for CLI / programmatic clients.
     Browser sessions should use /login (sets HttpOnly cookie instead)."""
-    user = auth_service.authenticate(req.email, req.password)
+    user, locked = auth_service.login_attempt(req.email, req.password)
+    if locked:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many failed login attempts. Try again in {locked} seconds.",
+        )
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
     return {"token": auth_service.create_token(user)}
