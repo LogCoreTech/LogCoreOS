@@ -43,6 +43,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Docker socket no longer exposed to the app** — the web app used to bind-mount the host Docker socket (an app compromise ≈ host root). It now reaches Docker through a locked-down `docker-socket-proxy` that permits only the container operations the updater/tunnel need and blocks everything else (exec, volumes, networks, …). **Re-run `launch.sh` on your next deploy so the new `socket-proxy` service starts.**
 - **n8n and ntfy ports are now loopback-only** — published to `127.0.0.1` instead of all interfaces; reach the n8n UI via the tunnel or an SSH port-forward. Fresh installs also get strong random `N8N_API_KEY`/`N8N_ENCRYPTION_KEY` instead of shipped defaults
 - **Pinned third-party images** — `cloudflared`, `ntfy`, `n8n`, and the socket-proxy are pinned to specific versions (no more silent `:latest` pulls), so builds are reproducible and roll-backable
+- **Signed-update verification (opt-in)** — the in-place updater (`docker/update.sh`) now *fetches* a new release and verifies it **before** it touches the working tree: with `UPDATE_REQUIRE_SIGNATURE=true` it refuses to build any commit that isn't GPG-signed (commit or annotated tag) by a trusted key, and it fast-forwards only (no silent merge of divergent history). Defends the auto-updater against a compromised origin or MITM. Default off so unsigned deployments are unaffected
+- **Vite updated to 5.4.x** — closes the Vite dev-server path-traversal advisories flagged in the audit (dev-tooling; production is served from the built bundle). The remaining esbuild dev-server advisory needs a future major (Vite 8) and is deferred
+- **Documented the `--install-deps` bootstrap** — `launch.sh` now warns that `--install-deps` runs the vendors' `curl | sudo sh` scripts as root (trust-on-first-use) and points to the manual-install path for operators who'd rather not
 
 ## [0.3.1] — 2026-07-18
 

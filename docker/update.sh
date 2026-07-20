@@ -33,6 +33,14 @@ WATCH_INTERVAL=60
 
 mkdir -p "$BRAIN_SYS"
 
+# Load operator config (UPDATE_REQUIRE_SIGNATURE, …) from docker/.env if present.
+if [[ -f "$DOCKER_DIR/.env" ]]; then
+    set -a
+    # shellcheck disable=SC1090,SC1091
+    source "$DOCKER_DIR/.env" 2>/dev/null || true
+    set +a
+fi
+
 # ── Logging ───────────────────────────────────────────────────────────────────
 
 log() {
@@ -109,6 +117,51 @@ do_rollback() {
     fi
 }
 
+# ── Supply-chain: verify the incoming commit is signed ─────────────────────────
+# Opt-in. When UPDATE_REQUIRE_SIGNATURE=true, the commit fetched from origin must
+# carry a valid GPG signature — on the commit itself, or on an annotated tag that
+# points at it — from a key trusted in the updater's GPG keyring. If it doesn't,
+# the update is refused BEFORE anything is merged or built. This defends the
+# auto-updater against a compromised origin or a MITM injecting malicious code.
+#
+# Default OFF so existing deployments (whose commits may be unsigned) keep
+# updating. To turn it on:
+#   1. GPG-sign your release commits or tags (git commit -S / git tag -s).
+#   2. Import the release signing PUBLIC key into the keyring the updater runs
+#      under (gpg --import release-pubkey.asc) and mark it trusted.
+#   3. Set UPDATE_REQUIRE_SIGNATURE=true in docker/.env.
+
+require_signature() {
+    case "${UPDATE_REQUIRE_SIGNATURE:-false}" in
+        true | 1 | yes | on) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+verify_signature() {
+    local commit="$1"
+    require_signature || return 0   # verification disabled → allow
+
+    log "UPDATE_REQUIRE_SIGNATURE=true — verifying GPG signature of $commit..."
+    if ! command -v gpg &>/dev/null; then
+        log "  gpg not installed — cannot verify signature; refusing update."
+        return 1
+    fi
+    if git -C "$REPO_ROOT" verify-commit "$commit" >> "$LOG_FILE" 2>&1; then
+        log "  Commit signature valid."
+        return 0
+    fi
+    # Fall back to an annotated tag that points at this commit
+    local tag
+    tag="$(git -C "$REPO_ROOT" tag --points-at "$commit" 2>/dev/null | head -1)"
+    if [[ -n "$tag" ]] && git -C "$REPO_ROOT" verify-tag "$tag" >> "$LOG_FILE" 2>&1; then
+        log "  Tag signature valid ($tag)."
+        return 0
+    fi
+    log "  No valid trusted GPG signature on $commit (or a tag pointing at it) — refusing update."
+    return 1
+}
+
 # ── Core update ───────────────────────────────────────────────────────────────
 
 do_update() {
@@ -136,18 +189,35 @@ do_update() {
     prev_commit="$(git -C "$REPO_ROOT" rev-parse HEAD)"
     log "Current commit: $prev_commit"
 
-    # 3. Pull latest code
-    log "Pulling latest code from origin/master..."
-    git -C "$REPO_ROOT" pull origin master >> "$LOG_FILE" 2>&1
+    # 3. Fetch latest code — but do NOT merge it into the working tree until it
+    #    has passed signature verification, so unverified code never lands.
+    log "Fetching latest code from origin/master..."
+    git -C "$REPO_ROOT" fetch origin master >> "$LOG_FILE" 2>&1
 
     local new_commit
-    new_commit="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+    new_commit="$(git -C "$REPO_ROOT" rev-parse FETCH_HEAD)"
 
     if [[ "$prev_commit" == "$new_commit" ]]; then
         log "Already up to date — nothing to do."
         rm -f "$RUNNING_FLAG"
         write_status "up-to-date"
         return 0
+    fi
+
+    # 3a. Verify the incoming commit's signature (no-op unless UPDATE_REQUIRE_SIGNATURE=true)
+    if ! verify_signature "$new_commit"; then
+        log "Signature verification failed — aborting update, working tree untouched."
+        write_status "signature-failed" "$new_commit"
+        rm -f "$RUNNING_FLAG"
+        return 1
+    fi
+
+    # 3b. Land the verified commit (fast-forward only — refuse divergent history)
+    if ! git -C "$REPO_ROOT" merge --ff-only "$new_commit" >> "$LOG_FILE" 2>&1; then
+        log "Cannot fast-forward to $new_commit (divergent local history) — aborting."
+        write_status "ff-failed" "$new_commit"
+        rm -f "$RUNNING_FLAG"
+        return 1
     fi
     log "New commit: $new_commit"
 
