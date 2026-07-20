@@ -77,6 +77,22 @@ write_installed_version() {
     return 0
 }
 
+# SSH remotes (git@github.com:…) need a key the cron user can read — a cron
+# installed under a different user (e.g. root after a sudo launch.sh) can't
+# fetch and the instance is stranded until someone SSHes in. The repo is public,
+# so the same repo is always fetchable over HTTPS with no credentials: derive
+# that URL from origin so forks keep tracking their own fork.
+https_equivalent_of_origin() {
+    local url
+    # Raw configured value (not `remote get-url`, which applies insteadOf rewrites)
+    url="$(git -C "$REPO_ROOT" config --get remote.origin.url 2>/dev/null)" || return 1
+    case "$url" in
+        git@github.com:*)       printf 'https://github.com/%s\n' "${url#git@github.com:}" ;;
+        ssh://git@github.com/*) printf 'https://github.com/%s\n' "${url#ssh://git@github.com/}" ;;
+        *) return 1 ;;
+    esac
+}
+
 # A previous update can deploy new code but die (or fail the write above) before
 # the version is recorded; every later run then no-ops on "already up to date"
 # and the stale version sticks forever. Heal that here: if the working tree's
@@ -220,12 +236,20 @@ do_update() {
     #    stale FETCH_HEAD once rebuilt the old tree and stamped it "successful".
     log "Fetching latest code from origin/master..."
     if ! git -C "$REPO_ROOT" fetch origin master >> "$LOG_FILE" 2>&1; then
-        log "git fetch failed — cannot reach origin. Check the remote URL and credentials (see log above)."
-        log "  Note: an SSH remote (git@github.com:…) needs a key the updater's cron user can read;"
-        log "  the public HTTPS remote needs none: git remote set-url origin https://github.com/LogCoreTech/LogCoreOS.git"
-        write_status "fetch-failed"
-        rm -f "$RUNNING_FLAG"
-        return 1
+        local https_url=""
+        https_url="$(https_equivalent_of_origin || true)"
+        if [[ -n "$https_url" ]] \
+            && git -C "$REPO_ROOT" fetch "$https_url" master >> "$LOG_FILE" 2>&1; then
+            log "origin fetch failed (SSH credentials?) — fell back to $https_url and continued."
+            log "  Fix the remote permanently with: git remote set-url origin $https_url"
+        else
+            log "git fetch failed — cannot reach origin. Check the remote URL and credentials (see log above)."
+            log "  Note: an SSH remote (git@github.com:…) needs a key the updater's cron user can read;"
+            log "  the public HTTPS remote needs none: git remote set-url origin https://github.com/LogCoreTech/LogCoreOS.git"
+            write_status "fetch-failed"
+            rm -f "$RUNNING_FLAG"
+            return 1
+        fi
     fi
 
     local new_commit
