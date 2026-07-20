@@ -157,12 +157,39 @@ def _startup_checks() -> None:
 app = FastAPI(title="LogCore OS", version="0.1.0", lifespan=lifespan)
 
 
+def _is_https_request(request: Request) -> bool:
+    """True when the response will reach the client over HTTPS.
+
+    Behind the Cloudflare tunnel / a reverse proxy the hop to the app is plain
+    HTTP, so we also honour X-Forwarded-Proto and treat any configured public
+    domain (Admin → Hosting) as HTTPS. We deliberately do NOT send HSTS on a
+    plain-HTTP LAN instance — that would lock the browser into HTTPS-only and
+    break a dev/LAN deployment that has no TLS.
+    """
+    if request.url.scheme == "https":
+        return True
+    if request.headers.get("x-forwarded-proto", "").split(",")[0].strip() == "https":
+        return True
+    return bool(effective_domain_url())
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        # Disable browser features the app never uses, so an injected script can't
+        # reach for the camera/mic/geolocation etc.
+        response.headers["Permissions-Policy"] = (
+            "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+        )
+        # Only force HTTPS when we're actually being served over HTTPS — never on a
+        # plain-HTTP LAN instance (see _is_https_request).
+        if _is_https_request(request):
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
         if request.url.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
         return response

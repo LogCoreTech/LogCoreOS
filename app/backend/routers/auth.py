@@ -31,7 +31,7 @@ bearer_optional = HTTPBearer(auto_error=False)
 _COOKIE = "lc_token"
 
 # Rate limits
-_login_limit = rate_limit(5, 300)  # 5 login attempts per 5 min
+_login_limit = rate_limit(5, 300, bucket="auth-login")  # 5 credential checks / 5 min, shared by /login + /token
 _register_limit = rate_limit(3, 3600)  # 3 registrations per hour
 _me_limit = rate_limit(10, 60)  # 10 profile updates per minute
 _get_me_limit = rate_limit(30, 60)  # 30 GET /me or /today per minute (polled endpoints)
@@ -278,7 +278,7 @@ def logout(response: Response, current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/token")
-def get_token(req: LoginRequest):
+def get_token(req: LoginRequest, _rl: None = Depends(_login_limit)):
     """Return a plain Bearer token for CLI / programmatic clients.
     Browser sessions should use /login (sets HttpOnly cookie instead)."""
     user = auth_service.authenticate(req.email, req.password)

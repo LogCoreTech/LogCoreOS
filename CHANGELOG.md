@@ -26,6 +26,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Release tags with a capital V are parsed correctly** (`V0.3.0` previously broke version comparison, hiding updates)
 - **Updates card ↺ now really checks** — the refresh button hits a new cache-busting endpoint (`POST /update/check`) instead of re-reading the 4-hour cache, so a fresh release is visible immediately
 
+### Security
+
+- **Login brute-force hardening** — the programmatic token endpoint (`POST /auth/token`) is now rate-limited just like the browser login, and both share one attempt budget so they can't be combined to double the allowance
+- **Constant-time login** — an unknown email now takes the same time to reject as a known one, closing a timing side-channel that could reveal which addresses have accounts
+- **Automation Inbox links are scheme-checked** — inbox items may only carry `http(s)` links; a `javascript:`/`data:` URL is now rejected on the way in (and defused in the UI), removing a stored-XSS path a leaked automation token could otherwise use against a reviewing admin
+- **Stronger security headers** — responses now send `Strict-Transport-Security` (over HTTPS) and a restrictive `Permissions-Policy`
+- **Dependency updates** — `python-jose` → 3.4.0 (algorithm-confusion / JWE advisories) and `python-multipart` → 0.0.18 (multipart-parsing ReDoS); AI/Docker SDK deps gained upper bounds for reproducible installs
+- **Scoped automation secret sync** — when Infisical is enabled, only n8n-scoped secrets are written into the n8n container's environment instead of the whole vault (extend via `N8N_ENV_ALLOWLIST`)
+- **Backups can be encrypted** — `docker/backup.sh` now supports opt-in GPG encryption (`BACKUP_GPG_RECIPIENT` or `BACKUP_PASSPHRASE`), restricts backup file permissions, and warns that unencrypted archives are secret-grade
+
 ## [0.3.1] — 2026-07-18
 
 ### Added

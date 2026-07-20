@@ -19,6 +19,12 @@ from services.file_service import brain_path, write_json
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 logger = logging.getLogger(__name__)
 
+# A fixed dummy bcrypt hash. When authenticate() is called with an unknown email
+# we still run a bcrypt verification against this hash so the response time does
+# not reveal whether the email exists (constant-time login — blocks timing-based
+# user enumeration). It never matches any real password.
+_DUMMY_HASH = pwd_context.hash("logcore-dummy-password-never-matches")
+
 
 def _auth_path() -> Path:
     """Auth data lives inside brain/_system/ so it's covered by the brain volume mount."""
@@ -219,7 +225,13 @@ def delete_user(user_id: str) -> None:
 
 def authenticate(email: str, password: str) -> dict | None:
     user = get_user_by_email(email)
-    if not user or not verify_password(password, user["hashed_password"]):
+    # Always run a bcrypt verification — against the real hash if the user exists,
+    # otherwise against a fixed dummy hash — so both paths take the same time and
+    # an unknown vs. known email can't be distinguished by response latency.
+    if user is None:
+        verify_password(password, _DUMMY_HASH)
+        return None
+    if not verify_password(password, user["hashed_password"]):
         return None
     return user
 

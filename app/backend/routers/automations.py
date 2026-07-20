@@ -2,9 +2,10 @@
 
 import json
 import logging
+import re
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from routers.auth import get_current_user, get_workspace, require_admin, require_module
 from services import automation_inbox_service as inbox_service
@@ -34,6 +35,22 @@ class InboxItemIn(BaseModel):
     summary: str | None = Field(None, max_length=2000)
     url: str | None = Field(None, max_length=1000)
     fields: dict = Field(default={})
+
+    @field_validator("url")
+    @classmethod
+    def _url_must_be_http(cls, v: str | None) -> str | None:
+        """Reject any non-http(s) URL. The inbox item's url is rendered as a
+        clickable link in the reviewer's (often admin) authenticated origin, so a
+        `javascript:`/`data:` scheme would be a stored-XSS sink. Land listings and
+        every legitimate source always use http(s)."""
+        if v is None:
+            return v
+        v = v.strip()
+        if not v:
+            return None
+        if not re.match(r"^https?://", v, re.IGNORECASE):
+            raise ValueError("url must be an http:// or https:// URL")
+        return v
 
 
 class AutomationInboxPost(BaseModel):

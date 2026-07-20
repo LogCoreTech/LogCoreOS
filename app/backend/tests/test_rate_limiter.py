@@ -84,6 +84,18 @@ def test_different_paths_tracked_separately():
     dep_b(_req(path="/register"))  # different path — must not raise
 
 
+def test_shared_bucket_counts_across_paths():
+    """An explicit bucket makes distinct paths share one allowance, so /auth/login
+    and /auth/token can't be used to double the login-attempt budget (A1)."""
+    login = rl.rate_limit(2, 60, bucket="auth-login")
+    token = rl.rate_limit(2, 60, bucket="auth-login")
+    login(_req(path="/auth/login"))
+    token(_req(path="/auth/token"))  # same bucket, same IP → 2 hits used
+    with pytest.raises(HTTPException) as exc:
+        login(_req(path="/auth/login"))
+    assert exc.value.status_code == 429
+
+
 # ---------------------------------------------------------------------------
 # Window expiry
 # ---------------------------------------------------------------------------
