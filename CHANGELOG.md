@@ -10,8 +10,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Mobile footer nav no longer sits above the true screen bottom** — on iOS/PWA the layout's `100dvh` height could stop short of the real screen edge, exposing a strip of the page background below the nav; the root layout now resolves its height through an explicit `height: 100%` chain instead of `dvh`
 - **Finance's "+ New book" button is reachable on mobile** — it used to sit in a header button row that overflowed off-screen on narrow viewports; it now also appears beside the Finance title on mobile, while desktop keeps the original layout
 - **Saved-chats drawer header no longer hidden behind the notch** — the "Chats" panel in AI Chat now respects the device's top safe-area inset, matching the fix already applied to the main app header
+
+*Note: the notification-channel rotation and optional ntfy publisher auth documented under [0.4.0] below landed on `master` a few hours after the `v0.4.0` tag was cut, so instances updating by tag receive them with this release.*
 
 ## [0.4.0] — 2026-07-19
 
