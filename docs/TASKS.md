@@ -6,6 +6,21 @@ Keep this up to date. Mark tasks done as they're completed. Add new tasks as the
 
 ---
 
+## Security audit remediation — MOST IMPORTANT (owner, 2026-07-19)
+
+From `docs/Security-Audit-2026-07-19.md` (1 CRITICAL · 5 HIGH · 7 MEDIUM · 4 LOW; app core verified sound — risk is concentrated in the deployment layer). Work in the audit's remediation order. **The HIGH app fixes and insecure defaults must land before the demo opens registration or gets an AI key.**
+
+- [ ] **[CRITICAL] Constrain the Docker socket** (`docker-compose.yml`) — the app container has the host socket mounted (`:ro` doesn't restrict the Engine API), so app RCE ≈ host root. Put container lifecycle ops behind a socket-proxy (e.g. tecnativa/docker-socket-proxy) or minimal broker limited to start/stop of named containers; at minimum add `cap_drop: [ALL]`, `no-new-privileges`, read-only rootfs to the app service
+- [ ] **[HIGH A2] Kill the assets bulk-export automation endpoint** (`routers/assets.py:337`) — `GET /automation/assets?user=<any>` dumps any user's whole assets store with the shared token; contradicts the Contacts write-only design. Restrict `_automation_store()` reads to `_team`/`_household` pools, or replace the list with a narrow lookup
+- [ ] **[HIGH A1] Rate-limit `POST /auth/token`** (`routers/auth.py:280`) — one-line fix: add the same `_login_limit` dependency `/auth/login` has; it's currently an unthrottled brute-force path. Consider a shared per-email bucket across both endpoints
+- [ ] **[HIGH] Infisical→n8n.env fan-out allow-list** (`infisical_loader.py`, `n8n_service.write_n8n_env`) — every vault secret (incl. `SECRET_KEY`, `ANTHROPIC_API_KEY`) is written plaintext into `docker/n8n.env` and readable by any n8n workflow; also filter what gets injected into `os.environ`
+- [ ] **[HIGH] n8n insecure compose defaults** (`docker-compose.yml`) — default `N8N_API_KEY`/`N8N_ENCRYPTION_KEY` fallbacks + port 5678 on 0.0.0.0. Have `launch.sh` generate strong values into `.env` (like it does for `SECRET_KEY`) and bind n8n/ntfy to `127.0.0.1`
+- [ ] **[HIGH] Dependency bumps** — `python-jose>=3.4.0` (alg-confusion + JWE-bomb advisories) and `python-multipart>=0.0.18` (multipart ReDoS); low-risk bumps, re-run suite
+- [ ] **[MEDIUM A3] Scheme-validate automation-inbox `url`** (`routers/automations.py:35` → `Automations.jsx:53`) — `javascript:` URLs render as clickable links in the reviewer's (usually admin's) session; reject non-http(s) at the Pydantic boundary + guard the render, add `rel="noopener noreferrer"`
+- [ ] **[MEDIUM] Fail-closed startup + security headers + installer defaults** — hard-fail on default `SECRET_KEY` when not loopback-bound (top outsider-takeover risk); add CSP + HSTS + Permissions-Policy to `SecurityHeadersMiddleware`; `launch.sh` should default `COOKIE_SECURE=true` and stop writing `ALLOWED_ORIGINS=*`; refuse-to-serve (not just warn) on `*`-CORS + non-loopback bind
+- [ ] **[MEDIUM] Supply chain + secrets at rest** — pin `cloudflared`/`ntfy`/`n8n` images to versions/digests; upper-bound `anthropic`/`openai`/`docker` deps; encrypt `backup.sh` tarballs (they contain auth.json hashes + SimpleFIN URLs) or document them as secret-grade
+- [ ] **[LOW] Defense-in-depth follow-ups** — constant-time login (dummy bcrypt on unknown email, A4 timing enumeration); checksum installer scripts; signed-tag verification or human gate in update.sh auto-pull; vite/eslint upgrades; account lockout + 2FA remain v1.0 backlog items
+
 ## Now — active build work
 
 - [ ] **BUG: deleting a user leaves their Brain data behind (owner, 2026-07-19)** — live evidence on the dev instance: a "Test test" `brain/USERS/` directory existed with no matching account in `auth.json` after the user was deleted. `DELETE /auth/admin/users/{id}` must cascade the ENTIRE `USERS/{name}` dir (assets incl. attachment files, contacts/deals, finance books + year shards + receipts, notes, journal, chats, `Business/` workspace, notifications) AND clean up references: their by-name entries in other stores' `shared_with`/`contributors`/`hidden_from` lists, and the derived share indexes (`reindex`/rebuild). Write a test that creates a user with data in several modules, deletes them, and asserts the dir + cross-references are gone
