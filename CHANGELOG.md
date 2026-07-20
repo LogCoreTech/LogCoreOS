@@ -39,6 +39,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Content-Security-Policy added** — the app now ships a CSP (`script-src 'self'`, tight defaults, Google Fonts allow-listed) so any future injected script is contained; the one inline script was moved into the bundle to keep the policy strict
 - **Refuses to start with an insecure signing key** — a deploy left on the default/empty `SECRET_KEY` (which would let anyone forge an admin token) now fails fast instead of running silently; set a real key (the installer generates one) or `ALLOW_INSECURE_SECRET_KEY=true` for local dev
 - **Secure-by-default installer** — fresh installs now default to `COOKIE_SECURE=true` and no wildcard CORS; opt into LAN/plain-HTTP mode explicitly (existing installs are unchanged)
+- **Docker socket no longer exposed to the app** — the web app used to bind-mount the host Docker socket (an app compromise ≈ host root). It now reaches Docker through a locked-down `docker-socket-proxy` that permits only the container operations the updater/tunnel need and blocks everything else (exec, volumes, networks, …). **Re-run `launch.sh` on your next deploy so the new `socket-proxy` service starts.**
+- **n8n and ntfy ports are now loopback-only** — published to `127.0.0.1` instead of all interfaces; reach the n8n UI via the tunnel or an SSH port-forward. Fresh installs also get strong random `N8N_API_KEY`/`N8N_ENCRYPTION_KEY` instead of shipped defaults
+- **Pinned third-party images** — `cloudflared`, `ntfy`, `n8n`, and the socket-proxy are pinned to specific versions (no more silent `:latest` pulls), so builds are reproducible and roll-backable
 
 ## [0.3.1] — 2026-07-18
 

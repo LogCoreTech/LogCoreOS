@@ -101,6 +101,9 @@ All env vars are defined in `app/backend/config.py` via Pydantic Settings and re
 
 ## Known Gotchas
 
+**Docker access goes through the socket-proxy (2026-07-20):**
+The app no longer bind-mounts `/var/run/docker.sock`. It reaches the Docker API via the `socket-proxy` service (`DOCKER_HOST=tcp://socket-proxy:2375`, set in `docker-compose.yml`). `docker.from_env()` picks that up automatically — no code change. The proxy allows only `CONTAINERS`/`IMAGES`/`POST` (+ start/stop/restart); it blocks `EXEC`, `VOLUMES`, `NETWORKS`, etc. If you add a NEW Docker operation to the backend, check it falls within an allowed section or the call will 403 at the proxy. **`N8N_ENCRYPTION_KEY` is a data key** — never change it on an instance that already has n8n data (stored credentials become permanently undecryptable); `launch.sh` only generates it for fresh installs.
+
 **Docker volume path for frontend dist:**
 The backend resolves the frontend dist as `Path(__file__).parent.parent / "frontend" / "dist"`. Since `main.py` is at `/app/main.py` inside the container, `parent.parent` is `/`. The volume mount in `docker-compose.yml` must be:
 ```yaml
