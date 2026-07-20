@@ -104,7 +104,11 @@ export default function Finance() {
   return (
     <div key={workspace} className="w-full max-w-3xl mx-auto space-y-5 overflow-x-hidden">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">Finance</h1><HelpButton section="finance" /></span>
+        <span className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold">Finance</h1>
+          <HelpButton section="finance" />
+          <button onClick={() => setShowNewBook(true)} className="btn-primary text-sm whitespace-nowrap md:hidden">＋ New book</button>
+        </span>
         <div className="flex gap-2 shrink-0">
           <button onClick={() => setShowBank(true)} className="btn-ghost text-sm whitespace-nowrap">🏦 Bank</button>
           {active && isSharedToMe && (
@@ -123,7 +127,7 @@ export default function Finance() {
           >
             {showArchived ? 'Hide archived' : 'Show archived'}
           </button>
-          <button onClick={() => setShowNewBook(true)} className="btn-primary whitespace-nowrap">＋ New book</button>
+          <button onClick={() => setShowNewBook(true)} className="btn-primary whitespace-nowrap hidden md:inline-block">＋ New book</button>
         </div>
       </div>
 
