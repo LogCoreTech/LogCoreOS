@@ -6,6 +6,11 @@
 #   bash docker/update.sh --watch      # daemon: apply update when flag file appears (every 60 s)
 #   bash docker/update.sh --check      # print installed version and exit
 #
+# Updates are ATOMIC: the script installs exactly the commit the latest
+# published GitHub release tag points at — commits pushed to master after a
+# release do not ship until the next release. Set UPDATE_CHANNEL=edge in
+# docker/.env to track origin/master instead (dev boxes).
+#
 # Auto-updates work by pairing this script with the in-app Admin → Updates panel:
 #   1. Admin clicks "Apply Update" in the app.
 #   2. App writes  brain/_system/pending_update.
@@ -91,6 +96,32 @@ https_equivalent_of_origin() {
         ssh://git@github.com/*) printf 'https://github.com/%s\n' "${url#ssh://git@github.com/}" ;;
         *) return 1 ;;
     esac
+}
+
+# The GitHub "owner/repo" path of the origin remote (fork-preserving), or fail.
+github_repo_path() {
+    local url path
+    url="$(git -C "$REPO_ROOT" config --get remote.origin.url 2>/dev/null)" || return 1
+    case "$url" in
+        git@github.com:*)        path="${url#git@github.com:}" ;;
+        ssh://git@github.com/*)  path="${url#ssh://git@github.com/}" ;;
+        https://github.com/*)    path="${url#https://github.com/}" ;;
+        http://github.com/*)     path="${url#http://github.com/}" ;;
+        *) return 1 ;;
+    esac
+    printf '%s\n' "${path%.git}"
+}
+
+# Tag name of the latest published GitHub release for the origin repo.
+# This is what makes updates ATOMIC: instances install exactly the commit the
+# release tag points at — commits pushed to master after a release do NOT ship
+# until the next release is published.
+latest_release_tag() {
+    local repo_path
+    repo_path="$(github_repo_path)" || return 1
+    curl -sf --max-time 15 "https://api.github.com/repos/${repo_path}/releases/latest" \
+        2>> "$LOG_FILE" \
+        | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
 }
 
 # A previous update can deploy new code but die (or fail the write above) before
@@ -229,17 +260,42 @@ do_update() {
     prev_commit="$(git -C "$REPO_ROOT" rev-parse HEAD)"
     log "Current commit: $prev_commit"
 
-    # 3. Fetch latest code — but do NOT merge it into the working tree until it
+    # 3. Decide what to install. Default: the latest published RELEASE tag —
+    #    updates are atomic, instances only ever run tagged release states, and
+    #    commits pushed to master after a release do NOT ship until the next
+    #    release. Set UPDATE_CHANNEL=edge in docker/.env to track origin/master
+    #    instead (dev boxes).
+    local channel="${UPDATE_CHANNEL:-release}"
+    local latest_tag="" fetch_spec="" resolve_ref="" target_desc=""
+    if [[ "$channel" == "edge" ]]; then
+        fetch_spec="master"
+        resolve_ref="FETCH_HEAD"
+        target_desc="origin/master (UPDATE_CHANNEL=edge)"
+    else
+        latest_tag="$(latest_release_tag || true)"
+        if [[ -z "$latest_tag" ]]; then
+            log "Could not determine the latest release tag (GitHub API unreachable, no release published, or non-GitHub remote) — aborting."
+            log "  Set UPDATE_CHANNEL=edge in docker/.env to track origin/master instead."
+            write_status "tag-failed"
+            rm -f "$RUNNING_FLAG"
+            return 1
+        fi
+        fetch_spec="refs/tags/${latest_tag}:refs/tags/${latest_tag}"
+        resolve_ref="refs/tags/${latest_tag}"
+        target_desc="release ${latest_tag}"
+    fi
+
+    #    Fetch the target — but do NOT merge it into the working tree until it
     #    has passed signature verification, so unverified code never lands.
     #    A failed fetch MUST abort here: this function is invoked as
     #    `do_update || …`, which disables errexit inside it, and continuing on a
     #    stale FETCH_HEAD once rebuilt the old tree and stamped it "successful".
-    log "Fetching latest code from origin/master..."
-    if ! git -C "$REPO_ROOT" fetch origin master >> "$LOG_FILE" 2>&1; then
+    log "Fetching ${target_desc}..."
+    if ! git -C "$REPO_ROOT" fetch --force origin "$fetch_spec" >> "$LOG_FILE" 2>&1; then
         local https_url=""
         https_url="$(https_equivalent_of_origin || true)"
         if [[ -n "$https_url" ]] \
-            && git -C "$REPO_ROOT" fetch "$https_url" master >> "$LOG_FILE" 2>&1; then
+            && git -C "$REPO_ROOT" fetch --force "$https_url" "$fetch_spec" >> "$LOG_FILE" 2>&1; then
             log "origin fetch failed (SSH credentials?) — fell back to $https_url and continued."
             log "  Fix the remote permanently with: git remote set-url origin $https_url"
         else
@@ -253,7 +309,7 @@ do_update() {
     fi
 
     local new_commit
-    if ! new_commit="$(git -C "$REPO_ROOT" rev-parse --verify 'FETCH_HEAD^{commit}' 2>> "$LOG_FILE")" \
+    if ! new_commit="$(git -C "$REPO_ROOT" rev-parse --verify "${resolve_ref}^{commit}" 2>> "$LOG_FILE")" \
         || [[ -z "$new_commit" ]]; then
         log "Could not resolve the fetched commit — aborting, working tree untouched."
         write_status "fetch-failed"
@@ -261,8 +317,11 @@ do_update() {
         return 1
     fi
 
-    if [[ "$prev_commit" == "$new_commit" ]]; then
-        log "Already up to date — nothing to do."
+    # Up to date when the target commit is already contained in the current
+    # checkout (covers equality, and an edge-channel checkout that's AHEAD of
+    # the latest release — never "update" backwards onto an older tag).
+    if git -C "$REPO_ROOT" merge-base --is-ancestor "$new_commit" "$prev_commit" 2>> "$LOG_FILE"; then
+        log "Already up to date (${target_desc} is contained in the current checkout) — nothing to do."
         restamp_if_stale
         rm -f "$RUNNING_FLAG"
         write_status "up-to-date"
