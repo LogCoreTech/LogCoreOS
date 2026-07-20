@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.4.3] — 2026-07-20
+
+### Changed
+
+- **Updates are now atomic: instances install exactly the published release** — the updater previously fetched the tip of `master`, so commits pushed after a release (including half-finished work toward the next one) silently shipped to anyone updating, while the app still reported the release's version number. The updater now asks GitHub for the latest published release and installs exactly the commit its tag points at — work landing on `master` between releases never reaches instances until the next release is published. Dev boxes that *want* to track `master` can set `UPDATE_CHANNEL=edge` in `docker/.env`
+- **Never updates backwards** — if an instance is already ahead of the latest release (e.g. a dev box that tracked `master`), the updater treats it as up to date instead of attempting a downgrade
+
 ## [0.4.2] — 2026-07-20
 
 ### Fixed
