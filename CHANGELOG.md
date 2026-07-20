@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.4.1] — 2026-07-20
+
+### Fixed
+
+- **Finance's "+ New book" button is reachable on mobile** — it used to sit in a header button row that overflowed off-screen on narrow viewports; it now also appears beside the Finance title on mobile, while desktop keeps the original layout
+- **Saved-chats drawer header no longer hidden behind the notch** — the "Chats" panel in AI Chat now respects the device's top safe-area inset, matching the fix already applied to the main app header
+
 ## [0.4.0] — 2026-07-19
 
 ### Added
