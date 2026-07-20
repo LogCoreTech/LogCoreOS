@@ -6,7 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [Unreleased]
+## [0.4.0] — 2026-07-19
 
 ### Added
 
@@ -19,8 +19,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Finish payment transactions on the spot** — recording a payment that logs a ledger transaction now opens that transaction immediately so you can set category, asset, and notes without hunting for it
 - **Everything links back** — invoices show the deal (and its assets) they came from; transactions show "from invoice / deal" chips; asset pages, deals, and invoices all click through to each other
 - **Contacts on assets** — asset templates get a "contact" field type (pick a person/company from your CRM); the contact's page gains a **References** section showing every asset, invoice, and dollar tied to them, plus per-deal job profit
-
-### Added
 
 **In-app Security & Privacy help**
 - A new **Help → Security & Privacy** section explains, in plain language *and* technical detail, how your account and data are protected — password hashing, login lockout, data isolation, session cookies, headers, and self-host hardening — plus two new FAQ entries ("Is my data private?" and "Why am I getting 'too many attempts'?")

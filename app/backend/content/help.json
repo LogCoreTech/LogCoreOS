@@ -432,6 +432,17 @@
   },
   "whats_new": [
     {
+      "version": "0.4.0",
+      "date": "2026-07-19",
+      "highlights": [
+        "Major security hardening — login lockout against password-guessing, stricter browser protections (CSP and more), locked-down automation APIs, and a safer Docker setup for self-hosters.",
+        "New Help → Security & Privacy section — how your account and data are protected, in plain language and technical detail.",
+        "Deals, assets, invoices, and money now link together — attach assets to a deal, see a Job P&L (invoiced, collected, expenses, net), create a pre-filled invoice from a Won deal, and jump between everything.",
+        "Asset pages show Finance activity (income / expenses / net), and contacts get a References card with every asset, invoice, and dollar tied to them.",
+        "Update flow fixes — the post-update What's New announcement fires reliably and the Updates card's refresh button checks for real."
+      ]
+    },
+    {
       "version": "0.3.1",
       "date": "2026-07-18",
       "highlights": [
