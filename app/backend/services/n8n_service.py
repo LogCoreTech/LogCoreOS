@@ -3,6 +3,7 @@
 import hashlib
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -271,14 +272,41 @@ def update_last_run(record_id: str, user_name: str, scope: str, timestamp: str) 
     write_json(path, records)
 
 
+# Only these keys are ever written into docker/n8n.env. The n8n container's
+# env is readable by every n8n workflow and n8n admin, so fanning the WHOLE
+# secret vault (SECRET_KEY, ANTHROPIC_API_KEY, …) into it would leak app-wide
+# secrets to workflow authors. Keys are allowed through only when they're clearly
+# n8n-scoped: an N8N_ prefix, or an explicit operator allow-list.
+_N8N_ENV_PREFIXES = ("N8N_",)
+
+
+def _n8n_env_allowed(key: str) -> bool:
+    if key.startswith(_N8N_ENV_PREFIXES):
+        return True
+    extra = {k.strip() for k in os.environ.get("N8N_ENV_ALLOWLIST", "").split(",") if k.strip()}
+    return key in extra
+
+
 def write_n8n_env(secrets: dict) -> None:
-    """Write Infisical secrets to docker/n8n.env for the n8n container."""
+    """Write n8n-scoped Infisical secrets to docker/n8n.env for the n8n container.
+
+    Only keys that pass ``_n8n_env_allowed()`` are written — the rest of the vault
+    stays out of the workflow-readable env. Set N8N_ENV_ALLOWLIST (comma-separated)
+    to pass through any additional non-N8N_-prefixed keys a workflow genuinely needs.
+    """
     repo_root = Path(__file__).parent.parent.parent.parent
     env_path = repo_root / "docker" / "n8n.env"
     env_path.parent.mkdir(parents=True, exist_ok=True)
-    lines = [f"{k}={v}" for k, v in secrets.items()]
+    allowed = {k: v for k, v in secrets.items() if _n8n_env_allowed(k)}
+    skipped = len(secrets) - len(allowed)
+    lines = [f"{k}={v}" for k, v in allowed.items()]
     env_path.write_text("\n".join(lines) + "\n")
-    logger.info("Wrote %d secrets to %s", len(secrets), env_path)
+    logger.info(
+        "Wrote %d n8n-scoped secret(s) to %s (%d non-n8n key(s) withheld)",
+        len(allowed),
+        env_path,
+        skipped,
+    )
 
 
 def restart_n8n() -> None:

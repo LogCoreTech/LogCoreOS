@@ -22,6 +22,17 @@
 
 **Overall verdict: NEEDS ATTENTION.**
 
+> **Remediation log — 2026-07-20 (branch `claude/security-audit-47iqui`).** First remediation pass shipped the fixes with no legitimate functional impact (suite 455 green, frontend build clean):
+> - ✅ **A1** — `POST /auth/token` now rate-limited; `/login` + `/token` share one bucket (`rate_limit(..., bucket="auth-login")`).
+> - ✅ **A3** — `InboxItemIn.url` rejects non-`http(s)` schemes; `Automations.jsx` guards the render + `rel="noopener noreferrer"`.
+> - ✅ **A4** — `authenticate()` runs a dummy bcrypt verify on unknown email (constant-time).
+> - ✅ **[MEDIUM transport-security]** — HSTS (HTTPS-only) + `Permissions-Policy` added. **CSP still open** — held for owner decision (external Google Fonts).
+> - ✅ **B/[HIGH outdated-dependency]** — `python-jose>=3.4.0`, `python-multipart==0.0.18`; upper bounds on `anthropic`/`openai`/`docker`.
+> - ✅ **B/[HIGH secret-exposure]** — `write_n8n_env()` allow-lists n8n-scoped keys (`N8N_` prefix + `N8N_ENV_ALLOWLIST`) instead of the whole vault. (The `os.environ` injection is left as-is: in managed mode Infisical is intentionally the config source.)
+> - ✅ **B/[MEDIUM secrets-at-rest]** — `backup.sh` gains opt-in GPG encryption + `chmod 600` + secret-grade warning.
+>
+> **Still open — held for owner decision (functionality-affecting):** B/CRITICAL Docker socket, **A2** asset bulk-export, CSP, startup fail-closed on default `SECRET_KEY` + installer defaults (`COOKIE_SECURE`/`ALLOWED_ORIGINS`), n8n weak compose defaults + loopback port binds, image pinning, and the LOW supply-chain/dev-tooling items.
+
 The **application code is genuinely strong** — the core auth/authorization/path-traversal/injection defenses are well built and were verified sound (see "Verified Sound" at the end). Every material risk is concentrated in the **deployment/infrastructure layer** (the bundled Docker stack, secret handling, and installer defaults) plus **one application finding** (an unthrottled login endpoint) and **stale dependencies**. Nothing here indicates a currently-exploited hole; these are hardening gaps that matter most the moment an instance is exposed to the public internet.
 
 ---

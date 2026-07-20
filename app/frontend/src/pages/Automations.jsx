@@ -49,8 +49,8 @@ function InboxItemRow({ item, canAct, canManage, onStatus, onDelete }) {
           </p>
         </button>
         <div className="flex items-center gap-1 shrink-0">
-          {item.url && (
-            <a href={item.url} target="_blank" rel="noreferrer" className="btn-ghost text-xs px-1.5 py-0.5" title="Open source link">↗</a>
+          {item.url && /^https?:\/\//i.test(item.url) && (
+            <a href={item.url} target="_blank" rel="noopener noreferrer" className="btn-ghost text-xs px-1.5 py-0.5" title="Open source link">↗</a>
           )}
           {canManage && (
             <button onClick={() => onDelete(item.id)} className="text-charcoal-300 hover:text-red-500 text-xs px-1" title="Delete item">✕</button>

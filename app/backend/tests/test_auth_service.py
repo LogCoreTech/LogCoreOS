@@ -71,6 +71,21 @@ def test_authenticate_unknown_email(brain):
     assert auth_service.authenticate("nobody@example.com", "password") is None
 
 
+def test_authenticate_unknown_email_still_runs_bcrypt(brain, monkeypatch):
+    """Constant-time login: an unknown email must still trigger a bcrypt verify
+    (against the dummy hash) so response timing can't be used to enumerate users."""
+    calls: list[str] = []
+    real_verify = auth_service.verify_password
+
+    def _spy(plain, hashed):
+        calls.append(hashed)
+        return real_verify(plain, hashed)
+
+    monkeypatch.setattr(auth_service, "verify_password", _spy)
+    assert auth_service.authenticate("nobody@example.com", "password") is None
+    assert calls == [auth_service._DUMMY_HASH]
+
+
 def test_token_round_trip(brain):
     user = auth_service.create_user("tok@example.com", "password123", "Token User")
     token = auth_service.create_token(user)

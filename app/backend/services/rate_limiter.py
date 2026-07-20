@@ -33,13 +33,19 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def rate_limit(max_calls: int, window_seconds: int):
-    """Returns a FastAPI dependency that enforces max_calls per window per IP."""
+def rate_limit(max_calls: int, window_seconds: int, bucket: str | None = None):
+    """Returns a FastAPI dependency that enforces max_calls per window per IP.
+
+    By default each endpoint path gets its own bucket. Pass an explicit ``bucket``
+    name to make several endpoints share one allowance — e.g. /auth/login and
+    /auth/token both perform the same credential check, so they share a bucket to
+    stop an attacker from doubling the login-attempt allowance across the two paths.
+    """
 
     def dependency(request: Request) -> None:
         global _sweep_n
         ip = _client_ip(request)
-        key = f"{request.url.path}:{ip}"
+        key = f"{bucket or request.url.path}:{ip}"
         now = time.monotonic()
 
         _sweep_n += 1

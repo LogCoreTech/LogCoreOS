@@ -249,3 +249,26 @@ def test_invalid_token_rejected(users):
         _require_automation_token("wrong-token")
     assert exc.value.status_code == 401
     _require_automation_token(automations_config.get_api_token())  # valid → no raise
+
+
+# ---------------------------------------------------------------------------
+# URL scheme validation (A3 — javascript: XSS sink)
+# ---------------------------------------------------------------------------
+
+
+def test_inbox_item_rejects_non_http_url():
+    from routers.automations import InboxItemIn
+
+    for bad in ("javascript:alert(1)", "data:text/html,<script>1</script>", "  javascript:fetch('/x')"):
+        with pytest.raises(ValueError):
+            InboxItemIn(external_id="x", title="t", url=bad)
+
+
+def test_inbox_item_accepts_http_url_and_normalizes_empty():
+    from routers.automations import InboxItemIn
+
+    assert InboxItemIn(external_id="x", title="t", url="https://ok.example").url == "https://ok.example"
+    assert InboxItemIn(external_id="x", title="t", url="http://ok.example").url == "http://ok.example"
+    # blank / whitespace-only collapses to None rather than a stored empty link
+    assert InboxItemIn(external_id="x", title="t", url="   ").url is None
+    assert InboxItemIn(external_id="x", title="t", url=None).url is None
