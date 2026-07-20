@@ -531,7 +531,7 @@ export default function Chat() {
           <div className="w-80 md:w-96 h-full bg-white dark:bg-charcoal-900 border-l border-charcoal-200 dark:border-charcoal-700 flex flex-col shadow-xl">
 
             {/* Drawer header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-charcoal-200 dark:border-charcoal-700 shrink-0">
+            <div className="flex items-center justify-between px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] border-b border-charcoal-200 dark:border-charcoal-700 shrink-0">
               {selectedChat ? (
                 <button
                   onClick={() => setSelectedChat(null)}
