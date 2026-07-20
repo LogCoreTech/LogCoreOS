@@ -437,6 +437,13 @@
   },
   "whats_new": [
     {
+      "version": "0.4.3",
+      "date": "2026-07-20",
+      "highlights": [
+        "Atomic updates — updating now installs exactly the published release, never in-progress work that landed after it, so every instance on the same version runs the same code."
+      ]
+    },
+    {
       "version": "0.4.2",
       "date": "2026-07-20",
       "highlights": [
