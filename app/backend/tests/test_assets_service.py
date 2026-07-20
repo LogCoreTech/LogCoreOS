@@ -1238,3 +1238,24 @@ def test_admin_never_downgraded_by_contributor_entry(parcel, users):
     )
     found = svc.find_asset("Alice", "personal", lot["id"], is_admin=True)
     assert found["can_edit"] is True and found["can_contribute"] is None
+
+
+# ---------------------------------------------------------------------------
+# Automation API — read is pool-only (A2: no bulk per-user export)
+# ---------------------------------------------------------------------------
+
+
+def test_automation_list_rejects_arbitrary_user(users):
+    """GET /automation/assets must not dump an arbitrary user's store — only the
+    _team/_household pools are readable via the shared automation token."""
+    import pytest as _pytest
+    from fastapi import HTTPException
+
+    from routers.assets import automation_list_assets
+
+    with _pytest.raises(HTTPException) as exc:
+        automation_list_assets(user="Bob", workspace="personal", _auth=None, _rl=None)
+    assert exc.value.status_code == 403
+
+    # Pool reads still work.
+    assert automation_list_assets(user="_team", _auth=None, _rl=None) == []

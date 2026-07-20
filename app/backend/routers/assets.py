@@ -312,10 +312,23 @@ def _require_automation_token(x_automation_token: str = Header("")) -> None:
         raise HTTPException(status_code=401, detail="Invalid automation token")
 
 
-def _automation_store(user: str, workspace: str) -> tuple[str, str]:
-    """Resolve the target store: a real user, or _team/_household pool names."""
+def _automation_store(user: str, workspace: str, read_only: bool = False) -> tuple[str, str]:
+    """Resolve the target store: a real user, or _team/_household pool names.
+
+    ``read_only=True`` (the list/export path) restricts the target to the shared
+    pool pseudo-users only. The automation API is authenticated by a single
+    instance-wide token, so allowing an arbitrary ``user`` on a bulk read would let
+    one leaked token dump every user's entire assets store. Writes may still target
+    a specific user (that's the intended n8n sync use, and mirrors the Contacts
+    automation API's write-only, no-bulk-export design).
+    """
     if user in ("_team", "_household"):
         return user, "personal"
+    if read_only:
+        raise HTTPException(
+            status_code=403,
+            detail="Automation reads are limited to the _team/_household pools.",
+        )
     if get_user_by_name(user) is None:
         raise HTTPException(status_code=404, detail=f"Unknown user {user!r}")
     return user, workspace
@@ -342,7 +355,7 @@ def automation_list_assets(
     _auth: None = Depends(_require_automation_token),
     _rl: None = Depends(_automation_limit),
 ):
-    store, store_ws = _automation_store(user, workspace)
+    store, store_ws = _automation_store(user, workspace, read_only=True)
     items = assets_service.list_assets(store, store_ws)
     if template:
         items = [a for a in items if a.get("template") == template]

@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     n8n_url: str = "http://n8n:5678"
     n8n_api_key: str = ""
 
+    # Escape hatch for local development ONLY. When False (default) the app refuses
+    # to start with the placeholder/empty SECRET_KEY, because that key lets anyone
+    # mint a valid admin token offline. Set to true to run locally without setting a
+    # real key. Never set this on a networked/production instance.
+    allow_insecure_secret_key: bool = False
+
     # Set to False only for local HTTP development; always True in production
     cookie_secure: bool = True
 

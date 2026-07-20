@@ -31,7 +31,13 @@
 > - ✅ **B/[HIGH secret-exposure]** — `write_n8n_env()` allow-lists n8n-scoped keys (`N8N_` prefix + `N8N_ENV_ALLOWLIST`) instead of the whole vault. (The `os.environ` injection is left as-is: in managed mode Infisical is intentionally the config source.)
 > - ✅ **B/[MEDIUM secrets-at-rest]** — `backup.sh` gains opt-in GPG encryption + `chmod 600` + secret-grade warning.
 >
-> **Still open — held for owner decision (functionality-affecting):** B/CRITICAL Docker socket, **A2** asset bulk-export, CSP, startup fail-closed on default `SECRET_KEY` + installer defaults (`COOKIE_SECURE`/`ALLOWED_ORIGINS`), n8n weak compose defaults + loopback port binds, image pinning, and the LOW supply-chain/dev-tooling items.
+> **Remediation pass 2 — 2026-07-20 (owner-approved, functionality-affecting):**
+> - ✅ **A2** — `GET /automation/assets` now serves the `_team`/`_household` pools only (`_automation_store(..., read_only=True)` → 403 on an arbitrary user). Writes still target a specific user.
+> - ✅ **[MEDIUM] CSP** — `Content-Security-Policy` added (`script-src 'self'`, `style-src` + `'unsafe-inline'` for React inline styles, Google Fonts allow-listed). The inline SW-registration script was moved into `main.jsx` so `script-src` stays strict. Verified with a live headless-browser load of `/login` — **zero CSP violations**, SPA renders fully.
+> - ✅ **[MEDIUM] fail-open startup** — `_startup_checks()` now `sys.exit(1)` on the default/empty `SECRET_KEY` unless `ALLOW_INSECURE_SECRET_KEY=true` (config escape hatch for local dev).
+> - ✅ **B/[MEDIUM] insecure-installer-default** — `launch.sh` writes `COOKIE_SECURE=true` + empty `ALLOWED_ORIGINS`; compose + `.env.example` defaults flipped to secure. Existing `.env` files are not regenerated, so running instances are unaffected.
+>
+> **Still open — infra pass in progress (owner chose full socket-proxy):** B/CRITICAL Docker socket (→ `docker-socket-proxy`; the app legitimately creates/restarts containers for the updater + tunnel flows, so create can't be fully denied — see that section), n8n weak compose defaults + loopback port binds, third-party image pinning, and the LOW supply-chain/dev-tooling items (`curl|sh` bootstrap, unsigned `update.sh` pull, vite/eslint staleness).
 
 The **application code is genuinely strong** — the core auth/authorization/path-traversal/injection defenses are well built and were verified sound (see "Verified Sound" at the end). Every material risk is concentrated in the **deployment/infrastructure layer** (the bundled Docker stack, secret handling, and installer defaults) plus **one application finding** (an unthrottled login endpoint) and **stale dependencies**. Nothing here indicates a currently-exploited hole; these are hardening gaps that matter most the moment an instance is exposed to the public internet.
 
