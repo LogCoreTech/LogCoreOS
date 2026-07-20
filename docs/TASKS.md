@@ -23,6 +23,28 @@ From `docs/Security-Audit-2026-07-19.md` (1 CRITICAL · 5 HIGH · 7 MEDIUM · 4 
 
 ## Now — active build work
 
+- [ ] **HOST FIX — run these commands on the machine hosting the owner's instance (URGENT, one-time, 2026-07-20)** — the updater is stranded: the host clone's origin is the SSH remote and the update cron's user has no key, so every update "succeeds" without fetching (see the Done entry "updater reported success without fetching"). The fix is NOT an app/code change — it must be run in a shell **on the host** (not inside a container), from the repo the running instance was launched from:
+
+  ```bash
+  # 1. Switch the instance's clone to the public HTTPS remote (no credentials needed)
+  cd /home/logcore/LogCoreDEV/LogCoreOS
+  git remote set-url origin https://github.com/LogCoreTech/LogCoreOS.git
+  git fetch origin master        # must complete without errors before continuing
+
+  # 2. Run the update (installs the latest published release; backs up Brain first,
+  #    rebuilds, restarts, health-checks, rolls back automatically on failure)
+  bash docker/update.sh
+
+  # 3. Remove a duplicate updater cron if one exists under root
+  #    (launch.sh installs the cron for whoever runs it; a sudo launch.sh
+  #    during the v0.4.0 upgrade likely added one for root — keep only the
+  #    entry belonging to the user who owns the repo checkout)
+  crontab -l | grep logcore-auto-update
+  sudo crontab -l | grep logcore-auto-update   # if present here too: sudo crontab -e, delete that line
+  ```
+
+  **Verify afterwards:** Admin → Updates shows the latest release version (0.4.3+) with "Up to date"; re-enable the **Auto-update** toggle (owner turned it off 2026-07-20 to stop the daily vacuous rebuild loop while away); confirm the What's-New banner/inbox note fired — this is the live test for the open CHECK item below. If anything fails, `brain/_system/update_status.json` and `brain/_system/update.log` now say exactly what went wrong (`fetch-failed`, `tag-failed`, …). Mark this task done with the outcome once run
+
 - [ ] **CHECK: What's-New announce missed its automatic catch-up on the v0.4.0 update (owner, 2026-07-20)** — the update completed cleanly (`installed_version.json` correctly stamped to 0.4.0, health check passed), but neither the boot-time announce nor the boot+180s `job_whats_new_recheck` catch-up (added specifically to close this race, see the 2026-07-18 "Updater-test findings fixed" entry below) actually notified users or opened the banner — `whats_new_state.json` sat stuck on the prior version (0.3.1) well past the 180s window. Code review found nothing structurally wrong; manually invoking `announce_if_updated()` against the live brain succeeded immediately (`{'announced': True, 'notified': 2}`), so the mechanism itself works — something about the automatic trigger didn't fire this cycle, cause unconfirmed (no container logs available to the diagnosing session). **Watch the next release**: if this recurs, it's a real bug in the boot+180s job (not a one-off) and needs log-backed investigation, not another guess. **Lead from the 2026-07-20 updater investigation (see Done: "updater reported success without fetching")**: the owner's instance had been running vacuous updates — failed `git fetch` silently rebuilding the same code — so some "updates" involved no real version transition for the announce to notice; re-observe on the next REAL update (v0.4.2, after the host remote is switched to HTTPS) before concluding the boot+180s job is broken
 - [ ] **BUG: deleting a user leaves their Brain data behind (owner, 2026-07-19)** — live evidence on the dev instance: a "Test test" `brain/USERS/` directory existed with no matching account in `auth.json` after the user was deleted. `DELETE /auth/admin/users/{id}` must cascade the ENTIRE `USERS/{name}` dir (assets incl. attachment files, contacts/deals, finance books + year shards + receipts, notes, journal, chats, `Business/` workspace, notifications) AND clean up references: their by-name entries in other stores' `shared_with`/`contributors`/`hidden_from` lists, and the derived share indexes (`reindex`/rebuild). Write a test that creates a user with data in several modules, deletes them, and asserts the dir + cross-references are gone. **Owner decision (2026-07-20): ship this fix as scoped — it's the correctness bug, orphaned data is leaking on every delete today.** A separate **ownership-transfer** enhancement (shared items move to the first person on their share list instead of being deleted) is scoped below under Features that unblock scale — bigger design lift, shouldn't block this fix
 - [ ] **BUG: new custom feature role can't be assigned to a user (owner, 2026-07-19)** — owner created a new feature role in Admin → Roles and the assign step fails/doesn't apply. Investigate `PATCH /auth/admin/features/users/{user_id}/role` + the Admin UI dropdown (stale roles list? validation rejecting the new name? response not persisted?). Repro on the dev instance
