@@ -213,6 +213,16 @@ def job_contacts_followups():
         logger.exception("contacts follow-up sweep failed")
 
 
+def job_channel_rotation_check():
+    """Monthly per-user reminders to rotate the ntfy notification channel."""
+    try:
+        from services.suggestions_service import run_channel_rotation_reminders
+
+        run_channel_rotation_reminders()
+    except Exception:
+        logger.exception("channel rotation reminder sweep failed")
+
+
 def _custom_job_id(user_name: str, suggestion_id: str) -> str:
     return f"custom__{user_name}__{suggestion_id}"
 
@@ -312,6 +322,9 @@ def start():
     scheduler.add_job(job_finance_nightly, CronTrigger(hour=7, minute=30), id="finance_nightly")
     scheduler.add_job(
         job_contacts_followups, CronTrigger(hour=8, minute=0), id="contacts_followups"
+    )
+    scheduler.add_job(
+        job_channel_rotation_check, CronTrigger(hour=9, minute=30), id="channel_rotation"
     )
     scheduler.add_job(
         job_n8n_reconcile, "date", run_date=_dt.now() + _td(seconds=100), id="n8n_reconcile_boot"

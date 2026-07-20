@@ -427,6 +427,7 @@ def me(current_user: dict = Depends(get_current_user), _rl: None = Depends(_get_
         "name": current_user["name"],
         "role": current_user["role"],
         "notification_channel": current_user.get("notification_channel", ""),
+        "channel_rotated_at": current_user.get("channel_rotated_at"),
         "session_minutes": current_user.get("session_minutes", 10080),
         "timezone": current_user.get("timezone", "UTC"),
         "feature_role": current_user.get("feature_role", "member"),
@@ -439,6 +440,22 @@ def me(current_user: dict = Depends(get_current_user), _rl: None = Depends(_get_
         "density": current_user.get("density", "comfortable"),
         "corner_style": current_user.get("corner_style", "rounded"),
         "shortcuts": current_user.get("shortcuts", {}),
+    }
+
+
+@router.post("/me/rotate-channel")
+def rotate_channel(
+    current_user: dict = Depends(get_current_user),
+    _rl: None = Depends(_me_limit),
+):
+    """Regenerate the caller's ntfy channel — the old ID stops receiving immediately."""
+    user = auth_service.rotate_notification_channel(current_user["id"])
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {
+        "ok": True,
+        "notification_channel": user["notification_channel"],
+        "channel_rotated_at": user["channel_rotated_at"],
     }
 
 

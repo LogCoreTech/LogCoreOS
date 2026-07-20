@@ -178,6 +178,23 @@ def update_user(user_id: str, updates: dict) -> dict | None:
     return None
 
 
+def rotate_notification_channel(user_id: str) -> dict | None:
+    """Regenerate a user's ntfy channel and stamp the rotation time.
+
+    The channel ID is the only lock on the user's notification stream, so a
+    leaked ID is revoked simply by rotating: suggestions_service resolves the
+    channel fresh from auth.json on every send, so the old ID goes dead
+    immediately. The stamp drives the monthly rotation reminder.
+    """
+    return update_user(
+        user_id,
+        {
+            "notification_channel": f"lc-{uuid_module.uuid4().hex[:12]}",
+            "channel_rotated_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+
+
 def get_system_settings() -> dict:
     """Return the runtime settings block stored in auth.json."""
     return _load_auth().get("settings", {})
