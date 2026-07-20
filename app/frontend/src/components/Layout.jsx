@@ -237,7 +237,7 @@ export default function Layout() {
   }
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex h-[100dvh] overflow-hidden">
 
       {/* Sidebar — desktop only */}
       <aside className={`hidden md:flex flex-col bg-white dark:bg-charcoal-950 border-r border-charcoal-200 dark:border-charcoal-800 transition-all duration-200 ${collapsed ? 'w-14' : 'w-56'}`}>
