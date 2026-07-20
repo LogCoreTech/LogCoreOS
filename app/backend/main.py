@@ -1,4 +1,5 @@
 import logging
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -114,15 +115,28 @@ def _startup_checks() -> None:
             "Only acceptable for local development. Set COOKIE_SECURE=true in production."
         )
 
-    if settings.secret_key == "change-me-in-production":
-        logger.critical(
-            "\n"
-            "╔══════════════════════════════════════════════════════╗\n"
-            "║  SECURITY WARNING: SECRET_KEY is using the default   ║\n"
-            "║  insecure value. Set SECRET_KEY in docker/.env        ║\n"
-            "║  before exposing this server to any network.          ║\n"
-            "╚══════════════════════════════════════════════════════╝"
-        )
+    if settings.secret_key in ("change-me-in-production", ""):
+        if settings.allow_insecure_secret_key:
+            logger.critical(
+                "\n"
+                "╔══════════════════════════════════════════════════════╗\n"
+                "║  SECURITY WARNING: SECRET_KEY is the default/empty    ║\n"
+                "║  insecure value. Running only because                 ║\n"
+                "║  ALLOW_INSECURE_SECRET_KEY=true. NEVER expose this     ║\n"
+                "║  instance to a network in this state.                 ║\n"
+                "╚══════════════════════════════════════════════════════╝"
+            )
+        else:
+            # Fail closed: a default/empty signing key lets anyone forge a valid
+            # admin token offline. Refuse to start rather than run silently
+            # insecure. launch.sh generates a strong key, so real deploys never
+            # hit this; local dev can opt out with ALLOW_INSECURE_SECRET_KEY=true.
+            logger.critical(
+                "SECRET_KEY is the default/empty insecure value — refusing to start. "
+                "Set a strong SECRET_KEY in docker/.env (launch.sh generates one), "
+                "or set ALLOW_INSECURE_SECRET_KEY=true for local development only."
+            )
+            sys.exit(1)
 
     bp = settings.brain_path
     if not bp.exists():
@@ -173,11 +187,39 @@ def _is_https_request(request: Request) -> bool:
     return bool(effective_domain_url())
 
 
+# Content-Security-Policy for the bundled SPA.
+#   script-src 'self'            — all JS is bundled; the one inline SW-registration
+#                                  script was moved into main.jsx so no 'unsafe-inline'
+#                                  is needed here (that's the part that actually
+#                                  contains an XSS attacker's payload).
+#   style-src … 'unsafe-inline'  — React sets element style="" attributes (dynamic
+#                                  colors/backgrounds); style attrs can't use a nonce,
+#                                  so inline styles are unavoidable. Fonts CSS is
+#                                  served from fonts.googleapis.com.
+#   font-src fonts.gstatic.com   — the Inter web font files.
+#   connect-src 'self'           — the API is same-origin; AI calls happen server-side.
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com; "
+    "img-src 'self' data: blob:; "
+    "connect-src 'self'; "
+    "manifest-src 'self'; "
+    "worker-src 'self'; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'; "
+    "object-src 'none'"
+)
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Content-Security-Policy"] = _CSP
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         # Disable browser features the app never uses, so an injected script can't
         # reach for the camera/mic/geolocation etc.

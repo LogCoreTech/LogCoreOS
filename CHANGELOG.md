@@ -35,6 +35,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Dependency updates** — `python-jose` → 3.4.0 (algorithm-confusion / JWE advisories) and `python-multipart` → 0.0.18 (multipart-parsing ReDoS); AI/Docker SDK deps gained upper bounds for reproducible installs
 - **Scoped automation secret sync** — when Infisical is enabled, only n8n-scoped secrets are written into the n8n container's environment instead of the whole vault (extend via `N8N_ENV_ALLOWLIST`)
 - **Backups can be encrypted** — `docker/backup.sh` now supports opt-in GPG encryption (`BACKUP_GPG_RECIPIENT` or `BACKUP_PASSPHRASE`), restricts backup file permissions, and warns that unencrypted archives are secret-grade
+- **Automation asset export locked down** — the automation API's asset *read* endpoint now only serves the shared `_team`/`_household` pools, not an arbitrary named user, so a leaked automation token can no longer dump any individual's entire asset store (writes still target a specific user, as before)
+- **Content-Security-Policy added** — the app now ships a CSP (`script-src 'self'`, tight defaults, Google Fonts allow-listed) so any future injected script is contained; the one inline script was moved into the bundle to keep the policy strict
+- **Refuses to start with an insecure signing key** — a deploy left on the default/empty `SECRET_KEY` (which would let anyone forge an admin token) now fails fast instead of running silently; set a real key (the installer generates one) or `ALLOW_INSECURE_SECRET_KEY=true` for local dev
+- **Secure-by-default installer** — fresh installs now default to `COOKIE_SECURE=true` and no wildcard CORS; opt into LAN/plain-HTTP mode explicitly (existing installs are unchanged)
 
 ## [0.3.1] — 2026-07-18
 

@@ -45,6 +45,15 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e =
   }
 })
 
+// Register the service worker from the bundle (was an inline <script> in
+// index.html — moved here so the Content-Security-Policy can keep script-src 'self'
+// without needing 'unsafe-inline').
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {})
+  })
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />

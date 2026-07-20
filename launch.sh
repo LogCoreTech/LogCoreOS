@@ -284,8 +284,12 @@ generate_env() {
   local secret_key
   secret_key="$(generate_secret_key)"
   env_set SECRET_KEY          "$secret_key"
-  env_set ALLOWED_ORIGINS     "*"
-  env_set COOKIE_SECURE       "false"
+  # Secure by default. The UI is same-origin with the API, so no CORS is needed;
+  # leave ALLOWED_ORIGINS empty (deny cross-origin) and keep the auth cookie Secure.
+  # For plain-HTTP LAN dev, flip COOKIE_SECURE=false and set ALLOWED_ORIGINS here,
+  # or use Admin → Hosting after first login.
+  env_set ALLOWED_ORIGINS     ""
+  env_set COOKIE_SECURE       "true"
   env_set TRUST_PROXY_HEADERS "false"
   env_set DOCKER_GID          "$(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo '999')"
 
