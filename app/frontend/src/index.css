@@ -48,6 +48,13 @@
     overflow: hidden;
   }
 
+  /* React mount point — needs an explicit height so Layout's `h-full` has a
+     non-auto ancestor to resolve against. Without this, height:100% on any
+     descendant collapses to content height instead of filling the screen. */
+  #root {
+    height: 100%;
+  }
+
   * {
     -webkit-tap-highlight-color: transparent;
   }
