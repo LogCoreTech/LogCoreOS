@@ -29,6 +29,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Security
 
 - **Login brute-force hardening** — the programmatic token endpoint (`POST /auth/token`) is now rate-limited just like the browser login, and both share one attempt budget so they can't be combined to double the allowance
+- **Account lockout** — after 10 failed attempts against one account within 15 minutes, further logins for that account are temporarily refused (HTTP 429) until the old failures age out. This stops distributed credential-stuffing — many IPs each trying a few passwords against one account — that the per-IP rate limit alone misses. The lock is temporary and only counts genuine failed attempts (attempts made while already locked don't extend it), so it can't be used to lock a victim out permanently
 - **Constant-time login** — an unknown email now takes the same time to reject as a known one, closing a timing side-channel that could reveal which addresses have accounts
 - **Automation Inbox links are scheme-checked** — inbox items may only carry `http(s)` links; a `javascript:`/`data:` URL is now rejected on the way in (and defused in the UI), removing a stored-XSS path a leaked automation token could otherwise use against a reviewing admin
 - **Stronger security headers** — responses now send `Strict-Transport-Security` (over HTTPS) and a restrictive `Permissions-Policy`

@@ -14,8 +14,9 @@ from services import auth_service
 def reset_auth(brain):
     """Each test gets a fresh brain directory with no users."""
     yield
-    # Clear in-memory revocation set between tests
+    # Clear in-memory revocation set + login-lockout state between tests
     auth_service._revoked_jtis.clear()
+    auth_service._failed_logins.clear()
 
 
 def test_create_and_retrieve_user(brain):
@@ -115,3 +116,52 @@ def test_system_settings_persist(brain):
     auth_service.update_system_settings({"allow_open_registration": True})
     settings = auth_service.get_system_settings()
     assert settings["allow_open_registration"] is True
+
+
+# --- Account-scoped login lockout -------------------------------------------
+
+
+def test_login_attempt_success(brain):
+    auth_service.create_user("lock@example.com", "rightpass", "Lock User")
+    user, remaining = auth_service.login_attempt("lock@example.com", "rightpass")
+    assert remaining == 0
+    assert user is not None and user["email"] == "lock@example.com"
+
+
+def test_login_attempt_bad_password_records_failure(brain):
+    auth_service.create_user("lock@example.com", "rightpass", "Lock User")
+    user, remaining = auth_service.login_attempt("lock@example.com", "nope")
+    assert user is None and remaining == 0
+    assert len(auth_service._failed_logins["lock@example.com"]) == 1
+
+
+def test_account_locks_after_threshold(brain):
+    auth_service.create_user("lock@example.com", "rightpass", "Lock User")
+    for _ in range(auth_service._LOCKOUT_THRESHOLD):
+        user, remaining = auth_service.login_attempt("lock@example.com", "wrong")
+        assert user is None
+    # Next attempt is refused with a positive cooldown, even with the RIGHT password
+    user, remaining = auth_service.login_attempt("lock@example.com", "rightpass")
+    assert user is None
+    assert remaining > 0
+
+
+def test_lockout_is_case_insensitive_on_email(brain):
+    auth_service.create_user("lock@example.com", "rightpass", "Lock User")
+    for _ in range(auth_service._LOCKOUT_THRESHOLD):
+        auth_service.login_attempt("LOCK@EXAMPLE.COM", "wrong")
+    assert auth_service.account_lock_remaining("lock@example.com") > 0
+
+
+def test_successful_login_clears_failure_counter(brain):
+    auth_service.create_user("lock@example.com", "rightpass", "Lock User")
+    for _ in range(auth_service._LOCKOUT_THRESHOLD - 1):
+        auth_service.login_attempt("lock@example.com", "wrong")
+    # One short of the threshold, a success resets the counter to empty
+    user, remaining = auth_service.login_attempt("lock@example.com", "rightpass")
+    assert user is not None and remaining == 0
+    assert "lock@example.com" not in auth_service._failed_logins
+
+
+def test_lock_remaining_zero_when_no_failures(brain):
+    assert auth_service.account_lock_remaining("nobody@example.com") == 0

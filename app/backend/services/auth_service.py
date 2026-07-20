@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import threading
+import time
 import uuid as uuid_module
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -24,6 +25,76 @@ logger = logging.getLogger(__name__)
 # not reveal whether the email exists (constant-time login — blocks timing-based
 # user enumeration). It never matches any real password.
 _DUMMY_HASH = pwd_context.hash("logcore-dummy-password-never-matches")
+
+# --- Account-scoped login lockout -------------------------------------------
+# The per-IP rate limiter (services/rate_limiter.py) throttles a single source
+# address, but does nothing against distributed credential-stuffing where many
+# IPs each try a few passwords against ONE account. This adds a per-account
+# (email-keyed) sliding-window lockout as a second layer.
+#
+# It is a *temporary* lock, not a permanent one: after _LOCKOUT_THRESHOLD failed
+# attempts inside _LOCKOUT_WINDOW seconds the account is refused until the oldest
+# failure ages out of the window, then it auto-recovers. Failures are only
+# recorded for genuine bad-credential attempts (the router checks the lock BEFORE
+# authenticating, so attempts made while already locked never extend it) — so an
+# attacker cannot keep a victim permanently locked out by hammering their email.
+# In-memory only (resets on restart), consistent with the rate limiter; safe for
+# the single-worker uvicorn deployment.
+_LOCKOUT_THRESHOLD = 10
+_LOCKOUT_WINDOW = 900  # seconds (15 min)
+_failed_logins: dict[str, list[float]] = {}
+_login_lock = threading.Lock()
+
+
+def account_lock_remaining(email: str) -> int:
+    """Seconds until the account can be tried again, or 0 if not locked."""
+    key = email.lower()
+    now = time.monotonic()
+    with _login_lock:
+        fails = [t for t in _failed_logins.get(key, []) if now - t < _LOCKOUT_WINDOW]
+        if fails:
+            _failed_logins[key] = fails
+        else:
+            _failed_logins.pop(key, None)
+        if len(fails) >= _LOCKOUT_THRESHOLD:
+            return max(1, int(_LOCKOUT_WINDOW - (now - fails[0])))
+        return 0
+
+
+def record_failed_login(email: str) -> None:
+    """Record a bad-credential attempt for the account's lockout window."""
+    key = email.lower()
+    now = time.monotonic()
+    with _login_lock:
+        fails = [t for t in _failed_logins.get(key, []) if now - t < _LOCKOUT_WINDOW]
+        fails.append(now)
+        _failed_logins[key] = fails
+
+
+def clear_failed_login(email: str) -> None:
+    """Reset the failure counter after a successful login."""
+    with _login_lock:
+        _failed_logins.pop(email.lower(), None)
+
+
+def login_attempt(email: str, password: str) -> tuple[dict | None, int]:
+    """Authenticate with account-scoped lockout applied.
+
+    Returns (user, lock_remaining_seconds):
+      - lock_remaining > 0 → account temporarily locked; user is None. The caller
+        must NOT reveal whether the credentials were valid.
+      - user is None, lock 0 → bad credentials (a failure has been recorded).
+      - user set → success (the failure counter has been cleared).
+    """
+    remaining = account_lock_remaining(email)
+    if remaining > 0:
+        return None, remaining
+    user = authenticate(email, password)
+    if user is None:
+        record_failed_login(email)
+        return None, 0
+    clear_failed_login(email)
+    return user, 0
 
 
 def _auth_path() -> Path:
