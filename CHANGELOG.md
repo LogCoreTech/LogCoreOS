@@ -14,6 +14,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **The recorded version now self-heals** — if a past update deployed new code but died (or failed) before recording the new version, every later check would report "already up to date" while showing the old version forever; the updater now detects the mismatch and re-stamps the running version once the app is confirmed healthy
 - **Version recording is verified and loud** — the write to `installed_version.json` is read back and any failure is logged prominently (new `success-stamp-failed` status) instead of being silently swallowed; it also no longer requires `python3` on the host
 - **Admin → Updates surfaces every failure** — the card now shows a clear banner for any unsuccessful update result (fetch failed, fast-forward refused, version-record failure, unhealthy rollback), not just automatic rollbacks
+- **The updater falls back to HTTPS when an SSH fetch fails** — if the host clone's `git@github.com:` remote can't authenticate (typically because the update cron runs as a different user than the one holding the SSH key, e.g. after a `sudo launch.sh`), the updater now retries the same repository over public HTTPS (no credentials needed) and continues, instead of stranding the instance; the log still recommends fixing the remote permanently. Forks are respected — the fallback URL is derived from the configured remote, never hardcoded
 
 ## [0.4.1] — 2026-07-20
 
