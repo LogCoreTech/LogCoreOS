@@ -2158,9 +2158,15 @@ function UpdateCard() {
             </div>
           )}
 
-          {status.last_update?.result === 'rollback' && !isWorking && (
+          {status.last_update?.result && !['success', 'up-to-date'].includes(status.last_update.result) && !isWorking && (
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-700 dark:text-red-300">
-              ⚠ Last update failed and was rolled back automatically. Check the log below.
+              {status.last_update.result === 'rollback'
+                ? '⚠ Last update failed and was rolled back automatically. Check the log below.'
+                : status.last_update.result === 'fetch-failed'
+                ? '⚠ Last update could not fetch new code from GitHub (nothing was changed). Check the host repo\'s remote URL/credentials and the log below.'
+                : status.last_update.result === 'success-stamp-failed'
+                ? '⚠ Last update deployed, but the new version could not be recorded — check brain/_system permissions and the log below.'
+                : `⚠ Last update did not complete (${status.last_update.result}). Check the log below.`}
             </div>
           )}
 
