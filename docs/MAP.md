@@ -193,6 +193,7 @@ LogCoreOS/
     ├── MAP.md                     → THIS FILE — navigation index
     ├── API.md                     → REST API endpoint reference
     ├── TESTING.md                 → testing guide: brain fixture, patterns, coverage targets
+    ├── Security-Audit-2026-07-19.md → full security audit + remediation log (passes 1–5)
     ├── Daily Notes/               → per-session work logs (YYYY-MM-DD.md)
     ├── skills/                    → dev tools for Claude Code sessions
     │   ├── README.md              → skill index and usage

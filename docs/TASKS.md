@@ -51,6 +51,15 @@ Keep this up to date. Mark tasks done as they're completed. Add new tasks as the
 
 ---
 
+## Security follow-ups (from the 2026-07-20 audit)
+
+Most audit findings were fixed this session (see `docs/Security-Audit-2026-07-19.md` remediation passes 1–5 + CHANGELOG). These are the deliberately-deferred remainders:
+
+- [ ] **App-level 2FA (TOTP)** — the last open residual from the audit's outsider/account-takeover threat model, and a v1.0-trust-stack gate (line below). A stolen/guessed password is currently full access with no second factor. Needs its own design pass: TOTP enrollment UX + QR provisioning, recovery codes, storage on the user record in `auth.json`, verify step wired into `/auth/login` + `/auth/token` (after the new lockout check), optional admin enforcement policy, and a "remember this device" option. Not a quick add — scope as a standalone feature/PR
+- [ ] **ESLint 8 → 9 (flat-config) migration** — dev-tooling only, deferred from the audit's LOW items because it's a breaking major: ESLint 9 defaults to flat config (`eslint.config.js`), so `.eslintrc.*` must be rewritten (imports instead of `extends` strings, `languageOptions.globals` instead of `env`), the React/hooks plugins bumped to flat-config-compatible versions, and removed/renamed rules chased down. No runtime/security exposure — do it as an isolated tooling PR on a maintenance pass, not bundled with feature work
+- [ ] **Vite 6 → 8 major** — closes the residual **esbuild** dev-server advisory (`GHSA-67mh-4wv8-2f99`) that the 5.4.x bump can't reach. Dev-server-only (production is served from the built `dist/` bundle), so low real-world risk; it's a breaking major needing the React plugin + config + Node-version review. Maintenance-pass item
+- [ ] **Enable signed updates on managed instances** — the updater supports `UPDATE_REQUIRE_SIGNATURE=true` (refuses unsigned commits/tags); to actually turn it on, start GPG-signing release tags and import the signing pubkey into each managed instance's updater keyring, then set the flag in that instance's `docker/.env`
+
 ## Product Backlog (pull in when demand appears)
 
 - [ ] **Profit First method for Finance** — allocation-based budgeting per the Profit First ideology (Income → Profit / Owner's Comp / Tax / Opex allocation accounts with target percentages, instant-assessment view, quarterly profit distributions); needs a design pass before build (owner request, 2026-07-16)

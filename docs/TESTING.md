@@ -56,7 +56,9 @@ Exception: external HTTP calls (AI provider, n8n, HA, Tavily) should be mocked w
 
 ---
 
-## Current Coverage (175 tests, 11 files)
+## Current Coverage (467 tests, 27 files)
+
+Core-service coverage below (the module suites — finance, contacts, assets, help, etc. — make up the remainder of the 27 files):
 
 | File | Tests | What's covered |
 |------|-------|----------------|
@@ -68,7 +70,7 @@ Exception: external HTTP calls (AI provider, n8n, HA, Tavily) should be mocked w
 | `test_suggestions_service.py` | 14 | Suggestion types, custom schedule management |
 | `test_recurring_service.py` | 15 | Next-due arithmetic including leap years, streak logic |
 | `test_task_service.py` | 15 | Task CRUD, pagination, type handling |
-| `test_auth_service.py` | 13 | User CRUD, JWT create/verify, bcrypt, JTI revocation |
+| `test_auth_service.py` | 20 | User CRUD, JWT create/verify, bcrypt, JTI revocation, **constant-time login + account lockout** |
 | `test_journal_service.py` | 13 | Daily entry CRUD |
 | `test_rate_limiter.py` | 12 | IP-based rate limiting, window enforcement |
 
