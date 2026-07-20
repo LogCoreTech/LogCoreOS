@@ -437,6 +437,22 @@
   },
   "whats_new": [
     {
+      "version": "0.4.2",
+      "date": "2026-07-20",
+      "highlights": [
+        "Reliable updates — the updater now refuses to report success when it couldn't actually fetch new code, recovers automatically if a past update didn't record its version, and the Admin → Updates card clearly shows what went wrong when an update fails."
+      ]
+    },
+    {
+      "version": "0.4.1",
+      "date": "2026-07-20",
+      "highlights": [
+        "Mobile polish — the Finance \"＋ New book\" button is back on screen, the Saved Chats panel no longer hides its header behind the notch, and the bottom navigation sits flush with the screen edge.",
+        "Rotate your notification channel — Settings → Notifications now has a Rotate button and a reminder when your channel is over 30 days old.",
+        "Safer push notifications — self-hosters exposing ntfy publicly can now require authentication for publishing while subscribing stays effortless."
+      ]
+    },
+    {
       "version": "0.4.0",
       "date": "2026-07-19",
       "highlights": [
