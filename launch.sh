@@ -293,6 +293,11 @@ generate_env() {
   env_set TRUST_PROXY_HEADERS "false"
   env_set DOCKER_GID          "$(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo '999')"
 
+  # Strong per-install n8n keys (fresh install → no existing n8n data, so it is
+  # safe to set the encryption key now). Never regenerated for an existing .env.
+  env_set N8N_API_KEY         "$(generate_secret_key)"
+  env_set N8N_ENCRYPTION_KEY  "$(generate_secret_key)"
+
   log_info "docker/.env created with a generated SECRET_KEY."
   log_info "After first login, go to Admin → AI Settings to add your API key."
   log_info "Go to Admin → Hosting to enable HTTPS/tunnel mode."

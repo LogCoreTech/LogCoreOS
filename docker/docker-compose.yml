@@ -9,7 +9,9 @@ services:
     volumes:
       - ../brain:/data/brain
       - ../app/frontend/dist:/frontend/dist
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # NOTE: the host Docker socket is deliberately NOT mounted here anymore.
+      # The app reaches the Docker API through the restricted socket-proxy below
+      # (see DOCKER_HOST) so an app RCE can't drive the raw Engine API directly.
     environment:
       BRAIN_PATH: /data/brain
       SECRET_KEY: ${SECRET_KEY}
@@ -18,6 +20,8 @@ services:
       AI_MODEL: ${AI_MODEL:-claude-sonnet-4-6}
       NTFY_URL: http://ntfy:80
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      # Talk to Docker through the filtered proxy, not the raw socket.
+      DOCKER_HOST: tcp://socket-proxy:2375
       SCHEDULER_TIMEZONE: ${SCHEDULER_TIMEZONE:-America/Chicago}
       MORNING_DIGEST_HOUR: ${MORNING_DIGEST_HOUR:-6}
       OVERDUE_CHECK_HOUR: ${OVERDUE_CHECK_HOUR:-19}
@@ -29,10 +33,9 @@ services:
       INFISICAL_TOKEN: ${INFISICAL_TOKEN:-}
       INFISICAL_ENV: ${INFISICAL_ENV:-prod}
       INFISICAL_PROJECT_ID: ${INFISICAL_PROJECT_ID:-}
-    group_add:
-      - "${DOCKER_GID:-973}"
     depends_on:
       - ntfy
+      - socket-proxy
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8000/api/v1/health"]
       interval: 30s
@@ -40,8 +43,34 @@ services:
       retries: 3
       start_period: 15s
 
+  # Restricted Docker API gateway. The app manages the n8n and cloudflared
+  # containers (start/stop/restart, and recreate the tunnel with a new token),
+  # so it needs container + image API access — but nothing else. This proxy
+  # exposes ONLY those sections over an internal TCP port and mounts the socket
+  # read-only, so an app compromise can't reach exec/volumes/networks/swarm/etc.
+  # Residual: because the tunnel flow legitimately CREATES a container, POST is
+  # enabled, so a determined attacker with app RCE could still craft a
+  # host-mounting container. Closing that fully needs a fixed-command broker
+  # (tracked as a follow-up). The port is NOT published to the host.
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: logcore-socket-proxy
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1      # list / inspect / create / remove the logcore containers
+      IMAGES: 1          # pull cloudflared when (re)creating the tunnel
+      POST: 1            # allow the mutating calls above (create/start/stop/restart)
+      ALLOW_START: 1
+      ALLOW_STOP: 1
+      ALLOW_RESTARTS: 1
+      # Everything else stays denied (default 0): EXEC, VOLUMES, NETWORKS, SWARM,
+      # SERVICES, TASKS, NODES, SECRETS, CONFIGS, PLUGINS, SYSTEM, INFO, AUTH, BUILD.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    # No `ports:` — only the app (same compose network) can reach it.
+
   tunnel:
-    image: cloudflare/cloudflared:latest
+    image: cloudflare/cloudflared:2026.7.2
     container_name: logcore-tunnel
     restart: unless-stopped
     network_mode: host
@@ -50,27 +79,36 @@ services:
       - app
 
   ntfy:
-    image: binwiederhier/ntfy
+    image: binwiederhier/ntfy:v2.26.0
     container_name: logcore-ntfy
     restart: unless-stopped
     ports:
-      - "5680:80"
+      # Bound to loopback — reached internally by the app (http://ntfy:80) or via
+      # an SSH tunnel, never directly from the network.
+      - "127.0.0.1:5680:80"
     volumes:
       - ntfy_data:/var/lib/ntfy
     command: serve
 
   n8n:
-    image: docker.n8n.io/n8nio/n8n:latest
+    image: docker.n8n.io/n8nio/n8n:2.31.3
     container_name: logcore-n8n
     restart: unless-stopped
     ports:
-      - "5678:5678"
+      # Bound to loopback — the app reaches n8n at http://n8n:5678 on the compose
+      # network; browse the n8n UI via an SSH tunnel or the Cloudflare tunnel.
+      - "127.0.0.1:5678:5678"
     volumes:
       - n8n_data:/home/node/.n8n
     env_file:
       - n8n.env
     environment:
       N8N_API_ENABLED: "true"
+      # launch.sh generates strong random values into docker/.env for NEW installs.
+      # The literal fallbacks are kept ONLY for backward compatibility with existing
+      # installs — do NOT rely on them, and NEVER change N8N_ENCRYPTION_KEY on an
+      # instance that already has n8n data (it decrypts stored credentials; a new
+      # key makes them permanently unreadable). Rotate N8N_API_KEY freely.
       N8N_API_KEY: ${N8N_API_KEY:-logcore-n8n-key}
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-change-me-n8n}
       GENERIC_TIMEZONE: ${SCHEDULER_TIMEZONE:-America/Chicago}
