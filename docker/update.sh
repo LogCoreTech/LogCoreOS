@@ -53,21 +53,45 @@ log() {
 
 write_status() {
     local result="$1" version="${2:-}"
-    python3 -c "
-import json, time
-print(json.dumps({'result': '$result', 'timestamp': time.time(), 'version': '$version'}))
-" > "$STATUS_FILE" 2>/dev/null || true
+    printf '{"result": "%s", "timestamp": %s, "version": "%s"}\n' \
+        "$result" "$(date +%s)" "$version" > "$STATUS_FILE" 2>/dev/null || true
 }
 
 write_heartbeat() {
-    python3 -c "import json, time; print(json.dumps({'last_seen': time.time()}))" \
-        > "$HEARTBEAT_FILE" 2>/dev/null || true
+    printf '{"last_seen": %s}\n' "$(date +%s)" > "$HEARTBEAT_FILE" 2>/dev/null || true
 }
 
+# The ONLY runtime source of the app's "current version" (Admin → Updates reads
+# installed_version.json via the backend). If this write fails, the app keeps
+# reporting the old version forever even though the new code is running — so
+# verify the write landed and complain loudly if it didn't.
 write_installed_version() {
-    local version="$1"
-    python3 -c "import json; print(json.dumps({'version': '$version'}))" \
-        > "$BRAIN_SYS/installed_version.json" 2>/dev/null || true
+    local version="$1" file="$BRAIN_SYS/installed_version.json"
+    printf '{"version": "%s"}\n' "$version" > "$file" 2>> "$LOG_FILE" || true
+    if ! grep -q "\"${version}\"" "$file" 2>/dev/null; then
+        log "ERROR: failed to record installed version ${version} in ${file}."
+        log "  The app will keep showing the previous version until this file is writable"
+        log "  (check ownership/permissions of $BRAIN_SYS)."
+        return 1
+    fi
+    return 0
+}
+
+# A previous update can deploy new code but die (or fail the write above) before
+# the version is recorded; every later run then no-ops on "already up to date"
+# and the stale version sticks forever. Heal that here: if the working tree's
+# VERSION differs from the recorded one and the app is up, re-stamp.
+restamp_if_stale() {
+    local repo_version="" stamped=""
+    [[ -f "$REPO_ROOT/VERSION" ]] && repo_version="$(tr -d '[:space:]' < "$REPO_ROOT/VERSION")"
+    [[ -z "$repo_version" ]] && return 0
+    stamped="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+        "$BRAIN_SYS/installed_version.json" 2>/dev/null | head -1)"
+    [[ "$repo_version" == "$stamped" ]] && return 0
+    if curl -sf --max-time 3 "$HEALTH_URL" > /dev/null 2>&1; then
+        log "Recorded version (${stamped:-none}) lags the deployed tree (${repo_version}) — re-stamping."
+        write_installed_version "$repo_version" || true
+    fi
 }
 
 # ── Health check ──────────────────────────────────────────────────────────────
@@ -191,14 +215,31 @@ do_update() {
 
     # 3. Fetch latest code — but do NOT merge it into the working tree until it
     #    has passed signature verification, so unverified code never lands.
+    #    A failed fetch MUST abort here: this function is invoked as
+    #    `do_update || …`, which disables errexit inside it, and continuing on a
+    #    stale FETCH_HEAD once rebuilt the old tree and stamped it "successful".
     log "Fetching latest code from origin/master..."
-    git -C "$REPO_ROOT" fetch origin master >> "$LOG_FILE" 2>&1
+    if ! git -C "$REPO_ROOT" fetch origin master >> "$LOG_FILE" 2>&1; then
+        log "git fetch failed — cannot reach origin. Check the remote URL and credentials (see log above)."
+        log "  Note: an SSH remote (git@github.com:…) needs a key the updater's cron user can read;"
+        log "  the public HTTPS remote needs none: git remote set-url origin https://github.com/LogCoreTech/LogCoreOS.git"
+        write_status "fetch-failed"
+        rm -f "$RUNNING_FLAG"
+        return 1
+    fi
 
     local new_commit
-    new_commit="$(git -C "$REPO_ROOT" rev-parse FETCH_HEAD)"
+    if ! new_commit="$(git -C "$REPO_ROOT" rev-parse --verify 'FETCH_HEAD^{commit}' 2>> "$LOG_FILE")" \
+        || [[ -z "$new_commit" ]]; then
+        log "Could not resolve the fetched commit — aborting, working tree untouched."
+        write_status "fetch-failed"
+        rm -f "$RUNNING_FLAG"
+        return 1
+    fi
 
     if [[ "$prev_commit" == "$new_commit" ]]; then
         log "Already up to date — nothing to do."
+        restamp_if_stale
         rm -f "$RUNNING_FLAG"
         write_status "up-to-date"
         return 0
@@ -255,8 +296,13 @@ do_update() {
     # 7. Health check
     log "Waiting for health check (up to ${HEALTH_TIMEOUT}s)..."
     if wait_healthy; then
-        write_installed_version "$new_version"
-        write_status "success" "$new_version"
+        if write_installed_version "$new_version"; then
+            write_status "success" "$new_version"
+        else
+            # Code deployed fine but the version record didn't land — surface it
+            # instead of pretending everything's consistent.
+            write_status "success-stamp-failed" "$new_version"
+        fi
         log "=== Update successful! Now running v${new_version} ==="
         rm -f "$RUNNING_FLAG"
         return 0
