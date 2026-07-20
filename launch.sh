@@ -143,6 +143,21 @@ install_deps() {
 
   log_step "Installing prerequisites"
 
+  # SECURITY NOTE — trust-on-first-use bootstrap.
+  # The Docker and Node.js installs below use the vendors' official
+  # `curl … | sudo sh` bootstrap scripts (get.docker.com, deb/rpm.nodesource.com).
+  # These run vendor-authored code as root, fetched over HTTPS, with no
+  # independent checksum/signature verification — the standard but inherently
+  # trust-on-first-use pattern. It only runs when you explicitly pass
+  # --install-deps. If you'd rather not pipe a remote script to root, install
+  # Docker Engine + Compose and Node.js 20+ yourself from the official docs and
+  # run launch.sh WITHOUT --install-deps:
+  #   Docker:  https://docs.docker.com/engine/install/
+  #   Node.js: https://nodejs.org/en/download/
+  log_warn "--install-deps runs the official Docker/Node bootstrap scripts as root"
+  log_info "  (curl … | sudo sh over HTTPS, no checksum pinning — trust-on-first-use)."
+  log_info "  To avoid this, install Docker + Node.js 20 manually and omit --install-deps."
+
   local pm
   if command -v apt-get &>/dev/null; then
     pm="apt"
