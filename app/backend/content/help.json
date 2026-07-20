@@ -322,6 +322,28 @@
       "modules": []
     },
     {
+      "id": "security",
+      "icon": "🔒",
+      "title": "Security & Privacy",
+      "blurb": "LogCoreOS holds your whole life, so protecting it is the priority: your data stays isolated to you unless you deliberately share it, your password is never stored in a form anyone can read, and the app is built to keep intruders out. Here's what protects you — and, for the technically minded, exactly how.",
+      "howto": [
+        "Your account is guarded by your password, which is stored only as a scrambled (hashed) value nobody can read or recover — so pick a strong, unique one; it's your main key.",
+        "After several wrong password guesses, sign-in for that account is paused for a few minutes. That blocks attackers trying huge lists of passwords, even from many computers at once.",
+        "Your data is private to you. Other people on the same instance cannot see your tasks, notes, money, or contacts unless you explicitly share them — and you can take that back anytime.",
+        "You can download everything you own at any time from Settings → Account → Export Brain. There is no lock-in.",
+        "Seeing a \"too many attempts, try again later\" message at sign-in means the protection is working — wait a few minutes, or ask an admin to reset your password."
+      ],
+      "tips": [
+        "Passwords are bcrypt-hashed; sign-in runs in constant time, so response speed can't reveal which emails have accounts.",
+        "Login is defended on two layers — per-IP rate limiting AND a per-account temporary lockout (10 failed tries in 15 minutes) — so distributed credential-stuffing is stopped too.",
+        "Sessions use an HttpOnly + SameSite=Lax + Secure cookie (a JWT); logging out revokes it server-side. Keep COOKIE_SECURE=true on any HTTPS deployment.",
+        "Responses carry a Content-Security-Policy, HSTS (over HTTPS), X-Frame-Options: DENY and nosniff; page content is rendered escaped (no raw HTML), and your Brain text sent to the AI is wrapped to resist prompt injection.",
+        "Cross-user access is enforced on the server only — a record you have no relationship to simply isn't found; the browser never decides who can see what.",
+        "Self-host hardening: the app refuses to start on a default SECRET_KEY, talks to Docker only through a restricted socket-proxy, can require GPG-signed updates (UPDATE_REQUIRE_SIGNATURE=true), and supports encrypted backups. Found a flaw? See SECURITY.md — please disclose privately to support@logcoretech.com."
+      ],
+      "modules": []
+    },
+    {
       "id": "appearance",
       "icon": "🎨",
       "title": "Appearance & Settings",
@@ -394,6 +416,14 @@
     {
       "q": "I found a bug or have an idea. How do I tell you?",
       "a": "See Contact & Support at the bottom of this page — email support@logcoretech.com with what happened (and steps to reproduce for bugs). We read everything."
+    },
+    {
+      "q": "Is my data private? Can other people on this instance see it?",
+      "a": "No. Everything you create lives in your own space and is private to you. Someone else can only see an item if you deliberately share it with them, and you can revoke that anytime. Even admins, who manage the instance, don't get a window into your personal tasks, notes, journal, money, or contacts unless you share them. See the Security & Privacy help section for the details."
+    },
+    {
+      "q": "I keep getting \"too many attempts\" when I try to log in.",
+      "a": "That's the brute-force protection working: after several wrong passwords, sign-in for your account is paused for a few minutes to shut out attackers. Wait a bit and try again with the correct password, or ask an admin to reset it — it clears on its own."
     }
   ],
   "support": {
