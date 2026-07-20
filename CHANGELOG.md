@@ -20,6 +20,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Everything links back** — invoices show the deal (and its assets) they came from; transactions show "from invoice / deal" chips; asset pages, deals, and invoices all click through to each other
 - **Contacts on assets** — asset templates get a "contact" field type (pick a person/company from your CRM); the contact's page gains a **References** section showing every asset, invoice, and dollar tied to them, plus per-deal job profit
 
+### Added
+
+**In-app Security & Privacy help**
+- A new **Help → Security & Privacy** section explains, in plain language *and* technical detail, how your account and data are protected — password hashing, login lockout, data isolation, session cookies, headers, and self-host hardening — plus two new FAQ entries ("Is my data private?" and "Why am I getting 'too many attempts'?")
+
 ### Fixed
 
 - **What's-New broadcast now fires after in-place updates** — `update.sh` stamps the installed version only after the restarted app passes its health check, so the boot-time announce saw the old version and stayed silent. The scheduler now re-checks 3 minutes after boot and during the daily update check
