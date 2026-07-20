@@ -112,6 +112,22 @@ def test_update_user(brain):
     assert refetched["timezone"] == "America/New_York"
 
 
+def test_rotate_notification_channel_changes_id_and_stamps_time(brain):
+    user = auth_service.create_user("rot@example.com", "password123", "Rot User")
+    original_channel = user["notification_channel"]
+    rotated = auth_service.rotate_notification_channel(user["id"])
+    assert rotated["notification_channel"] != original_channel
+    assert rotated["notification_channel"].startswith("lc-")
+    assert rotated["channel_rotated_at"]
+    # Persisted, not just returned
+    refetched = auth_service.get_user_by_id(user["id"])
+    assert refetched["notification_channel"] == rotated["notification_channel"]
+
+
+def test_rotate_notification_channel_unknown_user_returns_none(brain):
+    assert auth_service.rotate_notification_channel("no-such-id") is None
+
+
 def test_system_settings_persist(brain):
     auth_service.update_system_settings({"allow_open_registration": True})
     settings = auth_service.get_system_settings()

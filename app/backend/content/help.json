@@ -296,12 +296,17 @@
       "blurb": "LogCore reaches you through an in-app inbox (the bell), self-hosted push via ntfy, and web push on your devices.",
       "howto": [
         "Click the bell to see your notification inbox; actionable items (like share requests) have Accept/Decline right there.",
-        "Enable browser/web push in Settings → Notifications to get alerts on your devices.",
-        "For phone notifications, install the ntfy app and subscribe to your channel (shown in Settings).",
-        "Proactive digests (morning summary, overdue alerts, weekly review) are configurable in Settings."
+        "Enable browser/web push in Settings → Notifications to get alerts on your devices — this works from anywhere, including away from home.",
+        "For phone notifications at home, install the ntfy app and subscribe to your channel (shown in Settings → Notifications).",
+        "Rotate your ntfy channel anytime from Settings → Notifications if you think it's been shared or exposed; you'll need to re-subscribe in the ntfy app with the new channel afterward. LogCore also reminds you here once a channel is over 30 days old.",
+        "Proactive digests (morning summary, overdue alerts, weekly review) are configurable in Settings.",
+        "Want ntfy notifications away from home too, not just Web Push? An admin can give ntfy a public address if you're using a Cloudflare Tunnel: in Cloudflare Zero Trust → Networks → Tunnels → your tunnel → Public Hostname → Add, pick a subdomain (e.g. ntfy.yourdomain.com), and point it at http://localhost:5680. Then use that https:// address as the server in the ntfy app instead of your LAN address. This is optional — everything else works fine without it."
       ],
       "tips": [
-        "ntfy is fully self-hosted — no third-party notification service is involved."
+        "ntfy is fully self-hosted — no third-party notification service is involved.",
+        "By default ntfy is only reachable on your server's local network; use Web Push for remote devices unless an admin has given ntfy a public hostname (see the howto above).",
+        "A channel ID is the only thing that gates who can read (or fake) your ntfy notifications, since ntfy topics have no login — rotating it immediately retires the old ID.",
+        "The moment ntfy gets a public hostname, launch.sh automatically locks down publishing to the app itself (an admin publisher token) while subscribing stays login-free — nothing extra to configure, and it fails safe (never silently breaks notifications) if that provisioning can't complete."
       ],
       "modules": []
     },
@@ -407,7 +412,7 @@
     },
     {
       "q": "How do I get notifications on my phone?",
-      "a": "Enable web push in Settings → Notifications, and/or install the ntfy app and subscribe to your channel shown in Settings. ntfy is self-hosted, so no third-party service is involved."
+      "a": "Enable web push in Settings → Notifications for alerts anywhere, including away from home. For phone notifications at home, install the ntfy app and subscribe to your channel shown in Settings — ntfy is self-hosted and by default only reachable on your local network, so no third-party service is involved. If you want ntfy away from home too, an admin can give it a public address through your Cloudflare Tunnel (see the howto in this section) — LogCore automatically locks down who can publish once that's done, so subscribing stays just as simple. If you ever think your ntfy channel ID has leaked, rotate it from the same Settings card."
     },
     {
       "q": "Do I need n8n or Home Assistant to use LogCore?",

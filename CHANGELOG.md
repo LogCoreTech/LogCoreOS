@@ -23,6 +23,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 **In-app Security & Privacy help**
 - A new **Help → Security & Privacy** section explains, in plain language *and* technical detail, how your account and data are protected — password hashing, login lockout, data isolation, session cookies, headers, and self-host hardening — plus two new FAQ entries ("Is my data private?" and "Why am I getting 'too many attempts'?")
 
+**Rotate your notification channel**
+- Settings → Notifications now shows when your ntfy channel was last rotated and gives you a **Rotate channel** button — regenerates the ID immediately if you ever think it's leaked, no need to touch a config file. LogCore also reminds you here once a channel is over 30 days old
+
 ### Fixed
 
 - **What's-New broadcast now fires after in-place updates** — `update.sh` stamps the installed version only after the restarted app passes its health check, so the boot-time announce saw the old version and stayed silent. The scheduler now re-checks 3 minutes after boot and during the daily update check
@@ -45,6 +48,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Secure-by-default installer** — fresh installs now default to `COOKIE_SECURE=true` and no wildcard CORS; opt into LAN/plain-HTTP mode explicitly (existing installs are unchanged)
 - **Docker socket no longer exposed to the app** — the web app used to bind-mount the host Docker socket (an app compromise ≈ host root). It now reaches Docker through a locked-down `docker-socket-proxy` that permits only the container operations the updater/tunnel need and blocks everything else (exec, volumes, networks, …). **Re-run `launch.sh` on your next deploy so the new `socket-proxy` service starts.**
 - **n8n and ntfy ports are now loopback-only** — published to `127.0.0.1` instead of all interfaces; reach the n8n UI via the tunnel or an SSH port-forward. Fresh installs also get strong random `N8N_API_KEY`/`N8N_ENCRYPTION_KEY` instead of shipped defaults
+- **ntfy publishing can now require authentication** — if you give ntfy a public hostname (e.g. through the Cloudflare tunnel) for push notifications away from home, `launch.sh` provisions a dedicated publisher account and flips ntfy's default access to read-only: subscribing to your channel stays login-free, but publishing now requires the app's token, closing the open-publish spoofing risk that comes with any internet-reachable ntfy server
 - **Pinned third-party images** — `cloudflared`, `ntfy`, `n8n`, and the socket-proxy are pinned to specific versions (no more silent `:latest` pulls), so builds are reproducible and roll-backable
 - **Signed-update verification (opt-in)** — the in-place updater (`docker/update.sh`) now *fetches* a new release and verifies it **before** it touches the working tree: with `UPDATE_REQUIRE_SIGNATURE=true` it refuses to build any commit that isn't GPG-signed (commit or annotated tag) by a trusted key, and it fast-forwards only (no silent merge of divergent history). Defends the auto-updater against a compromised origin or MITM. Default off so unsigned deployments are unaffected
 - **Vite updated to 5.4.x** — closes the Vite dev-server path-traversal advisories flagged in the audit (dev-tooling; production is served from the built bundle). The remaining esbuild dev-server advisory needs a future major (Vite 8) and is deferred

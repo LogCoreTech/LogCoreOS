@@ -24,6 +24,11 @@ class Settings(BaseSettings):
 
     # Notifications
     ntfy_url: str = "http://ntfy:80"
+    # Access token for ntfy's admin publisher account — set automatically by
+    # launch.sh once ntfy's default access is hardened to read-only (see
+    # docker-compose.yml). Empty means ntfy is still in its default open-publish
+    # mode, so no auth header is sent.
+    ntfy_publish_token: str = ""
 
     # How many days the "What's New" banner stays visible after an app update.
     whats_new_days: int = Field(5, ge=0, le=60)

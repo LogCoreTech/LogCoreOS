@@ -384,9 +384,78 @@ ensure_n8n_env() {
   fi
 }
 
+wait_for_ntfy() {
+  local elapsed=0
+  while [[ $elapsed -lt 30 ]]; do
+    curl -sf --max-time 2 "http://127.0.0.1:5680/v1/health" > /dev/null 2>&1 && return 0
+    sleep 2
+    elapsed=$((elapsed + 2))
+  done
+  return 1
+}
+
+# ntfy ships with no auth by default — any client can publish OR subscribe to
+# any topic. That's an acceptable trust model for a LAN-only instance (the
+# random channel ID is the only lock, same as the notification-channel design
+# documented in Help → Notifications), but it stops being acceptable the moment
+# ntfy gets a public hostname (e.g. mapped through the Cloudflare tunnel — see
+# the ports note on the ntfy service in docker-compose.yml): an unauthenticated
+# publish endpoint on the open internet lets anyone spoof push notifications to
+# a leaked or guessed channel. This provisions ONE admin "publisher" account for
+# the app itself to authenticate with, then flips ntfy's default access to
+# read-only — anonymous subscribe keeps working with zero setup for every family
+# member, but publishing now requires this account's token.
+#
+# Idempotent: skipped once NTFY_PUBLISH_TOKEN is already recorded in docker/.env
+# (never silently rotates/reprovisions on a normal relaunch). Fails OPEN: if any
+# step here breaks — e.g. a future ntfy release changes its CLI — this logs a
+# warning and leaves the server in its default read-write mode rather than
+# risking a silent full notification outage. Re-running launch.sh retries it.
+provision_ntfy_auth() {
+  if [[ -n "$(env_get NTFY_PUBLISH_TOKEN)" ]]; then
+    return 0
+  fi
+  log_step "Provisioning ntfy publisher account"
+
+  if ! wait_for_ntfy; then
+    log_warn "ntfy didn't come up in time — leaving it unauthenticated (open publish, ID-gated read)."
+    log_warn "Re-run launch.sh to retry provisioning."
+    return 0
+  fi
+
+  local pw token
+  pw="$(generate_secret_key)"
+  if ! printf '%s\n%s\n' "$pw" "$pw" | docker compose \
+      -f "$DOCKER_DIR/docker-compose.yml" --project-directory "$DOCKER_DIR" \
+      exec -T ntfy ntfy user add --role=admin logcore-publisher >/dev/null 2>&1; then
+    log_warn "Could not create the ntfy publisher account — leaving ntfy unauthenticated."
+    log_warn "Notifications still work (open publish); re-run launch.sh later to retry."
+    return 0
+  fi
+
+  token="$(docker compose \
+      -f "$DOCKER_DIR/docker-compose.yml" --project-directory "$DOCKER_DIR" \
+      exec -T ntfy ntfy token add logcore-publisher 2>/dev/null | grep -oE 'tk_[A-Za-z0-9]+' | head -1)"
+  if [[ -z "$token" ]]; then
+    log_warn "ntfy publisher account created but no token could be extracted."
+    log_warn "Check manually: docker compose exec ntfy ntfy token add logcore-publisher"
+    return 0
+  fi
+
+  env_set NTFY_PUBLISH_TOKEN "$token"
+  env_set NTFY_AUTH_DEFAULT_ACCESS "read-only"
+  log_info "ntfy publisher account created — anonymous subscribe still works; publish now requires this token."
+}
+
 launch_containers() {
   log_step "Starting Docker containers"
   ensure_n8n_env
+  if [[ -z "$(env_get NTFY_PUBLISH_TOKEN)" ]]; then
+    # Bring ntfy up alone first so we can provision its auth before the app
+    # container is created with the (currently empty) NTFY_PUBLISH_TOKEN.
+    docker compose -f "$DOCKER_DIR/docker-compose.yml" --project-directory "$DOCKER_DIR" up -d ntfy
+    provision_ntfy_auth
+  fi
   docker compose \
     -f "$DOCKER_DIR/docker-compose.yml" \
     --project-directory "$DOCKER_DIR" \

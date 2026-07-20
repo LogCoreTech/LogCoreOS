@@ -56,7 +56,7 @@ Exception: external HTTP calls (AI provider, n8n, HA, Tavily) should be mocked w
 
 ---
 
-## Current Coverage (467 tests, 27 files)
+## Current Coverage (474 tests, 27 files)
 
 Core-service coverage below (the module suites — finance, contacts, assets, help, etc. — make up the remainder of the 27 files):
 
@@ -67,10 +67,10 @@ Core-service coverage below (the module suites — finance, contacts, assets, he
 | `test_profile_service.py` | 17 | Profile read/write, workspace-scoped paths, priority order |
 | `test_events_service.py` | 16 | Calendar event CRUD |
 | `test_priority_service.py` | 14 | Scoring formula, top3 logic, category weights, urgency bonus |
-| `test_suggestions_service.py` | 14 | Suggestion types, custom schedule management |
+| `test_suggestions_service.py` | 19 | Suggestion types, custom schedule management, **channel-rotation reminder sweep (dedup + reset-on-rotation)** |
 | `test_recurring_service.py` | 15 | Next-due arithmetic including leap years, streak logic |
 | `test_task_service.py` | 15 | Task CRUD, pagination, type handling |
-| `test_auth_service.py` | 20 | User CRUD, JWT create/verify, bcrypt, JTI revocation, **constant-time login + account lockout** |
+| `test_auth_service.py` | 22 | User CRUD, JWT create/verify, bcrypt, JTI revocation, constant-time login + account lockout, **notification-channel rotation** |
 | `test_journal_service.py` | 13 | Daily entry CRUD |
 | `test_rate_limiter.py` | 12 | IP-based rate limiting, window enforcement |
 
