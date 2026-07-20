@@ -13,6 +13,8 @@ Include:
 
 We aim to acknowledge reports within **48 hours** and provide a fix or mitigation within **7 days** for critical issues.
 
+If you'd like credit, we'll name you in the `CHANGELOG.md` entry for the fix — just say so (and how you'd like to be credited) in your report. Anonymous reports are just as welcome.
+
 ---
 
 ## Scope
