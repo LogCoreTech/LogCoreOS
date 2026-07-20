@@ -23,6 +23,7 @@ function NotifBell() {
     if (action?.type === 'open_admin_banking') return '/admin'
     if (action?.type === 'open_finance_book') return `/finance?book=${action.book_id || ''}`
     if (action?.type === 'open_contact') return '/contacts'
+    if (action?.type === 'open_settings') return '/settings'
     if (action?.type === 'notes_share') return null  // request → Accept/Decline, not a nav
     return null
   }

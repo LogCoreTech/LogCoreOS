@@ -1,7 +1,7 @@
 """Tests for services/suggestions_service.py."""
 
 import sys
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import pytest
@@ -138,6 +138,118 @@ def test_clear_notifications(user_dir):
     svc.clear_notifications(USER)
     notifs = svc.get_notifications(USER)
     assert all(n["read"] is True for n in notifs)
+
+
+# ---------------------------------------------------------------------------
+# run_channel_rotation_reminders
+# ---------------------------------------------------------------------------
+
+
+def _iso(dt):
+    return dt.isoformat()
+
+
+def _stub_users(monkeypatch, users):
+    """Wire svc.list_users/get_user_by_id/update_user to an in-memory user list."""
+    by_id = {u["id"]: u for u in users}
+
+    def _list_users():
+        return [{"id": u["id"], "name": u["name"]} for u in users]
+
+    def _get_user_by_id(uid):
+        return by_id.get(uid)
+
+    def _update_user(uid, updates):
+        by_id[uid].update(updates)
+        return by_id[uid]
+
+    monkeypatch.setattr(svc, "list_users", _list_users)
+    monkeypatch.setattr(svc, "get_user_by_id", _get_user_by_id)
+    monkeypatch.setattr(svc, "update_user", _update_user)
+    return by_id
+
+
+def test_rotation_reminder_fires_when_stale(user_dir, monkeypatch):
+    now = datetime.now(timezone.utc)
+    stale = now - timedelta(days=31)
+    users = [{"id": "u1", "name": USER, "channel_rotated_at": _iso(stale)}]
+    by_id = _stub_users(monkeypatch, users)
+    sent = []
+    monkeypatch.setattr(svc, "notify_user", lambda *a, **k: sent.append((a, k)))
+
+    count = svc.run_channel_rotation_reminders(now=now)
+
+    assert count == 1
+    assert len(sent) == 1
+    assert by_id["u1"]["channel_reminder_at"]  # dedup stamp written
+
+
+def test_rotation_reminder_skips_recent_rotation(user_dir, monkeypatch):
+    now = datetime.now(timezone.utc)
+    recent = now - timedelta(days=5)
+    users = [{"id": "u1", "name": USER, "channel_rotated_at": _iso(recent)}]
+    _stub_users(monkeypatch, users)
+    sent = []
+    monkeypatch.setattr(svc, "notify_user", lambda *a, **k: sent.append((a, k)))
+
+    assert svc.run_channel_rotation_reminders(now=now) == 0
+    assert sent == []
+
+
+def test_rotation_reminder_falls_back_to_created_at(user_dir, monkeypatch):
+    """Users who have never rotated are measured from account creation."""
+    now = datetime.now(timezone.utc)
+    old_created = now - timedelta(days=45)
+    users = [{"id": "u1", "name": USER, "created_at": _iso(old_created)}]
+    _stub_users(monkeypatch, users)
+    sent = []
+    monkeypatch.setattr(svc, "notify_user", lambda *a, **k: sent.append((a, k)))
+
+    assert svc.run_channel_rotation_reminders(now=now) == 1
+    assert len(sent) == 1
+
+
+def test_rotation_reminder_dedupes_within_window(user_dir, monkeypatch):
+    """Once reminded, don't re-fire again until the reminder window has passed —
+    even though the channel is still stale — so it's a monthly nudge, not daily."""
+    now = datetime.now(timezone.utc)
+    stale = now - timedelta(days=60)
+    just_reminded = now - timedelta(days=2)
+    users = [
+        {
+            "id": "u1",
+            "name": USER,
+            "channel_rotated_at": _iso(stale),
+            "channel_reminder_at": _iso(just_reminded),
+        }
+    ]
+    _stub_users(monkeypatch, users)
+    sent = []
+    monkeypatch.setattr(svc, "notify_user", lambda *a, **k: sent.append((a, k)))
+
+    assert svc.run_channel_rotation_reminders(now=now) == 0
+    assert sent == []
+
+
+def test_rotation_reminder_resets_after_actual_rotation(user_dir, monkeypatch):
+    """A rotation after the last reminder clears the dedup — the timer resets."""
+    now = datetime.now(timezone.utc)
+    just_rotated = now - timedelta(days=1)
+    old_reminder = now - timedelta(days=40)
+    users = [
+        {
+            "id": "u1",
+            "name": USER,
+            "channel_rotated_at": _iso(just_rotated),
+            "channel_reminder_at": _iso(old_reminder),
+        }
+    ]
+    _stub_users(monkeypatch, users)
+    sent = []
+    monkeypatch.setattr(svc, "notify_user", lambda *a, **k: sent.append((a, k)))
+
+    assert svc.run_channel_rotation_reminders(now=now) == 0
+    assert sent == []
 
 
 def test_notification_cap(user_dir):

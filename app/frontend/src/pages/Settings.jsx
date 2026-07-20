@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { auth as authApi, user as userApi, push as pushApi, suggestions as sugApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { getShortcutsForUser, ALL_MODULES } from '../lib/constants'
 import { useWorkspace } from '../lib/workspace'
 import { applyAccentColor, applyDarkMode, applyBackground, applyDensity, applyCornerStyle, getSystemDarkPreference, BACKGROUND_PRESETS } from '../lib/theme'
+import HelpButton from '../components/HelpButton'
 
 function _urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4)
@@ -35,6 +36,10 @@ export default function Settings() {
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
   const [ntfyChannel, setNtfyChannel] = useState('')
+  const [channelRotatedAt, setChannelRotatedAt] = useState(null)
+  const [rotating, setRotating] = useState(false)
+  const [rotateError, setRotateError] = useState('')
+  const [rotateSaved, setRotateSaved] = useState(false)
   const [sessionMinutes, setSessionMinutes] = useState(10080)
   const [timezone, setTimezone] = useState('')
   const [tzSaved, setTzSaved] = useState(false)
@@ -81,6 +86,7 @@ export default function Settings() {
   useEffect(() => {
     authApi.me().then(me => {
       setNtfyChannel(me.notification_channel || '')
+      setChannelRotatedAt(me.channel_rotated_at || null)
       setSessionMinutes(me.session_minutes || 10080)
       setTimezone(me.timezone || '')
     }).finally(() => setLoading(false))
@@ -99,6 +105,21 @@ export default function Settings() {
   function flash(setter) {
     setter(true)
     setTimeout(() => setter(false), 2000)
+  }
+
+  async function rotateChannel() {
+    setRotating(true)
+    setRotateError('')
+    try {
+      const res = await authApi.rotateChannel()
+      setNtfyChannel(res.notification_channel)
+      setChannelRotatedAt(res.channel_rotated_at)
+      flash(setRotateSaved)
+    } catch (err) {
+      setRotateError(err.message || 'Rotation failed')
+    } finally {
+      setRotating(false)
+    }
   }
 
   function previewAccent(hex) {
@@ -528,9 +549,12 @@ export default function Settings() {
 
       {/* Notifications */}
       <div className="card p-5">
-        <h2 className="font-semibold mb-1">Notifications (ntfy)</h2>
+        <h2 className="font-semibold mb-1">
+          Notifications (ntfy)
+          <HelpButton section="notifications" className="ml-1 align-middle" />
+        </h2>
         <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-3">
-          Install the <strong>ntfy</strong> app on your phone and subscribe to your personal channel to receive morning digests and alerts.
+          Install the <strong>ntfy</strong> app on your phone and subscribe to your personal channel to receive morning digests and alerts. By default ntfy runs self-hosted on your server's local network only — for notifications away from home, use Web Push below, or ask an admin to give ntfy a public address (see the <Link to="/help#notifications" className="text-orange-500 hover:underline">Notifications guide</Link> for setup steps). Your channel ID is the only thing protecting it, so treat it like a password: don't share it, and rotate it if you ever suspect it's leaked.
         </p>
         {ntfyChannel ? (
           <div>
@@ -545,6 +569,23 @@ export default function Settings() {
               >
                 Copy
               </button>
+            </div>
+            <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mt-2">
+              {channelRotatedAt
+                ? `Last rotated ${new Date(channelRotatedAt).toLocaleDateString()}`
+                : 'Never rotated since account creation'}
+              {' — '}we'll remind you here once it's over 30 days old.
+            </p>
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                onClick={rotateChannel}
+                disabled={rotating}
+                className="btn-ghost text-xs disabled:opacity-50"
+              >
+                {rotating ? 'Rotating…' : 'Rotate channel'}
+              </button>
+              {rotateSaved && <span className="text-green-500 text-xs">Rotated ✓ — update the topic in your ntfy app</span>}
+              {rotateError && <span className="text-red-500 text-xs">{rotateError}</span>}
             </div>
           </div>
         ) : (
