@@ -31,7 +31,9 @@ bearer_optional = HTTPBearer(auto_error=False)
 _COOKIE = "lc_token"
 
 # Rate limits
-_login_limit = rate_limit(5, 300, bucket="auth-login")  # 5 credential checks / 5 min, shared by /login + /token
+_login_limit = rate_limit(
+    5, 300, bucket="auth-login"
+)  # 5 credential checks / 5 min, shared by /login + /token
 _register_limit = rate_limit(3, 3600)  # 3 registrations per hour
 _me_limit = rate_limit(10, 60)  # 10 profile updates per minute
 _get_me_limit = rate_limit(30, 60)  # 30 GET /me or /today per minute (polled endpoints)

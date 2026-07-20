@@ -229,9 +229,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Only force HTTPS when we're actually being served over HTTPS — never on a
         # plain-HTTP LAN instance (see _is_https_request).
         if _is_https_request(request):
-            response.headers["Strict-Transport-Security"] = (
-                "max-age=31536000; includeSubDomains"
-            )
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         if request.url.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
         return response
