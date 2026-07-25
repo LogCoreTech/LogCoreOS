@@ -70,7 +70,7 @@ From `docs/Security-Audit-2026-07-19.md` (1 CRITICAL · 5 HIGH · 7 MEDIUM · 4 
 - [ ] **Off-site backups for demo VPS** — Hetzner snapshots or object storage; on-box backup.sh alone is not a backup
 - [ ] **Screenshots in README** — 3+ images + a 30-second GIF of the AI using its memory
 - [ ] **CONTRIBUTING.md** — how to run locally and submit a PR
-- [ ] **GitHub issue templates** — bug report + feature request
+- [x] **GitHub issue templates** — bug report + feature request (found already shipped 2026-07-25 during idea-backlog research: `.github/ISSUE_TEMPLATE/bug_report.yml` + `feature_request.yml`, both substantive; checklist item was stale)
 - [ ] **Website: copy refresh + Try the Demo CTA** — CTA → demo.logcoretech.com; add comparison table (LogCoreOS vs Khoj / Notion AI / Open WebUI)
 - [ ] **OG/social preview image for logcoretech.com** — `<meta og:image>` with branded screenshot
 - [ ] **Waitlist form** — Formspree, capture interest before self-serve signup exists
@@ -277,6 +277,19 @@ Search step: counted `@router.get/post/put/patch/delete` decorators across `app/
 | 🟠 7 | **Hosted developer/API documentation site** (even a simple static-generated one from the OpenAPI schema) as early groundwork for the Phase 7 "Developer API" / plugin-ecosystem roadmap item | 3 | 4 | Right now the only API reference lives in a GitHub markdown file — fine for the current single-maintainer stage, but a real blocker once external plugin/integration developers are actually being courted (Phase 7). Doing the OpenAPI-driven version from the idea above makes this nearly free once that exists |
 | 🟡 5 | **Lightweight numbered ADRs for major decisions, cross-linkable from PRs/commits** | 2 | 3 | `docs/MEMORY.md`'s "Key Decisions Log" already functions like an ADR log (dated, rationale-first entries) but isn't individually addressable — a contributor can't link "see ADR-014" from a PR. Worth numbering future entries rather than restructuring the existing ones |
 | 🟡 5 | **CONTRIBUTING.md** (already backlogged under Launch Surface) — **scope addition**: specifically document the AI agent tool-registry pattern in `agent_service.py`, since it's the least self-explanatory part of the codebase for a new contributor and the thing most likely to be touched when adding a module's AI tools | 2 | 2 | Not a new task, just a concrete scope note for the existing backlog item so it doesn't ship as a generic "how to run this locally" doc and miss the actually-hard part |
+
+### Cycle 11 — Community & Ecosystem (2026-07-25)
+
+Search step corrected a stale item: **GitHub issue templates were already marked as an open Launch Surface task but actually shipped** (`.github/ISSUE_TEMPLATE/bug_report.yml` + `feature_request.yml` both exist and are substantive) — checked off above. Also confirmed no `CODE_OF_CONDUCT.md` exists at the repo root, and GitHub Discussions (already enabled per the 2026-07-06 Done entry) currently has no real activity-seeding.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 6 | **Add `CODE_OF_CONDUCT.md`** (Contributor Covenant is the de facto standard) | 2 | 4 | Missing entirely today; it's a near-zero-effort, expected-by-default file for any OSS project courting outside contributors, and worth having in place *before* a Show HN / r/selfhosted push rather than reactively after the first incident |
+| 🟡 5 | **"Good first issue" labeling pass across the existing backlog** — pick a handful of small, well-scoped items (e.g. several of the ⚪/🟡 polish items in this very backlog) and tag them for external contributors | 3 | 2 | GitHub Discussions is enabled but there's no on-ramp for an outside contributor to find a bite-sized starting point; this directly lowers the barrier the v1.0-trust-stack/Show-HN push is aiming to clear |
+| 🟡 5 | **Self-hoster showcase / "who's running LogCoreOS" opt-in wall on logcoretech.com** | 3 | 2 | Social proof matters disproportionately for self-hosted-tool adoption decisions (a common r/selfhosted pattern); opt-in keeps it privacy-respectful, consistent with the project's own values |
+| 🟡 5 | **Real-time community channel (Discord or Matrix), distinct from the async GitHub Discussions already enabled** | 3 | 2 | Self-hosted-tool communities (Immich, Paperless-ngx, etc.) consistently cite real-time chat as where troubleshooting and evangelism actually happens, vs. Discussions being better for structured Q&A/feature debate |
+| ⚪ 4 | **Contributor recognition in README** (simple contributors section or an all-contributors-style bot) | 2 | 2 | Cheap goodwill/retention mechanism once external PRs start landing; sequence after CONTRIBUTING.md and the good-first-issue pass above, not before |
+| ⚪ 3 | **Post-launch release newsletter / mailing list** (distinct from the already-backlogged pre-launch Waitlist form) | 2 | 1 | Keeps existing self-hosters engaged across releases once there's an audience beyond the waitlist; low priority until the launch-surface items above it actually ship |
 
 
 
