@@ -141,6 +141,10 @@ Generated + curated across repeated search→generate→compare→update→organ
 
 **Scoring:** `Impact` = effect on revenue/conversion/retention/credibility (1–5). `Polish` = how much it raises the app's perceived quality/professionalism (1–5). `Tier` = 🔴 P0 (score 9–10, do soon) · 🟠 P1 (7–8) · 🟡 P2 (5–6) · ⚪ P3 (≤4, opportunistic/nice-to-have). Score = Impact + Polish. Items are de-duped against the sections above — if it's already tracked there, it's not repeated here.
 
+### Executive summary (18-cycle pass, 2026-07-25)
+
+107 scored ideas across 17 generation cycles (growth/monetization, UX/a11y, reliability, AI differentiation, hosting ops, per-module polish, i18n/compliance, technical debt, docs/dev-experience, community, security-as-business, mobile, pricing/packaging, activation funnel, internal analytics) plus this synthesis pass. **The clearest cross-cutting theme**: several of the highest-leverage findings weren't "build a new feature" ideas at all, but gaps a working codebase quietly accumulates — zero accessibility support, zero frontend/E2E test coverage, zero centralized error monitoring, zero outbound email capability anywhere, an API reference covering only 39% of actual endpoints, and four independently hand-rolled implementations of the same access-control logic that keep reproducing the same bug class. None of these were previously flagged anywhere in the project's docs. **Two items were concrete enough to act on directly rather than leave speculative**: a real currency-aggregation bug in Finance net worth (now logged under Now) and a stale "issue templates" checklist entry (already shipped, now corrected). See "Start here" below for the sequenced P0 list, and each cycle's table for full detail — everything here is unvetted and waits on owner triage.
+
 ### Start here — 🔴 P0 items across all cycles (synthesis pass, cycle 7)
 
 Every score-9 idea generated so far, in one place, roughly sequenced by dependency:
@@ -157,7 +161,7 @@ Every score-9 idea generated so far, in one place, roughly sequenced by dependen
 
 **Second-tier (🟠 P1, score 7–8) worth a fast skim**, grouped by what they'd unblock: revenue — referral program, LogCoreOS-vs-competitors comparison page, feature-gate design ahead of Stripe; polish — empty states per module, command palette, bulk actions, trash/undo; trust — public status page, backup-restore drill, frontend CI gate; AI differentiation — cross-module proactive suggestions (surfaces already-built linking data), AI usage transparency for end users; hosting ops — tenant onboarding SOP, support intake; architecture — consolidating the four duplicate access-resolution implementations, splitting `agent_service.py`; docs — closing the 39%-covered API-doc gap. Full detail and rationale for every item is in its cycle's table below.
 
-**Backlog size after 11 cycles:** 78 scored ideas across 11 themed passes, plus 2 concrete findings actioned directly (not left as speculative ideas): the `finance_reports.net_worth()` currency-aggregation bug logged under Now, and a stale "GitHub issue templates" checklist item corrected in Launch Surface. Zero duplicate ideas found on a cross-cycle scan (2026-07-25).
+**Backlog size after 17 cycles:** 107 scored ideas across 17 themed passes (see the Executive Summary above), plus 2 concrete findings actioned directly (not left as speculative ideas): the `finance_reports.net_worth()` currency-aggregation bug logged under Now, and a stale "GitHub issue templates" checklist item corrected in Launch Surface. Zero duplicate ideas found on cross-cycle scans (2026-07-25).
 
 ### Cycle 1 — Growth & Monetization (2026-07-25)
 
