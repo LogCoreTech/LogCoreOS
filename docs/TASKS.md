@@ -140,6 +140,20 @@ Generated + curated across repeated search→generate→compare→update→organ
 
 **Scoring:** `Impact` = effect on revenue/conversion/retention/credibility (1–5). `Polish` = how much it raises the app's perceived quality/professionalism (1–5). `Tier` = 🔴 P0 (score 9–10, do soon) · 🟠 P1 (7–8) · 🟡 P2 (5–6) · ⚪ P3 (≤4, opportunistic/nice-to-have). Score = Impact + Polish. Items are de-duped against the sections above — if it's already tracked there, it's not repeated here.
 
+### Start here — 🔴 P0 items across all cycles (synthesis pass, cycle 7)
+
+Every score-9 idea generated so far, in one place, roughly sequenced by dependency:
+
+1. **Accessibility (a11y) pass** (Cycle 2) — genuinely absent from the entire prior backlog; also the one item here with real legal-exposure downside if skipped once managed hosting has paying customers
+2. **Automated E2E test suite (Playwright)** (Cycle 3) — zero frontend/integration coverage today; every recent UI bug in the Done log was owner-found by hand
+3. **Structured error monitoring (Sentry/GlitchTip)** (Cycle 3) — no centralized error visibility exists; same "owner finds it by hand" gap as #2, for runtime errors instead of regressions
+4. **Self-serve pricing page + tier comparison** (Cycle 1) — blocks demo→paid conversion; no page exists to sell against once Stripe billing lands
+5. **In-app self-hosted → managed-hosting upsell** (Cycle 1) — zero-cost distribution to the best-qualified lead pool (people already successfully running the app)
+6. **AI change-log / "what the AI did while I was away" digest** (Cycle 4) — the transparency feature that's unique to an AI-native life OS; nothing else on this list is a product differentiator rather than table-stakes
+7. **Multi-tenant admin console for managed hosting** (Cycle 5) — manual per-instance tracking (a spreadsheet + a private repo) stops scaling at roughly the next tenant or two
+
+**Suggested sequencing logic:** #1–#3 are foundational risk-reduction (do before scaling paying customers or an OSS community launch); #4–#5 are the cheapest real revenue levers available right now; #6 is the highest-leverage differentiation feature; #7 becomes urgent the moment tenant count grows past what's manually trackable. None of this overrides owner priorities in the sections above — it's a lens, not a directive.
+
 ### Cycle 1 — Growth & Monetization (2026-07-25)
 
 | Tier | Idea | Impact | Polish | Why |
