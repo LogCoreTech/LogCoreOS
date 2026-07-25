@@ -155,6 +155,10 @@ Every score-9 idea generated so far, in one place, roughly sequenced by dependen
 
 **Suggested sequencing logic:** #1–#3 are foundational risk-reduction (do before scaling paying customers or an OSS community launch); #4–#5 are the cheapest real revenue levers available right now; #6 is the highest-leverage differentiation feature; #7 becomes urgent the moment tenant count grows past what's manually trackable. None of this overrides owner priorities in the sections above — it's a lens, not a directive.
 
+**Second-tier (🟠 P1, score 7–8) worth a fast skim**, grouped by what they'd unblock: revenue — referral program, LogCoreOS-vs-competitors comparison page, feature-gate design ahead of Stripe; polish — empty states per module, command palette, bulk actions, trash/undo; trust — public status page, backup-restore drill, frontend CI gate; AI differentiation — cross-module proactive suggestions (surfaces already-built linking data), AI usage transparency for end users; hosting ops — tenant onboarding SOP, support intake; architecture — consolidating the four duplicate access-resolution implementations, splitting `agent_service.py`; docs — closing the 39%-covered API-doc gap. Full detail and rationale for every item is in its cycle's table below.
+
+**Backlog size after 11 cycles:** 78 scored ideas across 11 themed passes, plus 2 concrete findings actioned directly (not left as speculative ideas): the `finance_reports.net_worth()` currency-aggregation bug logged under Now, and a stale "GitHub issue templates" checklist item corrected in Launch Surface. Zero duplicate ideas found on a cross-cycle scan (2026-07-25).
+
 ### Cycle 1 — Growth & Monetization (2026-07-25)
 
 | Tier | Idea | Impact | Polish | Why |
