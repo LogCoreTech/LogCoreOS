@@ -639,6 +639,14 @@ Read `Login.jsx` and grepped `routers/auth.py` for any password-change endpoint.
 |---|---|---|---|---|
 | 🟡 5 | **User avatar/profile picture** (upload a photo, or a simple auto-generated initials/color avatar as the default) | 2 | 3 | A purely visual addition, but it compounds across every place a user is referenced — sidebar, comment attribution, assigned-task badges, notification sender — and the app's own background-upload feature already proves the image-upload plumbing exists to reuse |
 
+### Cycle 48 — Safety: No "Sign Out of All Other Devices"
+
+Closes the Profile/Settings/Login/Setup sweep. Settings has a "Session Length" configuration (how long a login lasts) but no "active devices" list and no "sign out everywhere" action — despite the JWT JTI-revocation mechanism (already used for normal logout) being exactly the right primitive to revoke every outstanding session for a user in one action.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟠 7 | **"Sign out of all other devices/sessions" button in Settings** | 3 | 4 | This closes a genuinely broken account-recovery loop found across this sweep: a user who suspects compromise today can't change their password (Cycle 44), can't delete their account and start fresh (Cycle 46), and can't even revoke the suspect session directly (this item) — every self-service security lever a user would reach for in that moment is missing, and this is the cheapest of the three to build since the JTI-blacklist mechanism it needs already exists and is already exercised by normal logout |
+
 
 
 - [x] **Atomic release-pinned updates (owner decision, 2026-07-20)** — `update.sh` previously installed the tip of `origin/master`, so commits pushed after a release tag (including partial work toward the next release) silently shipped to any instance that updated, while `installed_version.json` still reported the release's number — different instances could run different code under the same version. Now the updater asks the GitHub API for the latest published release (`releases/latest`, repo derived fork-preservingly from the origin remote) and fetches/fast-forwards to exactly the commit that tag points at; new `tag-failed` status when the tag can't be determined; `merge-base --is-ancestor` guard means an instance ahead of the release (old edge behavior) is treated as up-to-date, never downgraded; `UPDATE_CHANNEL=edge` in `docker/.env` restores master-tip tracking for dev boxes. Signed-update verification (`UPDATE_REQUIRE_SIGNATURE`) now aligns naturally with release tags. 9-test simulated suite green (fetch failure, restamp self-heal, HTTPS fallback, tag-failed abort, repo-path derivation, no-downgrade); tag extraction validated against the live GitHub API. Consequence for workflow: publishing the GitHub release is now both the deploy trigger AND the content selector — the tagged commit must be ship-ready, master between releases need not be
