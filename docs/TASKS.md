@@ -556,6 +556,14 @@ Task assignment already exists for Household (admin assigns a shared task to a n
 |---|---|---|---|---|
 | 🟡 5 | **Auto-rotating chore assignment** (a recurring household task cycles to the next member in a defined rotation each time it recurs, instead of staying pinned to one person) | 3 | 2 | Fair chore-splitting is one of the most concrete, recurring reasons a family would adopt a shared household tool at all — today achieving that requires an admin to manually reassign the same recurring task every cycle, which nobody actually keeps up with in practice |
 
+### Cycle 38 — UI Improvement: Calendar Agenda/List View
+
+Closes the Calendar/Household/Team sweep. `grep` for `agenda`/`list view`/`viewMode` in `Calendar.jsx` found nothing — the month grid (`CalendarGrid.jsx`) is the only way to view events and dated tasks.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 5 | **Agenda/list view toggle for Calendar** (a scrollable chronological list of upcoming events + dated tasks, alongside the existing month grid) | 3 | 3 | A month grid is genuinely hard to use on a phone screen — cells are tiny and multi-day/task-pill crowding is already a known constraint (see the multi-day-event backlog item); a simple linear list is often the more usable *default* on mobile, which is where most of this app's real-world usage happens |
+
 
 
 - [x] **Atomic release-pinned updates (owner decision, 2026-07-20)** — `update.sh` previously installed the tip of `origin/master`, so commits pushed after a release tag (including partial work toward the next release) silently shipped to any instance that updated, while `installed_version.json` still reported the release's number — different instances could run different code under the same version. Now the updater asks the GitHub API for the latest published release (`releases/latest`, repo derived fork-preservingly from the origin remote) and fetches/fast-forwards to exactly the commit that tag points at; new `tag-failed` status when the tag can't be determined; `merge-base --is-ancestor` guard means an instance ahead of the release (old edge behavior) is treated as up-to-date, never downgraded; `UPDATE_CHANNEL=edge` in `docker/.env` restores master-tip tracking for dev boxes. Signed-update verification (`UPDATE_REQUIRE_SIGNATURE`) now aligns naturally with release tags. 9-test simulated suite green (fetch failure, restamp self-heal, HTTPS fallback, tag-failed abort, repo-path derivation, no-downgrade); tag extraction validated against the live GitHub API. Consequence for workflow: publishing the GitHub release is now both the deploy trigger AND the content selector — the tagged commit must be ship-ready, master between releases need not be
