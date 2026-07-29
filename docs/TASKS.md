@@ -585,6 +585,30 @@ Read the deal-stage code in `Contacts.jsx`: stage changes go through a plain `<s
 
 Closes Sweep M. Verified two things already work well and don't need fixing: `Calendar.jsx` has a working "Today" jump button (`goToday()`), and `Automations.jsx`'s execution log already shows per-run success/failure status with colored badges (the *proactive alerting* gap on top of that data is already captured in Cycle 22 — not repeated here).
 
+### Cycle 91 — Docs Accuracy: `brain.py` Is Not Admin-Only, and Only Ever Touches `.md` Files
+
+Read `routers/brain.py` in full to verify the Cycle-42 finding above (which turned out to be wrong — corrected there). Two things confirmed here: (1) every endpoint uses plain `get_current_user`, not `require_admin` — despite both `docs/AGENTS.md` and `docs/MAP.md` describing this router as "admin-only writes." In practice any authenticated user can read/write their *own* `.md` files (correctly scoped via `_resolve()`'s `target.relative_to(base)` check) — this looks like intentional self-service behavior for a normal user-facing nav page (`Brain.jsx`, not wrapped in `<AdminOnly>`), with the docs simply stale. (2) `_resolve()` explicitly rejects anything not ending in `.md` — `.json` files were never reachable here, which is what made the Cycle-42 finding wrong.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| ⚪ 3 | **Fix the stale "admin-only writes" description of `brain.py` in `docs/AGENTS.md` and `docs/MAP.md`** (or restrict it to admin if that was actually the intent and the current self-service behavior is the bug) | 1 | 2 | A conflict between documented and actual behavior for a file-write endpoint is worth resolving explicitly either way — either the docs are wrong (cheap fix) or the code is more permissive than intended (bigger question), and right now nobody has decided which |
+
+### Cycle 92 — Safety: Deleting a Custom Feature Role Doesn't Check Who's Using It
+
+Read `routers/features.py`'s `delete_role` (line 87): it removes the role from `_system/features.json` without checking whether any user currently has that `feature_role` assigned. Per `docs/AGENTS.md`, `member` is "the internal fallback when a feature role goes missing" — so deleting a restrictive custom role (e.g. a "cleaner" role with almost every module disabled) silently falls those users back to `member`, which is typically a **more** permissive default, not less. The admin gets no warning that anyone is affected.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟠 7 | **Warn (or block) deleting a feature role that's still assigned to users**, showing who's affected before confirming | 3 | 3 | This is a real, silent privilege-escalation path: an admin cleaning up an unused-looking role can inadvertently grant broader access to real accounts (a cleaner, a nanny, a guest) with zero indication anything changed — exactly the kind of consequence a deletion confirmation should surface before it happens |
+
+### Cycle 93 — Safety: Physical-Security Home Assistant Actions Have No Backend-Level Distinction
+
+Read `routers/home.py`'s `call_entity_service` (line 88): gated only by `_require_home` (any user with the Home module enabled) — no special check for `lock`/`cover` (garage) domains vs. `light`/`switch`. This confirms and sharpens Cycle 52/23: the frontend's `window.confirm()` before unlocking a door is **entirely client-side** — a direct API call (or a compromised browser context, or the AI's `control_home_device` tool in Auto mode) bypasses it completely, because the backend treats "unlock the front door" and "turn on a light" as identically privileged actions.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 6 | **Add a server-side confirmation/step-up requirement for physical-security-relevant HA domains** (`lock`, `cover`), not just a frontend `confirm()` | 3 | 3 | Directly strengthens the Cycle-52 recommendation with the specific mechanism: since the client-side confirm is trivially bypassable by anything that talks to the API directly, the real fix has to live in `routers/home.py`, not just the React component |
+
 
 ### Cycle 29 — Convenience: Task Creation Friction (Dashboard + Tasks deep read)
 
@@ -697,13 +721,13 @@ Read `notes_service.py:update_note` — no version stamp, ETag, or any conflict 
 |---|---|---|---|---|
 | 🟡 6 | **Basic conflict detection on Notes save** (send the content hash/timestamp the editor loaded; if the stored file has changed since, warn before overwriting instead of silently replacing it) | 3 | 3 | This is specifically a data-loss risk, not just a UX rough edge — a user editing the same shopping list from their phone in the kitchen and their laptop at the same time will lose one set of edits with zero indication anything went wrong. A minimal version-check (compare a stored hash, not a full CRDT/merge system) closes the silent-loss case cheaply |
 
-### Cycle 42 — Safety: No JSON Validation in the Raw Brain File Editor
+### Cycle 42 — ~~Safety: No JSON Validation in the Raw Brain File Editor~~ (CORRECTED in Cycle 91 — see below)
 
-Read `Brain.jsx` — it's a raw markdown/JSON file browser+editor (writes admin-only per `docs/MAP.md`). `grep` for `JSON.parse`/`validate` found nothing: saving a `.json` file (e.g. `Tasks/tasks.json`, `profile.json`) through this editor does **no syntax or schema validation** before writing. A single missing comma or stray bracket, saved through this power-user page, would corrupt the file the normal app UI depends on — potentially breaking that user's Tasks page or scheduler processing until someone manually fixes the raw file.
+~~Read `Brain.jsx` — it's a raw markdown/JSON file browser+editor (writes admin-only per `docs/MAP.md`). `grep` for `JSON.parse`/`validate` found nothing: saving a `.json` file (e.g. `Tasks/tasks.json`, `profile.json`) through this editor does no syntax or schema validation before writing. A single missing comma or stray bracket, saved through this power-user page, would corrupt the file the normal app UI depends on.~~ **Correction (Cycle 91):** the backend router `routers/brain.py` explicitly rejects any path not ending in `.md` (`_resolve()`: `"Only .md files are accessible"`) — `.json` files are never reachable through this endpoint at all, so the JSON-corruption risk described here does not exist. Frontend-only inspection missed this backend guard; see Cycle 91 for the corrected finding and what actually needed flagging.
 
 | Tier | Idea | Impact | Polish | Why |
 |---|---|---|---|---|
-| 🟡 5 | **Client-side JSON.parse validation before save in the Brain editor**, with a clear inline error instead of a silent write of broken JSON | 2 | 3 | Cheap (a try/catch around `JSON.parse` before the save call) and closes a real self-inflicted-corruption path for the one page in the app explicitly designed to let a user/admin bypass all the normal validated write paths |
+| ~~🟡 5~~ | ~~Client-side JSON.parse validation before save in the Brain editor~~ | — | — | **WITHDRAWN (Cycle 91):** premise was wrong — `.json` files are never reachable via `routers/brain.py` (`.md`-only, enforced server-side), so there is no JSON-corruption path to protect against here |
 
 ### Cycle 43 — New Feature: Note Templates
 
