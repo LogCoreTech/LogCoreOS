@@ -629,6 +629,30 @@ Read `web_search_service.py`: every research-mode call hits the Tavily API fresh
 
 Closes Sweep O. Read `priority_service.py` (Python's stable sort means Top-3 tie-breaking is deterministic, not flickering — fine as-is), `ha_service.py` (HA API calls already have sane 15s timeouts), `hosting_service.py` (clean runtime-override pattern, no issue), and `whats_new_service.py`/`help_service.py` (both solid; the one real open question there — the boot+180s catch-up race — is already tracked as a live CHECK item in the Now section, not repeated here).
 
+### Cycle 97 — Performance: Zero Code-Splitting — All 21 Pages Ship in One Bundle
+
+Read `App.jsx`: all 21 pages are static top-level imports, `grep` for `lazy(` found zero matches. Checked `vite.config.js`: no `rollupOptions.output.manualChunks` either — plain default build. Every user downloads and parses the entire app (Finance's many sub-panels, Assets, Contacts, Automations, everything) on first load, regardless of which modules they actually have enabled or use.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 6 | **Route-level code-splitting via `React.lazy()`** for each page | 3 | 3 | A mechanical, well-understood optimization (React's own built-in pattern, no new dependency) that directly improves first-load time — especially relevant on mobile, the app's primary target device, and for users who only have a handful of modules enabled and are still downloading code for all 21 |
+
+### Cycle 98 — Performance: No List Virtualization Anywhere
+
+`grep` for `react-window`/`react-virtual` in `package.json` found nothing. Every list in the app (Tasks, Finance transactions, Notes tree, Contacts) renders every item as a real DOM node regardless of count.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 5 | **Virtualize the highest-volume lists first** (Finance transactions, Notes tree) using a lightweight library (`react-window` or similar) | 3 | 2 | Fine today at typical household data volumes, but the app's own core pitch is "years of accumulated life data" — a Finance book with several years of transaction history, or a long-running Tasks history, is exactly the scenario this app is built to reward staying with, and unwindowed rendering only becomes visibly bad well after a user is already invested, which is the worst time to discover it |
+
+### Cycle 99 — DX: No Bundle-Size Visibility in CI
+
+Closes Sweep P. There's no bundle-size check/report in the CI pipeline (per the existing Cycle-3 finding that CI's frontend coverage itself is unconfirmed) — nothing would catch a dependency or feature silently doubling the shipped JS size over time.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| ⚪ 4 | **Report bundle size on every PR** (a simple `vite build` size diff comment, or a budget that fails CI past a threshold) | 2 | 2 | Cheap insurance against silent bloat — pairs naturally with the code-splitting and virtualization work above by making their impact (and any future regression) visible instead of assumed |
+
 
 ### Cycle 29 — Convenience: Task Creation Friction (Dashboard + Tasks deep read)
 
