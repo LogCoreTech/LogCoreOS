@@ -495,6 +495,49 @@ Ran across 10 sweeps, each reading the actual page/service code rather than brai
 
 Everything in both Idea Backlog sections remains unvetted and awaits owner triage — nothing here overrides the active priorities in the sections above.
 
+## Idea Backlog III — Extended Deep-Dive Pass (requested 500 cycles; continuing as far as genuine, non-duplicate, code-grounded material allows — see Cycle 78's note and the final status report at the end of this section)
+
+### Cycle 79 — Finance: Recurring Bills Have No Per-Occurrence Skip
+
+Read `RecurringPanel.jsx` in full: a recurring bill's only actions are Pause/Resume (stops tracking entirely), Edit, and Delete — no way to skip a single upcoming occurrence while keeping the rule active (e.g., a gym membership on a one-month promotional pause, or a bill that's genuinely not due this one cycle).
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| ⚪ 4 | **"Skip this occurrence" on a recurring bill** (advances `next_due` without pausing the whole rule) | 2 | 2 | Pausing is the only current option for a one-off exception, but it stops missed-bill detection entirely until manually resumed — a real gap between "skip once" and "stop tracking indefinitely" |
+
+### Cycle 80 — Finance: Reports Have No Trend/Comparison View
+
+Read `ReportsPanel.jsx`: `grep` for `compare`/`previous`/`trend`/`chart` found nothing. P&L and tax reports show raw period totals only, no "vs. last month/quarter/year" comparison and no visualization.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 5 | **Period-over-period comparison + a simple trend chart in Reports** | 3 | 3 | A number in isolation ("$4,200 this month") is far less useful than the same number with direction ("up $600 from last month") — this is standard for any financial reporting view and currently entirely absent |
+
+### Cycle 81 — Finance: No Manual "Sync Now" for Bank Connections
+
+Read `SimpleFinPanel.jsx`: `last_sync`/`last_error` are surfaced well, but there's no on-demand sync trigger — `grep` for `sync now`/`manual sync` found nothing. Users wait for the boot+2min/every-12h scheduled job.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 5 | **Manual "Sync now" button on the bank connection panel** | 2 | 3 | After making a purchase, or after fixing a sync error, a user has no way to force a fresh pull rather than waiting up to 12 hours — a small, obviously-expected control for anything with a sync status display |
+
+### Cycle 82 — Finance: No Category Rename — Only Destructive Delete-and-Recreate
+
+Read `BookSettings.jsx`: `grep` for `rename`/`merge` on categories found nothing. Per `docs/MEMORY.md`, deleting a category relabels all its transactions to `""` (uncategorized) — meaning the only way to fix a typo in a category name today is to destroy every transaction's categorization and start over.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 5 | **Category rename** (updates the label in place, all existing transactions keep their categorization) | 2 | 3 | A one-character typo fix currently costs re-categorizing every transaction that used the old name — a disproportionate consequence for what should be a trivial edit |
+
+### Cycle 83 — Finance: No Recurring/Subscription Invoice Generation
+
+Closes Sweep K. `grep` for `recurring invoice`/`subscription` in `InvoicesPanel.jsx` found nothing — Recurring Bills covers expenses/income, but a business issuing the same invoice every month to a retainer client has no auto-generation equivalent on the invoicing side.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 5 | **Recurring/subscription invoices** (auto-draft or auto-send the same invoice on a schedule to a retainer client) | 3 | 2 | A natural extension of the Recurring Bills pattern that already exists for the expense side — retainer/subscription billing is a common real business model this module doesn't yet support without manual monthly re-entry |
+
+
 ### Cycle 29 — Convenience: Task Creation Friction (Dashboard + Tasks deep read)
 
 Read `Dashboard.jsx` and `Tasks.jsx` in full. Confirmed there is **no lightweight quick-add anywhere in the app** — creating a task, from the Dashboard or the Tasks page, always opens the full `TaskModal` (title, category, type, recurrence, due date/time, assigned-to, linked asset). There's no "type a title, hit Enter" fast path, unlike Todoist/Things-style task managers this competes with for the same use case.
