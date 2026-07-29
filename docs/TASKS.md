@@ -531,6 +531,15 @@ Read `EventModal.jsx` and `events_service.py`; `grep` for `recurring`/`rrule` in
 |---|---|---|---|---|
 | 🟠 7 | **Recurring calendar events** (weekly/monthly/yearly patterns, distinct from the already-backlogged multi-day-*span* event schema gap) | 3 | 4 | A genuinely fundamental calendar-app capability that's simply absent today; every competitor calendar (Google, Apple, even a paper wall calendar) supports this, and its absence is the kind of gap a new user notices in their first five minutes of trying to use Calendar seriously |
 
+### Cycle 35 — Convenience: Event Reminders & Location
+
+`EventModal.jsx`'s form fields are title/dates/times/all-day/color/notes only — no reminder lead-time and no location field, despite the app already having a full push-notification pipeline (ntfy + Web Push) that event reminders could plug straight into.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 6 | **Event reminder lead-time** ("notify me 30 min / 1 hour / 1 day before") | 3 | 3 | The notification delivery pipeline already exists end-to-end (ntfy + Web Push, used for task/suggestion alerts) — this is wiring an existing capability to a new trigger, not new infrastructure, and it's a core expectation for any calendar |
+| ⚪ 4 | **Optional location field on events** (plain text, maybe with a map-link auto-generation from the text) | 2 | 2 | Small, cheap addition; useful context ("where") that's currently only expressible by cramming it into the free-text notes field |
+
 
 
 - [x] **Atomic release-pinned updates (owner decision, 2026-07-20)** — `update.sh` previously installed the tip of `origin/master`, so commits pushed after a release tag (including partial work toward the next release) silently shipped to any instance that updated, while `installed_version.json` still reported the release's number — different instances could run different code under the same version. Now the updater asks the GitHub API for the latest published release (`releases/latest`, repo derived fork-preservingly from the origin remote) and fetches/fast-forwards to exactly the commit that tag points at; new `tag-failed` status when the tag can't be determined; `merge-base --is-ancestor` guard means an instance ahead of the release (old edge behavior) is treated as up-to-date, never downgraded; `UPDATE_CHANNEL=edge` in `docker/.env` restores master-tip tracking for dev boxes. Signed-update verification (`UPDATE_REQUIRE_SIGNATURE`) now aligns naturally with release tags. 9-test simulated suite green (fetch failure, restamp self-heal, HTTPS fallback, tag-failed abort, repo-path derivation, no-downgrade); tag extraction validated against the live GitHub API. Consequence for workflow: publishing the GitHub release is now both the deploy trigger AND the content selector — the tagged commit must be ship-ready, master between releases need not be
