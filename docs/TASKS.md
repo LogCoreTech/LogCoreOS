@@ -864,6 +864,14 @@ Read `Tasks.jsx`'s category-priority reorder modal: `onDragStart`/`onDragOver`/`
 |---|---|---|---|---|
 | 🟡 5 | **Only auto-scroll when the user is already at (or near) the bottom** — otherwise show a small "↓ New messages" pill instead of forcibly scrolling | 2 | 3 | A well-known, well-solved pattern in essentially every modern chat app (Slack, Discord, ChatGPT) for exactly this reason — the current behavior actively punishes trying to read back through a response while it's still streaming |
 
+### Cycle 77 — UI/Accessibility: Priority Indicators Are Color-Only
+
+`Dashboard.jsx`'s `priorityDot()` renders task priority as a plain colored circle only — red/yellow/gray for High/Medium/Low, no text, label, icon, or pattern distinguishing them. This is the same everywhere the priority dot is reused (Tasks, Household, Team task cards).
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 5 | **Add a non-color signal to priority indicators** (a tooltip/`title` at minimum, or a shape/fill difference) alongside the existing color dot | 2 | 3 | A concrete, easy starting point for the broader Cycle-2 accessibility pass — color-only status is a textbook WCAG failure (color-blind users can't distinguish red from the gray/green family reliably) and it's a five-minute `title="High priority"` fix per instance while the larger a11y audit is still unscoped |
+
 
 
 - [x] **Atomic release-pinned updates (owner decision, 2026-07-20)** — `update.sh` previously installed the tip of `origin/master`, so commits pushed after a release tag (including partial work toward the next release) silently shipped to any instance that updated, while `installed_version.json` still reported the release's number — different instances could run different code under the same version. Now the updater asks the GitHub API for the latest published release (`releases/latest`, repo derived fork-preservingly from the origin remote) and fetches/fast-forwards to exactly the commit that tag points at; new `tag-failed` status when the tag can't be determined; `merge-base --is-ancestor` guard means an instance ahead of the release (old edge behavior) is treated as up-to-date, never downgraded; `UPDATE_CHANNEL=edge` in `docker/.env` restores master-tip tracking for dev boxes. Signed-update verification (`UPDATE_REQUIRE_SIGNATURE`) now aligns naturally with release tags. 9-test simulated suite green (fetch failure, restamp self-heal, HTTPS fallback, tag-failed abort, repo-path derivation, no-downgrade); tag extraction validated against the live GitHub API. Consequence for workflow: publishing the GitHub release is now both the deploy trigger AND the content selector — the tagged commit must be ship-ready, master between releases need not be
