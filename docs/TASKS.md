@@ -719,6 +719,14 @@ Confirmed in `Tasks.jsx`: `const [filter, setFilter] = useState('pending')` — 
 |---|---|---|---|---|
 | 🟡 5 | **Plain "Duplicate" action on Tasks/Events/Transactions** (opens a pre-filled create form from an existing item, not an AI feature — just a copy) | 2 | 3 | A simple, direct UI action distinct from the speculative Assets AI-clone idea — genuinely common patterns ("same meeting next week but a different topic," "same trip expense category again") are currently full re-entry every time |
 
+### Cycle 58 — Cross-Cutting Convenience: No "Save & Add Another"
+
+Closes the convenience sweep. `grep` for `saveAndNew`/`keepOpen`/"Save & Another" across `components/` found nothing — every create modal closes on save, full stop. Entering several items in a row (a week's worth of calendar events, a batch of transactions, several tasks for a project) means reopening the modal from scratch each time.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 5 | **"Save & add another" option on create modals** (saves the current item and immediately reopens a blank form, optionally carrying forward shared fields like date/category) | 2 | 3 | A well-known productivity pattern (Airtable, Google Forms, most admin CRUD UIs) for exactly the batch-entry moments this app's data model invites — planning a week of household events, or logging several receipts at once — that today cost a full modal open/close cycle per item |
+
 
 
 - [x] **Atomic release-pinned updates (owner decision, 2026-07-20)** — `update.sh` previously installed the tip of `origin/master`, so commits pushed after a release tag (including partial work toward the next release) silently shipped to any instance that updated, while `installed_version.json` still reported the release's number — different instances could run different code under the same version. Now the updater asks the GitHub API for the latest published release (`releases/latest`, repo derived fork-preservingly from the origin remote) and fetches/fast-forwards to exactly the commit that tag points at; new `tag-failed` status when the tag can't be determined; `merge-base --is-ancestor` guard means an instance ahead of the release (old edge behavior) is treated as up-to-date, never downgraded; `UPDATE_CHANNEL=edge` in `docker/.env` restores master-tip tracking for dev boxes. Signed-update verification (`UPDATE_REQUIRE_SIGNATURE`) now aligns naturally with release tags. 9-test simulated suite green (fetch failure, restamp self-heal, HTTPS fallback, tag-failed abort, repo-path derivation, no-downgrade); tag extraction validated against the live GitHub API. Consequence for workflow: publishing the GitHub release is now both the deploy trigger AND the content selector — the tagged commit must be ship-ready, master between releases need not be
