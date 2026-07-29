@@ -598,6 +598,14 @@ Read `Brain.jsx` — it's a raw markdown/JSON file browser+editor (writes admin-
 |---|---|---|---|---|
 | 🟡 5 | **Client-side JSON.parse validation before save in the Brain editor**, with a clear inline error instead of a silent write of broken JSON | 2 | 3 | Cheap (a try/catch around `JSON.parse` before the save call) and closes a real self-inflicted-corruption path for the one page in the app explicitly designed to let a user/admin bypass all the normal validated write paths |
 
+### Cycle 43 — New Feature: Note Templates
+
+Closes the Notes/Journal/Brain sweep. A new note always starts blank — there's no way to save a reusable starting structure (a meeting-notes layout, a recipe format, a packing checklist) the way the Assets module already does with its admin-curated Templates.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 5 | **Note templates** (save any note as a reusable starting-point template; "New note from template" alongside plain "New note") | 3 | 3 | Notes is the one content-heavy module without any templating concept, despite Assets already proving the pattern works well in this codebase; recurring note shapes (meeting notes, recipes, trip-packing lists) are extremely common and currently mean retyping the same structure every time |
+
 
 
 - [x] **Atomic release-pinned updates (owner decision, 2026-07-20)** — `update.sh` previously installed the tip of `origin/master`, so commits pushed after a release tag (including partial work toward the next release) silently shipped to any instance that updated, while `installed_version.json` still reported the release's number — different instances could run different code under the same version. Now the updater asks the GitHub API for the latest published release (`releases/latest`, repo derived fork-preservingly from the origin remote) and fetches/fast-forwards to exactly the commit that tag points at; new `tag-failed` status when the tag can't be determined; `merge-base --is-ancestor` guard means an instance ahead of the release (old edge behavior) is treated as up-to-date, never downgraded; `UPDATE_CHANNEL=edge` in `docker/.env` restores master-tip tracking for dev boxes. Signed-update verification (`UPDATE_REQUIRE_SIGNATURE`) now aligns naturally with release tags. 9-test simulated suite green (fetch failure, restamp self-heal, HTTPS fallback, tag-failed abort, repo-path derivation, no-downgrade); tag extraction validated against the live GitHub API. Consequence for workflow: publishing the GitHub release is now both the deploy trigger AND the content selector — the tagged commit must be ship-ready, master between releases need not be
