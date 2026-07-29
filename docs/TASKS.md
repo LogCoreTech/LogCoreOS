@@ -840,6 +840,14 @@ Closes the safety sweep. `grep` for `notify_user`/`add_notification` in `routers
 |---|---|---|---|---|
 | 🟡 5 | **Notify affected members when a shared household/team task or event they didn't create is deleted** (reusing the existing `notify_user()` pattern already proven in Assets/Finance) | 2 | 3 | Not a data-loss bug (the delete is intentional and authorized) — it's an awareness gap: the person who planned around that event has no way to know it's gone until they notice it missing, which erodes trust in the shared pool being a reliable source of truth for the household |
 
+### Cycle 74 — UI: No Shared Toast/Snackbar System Anywhere
+
+`glob` for `Toast*.jsx` across the whole frontend found nothing. Feedback for successful/failed actions is ad-hoc per page: some show inline red error text (Login, TaskModal), Notes has its own bespoke "Saving…/Saved ✓" label, and many actions (completing a task, saving Settings) give no transient confirmation at all beyond the UI state itself changing.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 6 | **A shared toast/snackbar component for success/error feedback**, adopted consistently instead of each page inventing its own pattern (or having none) | 2 | 4 | Small individually, but it's exactly the kind of consistency that separates an app that feels professionally finished from a collection of well-built-but-independent pages — and it gives every future feature a ready-made place to put "saved," "deleted," and error feedback instead of reinventing it again |
+
 
 
 - [x] **Atomic release-pinned updates (owner decision, 2026-07-20)** — `update.sh` previously installed the tip of `origin/master`, so commits pushed after a release tag (including partial work toward the next release) silently shipped to any instance that updated, while `installed_version.json` still reported the release's number — different instances could run different code under the same version. Now the updater asks the GitHub API for the latest published release (`releases/latest`, repo derived fork-preservingly from the origin remote) and fetches/fast-forwards to exactly the commit that tag points at; new `tag-failed` status when the tag can't be determined; `merge-base --is-ancestor` guard means an instance ahead of the release (old edge behavior) is treated as up-to-date, never downgraded; `UPDATE_CHANNEL=edge` in `docker/.env` restores master-tip tracking for dev boxes. Signed-update verification (`UPDATE_REQUIRE_SIGNATURE`) now aligns naturally with release tags. 9-test simulated suite green (fetch failure, restamp self-heal, HTTPS fallback, tag-failed abort, repo-path derivation, no-downgrade); tag extraction validated against the live GitHub API. Consequence for workflow: publishing the GitHub release is now both the deploy trigger AND the content selector — the tagged commit must be ship-ready, master between releases need not be
