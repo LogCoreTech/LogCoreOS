@@ -759,6 +759,14 @@ Connecting two separate findings: Cycle 30 established that `markDone`/`toggleDo
 |---|---|---|---|---|
 | 🟡 5 | **Validate the timezone field against a real IANA zone list** (a searchable dropdown/datalist instead of free text, or at minimum reject an unrecognized value with a clear error) | 3 | 2 | A mistyped timezone is invisible at entry time and only manifests later as "why are my tasks showing the wrong overdue time" — exactly the kind of silent-misconfiguration bug that's disproportionately hard to diagnose after the fact, worth closing at the source rather than only fixing the downstream comparison logic |
 
+### Cycle 63 — Friction Reduction: Denying an AI Plan Has No Inline Correction
+
+Closes the friction-reduction sweep. `Chat.jsx`'s `ApprovalCard` Deny button (line 406) sends a hardcoded `"No — don't make those changes."` with no way to tell the AI *what* was wrong or what to do instead — the user has to then type a fresh follow-up message from scratch to redirect it.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 5 | **Optional inline correction field on Deny** ("Deny" stays a one-click no-op as today, but an optional text box — "tell it what to change" — sends that as the follow-up instead of the generic hardcoded denial) | 2 | 3 | Right now denying a plan is a context-switch: close the moment, go retype a whole new message. Letting the correction happen right where the decision was made keeps the interaction in flow, which matters for a chat-first interface where losing conversational momentum is a real cost |
+
 
 
 - [x] **Atomic release-pinned updates (owner decision, 2026-07-20)** — `update.sh` previously installed the tip of `origin/master`, so commits pushed after a release tag (including partial work toward the next release) silently shipped to any instance that updated, while `installed_version.json` still reported the release's number — different instances could run different code under the same version. Now the updater asks the GitHub API for the latest published release (`releases/latest`, repo derived fork-preservingly from the origin remote) and fetches/fast-forwards to exactly the commit that tag points at; new `tag-failed` status when the tag can't be determined; `merge-base --is-ancestor` guard means an instance ahead of the release (old edge behavior) is treated as up-to-date, never downgraded; `UPDATE_CHANNEL=edge` in `docker/.env` restores master-tip tracking for dev boxes. Signed-update verification (`UPDATE_REQUIRE_SIGNATURE`) now aligns naturally with release tags. 9-test simulated suite green (fetch failure, restamp self-heal, HTTPS fallback, tag-failed abort, repo-path derivation, no-downgrade); tag extraction validated against the live GitHub API. Consequence for workflow: publishing the GitHub release is now both the deploy trigger AND the content selector — the tagged commit must be ship-ready, master between releases need not be
