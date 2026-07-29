@@ -711,6 +711,14 @@ Confirmed in `Tasks.jsx`: `const [filter, setFilter] = useState('pending')` — 
 |---|---|---|---|---|
 | 🟡 5 | **Persist list-view filter/sort choices** (localStorage or a URL query param, so leaving and returning to a page keeps the view as you left it) | 2 | 3 | Small per-instance annoyance that compounds with daily use — a user who always works from the "overdue" filter has to re-select it every single time they leave and come back to Tasks, which happens constantly in normal app usage (switching to Chat to ask something, then back) |
 
+### Cycle 57 — Cross-Cutting Convenience: No "Duplicate" Action Anywhere
+
+`grep` for `duplicate`/`clone` in `TaskModal.jsx` found nothing, and the pattern holds across the other item modals — creating a similar-but-not-identical item (another instance of a recurring-ish task, a near-copy of last year's holiday event, a repeat transaction) always means filling out a blank form from scratch. The only "clone" mentioned anywhere in the backlog is Assets-specific and bundled into a speculative AI-bulk-ops item.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 5 | **Plain "Duplicate" action on Tasks/Events/Transactions** (opens a pre-filled create form from an existing item, not an AI feature — just a copy) | 2 | 3 | A simple, direct UI action distinct from the speculative Assets AI-clone idea — genuinely common patterns ("same meeting next week but a different topic," "same trip expense category again") are currently full re-entry every time |
+
 
 
 - [x] **Atomic release-pinned updates (owner decision, 2026-07-20)** — `update.sh` previously installed the tip of `origin/master`, so commits pushed after a release tag (including partial work toward the next release) silently shipped to any instance that updated, while `installed_version.json` still reported the release's number — different instances could run different code under the same version. Now the updater asks the GitHub API for the latest published release (`releases/latest`, repo derived fork-preservingly from the origin remote) and fetches/fast-forwards to exactly the commit that tag points at; new `tag-failed` status when the tag can't be determined; `merge-base --is-ancestor` guard means an instance ahead of the release (old edge behavior) is treated as up-to-date, never downgraded; `UPDATE_CHANNEL=edge` in `docker/.env` restores master-tip tracking for dev boxes. Signed-update verification (`UPDATE_REQUIRE_SIGNATURE`) now aligns naturally with release tags. 9-test simulated suite green (fetch failure, restamp self-heal, HTTPS fallback, tag-failed abort, repo-path derivation, no-downgrade); tag extraction validated against the live GitHub API. Consequence for workflow: publishing the GitHub release is now both the deploy trigger AND the content selector — the tagged commit must be ship-ready, master between releases need not be
