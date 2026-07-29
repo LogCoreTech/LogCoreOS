@@ -735,6 +735,14 @@ Closes the convenience sweep. `grep` for `saveAndNew`/`keepOpen`/"Save & Another
 |---|---|---|---|---|
 | 🟠 7 | **Warn before discarding unsaved form changes** (a lightweight dirty-check on the shared modal wrapper — pairs naturally with the Cycle-54 Escape-to-close fix, since both touch the same close path) | 3 | 4 | A long Asset or Invoice form with many fields, lost to one accidental backdrop click with zero warning, is a genuinely bad moment for a new user's first impression — and it's systemic across every form in the app, not a one-off. Bundling with Cycle 54's shared modal-wrapper work is the efficient way to fix both at once |
 
+### Cycle 60 — Friction Reduction: No Breadcrumb When Drilling Into a Nested Asset
+
+Read `AssetView.jsx` — no breadcrumb or "back to parent" affordance. Per `docs/MEMORY.md`, drilling into a child asset re-targets the same modal (`key` forces a remount) — so once you've gone Subdivision → Parcel → Equipment, there's no visible trail back up; the only way out is closing the whole modal and re-navigating the tree from the top-level page.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 6 | **Breadcrumb trail in the Asset modal** (Subdivision ▸ Parcel ▸ Equipment, each segment clickable to jump back up) | 3 | 3 | Assets is explicitly built for arbitrarily nested trees — that's the whole point of the module — but the navigation UI for moving back *up* the tree once you've drilled down doesn't exist, forcing a full close-and-re-find for what should be a one-click "go up one level" |
+
 
 
 - [x] **Atomic release-pinned updates (owner decision, 2026-07-20)** — `update.sh` previously installed the tip of `origin/master`, so commits pushed after a release tag (including partial work toward the next release) silently shipped to any instance that updated, while `installed_version.json` still reported the release's number — different instances could run different code under the same version. Now the updater asks the GitHub API for the latest published release (`releases/latest`, repo derived fork-preservingly from the origin remote) and fetches/fast-forwards to exactly the commit that tag points at; new `tag-failed` status when the tag can't be determined; `merge-base --is-ancestor` guard means an instance ahead of the release (old edge behavior) is treated as up-to-date, never downgraded; `UPDATE_CHANNEL=edge` in `docker/.env` restores master-tip tracking for dev boxes. Signed-update verification (`UPDATE_REQUIRE_SIGNATURE`) now aligns naturally with release tags. 9-test simulated suite green (fetch failure, restamp self-heal, HTTPS fallback, tag-failed abort, repo-path derivation, no-downgrade); tag extraction validated against the live GitHub API. Consequence for workflow: publishing the GitHub release is now both the deploy trigger AND the content selector — the tagged commit must be ship-ready, master between releases need not be
