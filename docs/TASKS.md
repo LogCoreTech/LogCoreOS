@@ -144,7 +144,7 @@ Most audit findings were fixed this session (see `docs/Security-Audit-2026-07-19
 
 Generated across a systematic search→generate→compare→document pass over the whole codebase (pages, components, routers, services) — every item below is grounded in an actual code read, not brainstormed in the abstract. Everything here is **unvetted**: nothing moves to an active section above until the owner pulls it in. Organized purely by priority so triage is fast; module/theme is called out inline where useful. De-duped against every section above and cross-checked for internal duplicates.
 
-**Scoring:** `Impact` × `Polish` combine into a tier — 🔴 **P0** (do soon), 🟠 **P1**, 🟡 **P2**, ⚪ **P3** (opportunistic/nice-to-have). ~217 ideas total.
+**Scoring:** `Impact` × `Polish` combine into a tier — 🔴 **P0** (do soon), 🟠 **P1**, 🟡 **P2**, ⚪ **P3** (opportunistic/nice-to-have). 219 ideas total.
 
 ### 🔴 P0 — Do Soon
 
@@ -227,6 +227,7 @@ Generated across a systematic search→generate→compare→document pass over t
 - Onboarding sample data toggle ("load example tasks/notes/finance book to explore").
 - Add `CODE_OF_CONDUCT.md` (Contributor Covenant) — missing entirely, expected-by-default for OSS.
 - "Good first issue" labeling pass across the existing backlog.
+- CONTRIBUTING.md scope note documenting the AI tool-registry pattern in `agent_service.py` — the least self-explanatory, most-touched file for new contributors.
 - Self-hoster showcase / "who's running LogCoreOS" opt-in wall.
 - Real-time community channel (Discord or Matrix), distinct from async GitHub Discussions.
 - "Invite your household/team" prompt after first-user setup — nothing currently nudges an admin toward the multi-user differentiator.
@@ -269,6 +270,9 @@ Generated across a systematic search→generate→compare→document pass over t
 - Scoped/multiple automation tokens instead of one shared instance-wide credential.
 - Notify affected members when a shared household/team item they didn't create is deleted.
 - Automated prompt-injection red-team test suite for the AI tool registry.
+- Import dry-run preview — show exactly what the Todoist/Notion/Obsidian importer will create (counts, sample mapped items) before committing anything.
+- Automated Brain export/import round-trip test — export a seeded Brain, spin up a fresh instance, confirm it's actually usable; the portability promise is currently unverified.
+- Smart Home Auto-mode carve-out — require approval for unlock/garage-open actions even in Auto mode, as a permanent exception regardless of how the general Auto-mode fix lands.
 
 **AI & differentiation**
 - Local LLM quality/model-picker guidance once Ollama support ships.
@@ -319,6 +323,12 @@ Generated across a systematic search→generate→compare→document pass over t
 - Route-level code-splitting via `React.lazy()` — all 21 pages ship in one bundle today.
 - Virtualize the highest-volume lists (Finance transactions, Notes tree) — the app's own pitch is years of accumulated data, and nothing renders efficiently at that scale yet.
 - Add a non-color signal to priority indicators (tooltip at minimum) — currently color-only, a textbook WCAG failure.
+- Role-aware empty-state/Getting Started messaging for guest/restricted feature-role users, whose Dashboard can look nearly empty with no explanation.
+- Natural-language quick-add parsing ("Call dentist tomorrow 3pm" → title + due date auto-filled) once the inline quick-add input exists.
+- Optimistic UI for completion toggles — flip the checkbox instantly and roll back only on failure, instead of waiting on a full reload.
+- Context-aware destructive-action warnings in the shared ConfirmDialog (e.g. "You'll lose its 90-day streak") instead of generic delete-confirmation text.
+- "Today at a glance" Dashboard-header indicator — a small ring or "3/7 done today" stat next to the greeting, distinct from the weekly summary strip.
+- Smart chat auto-scroll — only auto-scroll when already at/near bottom; otherwise show a "↓ New messages" pill instead of forcing scroll during streaming.
 
 **i18n & compliance**
 - i18n framework foundation (react-i18next), even before translation itself is prioritized — no framework exists at all today.
@@ -399,6 +409,9 @@ Generated across a systematic search→generate→compare→document pass over t
 - Fix the stale "admin-only writes" description of `brain.py` in `docs/AGENTS.md`/`docs/MAP.md` — in practice it's correctly self-service (any user edits their own `.md` files only), the docs are just outdated.
 - Optional location field on calendar events.
 - "Focus mode" toggle on the Dashboard (collapse to just the Top-3 card).
+- Contributor recognition in README (contributors section or all-contributors-style bot) — sequence after CONTRIBUTING.md and the good-first-issue pass.
+- Post-launch release newsletter/mailing list, distinct from the pre-launch Waitlist form — keeps self-hosters engaged across releases.
+- "Forgot password? Ask your admin" login-page hint — interim messaging fix so a failed-login user gets guidance instead of a generic error.
 
 ---
 
