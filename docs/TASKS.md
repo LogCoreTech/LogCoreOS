@@ -475,6 +475,19 @@ Unlike prior cycles, the search step here was live web research (not codebase re
 | 🟡 5 | **Obsidian/editor plugin bridge for the Notes module** (query or sync the Brain from inside an existing note-taking tool) | 3 | 2 | A clever adoption wedge for people who already use Obsidian and aren't ready to fully migrate — Khoj ships exactly this; it lowers the switching cost that's otherwise a real barrier to trying LogCoreOS at all |
 | ⚪ 4 | **Multi-model side-by-side comparison in chat** (send one prompt, see responses from two configured models at once) | 2 | 3 | Open WebUI supports this; only meaningfully useful once the backlogged Ollama/multi-provider support ships (a single active model today has nothing to compare against), so sequence after that |
 
+## Idea Backlog II — Convenience, Friction, Stickiness, Safety, UI, New Features (50-cycle deeper pass, started 2026-07-25)
+
+Requested focus for this pass: convenience, friction reduction, user stickiness, safety, UI improvements, new features. Same scoring rubric and unvetted status as above. Cross-checked against all 146 existing ideas before adding anything new.
+
+### Cycle 29 — Convenience: Task Creation Friction (Dashboard + Tasks deep read)
+
+Read `Dashboard.jsx` and `Tasks.jsx` in full. Confirmed there is **no lightweight quick-add anywhere in the app** — creating a task, from the Dashboard or the Tasks page, always opens the full `TaskModal` (title, category, type, recurrence, due date/time, assigned-to, linked asset). There's no "type a title, hit Enter" fast path, unlike Todoist/Things-style task managers this competes with for the same use case.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟠 7 | **Inline single-line quick-add** (a plain text input at the top of the Tasks list and/or the Dashboard Top-3 card — type a title, hit Enter, done; category/priority default and can be refined later by opening the task) | 4 | 3 | This is the single most common action in a task manager and today it always costs a full modal with a dozen fields; distinct from the already-backlogged "Quick capture" item, which is about *external* capture surfaces (email-to-inbox, PWA share_target) — this is the missing in-app fast path that item doesn't cover |
+| 🟡 5 | **Natural-language quick-add parsing** ("Call dentist tomorrow 3pm" → title + due date + time auto-filled) | 3 | 3 | A natural pairing once the quick-add input above exists; ties to the already-backlogged "natural-language date parsing" recurring-task item but applies it to the create step itself, not just recurrence rules |
+
 
 
 - [x] **Atomic release-pinned updates (owner decision, 2026-07-20)** — `update.sh` previously installed the tip of `origin/master`, so commits pushed after a release tag (including partial work toward the next release) silently shipped to any instance that updated, while `installed_version.json` still reported the release's number — different instances could run different code under the same version. Now the updater asks the GitHub API for the latest published release (`releases/latest`, repo derived fork-preservingly from the origin remote) and fetches/fast-forwards to exactly the commit that tag points at; new `tag-failed` status when the tag can't be determined; `merge-base --is-ancestor` guard means an instance ahead of the release (old edge behavior) is treated as up-to-date, never downgraded; `UPDATE_CHANNEL=edge` in `docker/.env` restores master-tip tracking for dev boxes. Signed-update verification (`UPDATE_REQUIRE_SIGNATURE`) now aligns naturally with release tags. 9-test simulated suite green (fetch failure, restamp self-heal, HTTPS fallback, tag-failed abort, repo-path derivation, no-downgrade); tag extraction validated against the live GitHub API. Consequence for workflow: publishing the GitHub release is now both the deploy trigger AND the content selector — the tagged commit must be ship-ready, master between releases need not be
