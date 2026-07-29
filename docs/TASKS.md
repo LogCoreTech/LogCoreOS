@@ -609,6 +609,26 @@ Read `routers/home.py`'s `call_entity_service` (line 88): gated only by `_requir
 |---|---|---|---|---|
 | 🟡 6 | **Add a server-side confirmation/step-up requirement for physical-security-relevant HA domains** (`lock`, `cover`), not just a frontend `confirm()` | 3 | 3 | Directly strengthens the Cycle-52 recommendation with the specific mechanism: since the client-side confirm is trivially bypassable by anything that talks to the API directly, the real fix has to live in `routers/home.py`, not just the React component |
 
+### Cycle 94 — Stickiness: Streaks Have No Grace Period
+
+Read `recurring_service.process_user()` (line 65-69): missing a recurring task by even one day zeroes `streak_count` immediately at the next nightly run — no forgiveness mechanic at all.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 5 | **A limited "streak freeze"** (e.g. one grace day per month, or an explicit "protect my streak" toggle) — a well-proven Duolingo-style retention mechanic | 3 | 2 | An all-or-nothing streak is unforgiving of one bad day (sick, traveling, genuinely busy) and can demotivate exactly the user it's meant to encourage — freezing once in a while instead of resetting to zero is a small mechanic with an outsized effect on whether people keep coming back after a slip |
+
+### Cycle 95 — Cost: Web Search (Tavily) Has No Caching
+
+Read `web_search_service.py`: every research-mode call hits the Tavily API fresh, even for repeated/similar queries in the same conversation — no cache layer at all.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| ⚪ 4 | **Short-TTL cache for identical/near-identical web searches** | 2 | 1 | A modest but real cost lever — ties to the AI-cost-protection theme already prominent in the Now section (Haiku model + per-user caps for the demo); a repeated question in the same session currently re-pays for a Tavily call it already made |
+
+### Cycle 96 — Backend Services Sweep Close: Several Non-Findings Worth Recording
+
+Closes Sweep O. Read `priority_service.py` (Python's stable sort means Top-3 tie-breaking is deterministic, not flickering — fine as-is), `ha_service.py` (HA API calls already have sane 15s timeouts), `hosting_service.py` (clean runtime-override pattern, no issue), and `whats_new_service.py`/`help_service.py` (both solid; the one real open question there — the boot+180s catch-up race — is already tracked as a live CHECK item in the Now section, not repeated here).
+
 
 ### Cycle 29 — Convenience: Task Creation Friction (Dashboard + Tasks deep read)
 
