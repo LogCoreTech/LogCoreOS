@@ -614,6 +614,15 @@ Read `Login.jsx` and grepped `routers/auth.py` for any password-change endpoint.
 |---|---|---|---|---|
 | 🟠 7 | **Self-service "Change password" in Settings** (current password + new password, standard pattern) | 4 | 3 | Basic account hygiene that's simply missing — a security-conscious user has no way to rotate their own password without involving an admin, which is both a real security gap (compromised-password recovery depends entirely on someone else noticing/acting) and a friction point unrelated to the separate admin-reset-for-lockout feature already backlogged |
 
+### Cycle 45 — Convenience/UI: Login Form Small Polish
+
+`Login.jsx` read in full: plain `type="password"` input with no visibility toggle, `minLength={8}` with no strength feedback beyond a browser's default validation message, and no password-recovery messaging of any kind (the "closed registration" state shows "Ask an admin to add you" but there's no equivalent hint for a forgotten password).
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 5 | **Show/hide password toggle (👁)** on the Login/Register password field | 1 | 3 | Small but genuinely expected in 2026 — typing a password blind on a phone keyboard with no way to verify it before submitting is a needless bit of friction on the very first interaction a new user has with the app |
+| ⚪ 4 | **"Forgot your password? Ask your admin" hint on the login page** (interim messaging fix, not the reset flow itself) | 2 | 2 | Cheap and immediate — today a user who's forgotten their password gets a generic "incorrect password" failure with zero guidance on what to do next, unlike the closed-registration state which already tells the user exactly who to contact |
+
 
 
 - [x] **Atomic release-pinned updates (owner decision, 2026-07-20)** — `update.sh` previously installed the tip of `origin/master`, so commits pushed after a release tag (including partial work toward the next release) silently shipped to any instance that updated, while `installed_version.json` still reported the release's number — different instances could run different code under the same version. Now the updater asks the GitHub API for the latest published release (`releases/latest`, repo derived fork-preservingly from the origin remote) and fetches/fast-forwards to exactly the commit that tag points at; new `tag-failed` status when the tag can't be determined; `merge-base --is-ancestor` guard means an instance ahead of the release (old edge behavior) is treated as up-to-date, never downgraded; `UPDATE_CHANNEL=edge` in `docker/.env` restores master-tip tracking for dev boxes. Signed-update verification (`UPDATE_REQUIRE_SIGNATURE`) now aligns naturally with release tags. 9-test simulated suite green (fetch failure, restamp self-heal, HTTPS fallback, tag-failed abort, repo-path derivation, no-downgrade); tag extraction validated against the live GitHub API. Consequence for workflow: publishing the GitHub release is now both the deploy trigger AND the content selector — the tagged commit must be ship-ready, master between releases need not be
