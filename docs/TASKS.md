@@ -102,9 +102,11 @@ From `docs/Security-Audit-2026-07-19.md` (1 CRITICAL · 5 HIGH · 7 MEDIUM · 4 
 
 Most audit findings were fixed this session (see `docs/Security-Audit-2026-07-19.md` remediation passes 1–5 + CHANGELOG). These are the deliberately-deferred remainders:
 
-- [ ] **CHECK: Brain export (`GET /user/export`) likely bundles the SimpleFIN bank access URL, bypassing its documented admin-only-reveal protection (found 2026-07-25 via code review, not verified against a live instance)** — `routers/export.py:24-30` zips the caller's *entire* `user_path(name)` folder, excluding only `push_subscription.json` by name. Per `docs/MEMORY.md`, the SimpleFIN read-only bank-access URL is stored at that same user's `Finance/simplefin.json` and is deliberately designed to be "never logged; output only by the admin reveal endpoint, 3/hour" — specifically so a compromised member session can't be used to exfiltrate a standing bank-read credential. The self-service Brain export endpoint (2/hour, no admin gate, callable by the member themselves) appears to include that exact file, which would let a member (or anyone holding their session) get the raw bank-access URL through a completely different, unthrottled-by-design path than the one the security model intends. Needs verification against a real SimpleFIN-connected account, then either exclude `Finance/*/simplefin.json` from the export zip (matching the `push_subscription.json` exclusion pattern already used) or confirm this is accepted/intentional
-- [ ] **CHECK: GitHub flagged 2 moderate Dependabot alerts on `master` (noticed 2026-07-25, via push output during idea-backlog work)** — no specifics available in this session (no Dependabot API access here); check the repo's Security → Dependabot tab for the affected packages and whether they're reachable at runtime or dev-only. Ties directly to the already-backlogged "formal quarterly dependency-upgrade cadence" and "dependency vulnerability scanning in CI" ideas above — this is a live instance of exactly the gap those ideas describe
-- [ ] **CHECK: `get_workspace()` never verifies the requesting user is actually entitled to the workspace they claim via the `X-Workspace` header (found 2026-07-25 via code review, not verified against a live instance)** — `routers/auth.py:76-78`'s `get_workspace()` only checks the header value is literally `"personal"` or `"business"`, defaulting to `"personal"` otherwise; it never cross-checks against `user["workspaces"]` (the admin-controlled entitlement list). `grep` for `workspaces` in `routers/tasks.py` (and a spot-check of other data routers) found no per-request gating on it either — the *frontend* only shows the workspace toggle / sends the header when `user.workspaces.length > 1`, but nothing server-side stops a user whose `workspaces` is `["personal"]` from sending `X-Workspace: business` directly and reading/writing their own `Business/` subfolder (`ws_path()`) anyway, self-granting access to a workspace an admin never enabled for them. Bounded impact (each user's `ws_path()` stays scoped to their own directory either way — this is not a cross-user data leak), but it does bypass the `workspaces` field as an actual access control rather than a UI-only convenience, which is how it's documented (`docs/MEMORY.md` §Workspace Switching). Needs verification against a live instance, then either add the entitlement check to `get_workspace()`/`get_current_user()` or confirm the `workspaces` field is intentionally advisory-only and document it as such
+- [ ] **CHECK: Brain export (`GET /user/export`) likely bundles the SimpleFIN bank access URL, bypassing its documented admin-only-reveal protection (found via code review, not verified against a live instance)** — `routers/export.py:24-30` zips the caller's *entire* `user_path(name)` folder, excluding only `push_subscription.json` by name. Per `docs/MEMORY.md`, the SimpleFIN read-only bank-access URL is stored at that same user's `Finance/simplefin.json` and is deliberately designed to be "never logged; output only by the admin reveal endpoint, 3/hour" — specifically so a compromised member session can't be used to exfiltrate a standing bank-read credential. The self-service Brain export endpoint (2/hour, no admin gate, callable by the member themselves) appears to include that exact file, which would let a member (or anyone holding their session) get the raw bank-access URL through a completely different, unthrottled-by-design path than the one the security model intends. Needs verification against a real SimpleFIN-connected account, then either exclude `Finance/*/simplefin.json` from the export zip (matching the `push_subscription.json` exclusion pattern already used) or confirm this is accepted/intentional
+- [ ] **CHECK: GitHub flagged moderate Dependabot alerts on `master`** — no specifics available in-session (no Dependabot API access here); check the repo's Security → Dependabot tab for the affected packages and whether they're reachable at runtime or dev-only
+- [ ] **CHECK: `get_workspace()` never verifies the requesting user is actually entitled to the workspace they claim via the `X-Workspace` header (found via code review, not verified against a live instance)** — `routers/auth.py:76-78`'s `get_workspace()` only checks the header value is literally `"personal"` or `"business"`, defaulting to `"personal"` otherwise; it never cross-checks against `user["workspaces"]` (the admin-controlled entitlement list). No per-request gating on it in `routers/tasks.py` either (spot-checked) — the *frontend* only shows the workspace toggle / sends the header when `user.workspaces.length > 1`, but nothing server-side stops a user whose `workspaces` is `["personal"]` from sending `X-Workspace: business` directly and reading/writing their own `Business/` subfolder (`ws_path()`) anyway, self-granting access to a workspace an admin never enabled for them. Bounded impact (each user's `ws_path()` stays scoped to their own directory either way — this is not a cross-user data leak), but it does bypass the `workspaces` field as an actual access control rather than a UI-only convenience, which is how it's documented (`docs/MEMORY.md` §Workspace Switching). Needs verification against a live instance, then either add the entitlement check to `get_workspace()`/`get_current_user()` or confirm the `workspaces` field is intentionally advisory-only and document it as such
+- [ ] **CHECK: `write_json()`'s per-path lock only wraps the write step, not the full read-modify-write cycle — a real lost-update race (found via code review)** — `file_service.py`: `read_json()` takes no lock at all, and `task_service.py` has no locking whatsoever (unlike `auth_service.py`, which explicitly uses `_auth_lock` around its own read-modify-write operations — proof the team already knows this race exists and solved it there, just not everywhere else). Two concurrent requests touching the same user's `tasks.json` (two devices, or the nightly recurring-processor job running while a client is mid-edit) can silently lose one side's change: A reads v1 → B reads v1 (before A writes) → A writes v1+its-change (v2) → B writes v1+its-change (v3), discarding A's change. Applies to any per-user JSON store, not just Tasks. Fix: a shared read-modify-write helper that holds one lock across the full cycle, not just the write
+- [ ] **CHECK: `routers/features.py`'s `delete_role` doesn't check who's using the role before deleting it — a silent privilege-escalation path (found via code review)** — per `docs/AGENTS.md`, `member` is "the internal fallback when a feature role goes missing," so deleting a restrictive custom role (e.g. a "cleaner" role with almost every module disabled) silently falls those users back to `member`, which is typically **more** permissive, not less. The admin gets no warning anyone is affected. Fix: warn (or block) deleting a feature role still assigned to users, showing who's affected
 - [ ] **App-level 2FA (TOTP)** — the last open residual from the audit's outsider/account-takeover threat model, and a v1.0-trust-stack gate (line below). A stolen/guessed password is currently full access with no second factor. Needs its own design pass: TOTP enrollment UX + QR provisioning, recovery codes, storage on the user record in `auth.json`, verify step wired into `/auth/login` + `/auth/token` (after the new lockout check), optional admin enforcement policy, and a "remember this device" option. Not a quick add — scope as a standalone feature/PR
 - [ ] **ESLint 8 → 9 (flat-config) migration** — dev-tooling only, deferred from the audit's LOW items because it's a breaking major: ESLint 9 defaults to flat config (`eslint.config.js`), so `.eslintrc.*` must be rewritten (imports instead of `extends` strings, `languageOptions.globals` instead of `env`), the React/hooks plugins bumped to flat-config-compatible versions, and removed/renamed rules chased down. No runtime/security exposure — do it as an isolated tooling PR on a maintenance pass, not bundled with feature work
 - [ ] **Vite 6 → 8 major** — closes the residual **esbuild** dev-server advisory (`GHSA-67mh-4wv8-2f99`) that the 5.4.x bump can't reach. Dev-server-only (production is served from the built `dist/` bundle), so low real-world risk; it's a breaking major needing the React plugin + config + Node-version review. Maintenance-pass item
@@ -140,922 +142,267 @@ Most audit findings were fixed this session (see `docs/Security-Audit-2026-07-19
 
 ## Idea Backlog — scored, awaiting owner triage
 
-Generated + curated across repeated search→generate→compare→update→organize→document cycles (started 2026-07-25). Everything here is **unvetted** — nothing moves to an active section above until the owner pulls it in. Purpose: surface ideas the owner hasn't explicitly asked for yet, ranked so triage is fast.
-
-**Scoring:** `Impact` = effect on revenue/conversion/retention/credibility (1–5). `Polish` = how much it raises the app's perceived quality/professionalism (1–5). `Tier` = 🔴 P0 (score 9–10, do soon) · 🟠 P1 (7–8) · 🟡 P2 (5–6) · ⚪ P3 (≤4, opportunistic/nice-to-have). Score = Impact + Polish. Items are de-duped against the sections above — if it's already tracked there, it's not repeated here.
-
-### Executive summary (28-cycle pass, 2026-07-25)
-
-146 scored ideas across 27 generation cycles (this count reflects the pass as of Cycle 28; see Cycle 78 and Cycle 100 for the running totals after later extensions — 202 after the 50-cycle pass, 219 after the 100-cycle pass) — the first 17 covered cross-cutting themes (growth/monetization, UX/a11y, reliability, AI differentiation, hosting ops, per-module polish, i18n/compliance, technical debt, docs/dev-experience, community, security-as-business, mobile, pricing/packaging, activation funnel, internal analytics); a second wave (cycles 19–28) went deeper into specific modules and subsystems (Finance, Assets, Contacts, Automations/n8n, AI agent safety, notifications, role-based onboarding, DevOps/deployment, import/export, competitive positioning against Khoj and Open WebUI) — plus two synthesis passes. **The clearest cross-cutting theme, sharper after the deeper pass**: the highest-leverage findings are consistently gaps a working codebase quietly accumulates, not missing features — zero accessibility support, zero frontend/E2E test coverage, zero centralized error monitoring, zero outbound email capability anywhere, an API reference covering only 39% of actual endpoints, four independently hand-rolled implementations of the same access-control logic that keep reproducing the same bug class, **and — the single most severe finding of the whole pass — Auto mode executes destructive AI actions (deletes) with zero confirmation, with no trash/undo backstop anywhere in the app to fall back on.** None of these were previously flagged anywhere in the project's docs. **Four items were concrete enough to act on directly rather than leave speculative**: a real currency-aggregation bug in Finance net worth, a stale "issue templates" checklist entry (corrected), and two CHECK items needing live-instance verification (a possible SimpleFIN bank-URL leak via Brain export, and GitHub's own Dependabot alert) — all logged under Now/Security follow-ups rather than buried in the idea backlog. See "Start here" below for the sequenced P0 list, and each cycle's table for full detail — everything here is unvetted and waits on owner triage.
-
-### Start here — 🔴 P0 items across all cycles (synthesis pass, cycles 7 + 23)
-
-Every score-9 idea generated so far, in one place, roughly sequenced by dependency — **#1 was added in Cycle 23 and is the single most severe finding of the entire pass; read it first:**
-
-0. **Auto mode executes destructive AI tools (deletes) with zero confirmation, and there is still no undo/trash-bin anywhere** (Cycle 23) — for an AI-native life OS handling irreplaceable personal data, this is a real safety gap, not a polish item; fix before promoting Auto mode as safe for general use
-1. **Accessibility (a11y) pass** (Cycle 2) — genuinely absent from the entire prior backlog; also the one item here with real legal-exposure downside if skipped once managed hosting has paying customers
-2. **Automated E2E test suite (Playwright)** (Cycle 3) — zero frontend/integration coverage today; every recent UI bug in the Done log was owner-found by hand
-3. **Structured error monitoring (Sentry/GlitchTip)** (Cycle 3) — no centralized error visibility exists; same "owner finds it by hand" gap as #2, for runtime errors instead of regressions
-4. **Self-serve pricing page + tier comparison** (Cycle 1) — blocks demo→paid conversion; no page exists to sell against once Stripe billing lands
-5. **In-app self-hosted → managed-hosting upsell** (Cycle 1) — zero-cost distribution to the best-qualified lead pool (people already successfully running the app)
-6. **AI change-log / "what the AI did while I was away" digest** (Cycle 4) — the transparency feature that's unique to an AI-native life OS; nothing else on this list is a product differentiator rather than table-stakes
-7. **Multi-tenant admin console for managed hosting** (Cycle 5) — manual per-instance tracking (a spreadsheet + a private repo) stops scaling at roughly the next tenant or two
-
-**Suggested sequencing logic:** #1–#3 are foundational risk-reduction (do before scaling paying customers or an OSS community launch); #4–#5 are the cheapest real revenue levers available right now; #6 is the highest-leverage differentiation feature; #7 becomes urgent the moment tenant count grows past what's manually trackable. None of this overrides owner priorities in the sections above — it's a lens, not a directive.
-
-**Second-tier (🟠 P1, score 7–8) worth a fast skim**, grouped by what they'd unblock: revenue — referral program, LogCoreOS-vs-competitors comparison page, feature-gate design ahead of Stripe; polish — empty states per module, command palette, bulk actions, trash/undo; trust — public status page, backup-restore drill, frontend CI gate; AI differentiation — cross-module proactive suggestions (surfaces already-built linking data), AI usage transparency for end users; hosting ops — tenant onboarding SOP, support intake; architecture — consolidating the four duplicate access-resolution implementations, splitting `agent_service.py`; docs — closing the 39%-covered API-doc gap. **From the deeper module-level pass (cycles 19–28)**: AI safety — visually distinguishing destructive AI actions in the ApprovalCard (the near-term companion to the P0 Auto-mode finding above); onboarding — fixing the admin-create-user password handoff (no forced change, no invite link today); Assets — QR/barcode label generation as the most tangible "built for real life" feature available; Contacts — wiring up the already-stored-but-dead `birthday` field; notifications — multi-device push support (currently one subscription per user, silently overwritten); Automations — resolving whether the native vendor-agnostic "LogCore Workflows" engine PROJECT.md promises actually gets built. Full detail and rationale for every item is in its cycle's table below.
-
-**Backlog size after 27 generation cycles + 2 synthesis passes:** 146 scored ideas (see the Executive Summary above), plus 4 concrete findings actioned directly rather than left speculative: the `finance_reports.net_worth()` currency-aggregation bug and a stale "GitHub issue templates" checklist item (both resolved/corrected), plus two CHECK items awaiting live-instance verification — a possible SimpleFIN bank-access-URL leak via `GET /user/export`, and GitHub's own Dependabot alert on `master`. Zero duplicate ideas found across three separate cross-cycle scans (2026-07-25).
-
-### Cycle 1 — Growth & Monetization (2026-07-25)
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🔴 9 | **Self-serve pricing page + tier comparison on logcoretech.com** | 5 | 4 | The README says "Hosted plans coming soon" with no pricing anywhere; Stripe billing portal is backlogged but there's no page to sell against yet. A visitor can't self-qualify without seeing a price — this blocks the "Try the Demo" → paid conversion the launch surface is building toward |
-| 🔴 9 | **In-app upsell path: self-hosted → managed hosting** | 5 | 4 | Nothing in the app itself tells a self-hosted admin that managed hosting exists once they're already a happy user (e.g. after they hit a Docker/update snag, or from Admin → Hosting). A single well-timed nudge card is high-leverage — free users are the best-qualified leads |
-| 🟠 8 | **Referral program (self-hosters → managed hosting signups)** | 5 | 3 | Open-source self-hosters are natural evangelists; a simple "give a free month, get a free month" referral tracked in the Business repo could be a cheap CAC channel once billing exists. Depends on Stripe billing portal landing first |
-| 🟠 8 | **Comparison page: LogCoreOS vs Notion AI / Khoj / Open WebUI** (ties to existing "Website copy refresh" launch item) | 4 | 4 | Already scoped generically in Launch Surface; breaking it into its own SEO-indexable page (not just a website section) captures long-tail "vs X" search traffic, a proven OSS-tool acquisition channel |
-| 🟠 7 | **"Import your digital life" guided importer (Todoist/Notion/Obsidian)** — already backlogged as a feature; **add**: a landing-page-driven funnel where the importer is the CTA itself ("switch in 5 minutes") | 4 | 3 | Reframes an existing backlog feature as an acquisition mechanism, not just a migration convenience — import friction removal is often the #1 driver of tool-switching |
-| 🟠 7 | **Free/paid feature-gate design pass before Stripe lands** | 4 | 3 | Stripe billing portal is backlogged with no spec for what's actually gated (seats? AI usage? modules?). A short design doc now avoids re-architecting `disabled_modules`/usage-counter code later. Directly unblocks the Stripe item cleanly |
-| 🟡 6 | **Public roadmap page (fed from a trimmed view of this file)** | 3 | 3 | OSS credibility signal + reduces "is this project alive" doubt for prospective self-hosters; low effort if auto-generated from a tagged subset of TASKS.md rather than hand-maintained |
-| 🟡 6 | **GitHub Sponsors / OpenCollective for the OSS side** | 3 | 2 | Doesn't fund the business directly but signals project health and gives non-hosting-customers a way to contribute financially; near-zero build cost |
-| 🟡 5 | **Case study / "why I self-hosted my life OS" blog post using the owner's own dogfood usage** | 3 | 2 | Cheapest possible content marketing — the owner already runs this daily; a real usage story outperforms generic feature posts for OSS audiences |
-| ⚪ 4 | **Affiliate/creator partnerships (r/selfhosted YouTubers etc.)** | 3 | 1 | Real channel but needs the product polished (v1.0 trust stack) and pricing live first — sequence after, not before |
-
-### Cycle 2 — Polish, UX & Accessibility (2026-07-25)
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🔴 9 | **Accessibility pass (a11y): keyboard nav, focus states, ARIA labels, color contrast audit** | 4 | 5 | Not mentioned anywhere in TASKS.md/MEMORY.md — genuinely absent. Beyond the ethical case, it's real legal exposure (ADA/EN 301 549) once there are paying managed-hosting customers, and screen-reader/keyboard support is a hard credibility signal reviewers (incl. r/selfhosted) call out explicitly |
-| 🟠 8 | **Empty-state and first-use polish per module** (partially covered by "Help follow-ups" backlog item, which only covers tooltip copy) | 3 | 5 | A brand-new user with zero tasks/notes/contacts sees a bare list today. Purpose-built empty states with a single clear CTA per module compound with the Getting Started checklist to lower time-to-first-value |
-| 🟠 8 | **Command palette / quick-add (Cmd+K)** — related to but distinct from the backlogged "Quick capture" (email-to-inbox, PWA share_target) | 4 | 4 | A fast keyboard-driven "jump to X / create Y" palette is a power-user retention feature and a strong "this feels like a real product" signal in a Claude-Code-styled app that already leans on keyboard-first design (see the Chat UX bundle) |
-| 🟠 7 | **Bulk actions (multi-select archive/delete/tag) across Tasks, Notes, Assets, Contacts** | 3 | 4 | Every module is single-item-at-a-time today; as Brain data accumulates (the core value prop is "years of data"), the lack of bulk ops becomes a daily friction point rather than a one-time complaint |
-| 🟠 7 | **Soft-delete / trash bin with restore window (esp. Tasks, Notes, Assets)** | 3 | 4 | There's no undo anywhere in the app; a filesystem-backed "moved to /Trash, purge after 30 days" pattern fits the Brain's atomic-write philosophy naturally and removes real anxiety around irreversible deletes |
-| 🟡 6 | **Global search across the whole Brain (tasks/notes/journal/contacts/assets), not just per-module search** | 4 | 3 | RAG-over-the-Brain is already roadmapped (v0.2) but is an AI-context feature, not a fast literal search bar; a lightweight non-AI global search could ship far sooner and serves a different need (find, not ask) |
-| 🟡 6 | **Micro-interaction pass: loading skeletons instead of blank/spinner states, save-confirmation toasts, subtle transitions** | 2 | 4 | Several modules (Notes auto-save, Journal) currently give no visible confirmation that a save happened — small trust gap that's cheap to close |
-| 🟡 5 | **Keyboard shortcuts overlay (`?` already opens Help — extend or add a dedicated shortcuts sheet)** | 2 | 3 | Cheap, and pairs naturally with the command-palette idea above if that gets built |
-| 🟡 5 | **Onboarding sample data toggle ("load example tasks/notes/finance book to explore")** | 3 | 3 | First-run empty app can feel intimidating for non-technical family members being onboarded by the admin; an opt-in seed pass (clearly removable) shortens time-to-understanding |
-| ⚪ 4 | **Custom app icon / splash screen polish per accent color for PWA install** | 2 | 2 | Cosmetic, but the per-user theming system already exists — extending it to the installed-PWA icon is a small novel touch |
-
-### Cycle 3 — Trust, Reliability & Observability (2026-07-25)
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🔴 9 | **Structured error monitoring (Sentry or self-hosted GlitchTip) for backend + frontend** | 5 | 4 | There's no centralized error visibility anywhere today — bugs are found by owner testing or user reports only (see the recurring "BUG: ... (owner, ...)" pattern in Done/Now). For a business about to run paying managed-hosting tenants, silent failures are a churn risk; a self-hostable option (GlitchTip) also fits the project's anti-vendor-lock-in ethos |
-| 🔴 9 | **Automated E2E test suite (Playwright) covering the golden paths** | 4 | 5 | The entire test suite is backend pytest only (`app/backend/tests/`) — zero frontend/integration coverage. Every UI bug in the Done log this cycle (mobile header clipping, footer gap, off-screen buttons) was owner-found by hand. A handful of Playwright specs on core flows (login, create task, chat send) would catch this whole bug class in CI |
-| 🟠 8 | **Public status page (status.logcoretech.com) for demo + managed instances** | 4 | 3 | UptimeRobot monitoring is already backlogged but only alerts internally; a public status page is what paying/prospective managed-hosting customers actually expect and look for before trusting a hosted offering |
-| 🟠 7 | **One-click restore drill / documented DR runbook** (backup.sh + encryption already shipped; restore is unverified) | 4 | 3 | "v1.0 trust stack" backlog item lists "automated backups + one-click restore" but there's no evidence a restore has ever been tested end-to-end. A backup nobody has restored from is unverified insurance — this is the single highest-leverage trust-stack item to de-risk first |
-| 🟠 7 | **CI: add a frontend build+lint+test gate** (badge exists for backend CI; confirm frontend is actually gated) | 3 | 3 | Worth a quick audit — if `ci.yml` only runs pytest, a broken frontend build could merge silently. Cheap to verify/fix, meaningfully reduces regression risk |
-| 🟡 6 | **Structured application logging (JSON logs + log level config) instead of ad-hoc `logger.error`/`logger.warning` calls** | 3 | 3 | Fine today at one-admin scale; becomes necessary once Sentry/GlitchTip (above) or any log aggregation is added for multiple managed tenants |
-| 🟡 5 | **Dependency vulnerability scanning in CI (Dependabot/Renovate + `pip-audit`/`npm audit` gate)** | 3 | 3 | The security audit found real stale-dependency issues (python-jose, python-multipart) that were caught manually; automating the check prevents the next one from waiting for a manual audit pass |
-| 🟡 5 | **Load/perf smoke test before the public demo opens registration** | 3 | 2 | Demo is explicitly gated on legal pages + message cap, but nothing checks the single-instance FastAPI/APScheduler setup survives concurrent demo traffic. Cheap insurance against a bad first impression on launch day |
-| ⚪ 4 | **Synthetic canary account per managed instance** (scripted login + basic action check beyond plain uptime ping) | 3 | 1 | Catches "server responds but app is broken" cases UptimeRobot's HTTP check would miss; low priority until there are several paying tenants |
-
-### Cycle 4 — Product Differentiation & AI (2026-07-25)
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🔴 9 | **AI change-log / "what the AI did while I was away" digest** | 4 | 5 | With approve-mode writes, plan mode, and proactive suggestions all now shipped, there's no single place a user reviews what the AI actually touched over time — this is a trust-building feature unique to an AI-native life OS and reinforces "your AI, transparently" as the core positioning vs. Notion AI/Khoj |
-| 🟠 8 | **Cross-module AI proactivity: connect the dots the user hasn't** (e.g. "this Contact's follow-up is overdue AND you have an open Deal with them" or "this Asset's linked invoice is 30 days overdue") | 4 | 4 | The cross-module linking work (Deal↔Asset↔Invoice↔Transaction↔Contact) shipped as passive data, not proactive insight; surfacing it via the existing suggestions engine turns already-built plumbing into a visible differentiator with near-zero new storage |
-| 🟠 7 | **"Ask your Brain" natural-language search bar (RAG-lite before the full v0.2 RAG ships)** | 4 | 3 | RAG over the Brain is roadmapped but scoped as a bigger embeddings project; a narrower "semantic search over recent Notes/Journal only" using existing AI calls (no new infra) could ship as a stepping stone and start proving the value proposition sooner |
-| 🟠 7 | **AI usage transparency widget for the end user (not just admin)** — complements the already-TOP-PRIORITY admin usage counter | 3 | 4 | The in-progress AI usage counter is admin-facing only; a small "you've used X messages this month" indicator for the user themselves (especially once soft/hard caps exist) avoids a jarring surprise block and is standard SaaS-AI UX today |
-| 🟡 6 | **Local LLM quality baseline / model picker guidance** (ties to backlogged Ollama support) | 3 | 3 | Once Ollama lands, users will need guidance on which local models are "good enough" for agentic tool use (many aren't) — a simple compatibility/recommendation note in Help avoids a wave of "the AI is dumb now" complaints post-launch |
-| 🟡 5 | **AI-drafted weekly/monthly "life report"** (distinct from the existing weekly review suggestion — a narrative summary, not a task list) | 3 | 3 | Turns accumulated Brain data into a periodic tangible artifact ("here's your month") — strong retention hook and shareable/exportable, nice complement to the existing Monthly value report backlog item (which is Automation-Inbox-specific) |
-| ⚪ 4 | **Voice input for chat (mobile PWA)** | 2 | 3 | Nice-to-have parity with mainstream AI apps; not a differentiator on its own, sequence after core AI-transparency ideas above |
-
-### Cycle 5 — Managed Hosting Business Ops (2026-07-25)
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🔴 9 | **Multi-tenant admin console (cross-instance view in the Business repo/tooling, not the OSS app)** | 5 | 3 | Today each managed instance is tracked manually (per-instance cost log, per-tenant details "in the private Business repo"). This doesn't scale past a handful of tenants — a simple internal dashboard (even a spreadsheet-replacement script) pays for itself the moment a 4th–5th beta tenant is added |
-| 🟠 8 | **Tenant onboarding checklist / SOP doc (Business repo)** | 4 | 3 | The "Deploy first managed-hosting beta instance" task shows the steps are still manual and ad hoc per instance; codifying them as a repeatable SOP now (before the instance-provisioning script ships) reduces mistakes as tenant count grows and is a prerequisite for delegating onboarding to anyone but the owner |
-| 🟠 7 | **Support ticket / help-request intake for managed customers** (separate from self-hoster Help feedback, which is backlogged as mailto-only) | 4 | 3 | Paying managed customers need a real support channel with SLA expectations, distinct from the self-hoster community support model — worth deciding now whether that's email, a shared inbox, or a lightweight helpdesk before the first paying (non-beta) customer arrives |
-| 🟡 6 | **Per-tenant data export / offboarding flow (contractual "you can always leave with your data")** | 4 | 2 | The Brain-export feature already exists technically (`GET /api/v1/user/export`); what's missing is the *business* commitment/process — documenting and testing that a managed tenant can cleanly get their full Brain and self-host elsewhere reinforces the no-lock-in promise that's core to the pitch |
-| 🟡 5 | **Managed-hosting SLA / uptime commitment page** | 3 | 2 | Depends on the status page (Cycle 3) and a few months of real uptime data existing first; sequence after |
-| 🟡 5 | **Backup verification report per tenant (proof the nightly backup actually ran and is restorable)** | 3 | 2 | Extends the "one-click restore drill" idea (Cycle 3) into an ongoing per-tenant assurance artifact — valuable once there's more than one paying tenant to protect |
-| ⚪ 3 | **White-label option for reseller/agency managed hosting** | 2 | 1 | Real potential channel but premature — needs the core managed offering proven with direct customers first |
-
-### Cycle 6 — Per-Module Polish Sweep (2026-07-25)
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 7 | **Dashboard: "this week at a glance" summary strip** (tasks done, upcoming events, new notes — above the existing top-3/streaks widgets) | 3 | 4 | The Dashboard's customizable-widget backlog item is about *configuration*; this is about giving even the default Dashboard a stronger first impression before that ships |
-| 🟠 7 | **Calendar: drag-to-reschedule for tasks/events** | 3 | 4 | Multi-day events are already backlogged as a schema gap; drag-to-reschedule is a separate, high-perceived-polish interaction that most calendar UIs are judged against |
-| 🟡 6 | **Notes: version history / "restore previous version"** | 3 | 3 | Auto-save with no explicit save button (by design) means a bad edit silently overwrites the last good version with no recovery path today — pairs naturally with the trash-bin idea from Cycle 2 |
-| 🟡 6 | **Journal: mood/tag quick-picker on entry (structured metadata alongside free text)** | 2 | 4 | The backlogged "Journal → insight loops" (mood vs sleep pattern detection) needs *some* structured signal to detect patterns from; a lightweight mood chip per entry is the minimum viable input for that feature to ever work |
-| 🟡 5 | **Chat: inline citations/links when the AI references a specific Brain file it read** | 3 | 3 | Right now the AI's tool-trace shows *that* it read a file but the chat response text doesn't link back to it; small addition that reinforces trustworthy, checkable AI answers |
-| 🟡 5 | **Tasks: saved filter views ("My overdue", "This week", per-category)** | 2 | 3 | Cheap, addresses a real recurring need once a user has more than ~30 active tasks |
-| ⚪ 4 | **Household/Team: shared shopping list tab** (already listed as a Phase 5 roadmap item in PROJECT.md but not in TASKS.md's active backlog) | 3 | 2 | Worth promoting from the architecture doc into the actual backlog so it isn't lost — currently only exists in PROJECT.md Phase 5 "Remaining" list |
-| ⚪ 3 | **Contacts: import from phone/Google contacts CSV** (distinct from the existing generic CSV import/export) | 2 | 2 | Lowers the activation-energy barrier to actually populating the CRM with real contacts on day one |
-
-### Cycle 8 — Internationalization, Compliance & Data Portability (2026-07-25)
-
-Search step confirmed there is currently **no i18n framework anywhere in the frontend** (`grep` for `i18n`/`react-intl`/`react-i18next` across `app/frontend/src` found zero matches — only unrelated hits for "locale"/"currency" strings) — the app is English-only today, and this hadn't been noted anywhere in the backlog. That search also turned up the currency-aggregation bug now logged under Now, above.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 7 | **Admin action audit log (who changed what, when)** — concrete scope for the vague "audit logging" bullet already inside the v1.0 trust-stack backlog item | 3 | 4 | User deletion, role/feature changes, module toggles, and data exports currently leave no queryable trail beyond scattered `logger.warning` calls; this is table-stakes for any managed-hosting customer doing their own compliance diligence, and a natural companion to the cascade-delete bug fix already in progress |
-| 🟡 6 | **i18n framework foundation (react-i18next or similar), English-only content extracted to translatable strings** | 3 | 3 | No current urgency, but the longer UI strings stay hardcoded/scattered across components, the more expensive this becomes to retrofit later; worth scoping even if translation itself is backlogged indefinitely |
-| 🟡 6 | **Multi-currency-aware Finance reporting (FX conversion for cross-currency net worth/reports)** — the durable feature version of the bug logged under Now | 3 | 3 | Once the immediate correctness bug is fixed (group-by-currency), this is the fuller feature: live/period FX rates so a household with a USD and a EUR book still gets one meaningful net-worth number |
-| 🟡 5 | **GDPR Data Processing Agreement (DPA) template for managed-hosting business customers** | 4 | 2 | Needed the moment any EU-based individual or business signs up for managed hosting; cheap to draft ahead of time (Business repo, not this one) vs. scrambling when a prospect asks for one |
-| 🟡 5 | **Terms-of-Service acceptance tracking (timestamp + version on the user record)** | 3 | 2 | The Privacy Policy / ToS pages are already top-priority launch-surface items; recording *that and when* a user accepted is the piece that makes the legal page actually enforceable, not just visible |
-| 🟡 5 | **EU data-residency option for managed hosting (separate EU-region server)** | 3 | 2 | Not urgent pre-launch, but self-hosted/privacy-focused audiences (this project's core audience) skew EU-conscious; worth having an answer ready before it's asked in a sales conversation |
-| ⚪ 4 | **Configurable data-retention windows (chat archive age, backup count, notification history)** | 2 | 2 | Currently several retention behaviors are hardcoded (e.g. "keeps the 30 most recent backups") — fine defaults today, but a compliance-minded managed customer may eventually ask for per-tenant control |
-| ⚪ 3 | **Confirm no cookie-consent banner is legally required** (quick documentation check, not a build item) | 2 | 1 | The app only sets a strictly-necessary httpOnly auth cookie (no tracking/analytics cookies today), which is generally consent-exempt under GDPR — worth a one-line confirmation in the privacy policy draft rather than assuming a banner is needed by default |
-
-### Cycle 9 — Technical Debt & Architecture (2026-07-25)
-
-Search step: no `TODO`/`FIXME`/`HACK` comments exist anywhere in `app/backend` (good hygiene signal), but file-size and duplication analysis surfaced real structural debt. Line counts: `services/agent_service.py` is **2,368 lines** (the entire AI tool registry for every module, one file); `routers/auth.py` is **1,009 lines** (mixes login/register/logout, admin user management, AND AI/search/hosting settings, Infisical, and feature flags — five distinct concerns per `docs/MAP.md`'s own description of the file); `routers/assets.py` (986) and `routers/contacts.py` (954) are close behind. Backend tests total ~6,700 lines against ~13,200 lines of services (roughly 1:2) — healthy today but worth watching as modules keep growing.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 7 | **Consolidate the four near-duplicate share/access-resolution implementations** (`assets_index.py`, `finance_index.py`, `contacts_index.py`, `notes_index.py` + each module's own `resolve_access`/specificity-ladder logic) into one shared library | 3 | 4 | The Done log shows the *same class* of access-control bug (by-name-vs-group specificity, contribute-caps-ignored-for-pool-managers) independently found and fixed at least twice for Assets alone (2026-07-12 entries); four parallel hand-rolled implementations of the same ladder is exactly the shape that produces this recurring bug class. High-leverage before the next module (Projects, Health tracking) copies the pattern a fifth time |
-| 🟠 7 | **Break up `services/agent_service.py` (2,368 lines) into per-module tool files registered into a central tool registry** | 3 | 4 | Every module's AI tools currently live in one file; as more modules ship (Projects, Health tracking are roadmapped) this file only grows, becoming a merge-conflict and review-difficulty magnet. Splitting by module (mirroring how routers/services already split) is a mechanical, low-risk refactor |
-| 🟡 6 | **Split `routers/auth.py` (1,009 lines) by concern**: core auth (login/register/logout/me) vs. admin user management vs. instance settings (AI/search/hosting/Infisical/feature flags) | 2 | 4 | Five unrelated concerns in one file today (per `docs/MAP.md`'s own description); splitting makes each piece easier to review/test in isolation, especially the security-sensitive auth core |
-| 🟡 5 | **Deep health-check endpoint** (`GET /health` currently returns a hardcoded `{"status": "ok"}` with zero checks — `routers/health.py:8`) — verify Brain path is writable, scheduler is alive, and optionally AI provider is reachable | 3 | 2 | A pure liveness check can't catch "process is up but Brain writes are failing" or "scheduler thread died" — exactly the class of failure a public status page (Cycle 3) or a managed-hosting SLA would need to detect. Cheap, mechanical fix |
-| 🟡 5 | **Module scaffolding script implementing the documented "Adding a New Module" 7-step checklist** (`docs/AGENTS.md` §Adding a New Module) | 2 | 3 | The steps are already written down but manual; a generator script (or even a checklist-driven Claude Code skill) removes the human-error risk of forgetting step 3 of 7 (e.g. the module-ID mismatch failure mode MEMORY.md explicitly warns about) |
-| 🟡 5 | **Scheduler job isolation audit** — confirm one job's uncaught exception (of the 10 fixed + dynamic custom jobs) can't silently prevent sibling jobs from running that cycle | 3 | 2 | Not a known bug — a verification task. Worth doing once, given how much now depends on the scheduler (digests, bill matching, deviation alerts, update checks, backups) |
-| ⚪ 4 | **Formal quarterly dependency-upgrade cadence** (distinct from the automated vuln-scanning gate in Cycle 3) — a recurring calendar pass through `requirements.txt`/`package.json` even for non-CVE version bumps | 2 | 2 | The ESLint 9 and Vite 8 migrations are already backlogged as one-off maintenance items; a standing cadence prevents the next 3 majors from all queuing up at once again |
-
-### Cycle 10 — Documentation & Developer Experience (2026-07-25)
-
-Search step: counted `@router.get/post/put/patch/delete` decorators across `app/backend/routers/` (298 total) against `docs/API.md`'s documented endpoints (116, via `### \`METHOD /path\`` headers) — **only ~39% of the actual API surface is documented**, and it's a fully hand-maintained 1,182-line file that will keep falling further behind as routers grow. Also confirmed FastAPI's auto-generated `/docs` (Swagger) and `/redoc` are enabled with zero overrides (`main.py:171`, `FastAPI(title="LogCore OS", version="0.1.0", ...)`) — including a **stale hardcoded version string** (`0.1.0`, real version is 0.4.3+) that isn't on the existing "release checklist for version-bearing files" gotcha in `docs/MEMORY.md`.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 7 | **Close the API-doc coverage gap (39% today) — auto-generate from FastAPI's OpenAPI schema, or add a CI check that fails when a new route has no doc entry** | 3 | 4 | Hand-maintaining API docs for a 298-endpoint surface that adds a new module every few weeks is already losing; either generate the reference from `/openapi.json` (near-zero ongoing maintenance) or gate PRs on doc coverage so it stops silently worsening |
-| 🟡 6 | **Deliberately decide whether `/docs` and `/redoc` stay enabled on every deployment, especially the public demo instance** | 2 | 3 | Currently on by accident-of-default, not by decision — reasonable for self-hosted instances (the admin already has full access) but worth an explicit call for the public demo, where exposing the full endpoint/schema map to anonymous visitors may not be intended |
-| 🟡 5 | **Fix the FastAPI app's hardcoded `title`/`version` (`main.py:171`) to read from the `VERSION` file, and add it to the existing version-bearing-files release checklist in `docs/MEMORY.md`** | 1 | 3 | Small, but it's a visible inconsistency (anyone hitting `/docs` or `/openapi.json` sees "0.1.0" on a 0.4.3+ install) and a one-line fix once found |
-| 🟠 7 | **Hosted developer/API documentation site** (even a simple static-generated one from the OpenAPI schema) as early groundwork for the Phase 7 "Developer API" / plugin-ecosystem roadmap item | 3 | 4 | Right now the only API reference lives in a GitHub markdown file — fine for the current single-maintainer stage, but a real blocker once external plugin/integration developers are actually being courted (Phase 7). Doing the OpenAPI-driven version from the idea above makes this nearly free once that exists |
-| 🟡 5 | **Lightweight numbered ADRs for major decisions, cross-linkable from PRs/commits** | 2 | 3 | `docs/MEMORY.md`'s "Key Decisions Log" already functions like an ADR log (dated, rationale-first entries) but isn't individually addressable — a contributor can't link "see ADR-014" from a PR. Worth numbering future entries rather than restructuring the existing ones |
-| 🟡 5 | **CONTRIBUTING.md** (already backlogged under Launch Surface) — **scope addition**: specifically document the AI agent tool-registry pattern in `agent_service.py`, since it's the least self-explanatory part of the codebase for a new contributor and the thing most likely to be touched when adding a module's AI tools | 2 | 2 | Not a new task, just a concrete scope note for the existing backlog item so it doesn't ship as a generic "how to run this locally" doc and miss the actually-hard part |
-
-### Cycle 11 — Community & Ecosystem (2026-07-25)
-
-Search step corrected a stale item: **GitHub issue templates were already marked as an open Launch Surface task but actually shipped** (`.github/ISSUE_TEMPLATE/bug_report.yml` + `feature_request.yml` both exist and are substantive) — checked off above. Also confirmed no `CODE_OF_CONDUCT.md` exists at the repo root, and GitHub Discussions (already enabled per the 2026-07-06 Done entry) currently has no real activity-seeding.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 6 | **Add `CODE_OF_CONDUCT.md`** (Contributor Covenant is the de facto standard) | 2 | 4 | Missing entirely today; it's a near-zero-effort, expected-by-default file for any OSS project courting outside contributors, and worth having in place *before* a Show HN / r/selfhosted push rather than reactively after the first incident |
-| 🟡 5 | **"Good first issue" labeling pass across the existing backlog** — pick a handful of small, well-scoped items (e.g. several of the ⚪/🟡 polish items in this very backlog) and tag them for external contributors | 3 | 2 | GitHub Discussions is enabled but there's no on-ramp for an outside contributor to find a bite-sized starting point; this directly lowers the barrier the v1.0-trust-stack/Show-HN push is aiming to clear |
-| 🟡 5 | **Self-hoster showcase / "who's running LogCoreOS" opt-in wall on logcoretech.com** | 3 | 2 | Social proof matters disproportionately for self-hosted-tool adoption decisions (a common r/selfhosted pattern); opt-in keeps it privacy-respectful, consistent with the project's own values |
-| 🟡 5 | **Real-time community channel (Discord or Matrix), distinct from the async GitHub Discussions already enabled** | 3 | 2 | Self-hosted-tool communities (Immich, Paperless-ngx, etc.) consistently cite real-time chat as where troubleshooting and evangelism actually happens, vs. Discussions being better for structured Q&A/feature debate |
-| ⚪ 4 | **Contributor recognition in README** (simple contributors section or an all-contributors-style bot) | 2 | 2 | Cheap goodwill/retention mechanism once external PRs start landing; sequence after CONTRIBUTING.md and the good-first-issue pass above, not before |
-| ⚪ 3 | **Post-launch release newsletter / mailing list** (distinct from the already-backlogged pre-launch Waitlist form) | 2 | 1 | Keeps existing self-hosters engaged across releases once there's an audience beyond the waitlist; low priority until the launch-surface items above it actually ship |
-
-### Cycle 13 — Security as a Business Asset (2026-07-25)
-
-`SECURITY.md` is already solid (clear scope, 48h/7-day response commitment, credit policy) — this cycle looks past the existing audit-remediation work (already the top section of this file) toward security as a *sales/trust* asset for the managed-hosting business specifically, not just app hardening.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 6 | **Independent third-party penetration test before managed hosting accepts non-beta paying customers** | 4 | 2 | The 2026-07-19 audit was thorough but internal/AI-assisted; an external pentest is what a security-conscious prospect (or their own IT diligence) will ask "have you had one" about, and it's cheap insurance relative to the reputational cost of a breach on a *life data* product |
-| 🟡 5 | **Public "Security & Trust" page on logcoretech.com** (marketing-facing counterpart to the in-app Help → Security & Privacy section that already shipped 2026-07-19) | 3 | 2 | The existing content only reaches people who've already signed up; a pre-signup prospect evaluating "can I trust this with my family's/business's data" has nothing to read today. Largely a repackaging job, not new writing |
-| 🟡 5 | **SOC 2 readiness gap-assessment** (not certification — just document what's missing) ahead of courting any business/team customers who'll ask for it | 3 | 2 | Cheap to start now (a document, not an audit) and avoids being blindsided by the question once the business-workspace/Team-module customer segment is actively being sold to |
-| 🟡 5 | **Bug bounty / vulnerability reward program** (even a modest hall-of-fame + small cash reward for CRITICAL/HIGH) | 3 | 2 | `SECURITY.md` already offers changelog credit; a paid tier (even $50–200 for critical findings) meaningfully increases researcher motivation once there's real revenue to fund it — sequence after Stripe billing lands |
-| ⚪ 4 | **Cyber liability insurance for the managed-hosting business** | 3 | 1 | Not a product feature, but the standard risk-transfer move once real customer data is being hosted for pay; a Business-repo/ops item, not app work |
-| ⚪ 3 | **Publish `/.well-known/security.txt`** (RFC 9116) pointing to `SECURITY.md` | 1 | 2 | Trivial, standard, and it's what automated security-research tooling and some bug-bounty platforms look for by convention before a human ever reads `SECURITY.md` |
-
-### Cycle 14 — Mobile-Specific (2026-07-25)
-
-Read `app/frontend/public/sw.js`: the PWA service worker is already well-built (app-shell caching, network-first API/HTML with cache fallback, push notification handling) — offline API calls degrade to a clean `{"error":"offline"}` response rather than hanging or crashing. This confirms the big-lift "Offline-first PWA sync" backlog item is correctly scoped as a data-sync project, not a from-scratch SW build. This cycle focuses on smaller mobile-native-feel gaps the SW audit and module review surfaced.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 6 | **Biometric/PIN app-lock on launch (Face ID/Touch ID/Android biometric via WebAuthn, or a simple PIN fallback)** | 3 | 3 | The app opens straight to finance/journal/contacts data with no re-auth gate once the JWT session is live — for a "life OS" holding financial and personal data on a device that can be picked up by anyone, this is a meaningful trust/privacy differentiator competitors like Notion don't need to think about as hard (their data isn't this sensitive by default) |
-| 🟡 6 | **Native app-store wrapper (Capacitor) for iOS/Android** — distinct from the existing PWA install | 3 | 3 | Gets LogCoreOS discoverable in the App Store/Play Store (a real acquisition channel PWA-only misses entirely), and unlocks home-screen widgets + more reliable background push than PWA-on-iOS currently allows (README already flags iOS PWA push limits) |
-| 🟡 5 | **Visible offline-state banner instead of relying on individual API error messages** | 2 | 3 | The service worker already returns a clean offline signal for failed API calls, but it's unclear whether the frontend surfaces a single "you're offline" banner vs. scattered per-request error toasts; a consistent app-wide indicator is a small change with an outsized "this feels solid" effect |
-| 🟡 5 | **Swipe gestures for common list actions** (swipe-to-complete a task, swipe-to-archive a note/asset) | 2 | 3 | Standard mobile-native interaction pattern users expect from any modern list-based app; currently everything requires opening a modal even for a one-tap action |
-| ⚪ 3 | **Pull-to-refresh on mobile list views** | 1 | 2 | Cheap, expected-by-default mobile gesture; low priority relative to the items above |
-| ⚪ 3 | **PWA app-icon badge count for unread notifications** | 2 | 1 | Browser/OS support for the Badging API is inconsistent across platforms; nice-to-have polish once the bigger mobile items above are done |
-
-### Cycle 15 — Pricing & Packaging Deep Dive (2026-07-25)
-
-Builds on Cycle 1's "feature-gate design pass" idea with concrete proposals, grounded in what's already built: the personal/business workspace split, the module system (`ALL_MODULES`), the household/team pools, and the AI usage counter's hard/soft-cap design (owner-decided 2026-07-20).
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 7 | **Concrete managed-hosting tier proposal mapped onto the existing workspace/module system** — e.g. Personal (personal workspace only) → Family (+ household pool, more seats) → Business (+ business workspace, team pool, higher AI cap, priority support) | 4 | 2 | Turns the abstract Cycle-1 "feature-gate design pass" into something billing-implementable without new architecture — every proposed boundary (workspace access, pool access, module set) already exists as an enforcement point (`disabled_modules`, `enabled_workspaces`) |
-| 🟡 6 | **"Bring your own AI key" discount tier for managed hosting** | 4 | 1 | The AI provider abstraction and per-instance API key support already exist (self-hosters already do this); offering a cheaper managed tier for customers who supply their own Anthropic/OpenAI key transfers the single biggest variable cost (AI tokens) off LogCore's books using tech that's already built, not a new feature |
-| 🟡 5 | **Founding-member / early-adopter lifetime-discount pricing for the first N managed-hosting signups** | 3 | 1 | Standard, low-cost launch tactic that rewards exactly the beta testers already in the pipeline and creates urgency for the next wave of signups once pricing goes live |
-| 🟡 5 | **AI usage overage pricing (pay-per-additional-message) as an alternative to the hard cap** | 3 | 1 | Complements the hard-cap/soft-cap design already decided 2026-07-20 (Now section) — a third "just charge for more" option avoids losing a paying customer's session entirely at the cap, at the cost of more billing complexity |
-| ⚪ 4 | **Multi-seat/family bundle discount** (per-additional-user pricing under one managed instance) | 3 | 1 | The app is inherently multi-user per instance already; pricing per-instance-flat vs. per-seat is a real open question worth deciding deliberately rather than defaulting to one model |
-| ⚪ 4 | **Nonprofit / student discount tier** | 2 | 2 | Goodwill + community-growth channel consistent with the project's OSS roots; low revenue impact but cheap to offer and good for the self-hoster community's perception of the business side |
-
-### Cycle 16 — Activation & Onboarding Funnel (2026-07-25)
-
-Search step found a significant, previously-unflagged gap: **the app has zero outbound email capability anywhere** (`grep` for `smtp`/`sendgrid`/`mailgun`/`send_email` across the whole backend found nothing) — `docs/PROJECT.md` itself notes "Email is used for login only — not for sending messages." No welcome email, no invite email, no password-reset email exists or could exist without new infra. This quietly constrains three *already-backlogged* items (Help feedback delivery, Admin password reset, v0.3 email digests) to workarounds instead of the obvious solution, and it's the same missing piece for all three — worth solving once.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 7 | **Add baseline transactional email infrastructure** (a single `email_service.py` behind a provider abstraction — Postmark/SES/SMTP relay, self-hosters can point at their own relay or leave it disabled) | 4 | 3 | Not a feature on its own — it's the shared prerequisite that makes the password-reset, Help-feedback-delivery, and email-digest backlog items buildable as intended instead of each reinventing a partial workaround (in-app-only notices, mailto: links). One piece of infra, three backlog items unblocked cleanly |
-| 🟡 6 | **"Invite your household/team" prompt after first-user setup** | 3 | 3 | Multi-user is a core differentiator (the whole point of Household/Team pools) but nothing currently nudges a freshly-onboarded admin to actually add the other people it's built for; doesn't require the email infra above — can start as "here's the Admin → Add User flow" surfaced at the right moment |
-| 🟡 5 | **Demo → real-signup bridge** (offer to carry over what a demo visitor created, instead of it just resetting nightly with no path forward) | 3 | 2 | The demo is explicitly throwaway (nightly reset, no AI key) by design, but a visitor who spent 10 minutes setting up tasks/notes in the demo has zero path to keep that work when they decide to actually sign up — a "create your real account and keep what you made" bridge could meaningfully lift demo→signup conversion |
-| 🟡 5 | **First-AI-chat quick-start prompt chips** ("Plan my week", "Summarize my tasks", "Organize my tasks by project" — the exact examples already listed as working in `docs/PROJECT.md`) | 2 | 3 | Those example commands already exist in the roadmap doc as proof the natural-language interface works, but a brand-new user facing a blank chat box has no way to discover them without reading documentation first |
-| 🟡 5 | **Progressive module/nav disclosure for new users** (a smaller "starter set" in the sidebar that expands as the user engages, instead of all 14 modules visible day one) | 2 | 3 | A first-time user (especially a non-technical household member being onboarded by the admin) sees the full module list immediately; a narrower default reduces first-session overwhelm without removing any capability |
-| ⚪ 4 | **Trial-to-paid nudge sequence for managed hosting** (day-3 usage recap, day-10 low-engagement check-in) | 3 | 1 | Real conversion lever once billing exists, but depends on both Stripe billing (already backlogged) and the transactional-email infra above — sequence last |
-
-### Cycle 17 — Product Analytics for the Business Itself (2026-07-25)
-
-**Hard constraint carried through every idea in this cycle**: "data ownership first" and no-cloud-required-by-default are the project's core promise (`docs/MEMORY.md`/`PROJECT.md`). Any telemetry idea here must be opt-in, anonymized/aggregate only, and never touch Brain content — violating that would contradict the actual product being sold. Right now there is **no usage/feature-adoption signal at all**, self-hosted or managed, beyond the in-progress AI-usage counter (Now section) — the owner has no data-driven way to know which of the 14 modules people actually use.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 7 | **Managed-hosting module/feature engagement tracking** (extend the in-progress AI usage counter's pattern to log which modules are actually opened per tenant — operational metadata only, same `_system/` storage philosophy, never Brain content) | 4 | 2 | Consent is already implicit in a hosted agreement (unlike self-hosted instances), so this is the lowest-friction place to start; without it, every roadmap call about which module to invest in next (Projects? Health tracking? deeper Finance?) is a guess |
-| 🟡 6 | **Fully opt-in, anonymous, aggregate telemetry toggle for self-hosted instances** (Admin → "Help improve LogCoreOS", off by default, sends only anonymized feature-usage counts — module opens, never Brain content or identifiers) | 4 | 2 | The much harder version of the idea above — self-hosters are the majority of the userbase and the roadmap is currently flying blind on their usage entirely. Must be opt-in and radically transparent about exactly what's sent (a "preview the payload" link in the toggle itself would go a long way) to stay consistent with the product's own values |
-| 🟡 5 | **Lightweight in-app NPS-style feedback prompt** (opt-in, local-first — shown after N weeks of use, only submitted if the user explicitly clicks send) | 3 | 2 | A qualitative complement to the quantitative ideas above; doesn't require any new backend infra beyond the existing Help feedback `mailto:` pattern to start |
-| 🟡 5 | **Feature-flag-driven canary rollout** (ship a new module/behavior to managed instances first via the existing feature-role system, gather real feedback, before it reaches self-hosted `master`) | 3 | 2 | The feature-role infrastructure for per-user/per-instance module visibility already exists (`features_service.py`) — repurposing it for staged rollout is mostly a process change, not new code |
-| ⚪ 4 | **Aggregate crash/error-rate rollup across all managed tenants** (distinct from the per-instance Sentry/GlitchTip idea in Cycle 3 — this is the business's own fleet-wide view) | 3 | 1 | Only valuable once there are several managed tenants and per-instance error monitoring (Cycle 3) already exists to roll up from; sequence after both |
-
-### Cycle 19 — Finance Module Deep Dive (2026-07-25)
-
-Read `finance_service.py` and `finance_planning_service.py` function-by-function. Confirmed several capabilities are absent (not just under-polished): no split-transaction support (one category per tx only), no reconciliation workflow, no budget rollover between months (`grep` for `rollover`/`carryover` found nothing). These are distinct from the already-backlogged Profit First / cross-book Transfer primitive / Waterfall visualization items.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 6 | **Split transactions** (one purchase across multiple categories, e.g. an 80/20 Target run) | 3 | 3 | Real-world spending routinely doesn't fit one category; forcing a single category per transaction either under-categorizes or forces awkward manual splitting into fake duplicate transactions today |
-| 🟡 6 | **Bulk transaction recategorize/edit** (select multiple imported transactions, apply a category/tag to all at once) | 3 | 3 | Bank sync and CSV import routinely land dozens of uncategorized transactions at once — the single biggest volume moment in Finance has no bulk tool, unlike the general Cycle-2 bulk-actions idea this is the highest-frequency place it would actually get used |
-| 🟡 6 | **Savings goals tied to an account** (visual progress toward a target balance, e.g. "Emergency fund: $3,200 / $10,000") | 3 | 3 | Distinct from task-type Goals — a finance-native goal ties directly to real account balances instead of being a manually-updated task; a natural companion to the existing budgets/projection work |
-| 🟡 5 | **Budget rollover option** (unspent budget carries into next month instead of resetting) | 3 | 2 | Standard envelope-budgeting behavior that many users expect; today every budget period is a hard reset with no accumulation, which doesn't fit how a lot of households actually save toward irregular expenses |
-| 🟡 5 | **Auto-post planned one-off transactions on their due date** (currently `planned.json` items are forecast-only — they feed the projection but never become a real ledger transaction automatically) | 3 | 2 | Users still have to remember to manually record a planned expense/income when it actually happens, duplicating effort already spent planning it; auto-posting (with an easy undo/edit) closes that loop |
-| ⚪ 4 | **Accountant-friendly export formats (QIF/OFX)** beyond the existing CSV/tax-summary export | 2 | 2 | Lets the accounting/bookkeeping-adjacent business-workspace users hand data to a real accountant or import into QuickBooks/Xero without reformatting a CSV by hand |
-
-### Cycle 20 — Assets Module Deep Dive (2026-07-25)
-
-Read `assets_service.py`; confirmed via grep that none of `warranty`, `depreciation`, `insurance`, `barcode`/`qr_code`, or `expir[y/ation]` exist anywhere in the module today. These are distinct from the existing "Assets follow-ups (deferred)" backlog item (template-key rename, pool conversion, bulk CSV, map/gallery views, cross-branch relations, etc.) — that list is about the tree/sharing mechanics; this cycle is about what a physical-asset-inventory app is *for*.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 7 | **QR/barcode label generation + scan-to-open** — generate a printable QR code per asset that deep-links straight to its page | 3 | 4 | Assets already tracks genuinely physical things (vehicles, equipment, parcels); a printable label you stick on the actual object and scan with a phone camera is the single most tangible "this app is built for real life" feature available in the whole product, and it's a strong differentiator against Notion-style generic databases |
-| 🟡 6 | **Warranty / registration / service-due reminders** (expiration date field + notification via the existing suggestions engine — car registration, appliance warranty, equipment service interval) | 3 | 3 | This is the actual killer feature of dedicated home-inventory apps (Sortly, Encircle) — LogCoreOS already has the template system, the field types, and a notification/suggestions engine; this is mostly wiring existing pieces together, not new infrastructure |
-| 🟡 5 | **Estimated-value tracking over time, optionally rolled into Finance net worth** | 3 | 2 | An asset's current value (a car, land parcel, equipment) isn't a ledger transaction — it doesn't belong in Finance's transaction model — but it's real net worth that today isn't counted anywhere. A simple "current estimated value" field per asset, summed separately from cash-account net worth, closes that gap |
-| 🟡 5 | **Insurance view** — a dedicated filtered view/report of everything tagged as insured, with attached policy docs, for use during a claim or a coverage review | 3 | 2 | The "for insurance purposes" use case is one of the most common reasons someone would build a physical-asset inventory in the first place; the underlying pieces (attachments, templates, tags) already exist — this is a purpose-built view over data users are likely already entering |
-| ⚪ 4 | **Read-only public share link for an asset or subtree** (e.g. hand an appraiser or insurance adjuster a link, no account needed) | 2 | 2 | Distinct from the existing user/pool sharing model, which requires the recipient to be a LogCoreOS account; useful for the insurance-claim scenario above without expanding the account-based sharing system |
-
-### Cycle 21 — Contacts/CRM Deep Dive (2026-07-25)
-
-Read `contacts_service.py`. Found a genuinely half-built feature: a `birthday` field exists and is validated (`YYYY-MM-DD` format check, `contacts_service.py:206-213`) but `grep` for `birthday` across the whole backend found it referenced only in the service and router — **no scheduler job ever reads it**, unlike `follow_up` dates which do get a nightly reminder job. Also confirmed the existing dedup search (`find_match`) only prevents *new* duplicate contacts at create time — there's no tool to merge duplicates that already exist (e.g. from a CSV import before dedup logic improved), and no deal-pipeline analytics (win-rate, average deal size, forecasted revenue by stage) despite the kanban pipeline already tracking everything needed to compute them.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 7 | **Wire up the already-stored `birthday` field to an actual reminder** (nightly job mirroring the existing `run_followup_reminders` pattern) | 3 | 4 | The data model and validation already exist — this is the single cheapest fix in this whole deep dive relative to its value, and it's exactly the kind of "wait, why doesn't this already work" gap a user notices immediately once they enter a birthday and nothing happens |
-| 🟡 6 | **Deal-pipeline analytics** (win-rate by stage, average deal size, average time-to-close, forecasted revenue) | 4 | 2 | The kanban pipeline already carries everything needed to compute these (stage, value, dates) — this is a reporting view over existing data, not new data collection, and it's core CRM value that business-workspace users evaluating LogCoreOS against a real CRM will expect |
-| 🟡 5 | **Duplicate-contact merge tool** (distinct from the existing create-time dedup search, which only prevents *new* duplicates) | 3 | 2 | CSV imports and manual entry before dedup existed can leave real duplicate contacts with no way to combine their interaction/deal history today |
-| 🟡 5 | **Contact engagement/lead score** (recency + frequency of interactions, surfaced as a sort/filter on the contact list) | 3 | 2 | Helps prioritize outreach in a growing contact list — a lightweight computed signal, not a new data-entry burden, using interaction timestamps that already exist |
-| ⚪ 4 | **Email/calendar two-way sync** (auto-log interactions from a connected inbox/calendar) | 3 | 1 | Real CRM-parity feature but a heavy lift requiring OAuth + external API integration, and blocked on the fact that the app has no email infrastructure at all yet (Cycle 16 finding) — sequence far out |
-
-### Cycle 22 — Automations/n8n + Scheduler Deep Dive (2026-07-25)
-
-Read `scheduler.py`: every job is individually try/excepted at the top level, and per-user loops (e.g. `job_morning_digest`) catch exceptions per-iteration too — this actually **de-risks** the existing Cycle-9 "scheduler job isolation audit" idea; a quick read suggests the pattern is already sound, though a full audit of every job is still worth the hour to confirm. The bigger finding is a real gap between stated architecture and shipped reality: `docs/PROJECT.md` §6 explicitly promises **"n8n is never a required dependency... keeps the system vendor-agnostic and self-contained by default"** via a native "LogCore Workflows" engine — but today, `n8n_service.py`/`automation_inbox_service.py` show automation runs exclusively through the bundled/external n8n container. A self-hoster who doesn't want n8n running has **no automation path at all**, unlike the AI-provider abstraction, which genuinely is swappable. There is no active backlog item for the native engine itself — only "AI-built n8n automations (v0.4)" (generating *n8n* workflows) and "Automation Inbox generalization," neither of which is the vendor-agnostic engine PROJECT.md describes.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 7 | **Promote the native "LogCore Workflows" engine (PROJECT.md Phase 3) into an actual scoped backlog item**, or explicitly revise PROJECT.md if the vendor-agnostic-automation promise has been superseded by "n8n is the automation layer" | 4 | 3 | This isn't a new idea so much as flagging that a specific, explicit architectural promise in the roadmap doc has no corresponding backlog entry and no shipped path — either build toward it or stop promising it in the docs; leaving the gap silent is the worst of both options |
-| 🟡 6 | **Workflow failure alerting** — notify the admin when a business workflow's n8n executions start failing repeatedly, instead of requiring a manual check of execution history | 3 | 3 | `get_executions()` already surfaces n8n's own history, but nothing proactively watches it; a lead-generation workflow silently failing for a week is a real, invisible business cost today |
-| 🟡 5 | **Per-workflow ROI display on the Automations page itself** (executions, items surfaced, items acted on) — a scoped-down version of the already-backlogged aggregate "Monthly value report" | 3 | 2 | Gives an admin an at-a-glance read on whether a specific workflow is worth keeping active, without waiting for a periodic report |
-| ⚪ 4 | **Community workflow-template gallery for self-hosters** (curated, importable n8n templates — distinct from the business-only stub-auto-sync system) | 3 | 1 | Lowers the barrier for a self-hoster to get any automation running without designing an n8n workflow from scratch; sequence after the vendor-agnostic-engine question above is resolved, since it affects whether n8n templates are even the right thing to invest in |
-
-### Cycle 23 — AI Agent Safety & Tool-Registry Deep Dive (2026-07-25)
-
-Read `agent_service.py`'s tool registry and `Chat.jsx`'s `ApprovalCard`. Confirmed a real loop guard exists (`MAX_STEPS = 10`, tool-call timeouts at 60–120s) and every write tool is gated behind one shared `_READ_TOOLS`/write-tool split — the mechanics are sound. But two specific gaps stood out, the first serious enough to flag as the top item in this whole pass:
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🔴 9 | **Auto mode executes destructive tools (`delete_asset` and equivalents) with zero human confirmation, and there is still no trash/undo backstop anywhere in the app** | 5 | 4 | Per `docs/AGENTS.md`: "Auto mode — AI executes directly using available tools" — no `ApprovalCard`, no pause, at all. Combined with the Cycle-2 finding that nothing in the app has a soft-delete/restore window, an AI in Auto mode that misreads an instruction ("clean up my old assets") can permanently destroy real data with zero confirmation and zero recovery path. For an "AI-native life OS" whose entire pitch is trustworthy AI handling of irreplaceable personal data, this is the single highest-severity finding across the whole idea-backlog pass. Two independent mitigations, either sufficient alone: (1) keep destructive tools approval-gated even in Auto mode (carve them out of the mode's tool set), or (2) ship the Cycle-2 trash-bin/soft-delete backstop so any AI-driven delete is recoverable regardless of mode |
-| 🟠 7 | **Differentiate destructive AI actions in the `ApprovalCard` UI** — currently every write tool (a benign field edit and a permanent delete) renders identically: same orange card, same one-click "Approve," and the delete's argument list shows a raw `asset_id` rather than a human-readable summary of what's actually being deleted | 3 | 4 | A user approving "`delete_asset` — asset_id: 8f3a2c1e" has to take the AI's word for what that ID actually refers to; showing the resolved name/summary (e.g. "Delete asset 'Grandma's Ring'") and a distinct red/warning treatment for irreversible ops is a small frontend change with an outsized trust payoff, and it's the more actionable near-term step if the Auto-mode item above needs a bigger design pass first |
-| 🟡 6 | **Automated prompt-injection red-team test suite** — adversarial Brain-file content run through chat, asserting the agent never takes an unintended write action | 3 | 3 | `docs/MEMORY.md` documents the `<brain_data>` XML-tag mitigation as a design decision, but nothing verifies it continues to hold as the tool registry grows; a natural extension of the Cycle-3 "add E2E/integration test coverage" finding, scoped specifically to the AI safety surface |
-
-### Cycle 24 — Notifications & Scheduler-Jobs Deep Dive (2026-07-25)
-
-Read `push_service.py`/`notification_service.py`. The engineering here is solid where it exists: expired push subscriptions (HTTP 410) are already auto-cleaned up, and per-suggestion-type enable/disable toggles already exist (confirmed via `scheduler.py`'s `cfg["daily_digest"].get("enabled", True)` pattern). Two real gaps stood out instead: `save_subscription`/`get_subscription` in `push_service.py` are **singular per user** — installing the PWA on a second device silently overwrites (steals) push delivery from the first, with no multi-device concept at all; and `grep` for `quiet`/`dnd`/`do_not_disturb` across the notification stack found nothing — there's no way to say "don't push me between 10pm and 7am" independent of which suggestion types are enabled.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 7 | **Multi-device push support** (a list of subscriptions per user instead of one, each independently 410-cleaned-up) | 3 | 4 | A household member who installs the app on both their phone and a shared desktop today silently loses push on whichever device they registered first — this is exactly the kind of "wait, why did notifications stop working" bug report that's hard to diagnose without knowing the storage is singular |
-| 🟡 6 | **Quiet hours / do-not-disturb window** (a time range, per user, during which no push fires regardless of suggestion type) | 3 | 3 | Distinct from the existing per-suggestion-type toggles — a user might want daily digests AND overdue alerts, just not at 2am; this is table-stakes for any notification system and currently has no equivalent control at all |
-| ⚪ 4 | **Actionable push notifications** (OS-level action buttons — e.g. Accept/Decline directly from the notification for a follow-up reminder or asset-comment mention — instead of only a deep link) | 2 | 3 | The Web Push API supports notification actions; most current notifications just deep-link into the app, requiring a full app open for what could be a one-tap response |
-
-### Cycle 25 — Role-Based Onboarding Deep Dive (2026-07-25)
-
-Read `admin_create_user` (`routers/auth.py:903`): `CreateUserRequest.password` is a **required plain-text field the admin must type themselves** — no auto-generated temp password, no `must_change_password` flag, no invite-link option. Combined with the Cycle-16 finding that the app has zero email infrastructure, onboarding a non-technical household member today means the admin invents a password on the spot and communicates it out-of-band (verbally, a text message, a sticky note) with no in-app support for that handoff at all, and the new user can use that admin-chosen password indefinitely.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 8 | **Fix the admin-create-user password handoff** — either (a) auto-generate a temp password + force a change on first login, or (b) generate a one-time invite link/code the admin shares however they like (text, verbally) that lets the new user set their own password | 4 | 4 | This is the actual first-run experience for every non-first user on every instance — a genuine security best-practice gap (no forced change) *and* a friction point (admin has to invent and relay a password by hand) bundled into one fix; option (b) is buildable without the email infrastructure Cycle 16 flagged as missing |
-| 🟡 5 | **Role-aware empty-state / Getting Started messaging for restricted accounts** (guest/custom feature-role users) | 2 | 3 | `guest` is the default feature role and typically has most modules disabled — a newly-onboarded restricted user's first Dashboard could look nearly empty with no explanation, unlike an admin's fully-featured first run which the existing Getting Started checklist is designed around |
-| ⚪ 4 | **"View as" role preview for admins** — see exactly what a given feature role's UI looks like without creating a throwaway test account | 2 | 2 | Useful when configuring a new custom feature role (e.g. "cleaner", "nanny") to verify the restricted experience actually makes sense before handing a real family member or employee that account |
-
-### Cycle 26 — DevOps / Multi-Instance Deployment Deep Dive (2026-07-25)
-
-Read `docker-compose.yml` and `update.sh`. Confirmed no service anywhere sets a memory or CPU limit (no `mem_limit`/`cpus`/`deploy.resources` keys at all) — a runaway process in any bundled container has no ceiling. Also confirmed updates are single-instance in-place (`docker compose up --build -d`), so there's a real (if brief) downtime window per release, and every managed tenant currently pulls the same release on its own cron with no staged rollout.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 6 | **Add container resource limits** (`mem_limit`/`cpus` per service in `docker-compose.yml`) | 3 | 3 | Without a ceiling, a memory leak in n8n or a runaway AI-response loop can consume the whole host — self-hosters on modest hardware and managed tenants on cost-sized VPS instances both benefit from a hard cap that fails predictably instead of taking the whole box down |
-| 🟡 5 | **Staged/canary rollout across managed tenants** (update a small percentage first, watch for failures, then roll out the rest) instead of every tenant's cron pulling the same release independently and simultaneously | 3 | 2 | The atomic release-pinned updater (already shipped) controls *what* gets installed; this controls *when*, per tenant — reduces blast radius if a release ships a real bug, which today would hit every managed tenant on the same cron cycle with no canary |
-| ⚪ 4 | **Pre-update backup verification gate** — `update.sh` confirms a recent successful `backup.sh` run exists before proceeding, instead of trusting the cron ran independently | 3 | 1 | A cheap safety check that closes the gap between "backups are configured" and "a backup actually exists to roll back to" right before the riskiest moment (an in-place update) |
-| ⚪ 3 | **Near-zero-downtime updates for managed tenants** (blue-green or rolling container swap instead of in-place recreate) | 2 | 1 | Only worth the added complexity once the Cycle-3/5 status-page and SLA-commitment ideas are actually live and downtime windows start being measured against a promise; premature otherwise |
-
-### Cycle 27 — Data Import/Export & Migration Deep Dive (2026-07-25)
-
-Read `routers/export.py` closely (see the new CHECK item logged under Security follow-ups above — the export endpoint likely bundles the SimpleFIN bank-access secret). Otherwise the export mechanism itself is simple and well-scoped (`user_path()`-bound, rate-limited, streamed as a zip). This cycle's remaining ideas are about the *import* side, which is currently only a roadmapped backlog item ("Importers: Todoist/Notion/Obsidian → Brain") with no scoping detail yet.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 6 | **Import dry-run preview before committing** — scope addition for the already-backlogged Todoist/Notion/Obsidian importer: show exactly what will be created (counts, a sample of mapped items) and let the user confirm before anything is written | 3 | 3 | Import is uniquely high-stakes compared to normal app usage — a bad field mapping could flood a fresh Brain with hundreds of junk tasks/notes in one shot with no easy bulk-undo (ties to the Cycle-2 trash-bin idea, which would also mitigate this); a preview step is cheap insurance for what's otherwise a first-impression-defining feature |
-| 🟡 5 | **Periodically verify Brain export/import round-trips actually work** (an automated test: export a seeded Brain, spin up a fresh instance, confirm the AI can read it) | 3 | 2 | "Your AI context comes with you" is core to the pitch (README, PROJECT.md) but nothing currently tests that an exported zip is actually usable elsewhere — the portability promise is unverified the same way backups were before the Cycle-3 restore-drill idea; same category of "insurance nobody's tested" |
-| ⚪ 4 | **Per-module selective export** (e.g. "export just my Contacts/Finance/Notes" as a smaller zip or CSV) distinct from the all-or-nothing full Brain export | 2 | 2 | Contacts already has its own CSV export; generalizing that pattern gives users a lighter-weight option than downloading their entire life's data just to hand one module's worth to someone else (an accountant, a new tool) |
-
-### Cycle 28 — Competitive Positioning Deep Dive (2026-07-25)
-
-Unlike prior cycles, the search step here was live web research (not codebase reading) on Khoj and Open WebUI — both already named as comparison targets in the backlogged "vs Notion AI / Khoj / Open WebUI" launch item. Two concrete gaps surfaced. **Khoj** offers multi-platform access beyond a web/PWA client — specifically browser, Obsidian, Emacs, desktop, phone, **and WhatsApp** — plus custom agents with tunable personality/tools/knowledge bases. **Open WebUI** already ships document RAG today and a "Pipelines" Python plugin framework for connecting business APIs. Sharpening two existing backlog items with this: (1) RAG over the Brain is roadmapped as v0.2 while a direct comparison target already has it shipped — worth treating as competitive catch-up, not just a nice-to-have roadmap phase; (2) the Phase 7 "Plugin system" roadmap item has a concrete existing example to study (Open WebUI Pipelines) rather than being designed from scratch.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 6 | **Messaging-platform bridge for the AI (WhatsApp or similar)** — `docs/PROJECT.md` §7 already lists "Messaging platforms" as a planned connector with zero scoping or backlog entry | 3 | 3 | Khoj's WhatsApp access is a genuinely compelling low-friction interaction surface (no app to open, just text the AI); LogCoreOS has zero equivalent today and this is an easy comparison point a prospective user checks when evaluating "vs Khoj" |
-| 🟡 5 | **Obsidian/editor plugin bridge for the Notes module** (query or sync the Brain from inside an existing note-taking tool) | 3 | 2 | A clever adoption wedge for people who already use Obsidian and aren't ready to fully migrate — Khoj ships exactly this; it lowers the switching cost that's otherwise a real barrier to trying LogCoreOS at all |
-| ⚪ 4 | **Multi-model side-by-side comparison in chat** (send one prompt, see responses from two configured models at once) | 2 | 3 | Open WebUI supports this; only meaningfully useful once the backlogged Ollama/multi-provider support ships (a single active model today has nothing to compare against), so sequence after that |
-
-## Idea Backlog II — Convenience, Friction, Stickiness, Safety, UI, New Features (50-cycle deeper pass, started 2026-07-25)
-
-Requested focus for this pass: convenience, friction reduction, user stickiness, safety, UI improvements, new features. Same scoring rubric and unvetted status as above. Cross-checked against all 146 existing ideas before adding anything new.
-
-### Cycle 78 — Final Synthesis of the 50-Cycle Pass (Cycles 29–77)
-
-Ran across 10 sweeps, each reading the actual page/service code rather than brainstorming in the abstract: Dashboard/Tasks/Goals, Calendar/Household/Team, Notes/Journal/Brain, Profile/Settings/Login/Setup, Help/Smart Home/Admin, cross-cutting convenience, cross-cutting friction, stickiness/retention, a safety deep dive, and a UI-polish/new-feature grab bag. **56 new scored ideas added** (backlog total: **202** across both Idea Backlog sections), plus **2 more confirmed code-level findings** logged directly as CHECK items under Security follow-ups (not left speculative): `get_workspace()` never verifies the caller is entitled to the workspace it's told to use, and the live GitHub Dependabot alert noticed mid-session. Cross-cycle duplicate scan across all 56 new rows found none.
-
-**The single most significant technical finding of this pass**: `file_service.write_json()`'s per-path lock only wraps the write step, not the read-modify-write cycle — `task_service.py` has no locking at all (unlike `auth_service.py`'s explicit `_auth_lock`, proof the team already knows this race exists and fixed it once). Two concurrent requests touching the same user's `tasks.json` can silently lose one side's change. This is the general root cause behind the earlier Notes-specific conflict finding (Cycle 41) and applies far more broadly.
-
-**Other standout findings, roughly by theme:**
-- **Broken account self-recovery loop** (Sweep D): a user who suspects their account is compromised today can't change their own password, can't delete their own account, and can't sign out other sessions — all three self-service security levers are simply missing.
-- **No `last_active` tracking anywhere** (Sweep H): blocks every retention mechanism that depends on "this person hasn't shown up in a while" — win-back notifications, dormancy visibility, engagement metrics all need this one field first. Compounded by the weekly-review notification's own logic silently skipping exactly the users who complete zero tasks that week — the mechanism currently only ever reaches already-engaged people.
-- **Systemic UI gaps found via `grep`, not guesswork**: zero `Escape`-key handling on any of the app's modals; all 14 destructive-action confirmations use the unstyled native `confirm()`; no unsaved-changes warning anywhere; no shared toast/snackbar component.
-- **No safeguard against demoting/deleting the last admin account** — a single accidental click can permanently lock an entire instance out of its own admin functions.
-- **Tasks' priority-reorder modal likely doesn't work on touch devices at all** (native HTML5 drag-and-drop, when Notes already solved the identical problem with pointer events elsewhere in the same codebase).
-
-Everything in both Idea Backlog sections remains unvetted and awaits owner triage — nothing here overrides the active priorities in the sections above.
-
-## Idea Backlog III — Extended Deep-Dive Pass (requested 500 cycles; continuing as far as genuine, non-duplicate, code-grounded material allows — see Cycle 78's note and the final status report at the end of this section)
-
-### Cycle 79 — Finance: Recurring Bills Have No Per-Occurrence Skip
-
-Read `RecurringPanel.jsx` in full: a recurring bill's only actions are Pause/Resume (stops tracking entirely), Edit, and Delete — no way to skip a single upcoming occurrence while keeping the rule active (e.g., a gym membership on a one-month promotional pause, or a bill that's genuinely not due this one cycle).
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| ⚪ 4 | **"Skip this occurrence" on a recurring bill** (advances `next_due` without pausing the whole rule) | 2 | 2 | Pausing is the only current option for a one-off exception, but it stops missed-bill detection entirely until manually resumed — a real gap between "skip once" and "stop tracking indefinitely" |
-
-### Cycle 80 — Finance: Reports Have No Trend/Comparison View
-
-Read `ReportsPanel.jsx`: `grep` for `compare`/`previous`/`trend`/`chart` found nothing. P&L and tax reports show raw period totals only, no "vs. last month/quarter/year" comparison and no visualization.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Period-over-period comparison + a simple trend chart in Reports** | 3 | 3 | A number in isolation ("$4,200 this month") is far less useful than the same number with direction ("up $600 from last month") — this is standard for any financial reporting view and currently entirely absent |
-
-### Cycle 81 — Finance: No Manual "Sync Now" for Bank Connections
-
-Read `SimpleFinPanel.jsx`: `last_sync`/`last_error` are surfaced well, but there's no on-demand sync trigger — `grep` for `sync now`/`manual sync` found nothing. Users wait for the boot+2min/every-12h scheduled job.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Manual "Sync now" button on the bank connection panel** | 2 | 3 | After making a purchase, or after fixing a sync error, a user has no way to force a fresh pull rather than waiting up to 12 hours — a small, obviously-expected control for anything with a sync status display |
-
-### Cycle 82 — Finance: No Category Rename — Only Destructive Delete-and-Recreate
-
-Read `BookSettings.jsx`: `grep` for `rename`/`merge` on categories found nothing. Per `docs/MEMORY.md`, deleting a category relabels all its transactions to `""` (uncategorized) — meaning the only way to fix a typo in a category name today is to destroy every transaction's categorization and start over.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Category rename** (updates the label in place, all existing transactions keep their categorization) | 2 | 3 | A one-character typo fix currently costs re-categorizing every transaction that used the old name — a disproportionate consequence for what should be a trivial edit |
-
-### Cycle 83 — Finance: No Recurring/Subscription Invoice Generation
-
-Closes Sweep K. `grep` for `recurring invoice`/`subscription` in `InvoicesPanel.jsx` found nothing — Recurring Bills covers expenses/income, but a business issuing the same invoice every month to a retainer client has no auto-generation equivalent on the invoicing side.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Recurring/subscription invoices** (auto-draft or auto-send the same invoice on a schedule to a retainer client) | 3 | 2 | A natural extension of the Recurring Bills pattern that already exists for the expense side — retainer/subscription billing is a common real business model this module doesn't yet support without manual monthly re-entry |
-
-### Cycle 84 — Assets: TagInput Doesn't Handle Pasted Comma-Separated Lists
-
-Read `TagInput.jsx`: no paste handler. Pasting "kitchen, appliance, warranty" from elsewhere lands as one literal tag containing commas, not three separate tags, on every surface that reuses this component (template fields, asset tags, share/hide member pickers).
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| ⚪ 4 | **Split pasted comma/newline-separated text into multiple tags in `TagInput`** | 2 | 2 | Small, single-component fix that improves every place `TagInput` is reused (it's explicitly a shared component per `docs/MAP.md`) — cheap leverage |
-
-### Cycle 85 — Assets: No Search in the Tree Picker (Move / Create-Parent)
-
-Read `AssetTreePicker.jsx`: no search/filter input, only expand/collapse navigation. Used for both "Move this asset" and choosing a parent when creating a new one.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Add a search/filter box to `AssetTreePicker`** | 3 | 3 | Assets is explicitly designed for deep, large hierarchies (subdivisions → parcels → equipment) — exactly the case where "expand everything and scan visually" stops working, and this component is the one place users navigate the tree to relocate or place things |
-
-### Cycle 86 — Assets: Attachment Upload Is Click-Only, No Drag-and-Drop
-
-Read `AssetModal.jsx`'s upload control: a plain hidden `<input type="file">` triggered by a button — no `onDrop` handler anywhere.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Drag-and-drop file upload zone for asset attachments** (photos of receipts/equipment are exactly the kind of file people drag from their desktop or a photos app) | 2 | 3 | A now-standard web convenience for file upload that's absent here; cheap to add on top of the existing upload handler |
-
-### Cycle 87 — Assets Sweep Close: Template Field Reorder Already Works Well (Non-Finding)
-
-Closes Sweep L. Verified `TemplateManager.jsx`'s `moveField()` (↑/↓ buttons per field) already provides reordering — flagging this explicitly as a **non-finding** so it isn't mistakenly re-investigated in a future pass. No new idea from this check.
-
-### Cycle 88 — Contacts: No Sort Control on the Contact List
-
-Read `Contacts.jsx`: `grep` for `sortBy`/`sortKey`/`localeCompare` found nothing — no user-facing sort control (by name, most-recent-interaction, company) on the contact list, just whatever order the backend returns.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Add a sort control to the Contacts list** (name, recently added, most recent interaction) | 2 | 3 | A growing CRM contact list with no sort control becomes hard to scan quickly — "who did I talk to most recently" is a common real query this can't currently answer without opening each contact |
-
-### Cycle 89 — Contacts: Deal Pipeline Advances via Dropdown, Not Kanban Drag
-
-Read the deal-stage code in `Contacts.jsx`: stage changes go through a plain `<select>` (line 266/355), not drag-and-drop between columns — despite `docs/MEMORY.md` describing the feature as a "kanban+list" pipeline.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **True drag-and-drop between kanban stage columns** (the dropdown can stay as a fallback/accessible alternative) | 3 | 3 | A kanban board's whole interaction model is dragging cards between columns — a dropdown-only implementation works but doesn't deliver the visual, tactile experience the "kanban" framing promises, and it's the deal-pipeline's primary interaction |
-
-### Cycle 90 — Calendar/Automations Sweep Close: Two Solid Non-Findings
-
-Closes Sweep M. Verified two things already work well and don't need fixing: `Calendar.jsx` has a working "Today" jump button (`goToday()`), and `Automations.jsx`'s execution log already shows per-run success/failure status with colored badges (the *proactive alerting* gap on top of that data is already captured in Cycle 22 — not repeated here).
-
-### Cycle 91 — Docs Accuracy: `brain.py` Is Not Admin-Only, and Only Ever Touches `.md` Files
-
-Read `routers/brain.py` in full to verify the Cycle-42 finding above (which turned out to be wrong — corrected there). Two things confirmed here: (1) every endpoint uses plain `get_current_user`, not `require_admin` — despite both `docs/AGENTS.md` and `docs/MAP.md` describing this router as "admin-only writes." In practice any authenticated user can read/write their *own* `.md` files (correctly scoped via `_resolve()`'s `target.relative_to(base)` check) — this looks like intentional self-service behavior for a normal user-facing nav page (`Brain.jsx`, not wrapped in `<AdminOnly>`), with the docs simply stale. (2) `_resolve()` explicitly rejects anything not ending in `.md` — `.json` files were never reachable here, which is what made the Cycle-42 finding wrong.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| ⚪ 3 | **Fix the stale "admin-only writes" description of `brain.py` in `docs/AGENTS.md` and `docs/MAP.md`** (or restrict it to admin if that was actually the intent and the current self-service behavior is the bug) | 1 | 2 | A conflict between documented and actual behavior for a file-write endpoint is worth resolving explicitly either way — either the docs are wrong (cheap fix) or the code is more permissive than intended (bigger question), and right now nobody has decided which |
-
-### Cycle 92 — Safety: Deleting a Custom Feature Role Doesn't Check Who's Using It
-
-Read `routers/features.py`'s `delete_role` (line 87): it removes the role from `_system/features.json` without checking whether any user currently has that `feature_role` assigned. Per `docs/AGENTS.md`, `member` is "the internal fallback when a feature role goes missing" — so deleting a restrictive custom role (e.g. a "cleaner" role with almost every module disabled) silently falls those users back to `member`, which is typically a **more** permissive default, not less. The admin gets no warning that anyone is affected.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 7 | **Warn (or block) deleting a feature role that's still assigned to users**, showing who's affected before confirming | 3 | 3 | This is a real, silent privilege-escalation path: an admin cleaning up an unused-looking role can inadvertently grant broader access to real accounts (a cleaner, a nanny, a guest) with zero indication anything changed — exactly the kind of consequence a deletion confirmation should surface before it happens |
-
-### Cycle 93 — Safety: Physical-Security Home Assistant Actions Have No Backend-Level Distinction
-
-Read `routers/home.py`'s `call_entity_service` (line 88): gated only by `_require_home` (any user with the Home module enabled) — no special check for `lock`/`cover` (garage) domains vs. `light`/`switch`. This confirms and sharpens Cycle 52/23: the frontend's `window.confirm()` before unlocking a door is **entirely client-side** — a direct API call (or a compromised browser context, or the AI's `control_home_device` tool in Auto mode) bypasses it completely, because the backend treats "unlock the front door" and "turn on a light" as identically privileged actions.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 6 | **Add a server-side confirmation/step-up requirement for physical-security-relevant HA domains** (`lock`, `cover`), not just a frontend `confirm()` | 3 | 3 | Directly strengthens the Cycle-52 recommendation with the specific mechanism: since the client-side confirm is trivially bypassable by anything that talks to the API directly, the real fix has to live in `routers/home.py`, not just the React component |
-
-### Cycle 94 — Stickiness: Streaks Have No Grace Period
-
-Read `recurring_service.process_user()` (line 65-69): missing a recurring task by even one day zeroes `streak_count` immediately at the next nightly run — no forgiveness mechanic at all.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **A limited "streak freeze"** (e.g. one grace day per month, or an explicit "protect my streak" toggle) — a well-proven Duolingo-style retention mechanic | 3 | 2 | An all-or-nothing streak is unforgiving of one bad day (sick, traveling, genuinely busy) and can demotivate exactly the user it's meant to encourage — freezing once in a while instead of resetting to zero is a small mechanic with an outsized effect on whether people keep coming back after a slip |
-
-### Cycle 95 — Cost: Web Search (Tavily) Has No Caching
-
-Read `web_search_service.py`: every research-mode call hits the Tavily API fresh, even for repeated/similar queries in the same conversation — no cache layer at all.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| ⚪ 4 | **Short-TTL cache for identical/near-identical web searches** | 2 | 1 | A modest but real cost lever — ties to the AI-cost-protection theme already prominent in the Now section (Haiku model + per-user caps for the demo); a repeated question in the same session currently re-pays for a Tavily call it already made |
-
-### Cycle 96 — Backend Services Sweep Close: Several Non-Findings Worth Recording
-
-Closes Sweep O. Read `priority_service.py` (Python's stable sort means Top-3 tie-breaking is deterministic, not flickering — fine as-is), `ha_service.py` (HA API calls already have sane 15s timeouts), `hosting_service.py` (clean runtime-override pattern, no issue), and `whats_new_service.py`/`help_service.py` (both solid; the one real open question there — the boot+180s catch-up race — is already tracked as a live CHECK item in the Now section, not repeated here).
-
-### Cycle 97 — Performance: Zero Code-Splitting — All 21 Pages Ship in One Bundle
-
-Read `App.jsx`: all 21 pages are static top-level imports, `grep` for `lazy(` found zero matches. Checked `vite.config.js`: no `rollupOptions.output.manualChunks` either — plain default build. Every user downloads and parses the entire app (Finance's many sub-panels, Assets, Contacts, Automations, everything) on first load, regardless of which modules they actually have enabled or use.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 6 | **Route-level code-splitting via `React.lazy()`** for each page | 3 | 3 | A mechanical, well-understood optimization (React's own built-in pattern, no new dependency) that directly improves first-load time — especially relevant on mobile, the app's primary target device, and for users who only have a handful of modules enabled and are still downloading code for all 21 |
-
-### Cycle 98 — Performance: No List Virtualization Anywhere
-
-`grep` for `react-window`/`react-virtual` in `package.json` found nothing. Every list in the app (Tasks, Finance transactions, Notes tree, Contacts) renders every item as a real DOM node regardless of count.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Virtualize the highest-volume lists first** (Finance transactions, Notes tree) using a lightweight library (`react-window` or similar) | 3 | 2 | Fine today at typical household data volumes, but the app's own core pitch is "years of accumulated life data" — a Finance book with several years of transaction history, or a long-running Tasks history, is exactly the scenario this app is built to reward staying with, and unwindowed rendering only becomes visibly bad well after a user is already invested, which is the worst time to discover it |
-
-### Cycle 100 — Final Synthesis + Honest Status Report on the Requested 500 Cycles
-
-Ran 6 more sweeps (K–P, cycles 79–99) reading the remaining unexplored surface: all 6 Finance sub-panels, all 4 Assets sub-components, Contacts/Automations/CalendarGrid, the 8 backend routers not yet individually read, the 9 remaining backend services, and a performance/bundle-size/CI pass. **21 new scored ideas added** (backlog total: **219** across three Idea Backlog sections), plus **one finding from this pass was itself a false positive, caught and corrected in place** (Cycle 42's JSON-corruption claim — `.json` files are never reachable via `brain.py` at all; withdrawn with a visible strikethrough rather than silently deleted) — this is exactly the kind of self-check the "check for duplicates on every run" instruction is meant to catch, and it applies to *correctness*, not just duplication. A full cross-cycle duplicate scan of every 🔴/🟠 row (91 rows) found no new duplicates.
-
-**Standout findings from this second extension**: deleting a custom feature role doesn't check who's using it, and the `member`-role fallback can silently *widen* access for those users — a real privilege-escalation path from ordinary admin cleanup. The Home Assistant lock/garage `confirm()` gate is entirely client-side with no backend distinction for physical-security domains, sharpening the Cycle-23/52 AI-safety findings with the specific mechanism. And the frontend ships zero code-splitting and zero list virtualization despite the product's core pitch being long-term data accumulation.
-
-**Status report on the requested 500 cycles, as promised at the start of this section:** this pass has now run **100 cycles** across 17 sweeps, reading essentially every page, component, router, and service in the codebase — the large majority of files have now been individually opened and checked, several more than once from different angles. Genuine, non-duplicate, code-grounded findings are getting measurably harder to find per cycle (this batch of 6 sweeps needed noticeably more exploratory reads per finding than earlier batches, and produced two explicit non-finding write-ups plus one correction along the way — a sign of a shrinking remainder, not a widening one). Continuing to literally 500 would mean either re-covering the same files under thinner pretexts (functionally duplicating, even if worded differently) or lowering the evidence bar toward speculation — both of which would work against the actual goal of a trustworthy backlog. **Recommendation: treat this 100-cycle mark as the natural stopping point for this pass.** If you want more after reviewing what's here, the highest-leverage next move is probably triaging what already exists (219 ideas is a lot to action) rather than generating further — but I'm glad to keep going into genuinely fresh ground (e.g. a line-by-line pytest test-suite audit for coverage gaps, or a full WCAG contrast-ratio pass) if that's more useful than triage right now.
-
-
-### Cycle 99 — DX: No Bundle-Size Visibility in CI
-
-Closes Sweep P. There's no bundle-size check/report in the CI pipeline (per the existing Cycle-3 finding that CI's frontend coverage itself is unconfirmed) — nothing would catch a dependency or feature silently doubling the shipped JS size over time.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| ⚪ 4 | **Report bundle size on every PR** (a simple `vite build` size diff comment, or a budget that fails CI past a threshold) | 2 | 2 | Cheap insurance against silent bloat — pairs naturally with the code-splitting and virtualization work above by making their impact (and any future regression) visible instead of assumed |
-
-
-### Cycle 29 — Convenience: Task Creation Friction (Dashboard + Tasks deep read)
-
-Read `Dashboard.jsx` and `Tasks.jsx` in full. Confirmed there is **no lightweight quick-add anywhere in the app** — creating a task, from the Dashboard or the Tasks page, always opens the full `TaskModal` (title, category, type, recurrence, due date/time, assigned-to, linked asset). There's no "type a title, hit Enter" fast path, unlike Todoist/Things-style task managers this competes with for the same use case.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 7 | **Inline single-line quick-add** (a plain text input at the top of the Tasks list and/or the Dashboard Top-3 card — type a title, hit Enter, done; category/priority default and can be refined later by opening the task) | 4 | 3 | This is the single most common action in a task manager and today it always costs a full modal with a dozen fields; distinct from the already-backlogged "Quick capture" item, which is about *external* capture surfaces (email-to-inbox, PWA share_target) — this is the missing in-app fast path that item doesn't cover |
-| 🟡 5 | **Natural-language quick-add parsing** ("Call dentist tomorrow 3pm" → title + due date + time auto-filled) | 3 | 3 | A natural pairing once the quick-add input above exists; ties to the already-backlogged "natural-language date parsing" recurring-task item but applies it to the create step itself, not just recurrence rules |
-
-### Cycle 30 — Friction Reduction: Optimistic UI for Task Completion
-
-Confirmed a consistent pattern across `Dashboard.jsx` (`markDone`) and `Tasks.jsx` (`toggleDone`): both call the write API, then re-run a **full reload** (`load()` — 3-4 parallel API calls) before the UI reflects the change. The button shows a small inline spinner in the meantime. No optimistic update anywhere in either file.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 6 | **Optimistic UI for task/event completion toggles** (flip the checkbox and remove/gray the item instantly; roll back only if the API call fails) | 3 | 3 | Checking off a task is the single highest-frequency interaction in the app — today it always waits on a full multi-request reload before visibly responding, which feels sluggish especially on mobile/slower connections; this is a perceived-speed fix, not a backend change |
-
-### Cycle 31 — Safety & UI Consistency: Every Delete in the App Uses the Native Browser `confirm()`
-
-`grep` for `confirm(` across the whole frontend found it used in **14 different files** (`Admin.jsx`, `Automations.jsx`, `Finance.jsx`, `Goals.jsx`, `Home.jsx`, `Notes.jsx`, `InvoicesPanel.jsx`, `RecurringPanel.jsx`, `TransactionModal.jsx`, `EventModal.jsx`, `BookSettings.jsx`, `TaskModal.jsx`, `TemplateManager.jsx`, `AssetModal.jsx`) — every single destructive-action confirmation in the entire app is the browser's own unstyled `window.confirm()` dialog, not a component from the app's own design system. `TaskModal.handleDelete` (line 92) is a representative example: `confirm('Delete this task?')` — identical wording and treatment whether the task is brand new or a 90-day streak about to be destroyed forever.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 7 | **Replace all 14 native `confirm()` call sites with a shared, styled `ConfirmDialog` component** | 3 | 4 | A jarring, un-styled browser dialog breaking the app's design system at the exact moment (a destructive action) where trust and clarity matter most; it's also a single, mechanical, low-risk refactor (one component, 14 call-site swaps) with an outsized "this feels like a real product" payoff — and the shared component becomes the natural place to add contextual severity (see next row) |
-| 🟡 6 | **Context-aware destructive-action warnings** (e.g. "Delete this task? You'll lose its 90-day streak" instead of a generic "Delete this task?") once the shared confirm component above exists | 3 | 3 | Right now a blank never-touched task and an asset with 50 comments and a 90-day streak get the exact same generic confirmation text — the dialog has all the data needed to say something more useful, it just doesn't today |
-
-### Cycle 32 — Stickiness: Positive-Reinforcement Moments
-
-Read `Goals.jsx`'s progress-summary section — a goal hitting 100% just updates a progress bar number, no distinct moment marks it. Also revisited `Dashboard.jsx`'s Due Today list: a task left undone doesn't roll over gracefully, it becomes overdue (compounding with the already-logged timezone/overdue bug) with no lighter-weight alternative to completing-or-ignoring it.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 6 | **One-tap "snooze to tomorrow" on Due Today tasks** (distinct from opening the full edit modal to change the due date) | 3 | 3 | Right now the only two outcomes for a Due Today item are "complete it" or "let it silently become overdue" — a lightweight snooze reduces the guilt-driven overdue pile-up that's a classic reason people abandon task-manager apps entirely, and it's a one-line addition next to the existing checkbox |
-| 🟡 5 | **A distinct celebration moment when a goal hits 100%** (even a simple animation/toast, not full confetti) | 2 | 3 | Completing a goal — usually a meaningfully bigger achievement than checking off a routine task — currently looks identical to any other progress-bar update; a small, deliberate moment of positive reinforcement at genuine milestones is a well-established, cheap retention lever most competitors (Notion, generic task apps) don't bother with either, which makes it a differentiator, not just table stakes |
-
-### Cycle 33 — UI Improvement + New Feature: Dashboard At-a-Glance Progress
-
-Closes out the Dashboard/Tasks/Goals sweep. The Dashboard header today is just a greeting + date (`Dashboard.jsx:66-67`) — no at-a-glance sense of "how is today going" beyond scrolling through the Top-3/Streaks/Due-Today cards individually.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **"Today at a glance" progress indicator in the Dashboard header** (e.g. a small ring or "3/7 done today" stat next to the greeting) | 2 | 4 | Gives an immediate sense of daily progress without scrolling through cards — a small, purely visual addition that makes the whole page feel more alive on open, and a lightweight first step toward the already-backlogged "this week at a glance" Dashboard summary strip idea (Cycle 6) |
-| ⚪ 4 | **"Focus mode" toggle** — temporarily collapse the Dashboard to just the Top-3 card, hiding Streaks/Due-Today/module widgets | 2 | 2 | A cheap, purely client-side option for a user who wants to open the app, see the three things that matter most, and act — without the rest of the Dashboard competing for attention |
-
-### Cycle 34 — New Feature: Recurring Calendar Events
-
-Read `EventModal.jsx` and `events_service.py`; `grep` for `recurring`/`rrule` in the events service found nothing. Calendar **events** have no recurrence at all — only Tasks do (via the separate task-recurrence system). A weekly standing meeting, a monthly bill due date, or a birthday must be manually re-created on the calendar every single occurrence, or not tracked there at all.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 7 | **Recurring calendar events** (weekly/monthly/yearly patterns, distinct from the already-backlogged multi-day-*span* event schema gap) | 3 | 4 | A genuinely fundamental calendar-app capability that's simply absent today; every competitor calendar (Google, Apple, even a paper wall calendar) supports this, and its absence is the kind of gap a new user notices in their first five minutes of trying to use Calendar seriously |
-
-### Cycle 35 — Convenience: Event Reminders & Location
-
-`EventModal.jsx`'s form fields are title/dates/times/all-day/color/notes only — no reminder lead-time and no location field, despite the app already having a full push-notification pipeline (ntfy + Web Push) that event reminders could plug straight into.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 6 | **Event reminder lead-time** ("notify me 30 min / 1 hour / 1 day before") | 3 | 3 | The notification delivery pipeline already exists end-to-end (ntfy + Web Push, used for task/suggestion alerts) — this is wiring an existing capability to a new trigger, not new infrastructure, and it's a core expectation for any calendar |
-| ⚪ 4 | **Optional location field on events** (plain text, maybe with a map-link auto-generation from the text) | 2 | 2 | Small, cheap addition; useful context ("where") that's currently only expressible by cramming it into the free-text notes field |
-
-### Cycle 36 — Fairness/Friction: Household Members Can't Edit Their Own Events
-
-Read `Household.jsx`'s permission wiring (`canEdit = isAdmin || poolEdit.includes('household')`, line 39, gating the event edit/delete UI at line 168/226). This confirms the documented model precisely: "any member can create events, admin-only edit/delete" (`docs/PROJECT.md`). That means a regular household member who creates a shared event and then notices a typo in the title **cannot fix it themselves** — only an admin or a `pool_edit` grant-holder can.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 6 | **Let a member edit/delete the events *they themselves created*** (using the `created_by` attribution already stored, same pattern Household tasks already use for display) | 3 | 3 | "You can create it but never touch it again" is an unusual and specifically frustrating permission model — nobody expects to need an admin just to fix their own typo. This isn't a broad permissions relaxation (pool-wide edit rights stay admin/`pool_edit`-gated); it's a narrow, low-risk "own creation" carve-out using data the system already tracks |
-
-### Cycle 37 — Stickiness: Chore Rotation for Household
-
-Task assignment already exists for Household (admin assigns a shared task to a named member), but it's static — the same person stays assigned to a recurring chore forever unless an admin manually reassigns it.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Auto-rotating chore assignment** (a recurring household task cycles to the next member in a defined rotation each time it recurs, instead of staying pinned to one person) | 3 | 2 | Fair chore-splitting is one of the most concrete, recurring reasons a family would adopt a shared household tool at all — today achieving that requires an admin to manually reassign the same recurring task every cycle, which nobody actually keeps up with in practice |
-
-### Cycle 38 — UI Improvement: Calendar Agenda/List View
-
-Closes the Calendar/Household/Team sweep. `grep` for `agenda`/`list view`/`viewMode` in `Calendar.jsx` found nothing — the month grid (`CalendarGrid.jsx`) is the only way to view events and dated tasks.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Agenda/list view toggle for Calendar** (a scrollable chronological list of upcoming events + dated tasks, alongside the existing month grid) | 3 | 3 | A month grid is genuinely hard to use on a phone screen — cells are tiny and multi-day/task-pill crowding is already a known constraint (see the multi-day-event backlog item); a simple linear list is often the more usable *default* on mobile, which is where most of this app's real-world usage happens |
-
-### Cycle 39 — Convenience: In-Module Search for Notes & Journal
-
-Read `Notes.jsx` and `Journal.jsx`. Notes browsing is folder-tree-only — `grep` for `search` found nothing — and Journal has no way to jump to a past entry except paging through the date picker one day at a time. (Correction while reading: Notes.jsx *does* already have a "Saving…/Saved ✓" indicator at line 618 — the Cycle-2 "no save confirmation" idea doesn't apply to Notes specifically; noting this here rather than editing that earlier entry.) Distinct from the big Cycle-2 "global search across the whole Brain" project (an AI/cross-module initiative) — this is the much cheaper, module-local version.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 7 | **In-module search/filter for Notes** (filter the tree by title or content match) | 3 | 4 | Once a user has more than a couple dozen notes, folder-tree-only navigation stops scaling — this is a simple client-side filter, not the infrastructure the global-Brain-search idea requires, and it's usable immediately |
-| 🟡 5 | **Jump-to-date / search-by-keyword for Journal** (beyond the day-by-day date picker) | 2 | 3 | Finding "that entry where I wrote about X" today means manually paging backward through the calendar picker one day at a time |
-
-### Cycle 40 — Stickiness: Pin/Favorite Notes + Journal Writing Prompts
-
-Neither pin/favorite (Notes) nor any prompt/starter mechanism (Journal) exists — confirmed no matches for `pin`/`favorite`/`prompt` in either page.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Pin/favorite notes** (a starred subset always shown at the top of the tree, independent of folder location) | 2 | 3 | Some notes (a running shopping list, a reference doc) get opened constantly regardless of where they live in the folder structure — pinning is a near-zero-cost way to skip the tree-navigation cost for exactly those |
-| 🟡 5 | **Optional daily journal writing prompts** ("What are you grateful for today?", rotating or user-configurable) shown as placeholder/starter text on a blank entry | 3 | 3 | Journaling apps live or die on habit formation, and "blank page" is the single biggest reason people stop — a lightweight optional prompt (never forced, easy to ignore) is a well-proven retention lever specifically for this category of app, distinct from the mood-quick-picker idea already backlogged (Cycle 6), which is about structured metadata, not the writing-prompt itself |
-
-### Cycle 41 — Safety: Silent Overwrite on Concurrent Note Edits
-
-Read `notes_service.py:update_note` — no version stamp, ETag, or any conflict check on write. Combined with Notes' 1.5s-debounced auto-save (no explicit save button, so a user may not even realize a note is "live" in two places), opening the same note in two tabs or on both phone and desktop and editing both produces a **silent last-write-wins overwrite** — whichever auto-save lands last simply erases the other session's changes with no warning, and (per the already-backlogged trash-bin gap) no way to recover what was lost.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 6 | **Basic conflict detection on Notes save** (send the content hash/timestamp the editor loaded; if the stored file has changed since, warn before overwriting instead of silently replacing it) | 3 | 3 | This is specifically a data-loss risk, not just a UX rough edge — a user editing the same shopping list from their phone in the kitchen and their laptop at the same time will lose one set of edits with zero indication anything went wrong. A minimal version-check (compare a stored hash, not a full CRDT/merge system) closes the silent-loss case cheaply |
-
-### Cycle 42 — ~~Safety: No JSON Validation in the Raw Brain File Editor~~ (CORRECTED in Cycle 91 — see below)
-
-~~Read `Brain.jsx` — it's a raw markdown/JSON file browser+editor (writes admin-only per `docs/MAP.md`). `grep` for `JSON.parse`/`validate` found nothing: saving a `.json` file (e.g. `Tasks/tasks.json`, `profile.json`) through this editor does no syntax or schema validation before writing. A single missing comma or stray bracket, saved through this power-user page, would corrupt the file the normal app UI depends on.~~ **Correction (Cycle 91):** the backend router `routers/brain.py` explicitly rejects any path not ending in `.md` (`_resolve()`: `"Only .md files are accessible"`) — `.json` files are never reachable through this endpoint at all, so the JSON-corruption risk described here does not exist. Frontend-only inspection missed this backend guard; see Cycle 91 for the corrected finding and what actually needed flagging.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| ~~🟡 5~~ | ~~Client-side JSON.parse validation before save in the Brain editor~~ | — | — | **WITHDRAWN (Cycle 91):** premise was wrong — `.json` files are never reachable via `routers/brain.py` (`.md`-only, enforced server-side), so there is no JSON-corruption path to protect against here |
-
-### Cycle 43 — New Feature: Note Templates
-
-Closes the Notes/Journal/Brain sweep. A new note always starts blank — there's no way to save a reusable starting structure (a meeting-notes layout, a recipe format, a packing checklist) the way the Assets module already does with its admin-curated Templates.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Note templates** (save any note as a reusable starting-point template; "New note from template" alongside plain "New note") | 3 | 3 | Notes is the one content-heavy module without any templating concept, despite Assets already proving the pattern works well in this codebase; recurring note shapes (meeting notes, recipes, trip-packing lists) are extremely common and currently mean retyping the same structure every time |
-
-### Cycle 44 — Safety/Convenience: No Self-Service "Change My Password" Exists At All
-
-Read `Login.jsx` and grepped `routers/auth.py` for any password-change endpoint. Found none — not `current_password`/`new_password`, nothing. This is distinct from (and more surprising than) the already-backlogged "Admin: reset a user's password" item, which covers an *admin* resetting someone else's forgotten password. There is no path today for **a logged-in user who knows their current password to simply change it** — the only way to rotate your own password, for any reason (routine hygiene, suspected compromise, nothing to do with being locked out), is to ask an admin.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 7 | **Self-service "Change password" in Settings** (current password + new password, standard pattern) | 4 | 3 | Basic account hygiene that's simply missing — a security-conscious user has no way to rotate their own password without involving an admin, which is both a real security gap (compromised-password recovery depends entirely on someone else noticing/acting) and a friction point unrelated to the separate admin-reset-for-lockout feature already backlogged |
-
-### Cycle 45 — Convenience/UI: Login Form Small Polish
-
-`Login.jsx` read in full: plain `type="password"` input with no visibility toggle, `minLength={8}` with no strength feedback beyond a browser's default validation message, and no password-recovery messaging of any kind (the "closed registration" state shows "Ask an admin to add you" but there's no equivalent hint for a forgotten password).
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Show/hide password toggle (👁)** on the Login/Register password field | 1 | 3 | Small but genuinely expected in 2026 — typing a password blind on a phone keyboard with no way to verify it before submitting is a needless bit of friction on the very first interaction a new user has with the app |
-| ⚪ 4 | **"Forgot your password? Ask your admin" hint on the login page** (interim messaging fix, not the reset flow itself) | 2 | 2 | Cheap and immediate — today a user who's forgotten their password gets a generic "incorrect password" failure with zero guidance on what to do next, unlike the closed-registration state which already tells the user exactly who to contact |
-
-### Cycle 46 — Safety/Compliance: No Self-Service Account Deletion
-
-`grep` for a self-delete-account endpoint in `routers/auth.py` found none — only `DELETE /auth/admin/users/{id}` (admin-driven) exists. A user cannot delete their own account and data without an admin acting on their behalf.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 6 | **Self-service "Delete my account" in Settings** (with the same cascade-delete correctness the admin path needs — see the already-logged cascade-delete BUG under Now) | 3 | 3 | Ties directly to the GDPR/data-portability work already flagged in Cycle 8 — "right to erasure" is normally something the data subject can exercise themselves, not something that requires asking an admin nicely. Should land *after* (or alongside) the cascade-delete bug fix already in progress, since a self-service path needs the same correct cleanup logic |
-
-### Cycle 47 — UI/Convenience: No User Avatar/Profile Picture
-
-`grep` for `avatar`/`profile_photo`/`photo_url` across the whole frontend found nothing. The app already has rich per-user theming (accent color, background image upload, density, corner style) and even a backlogged "Wii Mii-style" avatar idea — but only for CRM **Contacts**, not for a user's own account. Every mention of a user (sidebar, comment attribution, notification, assigned-task badge) is text-only.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **User avatar/profile picture** (upload a photo, or a simple auto-generated initials/color avatar as the default) | 2 | 3 | A purely visual addition, but it compounds across every place a user is referenced — sidebar, comment attribution, assigned-task badges, notification sender — and the app's own background-upload feature already proves the image-upload plumbing exists to reuse |
-
-### Cycle 48 — Safety: No "Sign Out of All Other Devices"
-
-Closes the Profile/Settings/Login/Setup sweep. Settings has a "Session Length" configuration (how long a login lasts) but no "active devices" list and no "sign out everywhere" action — despite the JWT JTI-revocation mechanism (already used for normal logout) being exactly the right primitive to revoke every outstanding session for a user in one action.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 7 | **"Sign out of all other devices/sessions" button in Settings** | 3 | 4 | This closes a genuinely broken account-recovery loop found across this sweep: a user who suspects compromise today can't change their password (Cycle 44), can't delete their account and start fresh (Cycle 46), and can't even revoke the suspect session directly (this item) — every self-service security lever a user would reach for in that moment is missing, and this is the cheapest of the three to build since the JTI-blacklist mechanism it needs already exists and is already exercised by normal logout |
-
-### Cycle 49 — Safety: No Guard Against Demoting/Deleting the Last Admin
-
-`grep` for `last admin`/`admin_count` in `auth_service.py` found nothing. Nothing stops an admin from demoting themselves (or the only other admin) to `member`, or deleting the last remaining admin account. Since registration is closed by default and only an admin can add users or change roles, that failure mode **permanently locks the entire instance out of its own admin functions** — no in-app way back short of direct Brain file editing on the host.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 7 | **Block the last-admin demotion/deletion path** (reject a role change or delete that would leave zero admins, with a clear error explaining why) | 3 | 4 | This is a classic, well-understood bug class in any multi-role system, and the consequence here is unusually severe for a self-hosted app with no separate superuser backdoor — a single accidental click permanently locks an admin (and by extension every user on that instance) out of user management, module gating, and every other admin-only control until someone edits `auth.json` by hand on the server |
-
-### Cycle 50 — Convenience/Support: Admin "Login As User" for Troubleshooting
-
-`Admin.jsx` has no impersonation/support-login feature — `grep` for `impersonat`/`login as`/`search user` found nothing.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 6 | **Admin "view as" / impersonate a user** (time-boxed, fully audit-logged session that lets an admin see exactly what a specific user sees, without needing their password) | 3 | 3 | Directly useful for the Cycle-5 managed-hosting "support intake" idea — diagnosing "why can't I see my Tasks" is far faster seeing the actual broken state than reading a description of it secondhand. Must be built with real guardrails (audit-logged start/end, clearly-labeled banner while impersonating, no ability to change the target's password/role while impersonating) given the obvious abuse surface a feature like this opens |
-
-### Cycle 51 — UI: Smart Home Entities Grouped Only by Domain, Not Room
-
-Read `Home.jsx`: entities are organized into tabs by domain only (Lights, Switches, Locks, …) with no room/area grouping — display name comes straight from Home Assistant's `friendly_name`.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Group Smart Home entities by room/area** (pull HA's area assignment if the API exposes it, or let the user tag entities with a room locally) as an alternative to the domain-only tabs | 2 | 3 | A non-technical family member thinks "what's in the kitchen," not "show me all my switches" — domain-first organization is a technically-minded default that doesn't match how most people who didn't personally configure Home Assistant actually think about their house |
-
-### Cycle 52 — Safety: Physical-World AI Actions Need a Higher Bar Than Data Writes
-
-`Home.jsx`'s manual lock toggle already does the right thing — a `window.confirm()` gate before unlocking (line 61) — but the AI chat's `control_home_device` tool (`agent_service.py:743`) is just another write tool subject to the same mode rules as everything else, meaning the Cycle-23 Auto-mode finding (destructive tools execute with zero confirmation) applies here too, with a physical-world consequence instead of a data one: an unlocked front door or an opened garage, not just a deleted record.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 6 | **Treat physical-security-relevant Smart Home actions (unlock, garage open) as a stricter tier than ordinary AI writes** — require approval even in Auto mode, regardless of how the general Auto-mode fix (Cycle 23) is resolved for data writes | 3 | 3 | Losing a task to a misfired AI action is recoverable (once the trash-bin idea ships); an unlocked door in the physical world isn't undoable the same way — this specific case is worth a permanent exception to whatever general Auto-mode policy gets chosen, not just inheriting the fix for data-only actions |
-
-### Cycle 53 — New Feature: Admin At-a-Glance Instance Health Overview
-
-Closes the Help/Smart Home/Admin sweep. `Admin.jsx` renders a fixed stack of independent cards (Users, Registration, Workspace Visibility, Roles, AI Provider, Web Search, Hosting, Infisical, n8n, Home Assistant, Pool Priorities) — there's no single summary view; an admin has to open each card to piece together "is everything okay."
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **A top-of-page instance health summary strip on Admin** (user count, current version/update status, last successful backup, AI usage this month, any failing scheduler jobs) | 3 | 3 | Every one of these facts already exists somewhere in the app (Updates card, the in-progress AI usage counter, backup logs) — this is a single glanceable rollup, not new data collection, and it's exactly what an admin actually wants to see first when opening the page rather than auditing each card individually |
-
-### Cycle 54 — Cross-Cutting Convenience: No Modal Closes on Escape, Anywhere
-
-`grep` for `Escape` across the entire `components/` directory returned **zero matches**. Every modal in the app (TaskModal, EventModal, AssetModal, TransactionModal, and every other dialog) can only be dismissed by clicking a Cancel/X button or the backdrop — none respond to the `Esc` key, one of the most universally expected keyboard conventions in any modal-based UI.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 7 | **Universal Escape-to-close for every modal** (a single shared hook/wrapper, not a per-modal fix) | 3 | 4 | This is systemic, not isolated to one component — every dialog in the app has the same gap, and it's exactly the kind of small missing convention that makes an app feel unfinished to anyone used to normal desktop software. A single shared modal-wrapper hook fixes it everywhere at once rather than needing dozens of individual patches |
-
-### Cycle 55 — Cross-Cutting Convenience: No `autoComplete` Attributes on Auth Forms
-
-Re-reading `Login.jsx`'s email/password/name inputs: none carry an `autoComplete` attribute (`autoComplete="email"`, `"new-password"`, `"current-password"`, `"name"`). Browsers and password managers rely on these hints to correctly offer to save/fill credentials and to trigger strong-password suggestions on registration.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Add standard `autoComplete` attributes to Login/Register (and any other credential) fields** | 2 | 3 | A five-minute fix with a real payoff: password managers work more reliably (fewer "did it actually save?" moments), and `autoComplete="new-password"` on registration nudges browsers to suggest a strong generated password — directly reinforcing good account hygiene for free |
-
-### Cycle 56 — Cross-Cutting Convenience: List Filters Reset on Every Navigation
-
-Confirmed in `Tasks.jsx`: `const [filter, setFilter] = useState('pending')` — plain component state, no persistence. Navigate away to check Notes and back to Tasks, and any non-default filter (e.g. "overdue" or "all") silently resets to "pending." The same pattern (local-only `useState` for view/filter choices) is used throughout the frontend's list-view pages.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Persist list-view filter/sort choices** (localStorage or a URL query param, so leaving and returning to a page keeps the view as you left it) | 2 | 3 | Small per-instance annoyance that compounds with daily use — a user who always works from the "overdue" filter has to re-select it every single time they leave and come back to Tasks, which happens constantly in normal app usage (switching to Chat to ask something, then back) |
-
-### Cycle 57 — Cross-Cutting Convenience: No "Duplicate" Action Anywhere
-
-`grep` for `duplicate`/`clone` in `TaskModal.jsx` found nothing, and the pattern holds across the other item modals — creating a similar-but-not-identical item (another instance of a recurring-ish task, a near-copy of last year's holiday event, a repeat transaction) always means filling out a blank form from scratch. The only "clone" mentioned anywhere in the backlog is Assets-specific and bundled into a speculative AI-bulk-ops item.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Plain "Duplicate" action on Tasks/Events/Transactions** (opens a pre-filled create form from an existing item, not an AI feature — just a copy) | 2 | 3 | A simple, direct UI action distinct from the speculative Assets AI-clone idea — genuinely common patterns ("same meeting next week but a different topic," "same trip expense category again") are currently full re-entry every time |
-
-### Cycle 58 — Cross-Cutting Convenience: No "Save & Add Another"
-
-Closes the convenience sweep. `grep` for `saveAndNew`/`keepOpen`/"Save & Another" across `components/` found nothing — every create modal closes on save, full stop. Entering several items in a row (a week's worth of calendar events, a batch of transactions, several tasks for a project) means reopening the modal from scratch each time.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **"Save & add another" option on create modals** (saves the current item and immediately reopens a blank form, optionally carrying forward shared fields like date/category) | 2 | 3 | A well-known productivity pattern (Airtable, Google Forms, most admin CRUD UIs) for exactly the batch-entry moments this app's data model invites — planning a week of household events, or logging several receipts at once — that today cost a full modal open/close cycle per item |
-
-### Cycle 59 — Friction Reduction: No Unsaved-Changes Warning Anywhere
-
-`grep` for `beforeunload`/`isDirty`/`hasChanges` across the whole frontend found nothing. Every explicit-submit form in the app (TaskModal, EventModal, AssetModal, TransactionModal, InvoiceModal, ContactModal, and more) can be dismissed — backdrop click, browser back, tab close — with zero warning, silently discarding whatever was typed. (Notes/Journal are the exception, since they auto-save; this applies to every *other* form.)
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 7 | **Warn before discarding unsaved form changes** (a lightweight dirty-check on the shared modal wrapper — pairs naturally with the Cycle-54 Escape-to-close fix, since both touch the same close path) | 3 | 4 | A long Asset or Invoice form with many fields, lost to one accidental backdrop click with zero warning, is a genuinely bad moment for a new user's first impression — and it's systemic across every form in the app, not a one-off. Bundling with Cycle 54's shared modal-wrapper work is the efficient way to fix both at once |
-
-### Cycle 60 — Friction Reduction: No Breadcrumb When Drilling Into a Nested Asset
-
-Read `AssetView.jsx` — no breadcrumb or "back to parent" affordance. Per `docs/MEMORY.md`, drilling into a child asset re-targets the same modal (`key` forces a remount) — so once you've gone Subdivision → Parcel → Equipment, there's no visible trail back up; the only way out is closing the whole modal and re-navigating the tree from the top-level page.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 6 | **Breadcrumb trail in the Asset modal** (Subdivision ▸ Parcel ▸ Equipment, each segment clickable to jump back up) | 3 | 3 | Assets is explicitly built for arbitrarily nested trees — that's the whole point of the module — but the navigation UI for moving back *up* the tree once you've drilled down doesn't exist, forcing a full close-and-re-find for what should be a one-click "go up one level" |
-
-### Cycle 61 — Friction Reduction: The Full-Reload Pattern (Cycle 30) Can Actually Trigger Rate Limits
-
-Connecting two separate findings: Cycle 30 established that `markDone`/`toggleDone` each trigger a **full reload** (up to 4 parallel GET requests) on top of the single write, per checkbox click. `docs/MEMORY.md` documents general reads at **30/min** and writes at **10/min**. A user quickly clearing out a short todo list — say 6-7 tasks in under a minute, completely normal end-of-day behavior — burns roughly 5 requests per click and can plausibly brush against both limits. `api.js` has no special handling for a 429 response (`grep` confirmed) — it would surface as a generic "Request failed" with no explanation of what actually happened or when to retry.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 6 | **Fix the request amplification at the source (ties to the Cycle-30 optimistic-UI fix) and add a clear, specific 429 message with retry timing if it's ever hit** | 3 | 3 | The real fix is reducing the request count per action (optimistic UI, or a targeted refetch instead of `load()`'s full parallel reload) — but a friendly "You're doing that a bit fast — try again in a few seconds" message is cheap insurance for the case it happens anyway, instead of a generic failure that gives no indication the app is fine and just needs a moment |
-
-### Cycle 62 — Friction/Safety: Timezone Is a Free-Text Field With No Validation
-
-`Setup.jsx`'s timezone field is a plain `<input type="text">` (with an auto-detect button) — no `<select>`, no `<datalist>`, no validation against real IANA zone names. A typo (e.g. "Amercia/Chicago") is silently accepted client-side with no error, and its effects would only surface later as confusing wrong-time behavior — a different root cause than, but the same symptom family as, the already-logged "BUG: timezone offset causes tasks to go overdue" in the Now section.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Validate the timezone field against a real IANA zone list** (a searchable dropdown/datalist instead of free text, or at minimum reject an unrecognized value with a clear error) | 3 | 2 | A mistyped timezone is invisible at entry time and only manifests later as "why are my tasks showing the wrong overdue time" — exactly the kind of silent-misconfiguration bug that's disproportionately hard to diagnose after the fact, worth closing at the source rather than only fixing the downstream comparison logic |
-
-### Cycle 63 — Friction Reduction: Denying an AI Plan Has No Inline Correction
-
-Closes the friction-reduction sweep. `Chat.jsx`'s `ApprovalCard` Deny button (line 406) sends a hardcoded `"No — don't make those changes."` with no way to tell the AI *what* was wrong or what to do instead — the user has to then type a fresh follow-up message from scratch to redirect it.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Optional inline correction field on Deny** ("Deny" stays a one-click no-op as today, but an optional text box — "tell it what to change" — sends that as the follow-up instead of the generic hardcoded denial) | 2 | 3 | Right now denying a plan is a context-switch: close the moment, go retype a whole new message. Letting the correction happen right where the decision was made keeps the interaction in flow, which matters for a chat-first interface where losing conversational momentum is a real cost |
-
-### Cycle 64 — Stickiness: No `last_active` Tracking Anywhere Means No Win-Back Mechanism Is Even Possible
-
-`grep` for `last_login`/`last_active`/`last_seen` in `auth_service.py` found nothing. The app has no record of when a user was last actually active. This is a foundational gap, not just a missing feature: **every** retention mechanism that depends on "this person hasn't shown up in a while" — a win-back notification, admin visibility into dormant accounts, the Cycle-17 engagement-tracking idea — needs this one data point first, and it doesn't exist yet.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 7 | **Track `last_active` per user (updated on login / meaningful API activity) and use it to power a lapsed-user win-back notification** ("Haven't seen you in a while — your Top 3 are waiting") | 4 | 3 | Foundational: this single field unlocks win-back nudges, admin dormancy visibility, and cleaner engagement metrics all at once — worth prioritizing as infrastructure even before deciding exactly which retention feature to build on top of it first |
-
-### Cycle 65 — Stickiness: The Weekly Review Notification Silently Skips Exactly the Users Who Need It Most
-
-Read `_run_weekly_review` (`suggestions_service.py:341-360`) closely: `if not this_week: return {"ok": False, "reason": "no completed tasks this week"}` — a user who completed **zero** tasks in the past week gets no weekly-review notification at all. The mechanism only ever rewards already-engaged users with a "Great week!" recap; the user who's drifting away — the one a retention nudge would actually help — is silently excluded by design.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 6 | **Send a softer message on a zero-completion week instead of nothing** ("Quiet week — here's what's still on your plate" + a link to Top 3, not a guilt-trip) | 3 | 3 | This inverts the current behavior in exactly the right direction: the existing logic celebrates engagement it already has and stays silent on disengagement, which is backwards for a retention mechanism — the whole point is reaching the person who's starting to drift, gently, before they stop opening the app altogether |
-
-### Cycle 66 — Stickiness: Milestones Beyond the Raw Streak Number
-
-Streaks already exist and display as a plain number (`🔥 {streak_count}`) everywhere they appear (Dashboard, Tasks). There's no distinct milestone moment — day 7, day 30, day 100 all look and feel identical to day 3, just a bigger digit.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Milestone call-outs at meaningful streak/completion thresholds** (7/30/100-day streaks, 100th/500th task completed — a small distinct badge or one-time celebratory moment, not a whole gamification system) | 2 | 3 | The raw number already does the basic job, but distinguishing genuine milestones from routine progress is what turns a counter into something someone actually feels good about hitting — a well-proven, low-cost retention lever most task managers underuse |
-
-### Cycle 67 — Stickiness: No Shared Momentum Visibility in Household
-
-Household already shows *what* tasks exist and who they're assigned to, but nothing shows collective progress — "how is the family doing this week" as a whole, versus one person's individual streak.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Household "this week" momentum strip** (e.g. "family completed 23 tasks this week" or a simple per-member completed-count comparison, visible to everyone in the pool) | 3 | 2 | Multi-user households are LogCoreOS's structural differentiator over single-user task apps, but the stickiness mechanisms today (streaks, top-3) are all individual — a lightweight shared/social signal is the kind of feature that makes the *family*, not just one person, want to keep using it, and it's cheap since the underlying completion data already exists in the pool |
-
-### Cycle 68 — Stickiness: No "Welcome Back" Re-Entry Moment
-
-Closes the stickiness sweep. `Dashboard.jsx`'s greeting is time-of-day only ("Good morning, Alex") — identical whether the user was last here five minutes ago or five weeks ago. Distinct from Cycle 64's *outbound* win-back push notification, this is about what greets the user *when they do come back* on their own.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **A distinct "welcome back" Dashboard state after a long absence** (once `last_active` exists per Cycle 64: "Good to see you again — here's what's changed" with a brief catch-up summary, instead of the identical daily greeting) | 2 | 3 | Returning after a lapse and seeing the exact same generic screen as every other day gives no signal the app noticed or is glad to have them back — a small, warm re-entry moment (distinct from a nagging push notification) makes coming back feel like less of a cold restart |
-
-### Cycle 69 — Safety: `write_json()`'s Lock Doesn't Actually Prevent Lost Updates
-
-Read `file_service.py`'s `write_json()`/`read_json()` closely. The per-path `threading.Lock` (`_get_lock`) wraps **only the write itself** (`with lock: ... os.replace(tmp, path)`) — `read_json()` takes no lock at all, and no service wraps its full read-modify-write cycle in the same lock. Checked `task_service.py` specifically: no locking whatsoever (unlike `auth_service.py`, which explicitly uses `_auth_lock` around its own read-modify-write operations on `auth.json` — proving the team already knows this race exists and solved it there, just not everywhere else). The actual sequence that loses data: request A reads `tasks.json` (v1) → request B reads `tasks.json` (v1, before A writes) → A writes v1+its-change (v2, lock prevents a torn write) → B writes v1+its-change (v3, **silently discarding A's change**, because B's in-memory copy was already stale before it ever wrote). This is the *general* version of the Cycle-41 Notes-specific finding — but broader: it applies to any two concurrent requests touching the same per-user JSON file at all (Tasks, Contacts, Journal, and more), not just two sessions editing the identical note.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟠 8 | **A shared read-modify-write helper that holds one lock across the full read→modify→write cycle** (not just the write step) for per-user JSON stores, starting with Tasks and Contacts (Notes' fix is already scoped separately in Cycle 41; Finance's per-book-per-year shards already reduce collision surface somewhat) | 4 | 4 | This is the root cause behind the Notes finding and applies far more broadly — two devices completing different tasks in quick succession, or the nightly recurring-processor job running while a client is mid-edit, can silently lose one side's change today. The existing `_auth_lock` pattern in `auth_service.py` is proof the right fix is already known and used elsewhere in this exact codebase — it just hasn't been generalized past auth |
-
-### Cycle 71 — Safety/Convenience: Shared-Household IP Rate-Limiting Can Lock Out the Whole Family
-
-Read `rate_limiter.py`: keying is `request.client.host` (IP-based; `X-Forwarded-For` only trusted when `TRUST_PROXY_HEADERS=true`). Login is rate-limited to 5 attempts per 5 minutes **per IP** (`docs/MEMORY.md`). A household behind one home router shares one public IP — if one family member (very plausibly a kid) mistypes their password a few times, the shared IP bucket empties and **every other household member on the same network** is locked out of logging in for the next 5 minutes too, even though their own credentials were never wrong. The separate account-scoped lockout (10 failures/15min, keyed by email) is unaffected by this and works correctly per-account — this is specifically about the IP-based limiter layered underneath it.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Consider a higher or NAT-aware login rate limit, or surface a clearer message distinguishing "this IP is rate-limited" from "your password is wrong"** | 2 | 2 | Not a security regression to loosen slightly — the account-level lockout (the layer actually defending against credential stuffing) is untouched either way — but the current 5/5min-per-IP setting was presumably sized around a single user, not LogCoreOS's actual target of multi-person households sharing one network; worth a deliberate re-check rather than an accidental one-size-fits-all setting |
-
-### Cycle 72 — Safety: The Automation Token Has No Scoping — One Leak Is Total Automation-Write Compromise
-
-Re-confirmed from `docs/AGENTS.md`: the single instance-wide `X-Automation-Token` can target **any named user's store** across Assets and Contacts ("`user` may be `_team`/`_household`" / write-focused with no list/export). It's a shared machine credential, rotatable by an admin, but there's no per-workflow or per-integration scoping — every n8n workflow that needs to write anywhere uses the exact same all-or-nothing secret.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Scoped/multiple automation tokens** (e.g. per-workflow or per-integration tokens, each restricted to specific stores/scopes) instead of one shared instance-wide credential | 3 | 2 | Today, a single leaked n8n workflow config (or a compromised n8n instance itself) compromises write access to every automatable store on the instance at once; least-privilege scoping is standard practice for any system issuing machine credentials to multiple independent integrations, and this system currently has none |
-
-### Cycle 73 — Safety: Deleting a Shared Household/Team Item Notifies Nobody
-
-Closes the safety sweep. `grep` for `notify_user`/`add_notification` in `routers/shared.py` (Household pool tasks/events) found nothing. Compare to Assets (comment posting notifies edit-level users) and Finance (share/deviation alerts notify affected parties) — both have real notification wiring. Household/Team's own deletion path has none: if an admin removes a shared event another family member was counting on, that member just finds it silently gone with no explanation.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Notify affected members when a shared household/team task or event they didn't create is deleted** (reusing the existing `notify_user()` pattern already proven in Assets/Finance) | 2 | 3 | Not a data-loss bug (the delete is intentional and authorized) — it's an awareness gap: the person who planned around that event has no way to know it's gone until they notice it missing, which erodes trust in the shared pool being a reliable source of truth for the household |
-
-### Cycle 74 — UI: No Shared Toast/Snackbar System Anywhere
-
-`glob` for `Toast*.jsx` across the whole frontend found nothing. Feedback for successful/failed actions is ad-hoc per page: some show inline red error text (Login, TaskModal), Notes has its own bespoke "Saving…/Saved ✓" label, and many actions (completing a task, saving Settings) give no transient confirmation at all beyond the UI state itself changing.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 6 | **A shared toast/snackbar component for success/error feedback**, adopted consistently instead of each page inventing its own pattern (or having none) | 2 | 4 | Small individually, but it's exactly the kind of consistency that separates an app that feels professionally finished from a collection of well-built-but-independent pages — and it gives every future feature a ready-made place to put "saved," "deleted," and error feedback instead of reinventing it again |
-
-### Cycle 75 — UI Bug-Adjacent: Tasks Priority Reorder Likely Doesn't Work on Touch Devices
-
-Read `Tasks.jsx`'s category-priority reorder modal: `onDragStart`/`onDragOver`/`onDragEnd` are wired to native HTML5 Drag-and-Drop events (`e.preventDefault()` in a `dragover` handler, `dragstart`/`dragend`) — a well-known API that **does not fire on touch devices** without extra polyfill work. Contrast with Notes' folder drag-and-drop, which `docs/MAP.md` explicitly documents as "pointer-based (mouse threshold + touch long-press)" specifically *because* the team already knows HTML5 DnD doesn't work on mobile.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 6 | **Rebuild the Tasks priority-reorder modal on pointer events** (mirroring the pattern Notes already uses) instead of native HTML5 drag-and-drop | 3 | 3 | If confirmed, this means reordering life-priority categories — a core, first-run-relevant feature (it's literally what the whole task-scoring formula weights by) — silently doesn't work at all on a phone, the primary device this app is designed to be used from, while the fix pattern already exists elsewhere in the same codebase to copy |
-
-### Cycle 76 — UI: Chat Force-Scrolls to Bottom, Fighting a Manual Scroll-Up
-
-`Chat.jsx` calls `bottomRef.current?.scrollIntoView({ behavior: 'smooth' })` unconditionally on new content (lines 159, 293) — there's no check for whether the user has already scrolled up to re-read an earlier message. During a long streamed AI response, every new chunk yanks the view back to the bottom, fighting anyone trying to scroll up mid-response.
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Only auto-scroll when the user is already at (or near) the bottom** — otherwise show a small "↓ New messages" pill instead of forcibly scrolling | 2 | 3 | A well-known, well-solved pattern in essentially every modern chat app (Slack, Discord, ChatGPT) for exactly this reason — the current behavior actively punishes trying to read back through a response while it's still streaming |
-
-### Cycle 77 — UI/Accessibility: Priority Indicators Are Color-Only
-
-`Dashboard.jsx`'s `priorityDot()` renders task priority as a plain colored circle only — red/yellow/gray for High/Medium/Low, no text, label, icon, or pattern distinguishing them. This is the same everywhere the priority dot is reused (Tasks, Household, Team task cards).
-
-| Tier | Idea | Impact | Polish | Why |
-|---|---|---|---|---|
-| 🟡 5 | **Add a non-color signal to priority indicators** (a tooltip/`title` at minimum, or a shape/fill difference) alongside the existing color dot | 2 | 3 | A concrete, easy starting point for the broader Cycle-2 accessibility pass — color-only status is a textbook WCAG failure (color-blind users can't distinguish red from the gray/green family reliably) and it's a five-minute `title="High priority"` fix per instance while the larger a11y audit is still unscoped |
-
-
+Generated across a systematic search→generate→compare→document pass over the whole codebase (pages, components, routers, services) — every item below is grounded in an actual code read, not brainstormed in the abstract. Everything here is **unvetted**: nothing moves to an active section above until the owner pulls it in. Organized purely by priority so triage is fast; module/theme is called out inline where useful. De-duped against every section above and cross-checked for internal duplicates.
+
+**Scoring:** `Impact` × `Polish` combine into a tier — 🔴 **P0** (do soon), 🟠 **P1**, 🟡 **P2**, ⚪ **P3** (opportunistic/nice-to-have). ~217 ideas total.
+
+### 🔴 P0 — Do Soon
+
+1. **Auto mode executes destructive AI actions (deletes) with zero human confirmation, and there is still no trash/undo backstop anywhere in the app.** The single most severe finding in this whole backlog — an AI in Auto mode that misreads an instruction can permanently destroy real data with no confirmation and no recovery path. Fix before promoting Auto mode as safe for general use: either keep destructive tools approval-gated even in Auto mode, or ship a trash-bin/soft-delete backstop so any AI-driven delete is recoverable regardless of mode.
+2. **Accessibility (a11y) pass** — keyboard nav, focus states, ARIA labels, color-contrast audit. Genuinely absent anywhere in the app or its docs. Real legal exposure (ADA/EN 301 549) once managed hosting has paying customers, and a credibility signal reviewers explicitly call out.
+3. **Automated E2E test suite (Playwright)** covering the golden paths. The entire test suite is backend pytest only — zero frontend/integration coverage. Every recent UI bug (mobile header clipping, footer gap, off-screen buttons) was owner-found by hand; a handful of Playwright specs on core flows would catch this whole bug class in CI.
+4. **Structured error monitoring** (Sentry or self-hosted GlitchTip) for backend + frontend. No centralized error visibility exists anywhere today — bugs are found by owner testing or user reports only. A self-hostable option fits the project's anti-vendor-lock-in ethos.
+5. **Self-serve pricing page + tier comparison on logcoretech.com.** The README says "Hosted plans coming soon" with no pricing anywhere; blocks demo→paid conversion since a visitor can't self-qualify.
+6. **In-app upsell path: self-hosted → managed hosting.** Nothing in the app tells a happy self-hosted admin that managed hosting exists — zero-cost distribution to the best-qualified lead pool.
+7. **AI change-log / "what the AI did while I was away" digest.** No single place reviews what the AI actually touched over time — the trust-building differentiator unique to an AI-native life OS, and the strongest true product differentiator on this whole list.
+8. **Multi-tenant admin console** (Business-repo tooling, not the OSS app) for managed hosting. Manual per-instance tracking stops scaling past a handful of tenants.
+
+### 🟠 P1
+
+**Growth & revenue**
+- Referral program (self-hosters → managed hosting signups) — cheap CAC channel once billing exists.
+- SEO-indexable comparison page: LogCoreOS vs Notion AI / Khoj / Open WebUI.
+- Reframe the "import your digital life" importer as the acquisition-funnel CTA itself, not just a migration convenience.
+- Free/paid feature-gate design pass before Stripe billing lands — avoids re-architecting `disabled_modules`/usage-counter code later.
+- Concrete managed-hosting tier proposal mapped onto the existing workspace/module system (Personal → Family → Business) — billing-implementable with zero new architecture.
+- Managed-hosting module/feature engagement tracking — consent is already implicit in a hosted agreement; without this, every roadmap call is a guess.
+
+**Trust & reliability**
+- Public status page (status.logcoretech.com) for demo + managed instances.
+- One-click restore drill / documented DR runbook — backups exist but have never been verified end-to-end.
+- Audit whether CI actually gates the frontend build, or only backend pytest.
+- Tenant onboarding checklist/SOP doc (Business repo) — deploy steps are still manual and ad hoc per instance.
+- Support ticket/help-request intake for managed customers, distinct from self-hoster mailto-only Help feedback.
+- Baseline transactional email infrastructure (a provider-abstracted `email_service.py`) — unblocks password reset, Help feedback delivery, and email digests in one shot; the app currently has zero outbound email capability at all.
+- Admin action audit log (who changed what, when) — user deletion, role changes, module toggles leave no queryable trail today.
+
+**AI**
+- Cross-module AI proactivity — surface overdue follow-ups, open deals, and 30-day-overdue linked invoices via the existing suggestions engine; the linking data already exists, this just makes it visible.
+- "Ask your Brain" natural-language search (RAG-lite stepping stone) ahead of the full v0.2 RAG project.
+- AI usage transparency widget for the end user, not just the admin.
+- Differentiate destructive AI actions in the `ApprovalCard` UI — currently a benign edit and a permanent delete render identically, with a raw ID instead of a readable summary.
+
+**Polish & UX**
+- Purpose-built empty states with a clear CTA per module.
+- Command palette / quick-add (Cmd+K).
+- Bulk actions (multi-select archive/delete/tag) across Tasks, Notes, Assets, Contacts.
+- Soft-delete / trash bin with a restore window — there's no undo anywhere in the app.
+- Dashboard "this week at a glance" summary strip.
+- Calendar drag-to-reschedule for tasks/events.
+- Inline single-line quick-add for tasks — creating one always costs a full modal with a dozen fields today.
+- Replace all 14 native `confirm()` dialogs app-wide with one shared, styled `ConfirmDialog` component.
+- In-module search/filter for Notes (title/content match) — folder-tree-only stops scaling past a couple dozen notes.
+- Universal Escape-to-close for every modal — zero `Esc` handling exists anywhere.
+- Warn before discarding unsaved form changes — no dirty-check exists on any form in the app.
+- Recurring calendar events (weekly/monthly/yearly) — calendar events have zero recurrence support today, unlike tasks.
+
+**Security & account safety**
+- Self-service "Change password" in Settings — no path exists today for a logged-in user to rotate their own known password.
+- "Sign out of all other devices/sessions" button — the JTI-revocation mechanism already exists, just isn't exposed for this.
+- Block the last-admin demotion/deletion path — nothing stops permanently locking an instance out of its own admin functions.
+- Warn (or block) deleting a feature role still assigned to users — can silently widen access via the `member` fallback.
+- Fix the admin-create-user password handoff — no forced change, no invite-link option; the admin invents and relays a password by hand today.
+- Multi-device push support — one subscription per user, so a second device silently steals push from the first.
+
+**Technical / architecture / docs**
+- Consolidate the four near-duplicate share/access-resolution implementations (Assets/Finance/Contacts/Notes) — the Done log shows the same bug class independently found and fixed at least twice for Assets alone.
+- Break up `services/agent_service.py` (2,368 lines, the whole AI tool registry) into per-module tool files.
+- Close the API-doc coverage gap — only ~39% of the actual 298-endpoint surface is documented in the hand-maintained `docs/API.md`.
+- Hosted developer/API documentation site, generated from the OpenAPI schema — early groundwork for the Phase 7 plugin-ecosystem roadmap item.
+- Track `last_active` per user — foundational; every retention/win-back/dormancy mechanism needs this one field first.
+- Shared read-modify-write lock helper for per-user JSON stores (Tasks, Contacts) — fixes the `write_json()` lost-update race described in Security follow-ups above.
+
+**Module-specific**
+- QR/barcode label generation + scan-to-open for Assets — the most tangible "built for real life" feature available in the product.
+- Wire up the already-stored Contacts `birthday` field to an actual reminder — validated and stored, but nothing ever reads it.
+- Resolve whether the native vendor-agnostic "LogCore Workflows" engine PROJECT.md promises actually gets built, or revise the docs — today all automation runs through n8n with no fallback, contradicting the "n8n never required" pitch.
+
+### 🟡 P2
+
+**Growth, marketing & community**
+- Public roadmap page fed from a trimmed view of this file.
+- GitHub Sponsors / OpenCollective for the OSS side.
+- Case-study blog post using the owner's own dogfood usage.
+- Global search across the whole Brain (tasks/notes/journal/contacts/assets) — a lighter, non-AI complement to the roadmapped RAG project.
+- Onboarding sample data toggle ("load example tasks/notes/finance book to explore").
+- Add `CODE_OF_CONDUCT.md` (Contributor Covenant) — missing entirely, expected-by-default for OSS.
+- "Good first issue" labeling pass across the existing backlog.
+- Self-hoster showcase / "who's running LogCoreOS" opt-in wall.
+- Real-time community channel (Discord or Matrix), distinct from async GitHub Discussions.
+- "Invite your household/team" prompt after first-user setup — nothing currently nudges an admin toward the multi-user differentiator.
+- Demo → real-signup bridge (carry over what a demo visitor created instead of losing it to the nightly reset).
+- First-AI-chat quick-start prompt chips, surfacing the example commands already documented as working.
+- Progressive module/nav disclosure for new users (a smaller starter set that expands with engagement).
+- Messaging-platform bridge for the AI (WhatsApp or similar) — Khoj ships this; LogCoreOS has no equivalent.
+- Obsidian/editor plugin bridge for Notes — a low-switching-cost adoption wedge, as Khoj also ships.
+
+**Pricing & managed-hosting ops**
+- "Bring your own AI key" discount tier — transfers the biggest variable cost off LogCore's books using tech that already exists.
+- Founding-member/early-adopter lifetime-discount pricing for the first N signups.
+- AI usage overage pricing (pay-per-additional-message) as an alternative to a hard cap.
+- Per-tenant data export/offboarding flow — the technical export exists; the business commitment/process doesn't.
+- Managed-hosting SLA/uptime commitment page (sequence after the status page).
+- Backup verification report per tenant.
+- Opt-in, anonymous, aggregate telemetry toggle for self-hosted instances — the roadmap is currently flying blind on the majority of the userbase's actual usage.
+- Lightweight in-app NPS-style feedback prompt.
+- Feature-flag-driven canary rollout to managed instances before self-hosted `master`.
+- Staged/canary rollout across managed tenants for releases, distinct from what gets installed.
+
+**Trust, reliability & security**
+- Structured application logging (JSON + level config) instead of ad-hoc `logger.*` calls.
+- Dependency vulnerability scanning in CI (Dependabot/Renovate + `pip-audit`/`npm audit` gate).
+- Load/perf smoke test before the public demo opens registration.
+- Split `routers/auth.py` (1,009 lines, five unrelated concerns) by concern.
+- Deep health-check endpoint — `GET /health` is a hardcoded `{"status":"ok"}` with zero real checks.
+- Module scaffolding script implementing the documented 7-step "Adding a New Module" checklist.
+- Scheduler job isolation audit (a verification pass, not a known bug).
+- Decide deliberately whether `/docs`/`/redoc` stay enabled on every deployment, especially the public demo.
+- Fix the FastAPI app's hardcoded `title`/`version` to read from `VERSION`.
+- Lightweight numbered ADRs for major decisions, cross-linkable from PRs.
+- Independent third-party penetration test before managed hosting accepts non-beta paying customers.
+- Public "Security & Trust" marketing page — the in-app version only reaches people who've already signed up.
+- SOC 2 readiness gap-assessment (a document, not an audit).
+- Bug bounty / vulnerability reward program.
+- Container resource limits (`mem_limit`/`cpus`) — no service anywhere has a ceiling today.
+- Add a server-side confirmation/step-up requirement for physical-security-relevant Home Assistant domains (`lock`, `cover`) — the frontend `confirm()` is trivially bypassable via direct API calls.
+- Consider a higher or NAT-aware login rate limit — a household sharing one IP can have one member's typo lock out the whole family.
+- Scoped/multiple automation tokens instead of one shared instance-wide credential.
+- Notify affected members when a shared household/team item they didn't create is deleted.
+- Automated prompt-injection red-team test suite for the AI tool registry.
+
+**AI & differentiation**
+- Local LLM quality/model-picker guidance once Ollama support ships.
+- AI-drafted weekly/monthly "life report" (a narrative, not a task list).
+- Multi-model side-by-side comparison in chat (sequence after multi-provider support ships).
+
+**Polish, UX & mobile**
+- Micro-interaction pass: loading skeletons, save-confirmation toasts, subtle transitions where still missing.
+- Keyboard shortcuts overlay.
+- Notes version history / "restore previous version" — auto-save with no explicit save can silently overwrite a good edit.
+- Journal mood/tag quick-picker on entry.
+- Chat inline citations/links when the AI references a specific Brain file it read.
+- Tasks saved filter views ("My overdue," "This week," per-category).
+- Biometric/PIN app-lock on launch — the app opens straight to finance/journal data with no re-auth gate.
+- Native app-store wrapper (Capacitor) for iOS/Android.
+- Visible offline-state banner instead of scattered per-request error messages.
+- Swipe gestures for common list actions (complete, archive).
+- One-tap "snooze to tomorrow" on Due Today tasks.
+- A distinct celebration moment when a goal hits 100%.
+- Let a household member edit/delete events *they themselves created*, using `created_by` attribution the system already tracks.
+- Auto-rotating chore assignment for recurring household tasks.
+- Agenda/list view toggle for Calendar, alongside the month grid.
+- Jump-to-date/search-by-keyword for Journal.
+- Pin/favorite notes.
+- Optional daily journal writing prompts.
+- Basic conflict detection on Notes save (a stored-hash check, not a full CRDT) — concurrent edits from two devices silently overwrite one side today.
+- Note templates, mirroring the pattern Assets already proves works well.
+- Show/hide password toggle on Login/Register.
+- Self-service "Delete my account" in Settings (right-to-erasure, land alongside the cascade-delete bug fix).
+- User avatar/profile picture.
+- Admin "view as"/impersonate a user for support troubleshooting, fully audit-logged and time-boxed.
+- Group Smart Home entities by room/area instead of domain-only tabs.
+- Admin at-a-glance instance health summary strip (user count, version, last backup, AI usage, failing jobs).
+- Add standard `autoComplete` attributes to auth forms.
+- Persist list-view filter/sort choices instead of resetting on every navigation.
+- Plain "Duplicate" action on Tasks/Events/Transactions.
+- "Save & add another" option on create modals for batch entry.
+- Breadcrumb trail in the Asset modal for nested drill-down.
+- Fix the request-amplification pattern behind full-reload-on-every-toggle, and add a clear 429 message with retry timing.
+- Validate the timezone field against a real IANA zone list instead of free text.
+- Optional inline correction field on Chat's "Deny" action.
+- Send a softer message on a zero-completion week instead of no notification at all — the weekly-review mechanism currently only reaches already-engaged users.
+- Milestone call-outs at meaningful streak/completion thresholds (7/30/100 days), not just a bigger number.
+- Household "this week" momentum strip — every stickiness mechanism today is individual, not shared.
+- A distinct "welcome back" Dashboard state after a long absence.
+- A shared toast/snackbar component, adopted consistently.
+- Rebuild the Tasks priority-reorder modal on pointer events — native HTML5 drag-and-drop likely doesn't work on touch devices at all, and Notes already solved this exact problem elsewhere in the codebase.
+- Route-level code-splitting via `React.lazy()` — all 21 pages ship in one bundle today.
+- Virtualize the highest-volume lists (Finance transactions, Notes tree) — the app's own pitch is years of accumulated data, and nothing renders efficiently at that scale yet.
+- Add a non-color signal to priority indicators (tooltip at minimum) — currently color-only, a textbook WCAG failure.
+
+**i18n & compliance**
+- i18n framework foundation (react-i18next), even before translation itself is prioritized — no framework exists at all today.
+- Multi-currency-aware Finance reporting (FX conversion), the durable fix behind the currency-aggregation bug logged under Now.
+- GDPR Data Processing Agreement template for managed-hosting business customers.
+- Terms-of-Service acceptance tracking (timestamp + version on the user record).
+- EU data-residency option for managed hosting.
+
+**Finance module**
+- Split transactions across multiple categories.
+- Bulk transaction recategorize/edit — bank sync and CSV import routinely land dozens of uncategorized transactions at once with no bulk tool.
+- Savings goals tied to an account balance, distinct from task-type Goals.
+- Budget rollover option (envelope-style, instead of a hard monthly reset).
+- Auto-post planned one-off transactions on their due date instead of requiring manual re-entry.
+- Period-over-period comparison + a trend chart in Reports — currently raw totals only, no direction.
+- Manual "Sync now" button for bank connections.
+- Category rename — today the only option is a destructive delete-and-recreate that strips all existing categorization.
+- Recurring/subscription invoice generation for retainer clients.
+
+**Assets module**
+- Warranty/registration/service-due reminders — the actual killer feature of dedicated home-inventory apps, and mostly wiring existing pieces (templates, notifications) together.
+- Estimated-value tracking over time, rolled into net worth separately from cash accounts.
+- A dedicated Insurance view (everything tagged insured, with attached policy docs).
+- Search/filter box in the asset tree picker — currently expand/collapse only, in a module explicitly built for large hierarchies.
+- Drag-and-drop file upload for attachments (click-only today).
+
+**Contacts/CRM module**
+- Deal-pipeline analytics (win-rate, average deal size, time-to-close) — the kanban already tracks everything needed.
+- Duplicate-contact merge tool, distinct from the create-time dedup search that only prevents new duplicates.
+- Contact engagement/lead score based on interaction recency.
+- Sort control on the contact list (name, recently added, most recent interaction).
+- True drag-and-drop between kanban deal-stage columns, not just a dropdown.
+
+**Automations/n8n**
+- Workflow failure alerting — execution history is already surfaced, nothing proactively watches it.
+- Per-workflow ROI display on the Automations page itself.
+- Community workflow-template gallery for self-hosters.
+
+**Notifications**
+- Quiet hours/do-not-disturb window, independent of per-suggestion-type toggles.
+- Event reminder lead-time — the push pipeline already exists end-to-end, this is wiring it to a new trigger.
+
+**Performance & DX**
+- Streak freeze / grace period (a Duolingo-style forgiveness mechanic) — currently one missed day zeroes the count with no mercy.
+
+### ⚪ P3
+
+- Affiliate/creator partnerships (r/selfhosted YouTubers etc.) — sequence after the product is more polished and pricing is live.
+- Custom app icon/splash screen per accent color for PWA install.
+- Synthetic canary account per managed instance (scripted login + action check).
+- Voice input for chat (mobile PWA).
+- White-label option for reseller/agency managed hosting.
+- Household/Team shared shopping-list tab (already scoped in PROJECT.md Phase 5 but never promoted to the active backlog).
+- Contacts import from phone/Google contacts CSV.
+- Configurable data-retention windows (chat archive age, backup count, notification history).
+- Confirm no cookie-consent banner is legally required (a documentation check, not a build item).
+- Formal quarterly dependency-upgrade cadence, distinct from automated vuln scanning.
+- Cyber liability insurance for the managed-hosting business (a Business-repo/ops item, not app work).
+- Publish `/.well-known/security.txt` pointing to `SECURITY.md`.
+- Pull-to-refresh on mobile list views.
+- PWA app-icon badge count for unread notifications.
+- Multi-seat/family bundle discount pricing.
+- Nonprofit/student discount tier.
+- Trial-to-paid nudge sequence for managed hosting (day-3/day-10 check-ins).
+- Aggregate crash/error-rate rollup across all managed tenants, once per-instance monitoring exists.
+- Accountant-friendly export formats (QIF/OFX) beyond CSV.
+- Read-only public share link for an asset or subtree (e.g. for an insurance adjuster).
+- Email/calendar two-way sync for Contacts (blocked on the app having no email infrastructure at all).
+- Actionable push notifications with OS-level action buttons.
+- "View as" role preview for admins, without creating a throwaway test account.
+- Pre-update backup verification gate in `update.sh`.
+- Near-zero-downtime updates for managed tenants (blue-green/rolling), once downtime is actually measured against a promise.
+- Per-module selective export (e.g. just Contacts or Finance) distinct from the full Brain zip.
+- "Skip this occurrence" on a recurring bill without pausing the whole rule.
+- Split pasted comma/newline-separated text into multiple tags in the shared `TagInput` component.
+- Short-TTL cache for repeated/identical web searches (a modest AI-cost lever).
+- Report bundle size on every PR to catch silent bloat.
+- Fix the stale "admin-only writes" description of `brain.py` in `docs/AGENTS.md`/`docs/MAP.md` — in practice it's correctly self-service (any user edits their own `.md` files only), the docs are just outdated.
+- Optional location field on calendar events.
+- "Focus mode" toggle on the Dashboard (collapse to just the Top-3 card).
+
+---
+
+## Done
 
 - [x] **Atomic release-pinned updates (owner decision, 2026-07-20)** — `update.sh` previously installed the tip of `origin/master`, so commits pushed after a release tag (including partial work toward the next release) silently shipped to any instance that updated, while `installed_version.json` still reported the release's number — different instances could run different code under the same version. Now the updater asks the GitHub API for the latest published release (`releases/latest`, repo derived fork-preservingly from the origin remote) and fetches/fast-forwards to exactly the commit that tag points at; new `tag-failed` status when the tag can't be determined; `merge-base --is-ancestor` guard means an instance ahead of the release (old edge behavior) is treated as up-to-date, never downgraded; `UPDATE_CHANNEL=edge` in `docker/.env` restores master-tip tracking for dev boxes. Signed-update verification (`UPDATE_REQUIRE_SIGNATURE`) now aligns naturally with release tags. 9-test simulated suite green (fetch failure, restamp self-heal, HTTPS fallback, tag-failed abort, repo-path derivation, no-downgrade); tag extraction validated against the live GitHub API. Consequence for workflow: publishing the GitHub release is now both the deploy trigger AND the content selector — the tagged commit must be ship-ready, master between releases need not be
 - [x] **BUG: updater reported "Update successful" without fetching any new code — instance stuck showing 0.4.0 after the v0.4.1 release (owner, 2026-07-20)** — log-confirmed root cause from the owner's `update.log`: the host clone's origin was the SSH remote (`git@github.com:`) with no key readable by the updater's cron environment, so `git fetch origin master` failed (`Permission denied (publickey)`); pre-fix `update.sh` never checked the fetch exit code (`do_update || true` disables `set -e` inside the function), `rev-parse FETCH_HEAD` (no `--verify`) echoed the literal string `FETCH_HEAD` which defeated the up-to-date guard, and the script rebuilt the unchanged tree (all Docker layers CACHED), passed health, and stamped the old `VERSION` (0.4.0) as a "successful" update. Fixes in `docker/update.sh`: (1) abort with status `fetch-failed` + loud log (incl. the HTTPS-remote tip) on fetch failure, before anything is touched; (2) `rev-parse --verify 'FETCH_HEAD^{commit}'` with abort on failure; (3) `write_installed_version` rewritten shell-native (no host `python3` dependency), read-back-verified, loud on failure, with new `success-stamp-failed` status when code deployed but the version record didn't land; (4) no-op "Already up to date" runs now self-heal: if the tree's `VERSION` differs from the recorded version and the app is healthy, re-stamp (fixes any instance stuck from a past die-before-stamp); (5) `write_status`/`write_heartbeat` also shell-native; (6) Admin → Updates card now shows a failure banner for ANY non-success result (`fetch-failed`, `ff-failed`, `success-stamp-failed`, `rollback-unhealthy`, …), not just `rollback`. Verified via simulated runs in a scratch clone: fetch-failure aborts before build with correct status, healthy no-op re-stamps 0.3.9→repo VERSION, down app leaves the stamp alone, unwritable stamp path errors loudly; `bash -n` clean, frontend build clean. **Operator action on the owner's instance: `git remote set-url origin https://github.com/LogCoreTech/LogCoreOS.git`, then re-run the update** (the repo is public — HTTPS needs no credentials). **Follow-up (same day): HTTPS-transport fallback added** — when the origin fetch fails on a `git@github.com:`/`ssh://` remote, the updater now derives the same repo's HTTPS URL (fork-preserving, from the raw configured remote) and retries over it, continuing the update instead of stranding the instance; log recommends the permanent remote fix. Likely trigger identified for the owner's box: `launch.sh` reinstalls the update cron for *whoever runs it* on every run — the v0.4.0 "re-run launch.sh" upgrade step run via sudo would move the cron to root, which has no SSH key. Owner is away ~2 weeks (2026-07-20): Auto-update toggled off from the phone stops the daily vacuous rebuild/restart loop until the one-line manual fix (or first post-fallback update) can run. Open follow-up: `launch.sh` should warn when installing the cron for root while the repo belongs to another user
