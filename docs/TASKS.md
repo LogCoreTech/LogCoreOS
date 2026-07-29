@@ -695,6 +695,14 @@ Closes the Help/Smart Home/Admin sweep. `Admin.jsx` renders a fixed stack of ind
 |---|---|---|---|---|
 | 🟠 7 | **Universal Escape-to-close for every modal** (a single shared hook/wrapper, not a per-modal fix) | 3 | 4 | This is systemic, not isolated to one component — every dialog in the app has the same gap, and it's exactly the kind of small missing convention that makes an app feel unfinished to anyone used to normal desktop software. A single shared modal-wrapper hook fixes it everywhere at once rather than needing dozens of individual patches |
 
+### Cycle 55 — Cross-Cutting Convenience: No `autoComplete` Attributes on Auth Forms
+
+Re-reading `Login.jsx`'s email/password/name inputs: none carry an `autoComplete` attribute (`autoComplete="email"`, `"new-password"`, `"current-password"`, `"name"`). Browsers and password managers rely on these hints to correctly offer to save/fill credentials and to trigger strong-password suggestions on registration.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 5 | **Add standard `autoComplete` attributes to Login/Register (and any other credential) fields** | 2 | 3 | A five-minute fix with a real payoff: password managers work more reliably (fewer "did it actually save?" moments), and `autoComplete="new-password"` on registration nudges browsers to suggest a strong generated password — directly reinforcing good account hygiene for free |
+
 
 
 - [x] **Atomic release-pinned updates (owner decision, 2026-07-20)** — `update.sh` previously installed the tip of `origin/master`, so commits pushed after a release tag (including partial work toward the next release) silently shipped to any instance that updated, while `installed_version.json` still reported the release's number — different instances could run different code under the same version. Now the updater asks the GitHub API for the latest published release (`releases/latest`, repo derived fork-preservingly from the origin remote) and fetches/fast-forwards to exactly the commit that tag points at; new `tag-failed` status when the tag can't be determined; `merge-base --is-ancestor` guard means an instance ahead of the release (old edge behavior) is treated as up-to-date, never downgraded; `UPDATE_CHANNEL=edge` in `docker/.env` restores master-tip tracking for dev boxes. Signed-update verification (`UPDATE_REQUIRE_SIGNATURE`) now aligns naturally with release tags. 9-test simulated suite green (fetch failure, restamp self-heal, HTTPS fallback, tag-failed abort, repo-path derivation, no-downgrade); tag extraction validated against the live GitHub API. Consequence for workflow: publishing the GitHub release is now both the deploy trigger AND the content selector — the tagged commit must be ship-ready, master between releases need not be
