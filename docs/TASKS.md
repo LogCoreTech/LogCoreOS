@@ -631,6 +631,14 @@ Read `Login.jsx` and grepped `routers/auth.py` for any password-change endpoint.
 |---|---|---|---|---|
 | 🟡 6 | **Self-service "Delete my account" in Settings** (with the same cascade-delete correctness the admin path needs — see the already-logged cascade-delete BUG under Now) | 3 | 3 | Ties directly to the GDPR/data-portability work already flagged in Cycle 8 — "right to erasure" is normally something the data subject can exercise themselves, not something that requires asking an admin nicely. Should land *after* (or alongside) the cascade-delete bug fix already in progress, since a self-service path needs the same correct cleanup logic |
 
+### Cycle 47 — UI/Convenience: No User Avatar/Profile Picture
+
+`grep` for `avatar`/`profile_photo`/`photo_url` across the whole frontend found nothing. The app already has rich per-user theming (accent color, background image upload, density, corner style) and even a backlogged "Wii Mii-style" avatar idea — but only for CRM **Contacts**, not for a user's own account. Every mention of a user (sidebar, comment attribution, notification, assigned-task badge) is text-only.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 5 | **User avatar/profile picture** (upload a photo, or a simple auto-generated initials/color avatar as the default) | 2 | 3 | A purely visual addition, but it compounds across every place a user is referenced — sidebar, comment attribution, assigned-task badges, notification sender — and the app's own background-upload feature already proves the image-upload plumbing exists to reuse |
+
 
 
 - [x] **Atomic release-pinned updates (owner decision, 2026-07-20)** — `update.sh` previously installed the tip of `origin/master`, so commits pushed after a release tag (including partial work toward the next release) silently shipped to any instance that updated, while `installed_version.json` still reported the release's number — different instances could run different code under the same version. Now the updater asks the GitHub API for the latest published release (`releases/latest`, repo derived fork-preservingly from the origin remote) and fetches/fast-forwards to exactly the commit that tag points at; new `tag-failed` status when the tag can't be determined; `merge-base --is-ancestor` guard means an instance ahead of the release (old edge behavior) is treated as up-to-date, never downgraded; `UPDATE_CHANNEL=edge` in `docker/.env` restores master-tip tracking for dev boxes. Signed-update verification (`UPDATE_REQUIRE_SIGNATURE`) now aligns naturally with release tags. 9-test simulated suite green (fetch failure, restamp self-heal, HTTPS fallback, tag-failed abort, repo-path derivation, no-downgrade); tag extraction validated against the live GitHub API. Consequence for workflow: publishing the GitHub release is now both the deploy trigger AND the content selector — the tagged commit must be ship-ready, master between releases need not be
