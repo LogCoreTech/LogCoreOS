@@ -565,6 +565,26 @@ Read `AssetModal.jsx`'s upload control: a plain hidden `<input type="file">` tri
 
 Closes Sweep L. Verified `TemplateManager.jsx`'s `moveField()` (↑/↓ buttons per field) already provides reordering — flagging this explicitly as a **non-finding** so it isn't mistakenly re-investigated in a future pass. No new idea from this check.
 
+### Cycle 88 — Contacts: No Sort Control on the Contact List
+
+Read `Contacts.jsx`: `grep` for `sortBy`/`sortKey`/`localeCompare` found nothing — no user-facing sort control (by name, most-recent-interaction, company) on the contact list, just whatever order the backend returns.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 5 | **Add a sort control to the Contacts list** (name, recently added, most recent interaction) | 2 | 3 | A growing CRM contact list with no sort control becomes hard to scan quickly — "who did I talk to most recently" is a common real query this can't currently answer without opening each contact |
+
+### Cycle 89 — Contacts: Deal Pipeline Advances via Dropdown, Not Kanban Drag
+
+Read the deal-stage code in `Contacts.jsx`: stage changes go through a plain `<select>` (line 266/355), not drag-and-drop between columns — despite `docs/MEMORY.md` describing the feature as a "kanban+list" pipeline.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 5 | **True drag-and-drop between kanban stage columns** (the dropdown can stay as a fallback/accessible alternative) | 3 | 3 | A kanban board's whole interaction model is dragging cards between columns — a dropdown-only implementation works but doesn't deliver the visual, tactile experience the "kanban" framing promises, and it's the deal-pipeline's primary interaction |
+
+### Cycle 90 — Calendar/Automations Sweep Close: Two Solid Non-Findings
+
+Closes Sweep M. Verified two things already work well and don't need fixing: `Calendar.jsx` has a working "Today" jump button (`goToday()`), and `Automations.jsx`'s execution log already shows per-run success/failure status with colored badges (the *proactive alerting* gap on top of that data is already captured in Cycle 22 — not repeated here).
+
 
 ### Cycle 29 — Convenience: Task Creation Friction (Dashboard + Tasks deep read)
 
