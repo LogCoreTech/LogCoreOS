@@ -537,6 +537,34 @@ Closes Sweep K. `grep` for `recurring invoice`/`subscription` in `InvoicesPanel.
 |---|---|---|---|---|
 | 🟡 5 | **Recurring/subscription invoices** (auto-draft or auto-send the same invoice on a schedule to a retainer client) | 3 | 2 | A natural extension of the Recurring Bills pattern that already exists for the expense side — retainer/subscription billing is a common real business model this module doesn't yet support without manual monthly re-entry |
 
+### Cycle 84 — Assets: TagInput Doesn't Handle Pasted Comma-Separated Lists
+
+Read `TagInput.jsx`: no paste handler. Pasting "kitchen, appliance, warranty" from elsewhere lands as one literal tag containing commas, not three separate tags, on every surface that reuses this component (template fields, asset tags, share/hide member pickers).
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| ⚪ 4 | **Split pasted comma/newline-separated text into multiple tags in `TagInput`** | 2 | 2 | Small, single-component fix that improves every place `TagInput` is reused (it's explicitly a shared component per `docs/MAP.md`) — cheap leverage |
+
+### Cycle 85 — Assets: No Search in the Tree Picker (Move / Create-Parent)
+
+Read `AssetTreePicker.jsx`: no search/filter input, only expand/collapse navigation. Used for both "Move this asset" and choosing a parent when creating a new one.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 5 | **Add a search/filter box to `AssetTreePicker`** | 3 | 3 | Assets is explicitly designed for deep, large hierarchies (subdivisions → parcels → equipment) — exactly the case where "expand everything and scan visually" stops working, and this component is the one place users navigate the tree to relocate or place things |
+
+### Cycle 86 — Assets: Attachment Upload Is Click-Only, No Drag-and-Drop
+
+Read `AssetModal.jsx`'s upload control: a plain hidden `<input type="file">` triggered by a button — no `onDrop` handler anywhere.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 5 | **Drag-and-drop file upload zone for asset attachments** (photos of receipts/equipment are exactly the kind of file people drag from their desktop or a photos app) | 2 | 3 | A now-standard web convenience for file upload that's absent here; cheap to add on top of the existing upload handler |
+
+### Cycle 87 — Assets Sweep Close: Template Field Reorder Already Works Well (Non-Finding)
+
+Closes Sweep L. Verified `TemplateManager.jsx`'s `moveField()` (↑/↓ buttons per field) already provides reordering — flagging this explicitly as a **non-finding** so it isn't mistakenly re-investigated in a future pass. No new idea from this check.
+
 
 ### Cycle 29 — Convenience: Task Creation Friction (Dashboard + Tasks deep read)
 
