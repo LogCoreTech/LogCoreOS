@@ -663,6 +663,14 @@ Closes the Profile/Settings/Login/Setup sweep. Settings has a "Session Length" c
 |---|---|---|---|---|
 | 🟡 6 | **Admin "view as" / impersonate a user** (time-boxed, fully audit-logged session that lets an admin see exactly what a specific user sees, without needing their password) | 3 | 3 | Directly useful for the Cycle-5 managed-hosting "support intake" idea — diagnosing "why can't I see my Tasks" is far faster seeing the actual broken state than reading a description of it secondhand. Must be built with real guardrails (audit-logged start/end, clearly-labeled banner while impersonating, no ability to change the target's password/role while impersonating) given the obvious abuse surface a feature like this opens |
 
+### Cycle 51 — UI: Smart Home Entities Grouped Only by Domain, Not Room
+
+Read `Home.jsx`: entities are organized into tabs by domain only (Lights, Switches, Locks, …) with no room/area grouping — display name comes straight from Home Assistant's `friendly_name`.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 5 | **Group Smart Home entities by room/area** (pull HA's area assignment if the API exposes it, or let the user tag entities with a room locally) as an alternative to the domain-only tabs | 2 | 3 | A non-technical family member thinks "what's in the kitchen," not "show me all my switches" — domain-first organization is a technically-minded default that doesn't match how most people who didn't personally configure Home Assistant actually think about their house |
+
 
 
 - [x] **Atomic release-pinned updates (owner decision, 2026-07-20)** — `update.sh` previously installed the tip of `origin/master`, so commits pushed after a release tag (including partial work toward the next release) silently shipped to any instance that updated, while `installed_version.json` still reported the release's number — different instances could run different code under the same version. Now the updater asks the GitHub API for the latest published release (`releases/latest`, repo derived fork-preservingly from the origin remote) and fetches/fast-forwards to exactly the commit that tag points at; new `tag-failed` status when the tag can't be determined; `merge-base --is-ancestor` guard means an instance ahead of the release (old edge behavior) is treated as up-to-date, never downgraded; `UPDATE_CHANNEL=edge` in `docker/.env` restores master-tip tracking for dev boxes. Signed-update verification (`UPDATE_REQUIRE_SIGNATURE`) now aligns naturally with release tags. 9-test simulated suite green (fetch failure, restamp self-heal, HTTPS fallback, tag-failed abort, repo-path derivation, no-downgrade); tag extraction validated against the live GitHub API. Consequence for workflow: publishing the GitHub release is now both the deploy trigger AND the content selector — the tagged commit must be ship-ready, master between releases need not be
