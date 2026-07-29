@@ -480,6 +480,21 @@ Unlike prior cycles, the search step here was live web research (not codebase re
 
 Requested focus for this pass: convenience, friction reduction, user stickiness, safety, UI improvements, new features. Same scoring rubric and unvetted status as above. Cross-checked against all 146 existing ideas before adding anything new.
 
+### Cycle 78 — Final Synthesis of the 50-Cycle Pass (Cycles 29–77)
+
+Ran across 10 sweeps, each reading the actual page/service code rather than brainstorming in the abstract: Dashboard/Tasks/Goals, Calendar/Household/Team, Notes/Journal/Brain, Profile/Settings/Login/Setup, Help/Smart Home/Admin, cross-cutting convenience, cross-cutting friction, stickiness/retention, a safety deep dive, and a UI-polish/new-feature grab bag. **56 new scored ideas added** (backlog total: **202** across both Idea Backlog sections), plus **2 more confirmed code-level findings** logged directly as CHECK items under Security follow-ups (not left speculative): `get_workspace()` never verifies the caller is entitled to the workspace it's told to use, and the live GitHub Dependabot alert noticed mid-session. Cross-cycle duplicate scan across all 56 new rows found none.
+
+**The single most significant technical finding of this pass**: `file_service.write_json()`'s per-path lock only wraps the write step, not the read-modify-write cycle — `task_service.py` has no locking at all (unlike `auth_service.py`'s explicit `_auth_lock`, proof the team already knows this race exists and fixed it once). Two concurrent requests touching the same user's `tasks.json` can silently lose one side's change. This is the general root cause behind the earlier Notes-specific conflict finding (Cycle 41) and applies far more broadly.
+
+**Other standout findings, roughly by theme:**
+- **Broken account self-recovery loop** (Sweep D): a user who suspects their account is compromised today can't change their own password, can't delete their own account, and can't sign out other sessions — all three self-service security levers are simply missing.
+- **No `last_active` tracking anywhere** (Sweep H): blocks every retention mechanism that depends on "this person hasn't shown up in a while" — win-back notifications, dormancy visibility, engagement metrics all need this one field first. Compounded by the weekly-review notification's own logic silently skipping exactly the users who complete zero tasks that week — the mechanism currently only ever reaches already-engaged people.
+- **Systemic UI gaps found via `grep`, not guesswork**: zero `Escape`-key handling on any of the app's modals; all 14 destructive-action confirmations use the unstyled native `confirm()`; no unsaved-changes warning anywhere; no shared toast/snackbar component.
+- **No safeguard against demoting/deleting the last admin account** — a single accidental click can permanently lock an entire instance out of its own admin functions.
+- **Tasks' priority-reorder modal likely doesn't work on touch devices at all** (native HTML5 drag-and-drop, when Notes already solved the identical problem with pointer events elsewhere in the same codebase).
+
+Everything in both Idea Backlog sections remains unvetted and awaits owner triage — nothing here overrides the active priorities in the sections above.
+
 ### Cycle 29 — Convenience: Task Creation Friction (Dashboard + Tasks deep read)
 
 Read `Dashboard.jsx` and `Tasks.jsx` in full. Confirmed there is **no lightweight quick-add anywhere in the app** — creating a task, from the Dashboard or the Tasks page, always opens the full `TaskModal` (title, category, type, recurrence, due date/time, assigned-to, linked asset). There's no "type a title, hit Enter" fast path, unlike Todoist/Things-style task managers this competes with for the same use case.
