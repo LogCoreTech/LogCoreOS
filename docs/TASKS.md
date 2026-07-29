@@ -548,6 +548,14 @@ Read `Household.jsx`'s permission wiring (`canEdit = isAdmin || poolEdit.include
 |---|---|---|---|---|
 | 🟡 6 | **Let a member edit/delete the events *they themselves created*** (using the `created_by` attribution already stored, same pattern Household tasks already use for display) | 3 | 3 | "You can create it but never touch it again" is an unusual and specifically frustrating permission model — nobody expects to need an admin just to fix their own typo. This isn't a broad permissions relaxation (pool-wide edit rights stay admin/`pool_edit`-gated); it's a narrow, low-risk "own creation" carve-out using data the system already tracks |
 
+### Cycle 37 — Stickiness: Chore Rotation for Household
+
+Task assignment already exists for Household (admin assigns a shared task to a named member), but it's static — the same person stays assigned to a recurring chore forever unless an admin manually reassigns it.
+
+| Tier | Idea | Impact | Polish | Why |
+|---|---|---|---|---|
+| 🟡 5 | **Auto-rotating chore assignment** (a recurring household task cycles to the next member in a defined rotation each time it recurs, instead of staying pinned to one person) | 3 | 2 | Fair chore-splitting is one of the most concrete, recurring reasons a family would adopt a shared household tool at all — today achieving that requires an admin to manually reassign the same recurring task every cycle, which nobody actually keeps up with in practice |
+
 
 
 - [x] **Atomic release-pinned updates (owner decision, 2026-07-20)** — `update.sh` previously installed the tip of `origin/master`, so commits pushed after a release tag (including partial work toward the next release) silently shipped to any instance that updated, while `installed_version.json` still reported the release's number — different instances could run different code under the same version. Now the updater asks the GitHub API for the latest published release (`releases/latest`, repo derived fork-preservingly from the origin remote) and fetches/fast-forwards to exactly the commit that tag points at; new `tag-failed` status when the tag can't be determined; `merge-base --is-ancestor` guard means an instance ahead of the release (old edge behavior) is treated as up-to-date, never downgraded; `UPDATE_CHANNEL=edge` in `docker/.env` restores master-tip tracking for dev boxes. Signed-update verification (`UPDATE_REQUIRE_SIGNATURE`) now aligns naturally with release tags. 9-test simulated suite green (fetch failure, restamp self-heal, HTTPS fallback, tag-failed abort, repo-path derivation, no-downgrade); tag extraction validated against the live GitHub API. Consequence for workflow: publishing the GitHub release is now both the deploy trigger AND the content selector — the tagged commit must be ship-ready, master between releases need not be
