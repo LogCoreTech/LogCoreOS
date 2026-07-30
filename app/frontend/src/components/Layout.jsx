@@ -237,6 +237,7 @@ export default function Layout() {
   }
 
   return (
+    <>
     <div className="flex h-full overflow-hidden">
 
       {/* Sidebar — desktop only */}
@@ -389,42 +390,50 @@ export default function Layout() {
 
         <WhatsNewBanner />
 
-        <main className="flex-1 min-h-0 overflow-y-scroll overflow-x-hidden p-4 md:p-6 flex flex-col">
+        <main className="flex-1 min-h-0 overflow-y-scroll overflow-x-hidden p-4 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:p-6 flex flex-col">
           <Outlet />
         </main>
-
-        {/* Bottom bar — mobile: pinned shortcuts + More button */}
-        <nav className="md:hidden shrink-0 bg-white dark:bg-charcoal-950 border-t border-charcoal-200 dark:border-charcoal-800 flex z-40 pb-[env(safe-area-inset-bottom)]">
-          {shortcutModules.map(({ id, to, icon, label }) => (
-            <NavLink
-              key={id}
-              to={to}
-              end={to === '/'}
-              className={({ isActive }) =>
-                `flex-1 flex flex-col items-center py-2 text-xs gap-0.5 transition-colors ${
-                  isActive
-                    ? 'text-orange-500'
-                    : 'text-charcoal-500 dark:text-charcoal-400'
-                }`
-              }
-            >
-              <span className="text-lg leading-none">{icon}</span>
-              {label}
-            </NavLink>
-          ))}
-
-          {/* More button */}
-          <button
-            onClick={() => setShowDrawer(true)}
-            className="flex-1 flex flex-col items-center py-2 text-xs gap-0.5 text-charcoal-500 dark:text-charcoal-400"
-          >
-            <span className="text-lg leading-none">⋯</span>
-            More
-          </button>
-        </nav>
       </div>
+    </div>
 
-      {/* Module drawer — slides up from bottom on mobile */}
+    {/* Bottom bar — mobile: pinned shortcuts + More button. Fixed AND rendered
+        outside BOTH overflow-hidden flex containers above (not just off the
+        normal flex flow) — Safari clips a position:fixed descendant to the
+        nearest overflow:hidden ancestor's box instead of the true viewport in
+        some cases, so nesting depth matters here even with `fixed` already
+        applied. See MEMORY.md gotcha on this file: two earlier fixes (the
+        height-resolution chain, then `fixed` while still nested) both looked
+        correct in Chromium and both failed on-device. */}
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-charcoal-950 border-t border-charcoal-200 dark:border-charcoal-800 flex z-40 pb-[env(safe-area-inset-bottom)]">
+      {shortcutModules.map(({ id, to, icon, label }) => (
+        <NavLink
+          key={id}
+          to={to}
+          end={to === '/'}
+          className={({ isActive }) =>
+            `flex-1 flex flex-col items-center py-2 text-xs gap-0.5 transition-colors ${
+              isActive
+                ? 'text-orange-500'
+                : 'text-charcoal-500 dark:text-charcoal-400'
+            }`
+          }
+        >
+          <span className="text-lg leading-none">{icon}</span>
+          {label}
+        </NavLink>
+      ))}
+
+      {/* More button */}
+      <button
+        onClick={() => setShowDrawer(true)}
+        className="flex-1 flex flex-col items-center py-2 text-xs gap-0.5 text-charcoal-500 dark:text-charcoal-400"
+      >
+        <span className="text-lg leading-none">⋯</span>
+        More
+      </button>
+    </nav>
+
+    {/* Module drawer — slides up from bottom on mobile */}
       {showDrawer && (
         <>
           <div
@@ -514,6 +523,6 @@ export default function Layout() {
           </div>
         </>
       )}
-    </div>
+    </>
   )
 }

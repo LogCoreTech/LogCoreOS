@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Mobile footer nav floating above the true screen bottom on the installed PWA (regular browser tab was always fine)** — four earlier attempts fixed the layout's height-resolution chain, moved the footer to `position: fixed`, and moved it outside every `overflow: hidden` ancestor including `body`; all four verified clean in Chromium and still failed on-device. The actual cause: standalone iOS PWAs (not regular Safari tabs) have a documented WebKit bug where the page renders as if an invisible browser toolbar is still pushing content upward, shorting the bottom of the page by roughly the top safe-area amount — confirmed by testing the same URL in a plain browser tab, where it rendered correctly. `html` now reserves deliberately-oversized `min-height` (100% plus the top safe-area inset) so that phantom shift has somewhere to go instead of shorting the real content
+- **Custom background gradient/photo didn't reach the same area** — `body` had `background-attachment: fixed`, a well-known unreliable property on iOS Safari; it served no purpose anyway since `body` never scrolls. Removed, so the chosen background now paints consistently instead of falling back to the plain light/dark background color in some regions
+
 ## [0.4.3] — 2026-07-20
 
 ### Changed
