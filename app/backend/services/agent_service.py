@@ -2274,7 +2274,9 @@ async def run_agent(
         active_tools = all_tools
 
     for step_num in range(MAX_STEPS):
-        response = await agent_completion(system, messages, active_tools)
+        response = await agent_completion(
+            system, messages, active_tools, user_name=user["name"], workspace=workspace
+        )
         last_text = response.text
 
         if not response.tool_calls or response.stop_reason != "tool_use":

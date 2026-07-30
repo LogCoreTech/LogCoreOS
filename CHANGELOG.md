@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **AI usage counter + caps** — Admin → AI Usage & Limits (linked from the AI Provider card) shows instance-wide, personal, and business AI usage (messages + input/output tokens), plus a per-user table with each user's live status. Admins can set a global default message/token limit (with per-user overrides) and, per user, pick a cap period (daily/weekly/monthly) and a mode: **off** (unlimited, the default), **soft** (warns, requires an explicit "Continue anyway?" confirmation in Chat once over), or **hard** (blocks the AI outright until the next period or a raised limit). A live usage-percentage badge also appears in the Chat toolbar. Automation (n8n) AI usage is not tracked — it's architecturally invisible to the backend when a workflow holds its own provider credential.
+
 ## [0.4.4] — 2026-07-30
 
 ### Fixed

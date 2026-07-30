@@ -372,6 +372,7 @@
         "Add users and set their role (admin/member), workspaces, and per-user module access.",
         "Create feature roles (e.g. cleaner, crew) to control which modules groups of users can see.",
         "Configure the AI provider, web search, hosting, Smart Home, bank connections, and n8n from their cards.",
+        "Open AI Usage & Limits (from the AI Provider card) to see instance/personal/business AI usage and set per-user daily/weekly/monthly caps (off/soft/hard).",
         "Grant \"Can manage\" on Household/Team pools to specific users."
       ],
       "tips": [

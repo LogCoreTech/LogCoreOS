@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import HelpButton from '../components/HelpButton'
 import { useNavigate } from 'react-router-dom'
-import { chat as chatApi, suggestions as sugApi, brain as brainApi } from '../lib/api'
+import { chat as chatApi, suggestions as sugApi, brain as brainApi, aiUsage as aiUsageApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
 
@@ -49,6 +49,20 @@ function ApprovalCard({ steps, onApprove, onDeny }) {
       <div className="flex gap-2">
         <button onClick={onApprove} className="btn-primary text-xs px-3 py-1.5">Approve</button>
         <button onClick={onDeny} className="btn-ghost text-xs px-3 py-1.5">Deny</button>
+      </div>
+    </div>
+  )
+}
+
+function UsageConfirmCard({ onContinue, onCancel }) {
+  return (
+    <div className="mt-3 border border-red-300 dark:border-red-700 rounded-xl p-4 bg-red-50 dark:bg-red-950/30">
+      <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-2 uppercase tracking-wide">
+        AI usage limit reached
+      </p>
+      <div className="flex gap-2">
+        <button onClick={onContinue} className="btn-primary text-xs px-3 py-1.5">Continue anyway</button>
+        <button onClick={onCancel} className="btn-ghost text-xs px-3 py-1.5">Never mind</button>
       </div>
     </div>
   )
@@ -151,13 +165,20 @@ export default function Chat() {
   const [savedChats, setSavedChats] = useState([])
   const [selectedChat, setSelectedChat] = useState(null) // { filename, content }
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [usage, setUsage] = useState(null) // { mode, pct } — null until loaded
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
   const modeRef = useRef(null)
 
+  function refreshUsage() {
+    aiUsageApi.me().then(setUsage).catch(() => {})
+  }
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  useEffect(refreshUsage, [workspace])
 
   // Inject unread chat-delivery notifications as AI messages on mount
   useEffect(() => {
@@ -225,7 +246,7 @@ export default function Chat() {
     return () => clearTimeout(t)
   }, [messages, loading])
 
-  async function send(e, overrideMsg, modeOverride) {
+  async function send(e, overrideMsg, modeOverride, acceptOverage) {
     e?.preventDefault()
     const msg = overrideMsg ?? input.trim()
     if (!msg || loading) return
@@ -238,12 +259,15 @@ export default function Chat() {
 
     try {
       const history = toApiHistory(updated.slice(1, -1))
-      const res = await chatApi.send(msg, history, modeOverride || chatMode, crossWorkspace)
+      const res = await chatApi.send(msg, history, modeOverride || chatMode, crossWorkspace, acceptOverage)
       setMessages([...updated, {
         role: 'assistant',
         content: res.response,
         steps: res.steps || [],
+        mode: res.mode,
+        triggerMsg: msg,
       }])
+      refreshUsage()
     } catch (err) {
       setMessages([...updated, { role: 'assistant', content: `Error: ${err.message}`, steps: [] }])
     } finally {
@@ -406,6 +430,14 @@ export default function Chat() {
                         onDeny={() => send(null, "No — don't make those changes.")}
                       />
                     )}
+                    {m.mode === 'usage_confirm_required' && isLastMsg && !loading && (
+                      <UsageConfirmCard
+                        onContinue={() => send(null, m.triggerMsg, chatMode, true)}
+                        onCancel={() => setMessages(msgs => msgs.map((mm, idx) =>
+                          idx === i ? { ...mm, mode: undefined } : mm
+                        ))}
+                      />
+                    )}
                   </>
                 )
               })()}
@@ -465,6 +497,22 @@ export default function Chat() {
             </div>
           )}
         </div>
+
+        {/* AI usage indicator — hidden when the admin hasn't set a cap for this user */}
+        {usage && usage.mode !== 'off' && usage.pct !== null && (
+          <span
+            className={`badge shrink-0 ${
+              usage.pct >= 100
+                ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                : usage.pct >= 80
+                  ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'
+                  : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+            }`}
+            title={`AI usage: ${usage.pct}% of your ${usage.period} limit`}
+          >
+            {usage.pct}%
+          </span>
+        )}
 
         {/* Icon memory controls — fixed-size, tooltip on hover */}
         {hasBothWorkspaces && (

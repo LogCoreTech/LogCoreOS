@@ -54,7 +54,8 @@ LogCoreOS/
 │   │   │   ├── contacts.py        → Contacts (CRM): contacts/interactions/deals CRUD, pipeline, admin custom fields, sharing handshake, CSV import/export, contact money view, write-focused n8n automation API
 │   │   │   ├── home.py           → Home Assistant module: entity control, scenes, automations, favourites, admin config
 │   │   │   ├── help.py            → Help system: GET /help/content (authored guide), /help/whats-new (banner state), GET/PUT /help/onboarding (first-run checklist); auth required, NO module gate (like Settings)
-│   │   │   └── update.py         → update status check + trigger (admin only); works with update.sh on host
+│   │   │   ├── update.py         → update status check + trigger (admin only); works with update.sh on host
+│   │   │   └── ai_usage.py       → AI usage metering + caps: GET /overview, /users, /defaults (admin), PATCH /defaults, /users/{id}/limits (admin), GET /me (any user, for the Chat toolbar indicator)
 │   │   ├── services/
 │   │   │   ├── file_service.py        → atomic Brain file reads/writes — ALWAYS use this, never open(...,'w')
 │   │   │   ├── auth_service.py        → user CRUD, JWT create/verify, bcrypt, JTI revocation
@@ -94,7 +95,8 @@ LogCoreOS/
 │   │   │   ├── ha_service.py          → Home Assistant REST API client; config CRUD, entity states, service calls, scenes, automations, user favourites
 │   │   │   ├── help_service.py        → Help content single source (loads content/help.json): get_content, as_text (markdown for the AI, incl. /help#id anchors), capabilities_index (enabled-modules index for chat context), onboarding state get/set
 │   │   │   ├── whats_new_service.py    → on version bump, notify every user once (announce_if_updated at boot) + drive the few-day What's-New banner (get_banner); state in _system/whats_new_state.json
-│   │   │   └── update_service.py      → GitHub release check (cached 4h), pending_update flag trigger, update log reader
+│   │   │   ├── update_service.py      → GitHub release check (cached 4h), pending_update flag trigger, update log reader
+│   │   │   └── ai_usage_service.py     → AI usage metering + caps: daily-bucketed usage in _system/ai_usage.json, derived daily/weekly/monthly totals, per-user hard/soft cap enforcement + warn/over notifications; the single place chat_completion/agent_completion record usage
 │   │   ├── content/
 │   │   │   └── help.json         → authored Help content (sections + FAQ + support + whats_new); SINGLE source read by the Help page, the ⓘ buttons, and the AI's get_help tool
 │   │   ├── automations_stubs/    → committed stub files (*.stub.json) that drive business workflow auto-sync; each has name/key/tags only — no workflow logic ever committed here
@@ -129,6 +131,7 @@ LogCoreOS/
 │           │   ├── Help.jsx        → Help & Guide page: fetches /help/content; TOC chips, per-section cards (blurb/how-to/tips), search, "only my modules" filter, What's New, FAQ, Contact & Support (mailto); hash-scrolls to #section from ⓘ deep-links
 │           │   ├── Home.jsx        → Smart Home: entity tiles by domain, scenes panel, HA automations, favourite stars
 │           │   ├── Admin.jsx      → admin panel (users, feature roles, workspace access, AI settings, web search, hosting, Infisical, n8n, Smart Home)
+│           │   ├── AiUsage.jsx    → Admin → AI Usage & Limits (own route, linked from the AI Provider card): month picker, instance/personal/business totals, global default caps, per-user mode/period/limit editor + live status
 │           │   ├── Settings.jsx   → user settings (appearance, timezone, session, notifications, background upload, shortcuts — server-side per-workspace via PATCH /auth/me)
 │           │   ├── Login.jsx      → login + register form
 │           │   └── Setup.jsx      → first-time setup wizard (Personal/Business profile, priorities, timezone)
@@ -167,7 +170,8 @@ LogCoreOS/
 │   ├── _system/vapid_keys.json    → VAPID keypair for web push notifications (auto-generated)
 │   ├── _system/n8n_config.json    → n8n URL + API key (written by Admin → n8n card)
 │   ├── _system/ha_config.json     → Home Assistant URL + long-lived token (written by Admin → Smart Home card)
-│   └── _system/automations_index.json → business workflow metadata (n8n IDs + tags)
+│   ├── _system/automations_index.json → business workflow metadata (n8n IDs + tags)
+│   └── _system/ai_usage.json      → AI usage metering + caps: per-user daily buckets (messages/tokens, personal+business), defaults, mode/period/limits, alert dedup — operational metadata, never in a user's portable Brain folder
 │   ├── ai_settings.json           → AI provider, model, API keys (written by Admin UI; not in git)
 │   └── hosting.json               → runtime hosting config written by Admin → Hosting panel
 │

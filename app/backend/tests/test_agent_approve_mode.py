@@ -43,7 +43,7 @@ def _fake_completion(responses: list[AgentResponse]):
     """Return an async agent_completion stub that yields the given responses in order."""
     calls = {"n": 0}
 
-    async def fake(system, messages, tools):
+    async def fake(system, messages, tools, **kwargs):
         resp = responses[min(calls["n"], len(responses) - 1)]
         calls["n"] += 1
         return resp

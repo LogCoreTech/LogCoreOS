@@ -422,12 +422,14 @@ Send a message to the AI. Returns a streaming response with step trace.
     { "role": "assistant", "content": "Hello! How can I help?" }
   ],
   "mode": "auto",
-  "cross_workspace": false
+  "cross_workspace": false,
+  "accept_overage": false
 }
 ```
 
 - `mode`: `"approve"` (default) | `"plan"` | `"auto"` | `"research"`. Approve mode runs reads freely but pauses before any write: the response has `mode: "awaiting_approval"` and `steps` containing `pending_write` entries (`{ type, tool, input, step }`); nothing is executed until the user approves (the frontend re-sends as a one-turn `auto` request). Plan mode proposes a whole plan before executing. Research mode adds Tavily web search, read-only.
 - `cross_workspace`: when `true` and the user has both workspaces, the AI searches both personal and business Brain paths (results prefixed `personal/` or `business/`). Only available to dual-workspace users.
+- `accept_overage`: only relevant when the caller is soft-capped (see **AI Usage** below) and already over their limit — set `true` to proceed anyway. When usage is hard-blocked the response is `{ "response": "...", "steps": [], "mode": "usage_blocked" }` and nothing runs; when soft-blocked and `accept_overage` is not yet `true`, the response is `{ "mode": "usage_confirm_required", ... }` and the frontend re-sends with `accept_overage: true` to continue. Accepting holds for the rest of that user's current cap period.
 
 Rate limited: 20 messages per minute per IP.
 
@@ -1173,6 +1175,39 @@ the existing list (de-duplicated, capped).
 Markdown with `/help#<id>` anchors), in the `_READ_TOOLS`/`_RESEARCH_TOOLS` allowlists so it runs in
 every mode. The chat system prompt also injects a compact capability index of the user's enabled
 modules so the AI can point them to the right one.
+
+---
+
+## AI Usage
+
+Router mounted at `/api/v1/ai-usage`. Meters and caps AI spend across the 3 real AI call sites (chat,
+save-memory, custom AI-powered suggestions). Usage is stored per user per day in
+`brain/_system/ai_usage.json` — operational metadata, never part of a user's portable Brain folder.
+Daily/weekly/monthly totals are always derived on read from the day buckets. **Automation (n8n) AI
+usage is not tracked** — n8n workflow nodes that call an AI provider directly (using their own
+credential) never touch this backend; see `docs/MEMORY.md` Key Decisions Log (2026-07-30).
+
+A cap check sums a user's **personal + business usage combined** (one human, one budget), even
+though display responses break the two apart. `mode` is `"off"` (unlimited, the default for every
+user) | `"soft"` | `"hard"`. `period` is `"daily"` | `"weekly"` (ISO Monday–Sunday) | `"monthly"`.
+Message/token limits are a global default with an optional per-user override; `null` means
+unlimited for that metric.
+
+| Method | Path | Access | Notes |
+|--------|------|--------|-------|
+| `GET` | `/ai-usage/overview?month=YYYY-MM` | admin | Instance totals + personal/business breakdown for the given calendar month (default: current), plus `available_months` seen in the data |
+| `GET` | `/ai-usage/users?month=YYYY-MM` | admin | Per-user rows: the picked month's personal/business messages+tokens (for comparability), plus each user's own **live** period/mode/effective limits/status (`ok`\|`warn`\|`over`\|`off`) — these two are independent windows |
+| `GET` | `/ai-usage/defaults` | admin | `{ period, message_limit, token_limit, warn_pct }` |
+| `PATCH` | `/ai-usage/defaults` | admin | Any subset of the same fields — only send what changes |
+| `PATCH` | `/ai-usage/users/{user_id}/limits` | admin | `{ period?, mode?, message_limit?, token_limit? }` — only send what changes |
+| `GET` | `/ai-usage/me` | any authenticated user | `{ mode, period, message_limit, token_limit, used_messages, used_tokens, pct }` — self-service summary powering the Chat toolbar's usage indicator; `pct` is the higher of the message-limit and token-limit ratios, or `null` when `mode` is `"off"` |
+
+**Enforcement**: hard mode blocks chat, save-memory, and suggestions outright once over the limit for
+the current period. Soft mode only interactively gates `POST /chat` (see `accept_overage` above) —
+save-memory and suggestion runs have no confirm UI, so they proceed once a user has accepted the
+overage for that period (or were never asked, if under the limit). Warn (default 80% of the limit)
+and over notifications fire once per cap period via the existing notification-inbox/push mechanism;
+admins are also notified when a user hits a **hard** cap.
 
 ---
 

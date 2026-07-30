@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from config import settings
 from routers.auth import get_current_user, get_workspace, require_module
+from services import ai_usage_service
 from services.agent_service import run_agent
 from services.ai_provider import chat_completion, is_ai_configured
 from services.auth_service import today_for_user
@@ -101,6 +102,8 @@ class ChatRequest(BaseModel):
     # "approve" is the default: reads run freely, each write pauses for user approval
     mode: Literal["approve", "plan", "auto", "research"] = "approve"
     cross_workspace: bool = False
+    # Set true to proceed past a soft AI-usage-cap confirmation (see ai_usage_service).
+    accept_overage: bool = False
 
     @model_validator(mode="after")
     def validate_history_alternates(self):
@@ -130,6 +133,23 @@ async def chat(
             "steps": [],
             "mode": "error",
         }
+
+    usage = ai_usage_service.check_usage(current_user["name"])
+    if usage["status"] == "blocked":
+        return {
+            "response": "You've reached your AI usage limit for this period. Contact your admin to raise it.",
+            "steps": [],
+            "mode": "usage_blocked",
+        }
+    if usage["status"] == "soft_confirm" and not req.accept_overage:
+        return {
+            "response": "You've reached your AI usage limit for this period. Continue anyway? "
+            "Extra usage may cost more.",
+            "steps": [],
+            "mode": "usage_confirm_required",
+        }
+    if usage["status"] == "soft_confirm" and req.accept_overage:
+        ai_usage_service.accept_overage(current_user["name"])
 
     from datetime import datetime
     from zoneinfo import ZoneInfo
@@ -227,6 +247,7 @@ async def chat(
         workspace=workspace,
         cross_workspace=req.cross_workspace,
     )
+    ai_usage_service.record_message(current_user["name"], workspace)
 
     return {
         "response": result["final_answer"],
@@ -250,6 +271,10 @@ async def save_memory(
     if not is_ai_configured():
         raise HTTPException(status_code=503, detail="AI not configured.")
 
+    usage = ai_usage_service.check_usage(current_user["name"])
+    if usage["status"] == "blocked":
+        raise HTTPException(status_code=402, detail="AI usage limit reached for this period.")
+
     convo = "\n".join(f"{m.role.upper()}: {m.content}" for m in req.history)
     extract_prompt = (
         "Extract the key facts, decisions, and insights from this conversation that are worth "
@@ -260,7 +285,10 @@ async def save_memory(
     summary = await chat_completion(
         "You are a memory extractor. Output only a markdown bullet list. No preamble.",
         [{"role": "user", "content": extract_prompt}],
+        user_name=current_user["name"],
+        workspace=workspace,
     )
+    ai_usage_service.record_message(current_user["name"], workspace)
 
     fname = "Long_Term_Memory.md" if req.target == "long" else "Short_Term_Memory.md"
     mem_path = ws_path(current_user["name"], workspace) / fname
