@@ -6,10 +6,13 @@ so admin UI changes take effect immediately without a restart.
 
 import asyncio
 import json
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from config import settings
+
+logger = logging.getLogger("logcore.ai_provider")
 
 
 @dataclass
@@ -25,6 +28,8 @@ class AgentResponse:
     text: str
     tool_calls: list[ToolCall]
     raw_content: list  # Anthropic-format blocks; used to continue message history
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -66,9 +71,20 @@ def is_ai_configured() -> bool:
 # ---------------------------------------------------------------------------
 
 
-async def chat_completion(system: str, messages: list[dict], max_tokens: int = 1024) -> str:
+async def chat_completion(
+    system: str,
+    messages: list[dict],
+    max_tokens: int = 1024,
+    *,
+    user_name: str,
+    workspace: str = "personal",
+) -> str:
     """Send a chat request and return the text response."""
-    return await asyncio.to_thread(_dispatch, system, messages, max_tokens)
+    text, input_tokens, output_tokens = await asyncio.to_thread(
+        _dispatch, system, messages, max_tokens
+    )
+    _record(user_name, workspace, input_tokens, output_tokens)
+    return text
 
 
 async def agent_completion(
@@ -76,9 +92,24 @@ async def agent_completion(
     messages: list[dict],
     tools: list[dict],
     max_tokens: int = 4096,
+    *,
+    user_name: str,
+    workspace: str = "personal",
 ) -> AgentResponse:
     """Send a tool-enabled request and return an AgentResponse."""
-    return await asyncio.to_thread(_dispatch_agent, system, messages, tools, max_tokens)
+    response = await asyncio.to_thread(_dispatch_agent, system, messages, tools, max_tokens)
+    _record(user_name, workspace, response.input_tokens, response.output_tokens)
+    return response
+
+
+def _record(user_name: str, workspace: str, input_tokens: int, output_tokens: int) -> None:
+    """Best-effort usage metering — must never break a real AI call."""
+    try:
+        from services.ai_usage_service import record_tokens
+
+        record_tokens(user_name, workspace, input_tokens, output_tokens)
+    except Exception:
+        logger.exception("ai_usage_service.record_tokens failed for %s", user_name)
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +117,7 @@ async def agent_completion(
 # ---------------------------------------------------------------------------
 
 
-def _dispatch(system: str, messages: list[dict], max_tokens: int) -> str:
+def _dispatch(system: str, messages: list[dict], max_tokens: int) -> tuple[str, int, int]:
     cfg = _get_config()
     provider = cfg.get("ai_provider", "anthropic")
     if provider == "anthropic":
@@ -116,7 +147,7 @@ def _dispatch_agent(
 # ---------------------------------------------------------------------------
 
 
-def _anthropic(system: str, messages: list[dict], max_tokens: int, cfg: dict) -> str:
+def _anthropic(system: str, messages: list[dict], max_tokens: int, cfg: dict) -> tuple[str, int, int]:
     import anthropic
 
     key = cfg.get("ai_api_key") or cfg.get("anthropic_api_key")
@@ -127,7 +158,10 @@ def _anthropic(system: str, messages: list[dict], max_tokens: int, cfg: dict) ->
         system=system,
         messages=messages,
     )
-    return response.content[0].text
+    usage = getattr(response, "usage", None)
+    input_tokens = getattr(usage, "input_tokens", 0) or 0
+    output_tokens = getattr(usage, "output_tokens", 0) or 0
+    return response.content[0].text, input_tokens, output_tokens
 
 
 def _anthropic_agent(
@@ -168,11 +202,14 @@ def _anthropic_agent(
                 }
             )
 
+    usage = getattr(response, "usage", None)
     return AgentResponse(
         stop_reason=response.stop_reason,
         text=text,
         tool_calls=tool_calls,
         raw_content=raw_content,
+        input_tokens=getattr(usage, "input_tokens", 0) or 0,
+        output_tokens=getattr(usage, "output_tokens", 0) or 0,
     )
 
 
@@ -181,7 +218,7 @@ def _anthropic_agent(
 # ---------------------------------------------------------------------------
 
 
-def _openai(system: str, messages: list[dict], max_tokens: int, cfg: dict) -> str:
+def _openai(system: str, messages: list[dict], max_tokens: int, cfg: dict) -> tuple[str, int, int]:
     import openai as _openai
 
     client = _openai.OpenAI(
@@ -194,7 +231,10 @@ def _openai(system: str, messages: list[dict], max_tokens: int, cfg: dict) -> st
         max_tokens=max_tokens,
         messages=oai_messages,
     )
-    return response.choices[0].message.content or ""
+    usage = getattr(response, "usage", None)
+    input_tokens = getattr(usage, "prompt_tokens", 0) or 0
+    output_tokens = getattr(usage, "completion_tokens", 0) or 0
+    return response.choices[0].message.content or "", input_tokens, output_tokens
 
 
 def _openai_agent(
@@ -269,11 +309,14 @@ def _openai_agent(
     elif choice.finish_reason == "length":
         stop_reason = "max_tokens"
 
+    usage = getattr(response, "usage", None)
     return AgentResponse(
         stop_reason=stop_reason,
         text=text,
         tool_calls=tool_calls,
         raw_content=raw_content,
+        input_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+        output_tokens=getattr(usage, "completion_tokens", 0) or 0,
     )
 
 

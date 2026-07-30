@@ -405,7 +405,13 @@ async def _run_custom_async(user_name: str, suggestion: dict) -> dict:
     """Run a custom AI-powered suggestion (async — for API endpoints)."""
     from zoneinfo import ZoneInfo
 
+    from services import ai_usage_service
     from services.ai_provider import chat_completion
+
+    # Custom suggestions are personal-only today (see _load_custom_jobs).
+    usage = ai_usage_service.check_usage(user_name)
+    if usage["status"] == "blocked":
+        return {"ok": False, "reason": "usage_limit_reached"}
 
     user = get_user_by_name(user_name)
     tz = user.get("timezone", "UTC") if user else "UTC"
@@ -419,9 +425,15 @@ async def _run_custom_async(user_name: str, suggestion: dict) -> dict:
         f"Today is {today_str}. Be direct and concise. Max 3 paragraphs."
     )
     try:
-        result = await chat_completion(system, [{"role": "user", "content": suggestion["prompt"]}])
+        result = await chat_completion(
+            system,
+            [{"role": "user", "content": suggestion["prompt"]}],
+            user_name=user_name,
+            workspace="personal",
+        )
     except Exception as e:
         return {"ok": False, "reason": str(e)}
+    ai_usage_service.record_message(user_name, "personal")
     title = suggestion["name"]
     _deliver(
         user_name,

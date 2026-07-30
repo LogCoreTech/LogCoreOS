@@ -10,6 +10,7 @@ import Chat from './pages/Chat'
 import Brain from './pages/Brain'
 import Settings from './pages/Settings'
 import Admin from './pages/Admin'
+import AiUsage from './pages/AiUsage'
 import Calendar from './pages/Calendar'
 import Household from './pages/Household'
 import Team from './pages/Team'
@@ -73,6 +74,7 @@ export default function App() {
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/help"     element={<Help />} />
                 <Route path="/admin"    element={<AdminOnly><Admin /></AdminOnly>} />
+                <Route path="/admin/ai-usage" element={<AdminOnly><AiUsage /></AdminOnly>} />
               </Route>
             </Routes>
           </BrowserRouter>

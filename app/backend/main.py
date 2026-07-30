@@ -17,6 +17,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from config import settings
 from migrations.runner import run_pending as run_migrations
 from routers import (
+    ai_usage,
     assets,
     auth,
     automations,
@@ -307,6 +308,7 @@ app.include_router(home.router, prefix="/api/v1/home", tags=["home"])
 app.include_router(team.router, prefix="/api/v1/team", tags=["team"])
 app.include_router(update.router, prefix="/api/v1/update", tags=["update"])
 app.include_router(help.router, prefix="/api/v1/help", tags=["help"])
+app.include_router(ai_usage.router, prefix="/api/v1/ai-usage", tags=["ai-usage"])
 
 # Serve React frontend — must come last
 static_dir = Path(__file__).parent.parent / "frontend" / "dist"

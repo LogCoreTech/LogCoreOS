@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { admin as adminApi, features as featuresApi, infisical as infisicalApi, automations as automationsApi, home as homeApi, priorities as prioritiesApi, update as updateApi, assets as assetsApi, finance as financeApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { ALL_MODULES } from '../lib/constants'
@@ -749,6 +750,7 @@ function WorkspaceVisibilityCard() {
 // AI Provider card
 // ---------------------------------------------------------------------------
 function AiProviderCard() {
+  const navigate = useNavigate()
   const [form, setForm] = useState({
     ai_provider: 'anthropic',
     ai_api_key: '',
@@ -905,6 +907,16 @@ function AiProviderCard() {
             ))}
           </div>
         )}
+      </div>
+
+      <div className="mt-4 border-t border-charcoal-100 dark:border-charcoal-800 pt-4">
+        <button
+          type="button"
+          onClick={() => navigate('/admin/ai-usage')}
+          className="btn-ghost w-full text-sm"
+        >
+          📊 AI Usage &amp; Limits →
+        </button>
       </div>
     </div>
   )

@@ -138,7 +138,7 @@ export const profile = {
 }
 
 export const chat = {
-  send:       (message, history, mode = 'approve', crossWorkspace = false) => post('/chat', { message, history, mode, cross_workspace: crossWorkspace }),
+  send:       (message, history, mode = 'approve', crossWorkspace = false, acceptOverage = false) => post('/chat', { message, history, mode, cross_workspace: crossWorkspace, accept_overage: acceptOverage }),
   saveMemory: (history, target = 'short') => post('/chat/save-memory',  { history, target }),
   saveChat:   (history, name = '', filename = '') => post('/chat/save', { history, name, filename }),
   listSaved:  ()                          => get('/chat/saved'),
@@ -173,6 +173,15 @@ export const admin = {
   getHostingSettings:    ()    => get('/auth/admin/hosting-settings'),
   updateHostingSettings: (s)   => patch('/auth/admin/hosting-settings', s),
   applyHostingSettings:  ()    => post('/auth/admin/hosting-settings/apply', {}),
+}
+
+export const aiUsage = {
+  overview:         (month)            => get(`/ai-usage/overview${month ? `?month=${month}` : ''}`),
+  users:            (month)            => get(`/ai-usage/users${month ? `?month=${month}` : ''}`),
+  getDefaults:      ()                 => get('/ai-usage/defaults'),
+  updateDefaults:   (body)             => patch('/ai-usage/defaults', body),
+  updateUserLimits: (userId, body)     => patch(`/ai-usage/users/${userId}/limits`, body),
+  me:               ()                 => get('/ai-usage/me'),
 }
 
 export const setup = {
