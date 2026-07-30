@@ -437,6 +437,13 @@
   },
   "whats_new": [
     {
+      "version": "0.4.4",
+      "date": "2026-07-30",
+      "highlights": [
+        "Mobile footer nav fixed for good — the bottom navigation on the installed home-screen app no longer floats above the true screen edge with a gap showing through; this was a standalone-app-only iOS rendering quirk, now resolved."
+      ]
+    },
+    {
       "version": "0.4.3",
       "date": "2026-07-20",
       "highlights": [
