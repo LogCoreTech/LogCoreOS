@@ -130,13 +130,28 @@ LogCoreOS/
 │           │   ├── Contacts.jsx    → Contacts (CRM): list + search, detail (fields/interactions/deals/money), ContactModal, CSV import/export; both workspaces
 │           │   ├── Help.jsx        → Help & Guide page: fetches /help/content; TOC chips, per-section cards (blurb/how-to/tips), search, "only my modules" filter, What's New, FAQ, Contact & Support (mailto); hash-scrolls to #section from ⓘ deep-links
 │           │   ├── Home.jsx        → Smart Home: entity tiles by domain, scenes panel, HA automations, favourite stars
-│           │   ├── Admin.jsx      → admin panel (users, feature roles, workspace access, AI settings, web search, hosting, Infisical, n8n, Smart Home)
-│           │   ├── AiUsage.jsx    → Admin → AI Usage & Limits (own route, linked from the AI Provider card): month picker, instance/personal/business totals, global default caps, per-user mode/period/limit editor + live status
-│           │   ├── Settings.jsx   → user settings (appearance, timezone, session, notifications, background upload, shortcuts — server-side per-workspace via PATCH /auth/me)
+│           │   ├── Settings.jsx   → Settings drill-down menu (icon+label rows, no inline cards): Profile/Appearance/Notifications/Shortcuts(mobile)/Account rows + admin-only "Admin Settings" row
+│           │   ├── settings/      → Settings sub-pages, one route per row (each with its own "← Back" header via components/settings/SettingsPageHeader.jsx):
+│           │   │   ├── Appearance.jsx    → dark mode, accent color, background presets/upload, density, corners
+│           │   │   ├── Notifications.jsx → ntfy channel+rotate, Web Push, Proactive Suggestions (merged from 3 former cards)
+│           │   │   ├── Shortcuts.jsx     → bottom bar shortcuts editor (mobile-only; row hidden on desktop in Settings.jsx)
+│           │   │   ├── Account.jsx       → timezone, "Your Brain" link (→ /brain), export Brain zip
+│           │   │   ├── AdminMenu.jsx     → Admin Settings drill-down menu (admin-only): Users & Roles/AI/General/Team/Household/Hosting rows
+│           │   │   └── admin/            → one page per Admin Settings row (relocated from the old Admin.jsx + AiUsage.jsx, not rewritten):
+│           │   │       ├── Users.jsx           → user list; "+ Add User" and "Role Definitions →" rows
+│           │   │       ├── NewUser.jsx         → create-user form as its own page
+│           │   │       ├── UserDetail.jsx      → per-user page: role, feature role, workspace access, pool-edit grants, module overrides, bank connection (claim/reveal/sync/disconnect), delete
+│           │   │       ├── RoleDefinitions.jsx → custom feature-role editor (create/edit/delete + module toggles)
+│           │   │       ├── Ai.jsx              → AI Provider + Web Search + AI Usage & Limits (month picker, stat cards, defaults, per-user limits) — 3 sections, one page
+│           │   │       ├── General.jsx         → Registration, Workspace visibility, Session Length (single global admin-set value, no per-user override), Updates
+│           │   │       ├── Team.jsx            → Team pool priorities + PoolBankConnections (pool="team")
+│           │   │       ├── Household.jsx       → Household pool priorities + Smart Home (Home Assistant config) + PoolBankConnections (pool="household")
+│           │   │       └── Hosting.jsx         → Hosting (domain/proxy/tunnel) + Managed Hosting (Infisical, self-hides when unconfigured) + n8n Automation + automation token reveal/rotate
 │           │   ├── Login.jsx      → login + register form
 │           │   └── Setup.jsx      → first-time setup wizard (Personal/Business profile, priorities, timezone)
 │           └── components/
 │               ├── Layout.jsx     → root shell: sidebar nav, user menu, theme toggle, module access guard
+│               ├── settings/      → shared Settings/Admin building blocks: MenuRow.jsx (icon+label+subtitle+chevron row), SettingsPageHeader.jsx ("← Back" + title), PriorityList.jsx (shared by admin/Team.jsx + admin/Household.jsx), PoolBankConnections.jsx (read-only per-pool SimpleFIN summary + "coming soon" direct-connect placeholder — independent instance per pool)
 │               ├── TaskModal.jsx  → create/edit task form (title, category, type, recurrence, due date/time, assigned_to, linked asset)
 │               ├── AssetModal.jsx → asset modal: opens an existing asset in read-first view (AssetView), Edit flips to the editor (dynamic template fields, attachments, share/hide selectors, history, 3-choice archive, delete/convert); auto-flips create→edit
 │               ├── AssetView.jsx  → read-only asset overview: header, attachments, fields as label/value pairs, notes, child list (drill-in), linked tasks, sharing summary, history; ✎ Edit button (owner/editor only)

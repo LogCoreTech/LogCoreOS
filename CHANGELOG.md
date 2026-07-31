@@ -8,9 +8,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Settings and Admin merged into one drill-down menu — the standalone Admin page is gone.** Settings is now a menu of icon+label rows (Profile, Appearance, Notifications, Shortcuts, Account, and an admin-only "Admin Settings" row); every row opens its own dedicated page instead of an always-expanded card. Admin Settings is the same pattern one level deeper: Users & Roles, AI, General, Team, Household, Hosting — each its own page, reorganized by the part of the app they configure rather than by setting type. Users & Roles drills further: tap a user for their own full page (role, feature role, workspace access, pool-management grants, module overrides, and their bank connection), or open Role Definitions for the custom feature-role editor. The `/admin` and `/admin/ai-usage` routes are removed with no redirect — bookmarks to them will land on the dashboard; use Settings → Admin Settings instead.
+- **Session length is now a single instance-wide setting, not a per-user choice.** Admins set it once in Settings → Admin Settings → General; it applies to every login going forward (existing sessions are unaffected). The per-user session-length picker in Settings is gone, along with the `PATCH /auth/session` endpoint.
+- **Team and Household admin pages show a read-only bank-connections summary** — which members currently have a SimpleFIN account mapped into that pool's books — plus a "coming soon" section for connecting a business/joint account directly to the pool (not tied to any one member's own connection). That direct pool-level connection is UI-only for now; the backend for it is tracked as a follow-up.
+
 ### Added
 
-- **AI usage counter + caps** — Admin → AI Usage & Limits (linked from the AI Provider card) shows instance-wide, personal, and business AI usage (messages + input/output tokens), plus a per-user table with each user's live status. Admins can set a global default message/token limit (with per-user overrides) and, per user, pick a cap period (daily/weekly/monthly) and a mode: **off** (unlimited, the default), **soft** (warns, requires an explicit "Continue anyway?" confirmation in Chat once over), or **hard** (blocks the AI outright until the next period or a raised limit). A live usage-percentage badge also appears in the Chat toolbar. Automation (n8n) AI usage is not tracked — it's architecturally invisible to the backend when a workflow holds its own provider credential.
+- **AI usage counter + caps** — Settings → Admin Settings → AI shows instance-wide, personal, and business AI usage (messages + input/output tokens), plus a per-user table with each user's live status. Admins can set a global default message/token limit (with per-user overrides) and, per user, pick a cap period (daily/weekly/monthly) and a mode: **off** (unlimited, the default), **soft** (warns, requires an explicit "Continue anyway?" confirmation in Chat once over), or **hard** (blocks the AI outright until the next period or a raised limit). A live usage-percentage badge also appears in the Chat toolbar. Automation (n8n) AI usage is not tracked — it's architecturally invisible to the backend when a workflow holds its own provider credential.
 
 ## [0.4.4] — 2026-07-30
 

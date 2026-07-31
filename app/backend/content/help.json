@@ -367,13 +367,13 @@
       "id": "admin",
       "icon": "🛡️",
       "title": "Admin",
-      "blurb": "Admin-only controls for the whole instance: users, roles, workspaces, and integrations.",
+      "blurb": "Admin-only controls for the whole instance: users, roles, workspaces, and integrations. Reached from Settings → Admin Settings, not a separate menu item.",
       "howto": [
-        "Add users and set their role (admin/member), workspaces, and per-user module access.",
-        "Create feature roles (e.g. cleaner, crew) to control which modules groups of users can see.",
-        "Configure the AI provider, web search, hosting, Smart Home, bank connections, and n8n from their cards.",
-        "Open AI Usage & Limits (from the AI Provider card) to see instance/personal/business AI usage and set per-user daily/weekly/monthly caps (off/soft/hard).",
-        "Grant \"Can manage\" on Household/Team pools to specific users."
+        "Open Settings → Admin Settings → Users & Roles to add users, set role (admin/member), workspaces, and per-user module access — tap a user for their own page.",
+        "Create feature roles (e.g. cleaner, crew) from Users & Roles → Role Definitions to control which modules groups of users can see.",
+        "Configure the AI provider and web search from Admin Settings → AI — AI Usage & Limits (instance/personal/business totals + per-user daily/weekly/monthly caps) is on the same page.",
+        "Configure hosting, managed hosting, and n8n from Admin Settings → Hosting; Smart Home and bank connections live on the Household/Team pages.",
+        "Grant \"Can manage\" on Household/Team pools from a user's own page in Users & Roles."
       ],
       "tips": [
         "The first registered user becomes admin; after that, registration is closed by default so accounts are added deliberately."

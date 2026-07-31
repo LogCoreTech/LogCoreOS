@@ -45,16 +45,11 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8)
     name: str = Field(..., min_length=1, max_length=60)
-    session_minutes: int = Field(default=10080, ge=60, le=129600)  # 1h–90 days
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
-
-
-class SessionRequest(BaseModel):
-    session_minutes: int = Field(..., ge=60, le=129600)
 
 
 def _set_auth_cookie(response: Response, token: str, session_minutes: int) -> None:
@@ -213,7 +208,6 @@ def register(
             req.password,
             req.name,
             role=role,
-            session_minutes=req.session_minutes,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -221,7 +215,7 @@ def register(
         auth_service.update_user(user["id"], {"workspaces": ["personal", "business"]})
         user["workspaces"] = ["personal", "business"]
     token = auth_service.create_token(user)
-    _set_auth_cookie(response, token, user.get("session_minutes", 10080))
+    _set_auth_cookie(response, token, auth_service.get_effective_session_minutes())
     effective = get_effective_disabled(
         user.get("feature_role", "member"),
         user.get("disabled_modules", []),
@@ -253,7 +247,7 @@ def login(req: LoginRequest, response: Response, _rl: None = Depends(_login_limi
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = auth_service.create_token(user)
-    _set_auth_cookie(response, token, user.get("session_minutes", 10080))
+    _set_auth_cookie(response, token, auth_service.get_effective_session_minutes())
     effective = get_effective_disabled(
         user.get("feature_role", "member"),
         user.get("disabled_modules", []),
@@ -430,7 +424,6 @@ def me(current_user: dict = Depends(get_current_user), _rl: None = Depends(_get_
         "role": current_user["role"],
         "notification_channel": current_user.get("notification_channel", ""),
         "channel_rotated_at": current_user.get("channel_rotated_at"),
-        "session_minutes": current_user.get("session_minutes", 10080),
         "timezone": current_user.get("timezone", "UTC"),
         "feature_role": current_user.get("feature_role", "member"),
         "disabled_modules": current_user.get("disabled_modules", []),
@@ -696,20 +689,6 @@ def update_user_by_admin(
     return {"ok": True, **updates}
 
 
-_session_limit = rate_limit(5, 3600)  # 5 session updates per hour
-
-
-@router.patch("/session")
-def update_session(
-    req: SessionRequest,
-    current_user: dict = Depends(get_current_user),
-    _rl: None = Depends(_session_limit),
-):
-    """Update session length for the current user."""
-    auth_service.update_user(current_user["id"], {"session_minutes": req.session_minutes})
-    return {"ok": True, "session_minutes": req.session_minutes}
-
-
 @router.get("/today")
 def get_today(current_user: dict = Depends(get_current_user), _rl: None = Depends(_get_me_limit)):
     """Return today's date in the user's local timezone (YYYY-MM-DD)."""
@@ -972,6 +951,7 @@ def admin_delete_user(user_id: str, current_user: dict = Depends(require_admin))
 class AdminSettingsRequest(BaseModel):
     allow_open_registration: bool | None = None
     enabled_workspaces: list[str] | None = None
+    session_minutes: int | None = Field(default=None, ge=60, le=129600)
 
     @field_validator("enabled_workspaces")
     @classmethod
@@ -994,6 +974,7 @@ def get_admin_settings(current_user: dict = Depends(require_admin)):
             "allow_open_registration", settings.allow_open_registration
         ),
         "enabled_workspaces": auth_service.enabled_workspaces(),
+        "session_minutes": auth_service.get_effective_session_minutes(),
     }
 
 
@@ -1006,4 +987,5 @@ def update_admin_settings(
     return {
         "allow_open_registration": updated.get("allow_open_registration"),
         "enabled_workspaces": auth_service.enabled_workspaces(),
+        "session_minutes": auth_service.get_effective_session_minutes(),
     }

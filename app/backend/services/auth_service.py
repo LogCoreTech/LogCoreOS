@@ -209,6 +209,11 @@ def update_system_settings(updates: dict) -> dict:
         return data["settings"]
 
 
+def get_effective_session_minutes() -> int:
+    """Instance-wide session length in minutes, admin-configurable via runtime settings."""
+    return get_system_settings().get("session_minutes", settings.access_token_expire_minutes)
+
+
 def enabled_workspaces() -> list[str]:
     """Instance-wide list of workspaces available on this install.
 
@@ -253,7 +258,6 @@ def create_user(
     name: str,
     role: str = "member",
     timezone: str = "UTC",
-    session_minutes: int = 10080,
 ) -> dict:
     # Validate name — prevents path traversal and markdown injection
     if not _NAME_RE.match(name):
@@ -275,7 +279,6 @@ def create_user(
             "role": role,
             "hashed_password": hash_password(password),
             "timezone": timezone,
-            "session_minutes": session_minutes,
             "notification_channel": f"lc-{uuid_module.uuid4().hex[:12]}",
             "created_at": datetime.now(ZoneInfo("UTC")).isoformat(),
         }
@@ -325,7 +328,7 @@ def authenticate(email: str, password: str) -> dict | None:
 
 
 def create_token(user: dict) -> str:
-    session_minutes = user.get("session_minutes", settings.access_token_expire_minutes)
+    session_minutes = get_effective_session_minutes()
     payload = {
         "sub": user["id"],
         "jti": str(uuid_module.uuid4()),

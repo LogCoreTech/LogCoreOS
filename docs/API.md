@@ -35,8 +35,7 @@ Create an account. Requires admin token when registration is closed (except for 
 {
   "email": "user@example.com",
   "password": "mypassword",
-  "name": "Alice",
-  "session_minutes": 10080
+  "name": "Alice"
 }
 ```
 
@@ -79,7 +78,6 @@ Returns current user's profile.
   "name": "Alice",
   "role": "member",
   "notification_channel": "lc-abc123",
-  "session_minutes": 10080,
   "timezone": "America/Chicago",
   "workspaces": ["personal"],
   "disabled_modules": [],
@@ -144,13 +142,6 @@ Remove the uploaded background image and clear the `background` field.
 
 **Response** `204 No Content`
 
-### `PATCH /auth/session`
-Update own session length.
-
-**Body** `{ "session_minutes": 43200 }`
-
-**Response** `{ "ok": true, "session_minutes": 43200 }`
-
 ### `GET /auth/today`
 Returns today's date in the user's timezone.
 
@@ -202,14 +193,16 @@ Set which modules are disabled for a user.
 ### `GET /auth/admin/settings`
 Get runtime admin settings.
 
-**Response** `{ "allow_open_registration": false, "enabled_workspaces": ["personal", "business"] }`
+**Response** `{ "allow_open_registration": false, "enabled_workspaces": ["personal", "business"], "session_minutes": 10080 }`
 
 ### `PATCH /auth/admin/settings`
 Update runtime admin settings. All fields optional — only send what changes.
 
-**Body** `{ "allow_open_registration": true }` and/or `{ "enabled_workspaces": ["personal"] }`
+**Body** `{ "allow_open_registration": true }` and/or `{ "enabled_workspaces": ["personal"] }` and/or `{ "session_minutes": 43200 }`
 
 `enabled_workspaces` — instance-wide list of workspaces available on this install (subset of `["personal", "business"]`, never empty). Hiding a workspace removes it for **everyone, including admins**: `get_current_user()` intersects each user's `workspaces` with this list. Used for personal-only or business-only deployments.
+
+`session_minutes` (60–129600, default 10080) — a **single instance-wide value**, admin-only, no per-user override. Controls how long every login stays valid (both the JWT `exp` claim and the cookie `max_age`). There used to be a per-user `PATCH /auth/session` self-service endpoint; it was removed in favor of this single admin-controlled setting. Changing it only affects logins from that point forward — already-active sessions are not forcibly invalidated.
 
 ### `GET /auth/admin/ai-settings`
 Get AI provider configuration.
@@ -398,11 +391,11 @@ Get the category priority order for both pool pseudo-users (`_household` and `_t
 ```
 
 ### `PUT /priorities/pool`
-Update the category priority order for a pool pseudo-user. Admin only.
+Update the category priority order for one or both pool pseudo-users. Admin only.
 
-**Body** `{ "pool": "household", "order": ["Family", "Home", "Errands"] }`
-
-Valid `pool` values: `"household"`, `"team"`.
+**Body** `{ "household"?: ["Family", "Home", "Errands"], "team"?: [...] }` — both keys are optional;
+send only the pool(s) you're updating. (Corrected from an earlier `{pool, order}` shape documented
+here that never matched the actual route.)
 
 **Response** `{ "ok": true }`
 
@@ -847,15 +840,16 @@ Router mounted at `/api/v1/finance`. Requires the `finance` module (disabled for
 
 ### Bank sync (SimpleFIN — admin-managed) + CSV import
 
-Bank connections use SimpleFIN Bridge **read-only** tokens. Members never enter tokens: they *request* a connection (admins get a bell/push with a View → to Admin), an admin claims the user's setup token in **Admin → Bank Connections**, then the member maps connected bank accounts onto their own book accounts from **Finance → 🏦 Bank**. The access URL lives at `brain/USERS/{name}/Finance/simplefin.json` and is only ever output by the admin reveal endpoint. Sync runs 2 min after boot + every 12 h; imported transactions land uncategorized (`category: ""`) unless a learned payee rule matches.
+Bank connections use SimpleFIN Bridge **read-only** tokens. Members never enter tokens: they *request* a connection (admins get a bell/push that deep-links straight to that member's page), an admin claims the user's setup token from that member's own page under Settings → Admin Settings → Users & Roles, then the member maps connected bank accounts onto their own book accounts from **Finance → 🏦 Bank**. The access URL lives at `brain/USERS/{name}/Finance/simplefin.json` and is only ever output by the admin reveal endpoint. Sync runs 2 min after boot + every 12 h; imported transactions land uncategorized (`category: ""`) unless a learned payee rule matches.
 
 | Method | Path | Access | Notes |
 |--------|------|--------|-------|
-| `POST` | `/finance/simplefin/request` | module users | notify all admins (rate 3/hour) |
+| `POST` | `/finance/simplefin/request` | module users | notify all admins (rate 3/hour); notification action carries `user_id` so the admin lands on the requesting member's page |
 | `GET` | `/finance/simplefin/status` | module users | own sanitized status — never includes the access URL |
 | `GET` | `/finance/simplefin/accounts` | module users | live list of connected bank accounts (for the mapping UI) |
 | `PUT` | `/finance/simplefin/mapping` | module users | `{entries: [{simplefin_account_id, bank_name?, account_name?, target: {store: self\|household\|team, workspace, book_id, account_id}, enabled}]}` — pool targets **admin-only** |
-| `GET` | `/finance/simplefin/connections` | **admin** | per-user connection status for the Admin card |
+| `GET` | `/finance/simplefin/connections` | **admin** | per-user connection status, used to populate each user's own Bank Connection section |
+| `GET` | `/finance/simplefin/pool-summary?pool=household\|team` | **admin** | read-only, derived from every user's `account_map`: which members have accounts mapped into that pool's books (`[{user_id, name, mapped_accounts}]`). No pool-level connection exists yet — this is purely a summary of user-owned connections |
 | `POST` | `/finance/simplefin/claim` | **admin** | `{user_id, setup_token}` → claims + stores the access URL for that user; notifies them (rate 5/hour) |
 | `POST` | `/finance/simplefin/reveal` | **admin** | `{user_id}` → the stored access URL (rate 3/hour — the only endpoint that outputs it) |
 | `DELETE` | `/finance/simplefin/{user_id}` | **admin** | disconnect (deletes the stored token; imported data stays) |

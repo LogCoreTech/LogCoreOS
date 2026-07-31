@@ -9,8 +9,20 @@ import Goals from './pages/Goals'
 import Chat from './pages/Chat'
 import Brain from './pages/Brain'
 import Settings from './pages/Settings'
-import Admin from './pages/Admin'
-import AiUsage from './pages/AiUsage'
+import SettingsAppearance from './pages/settings/Appearance'
+import SettingsNotifications from './pages/settings/Notifications'
+import SettingsShortcuts from './pages/settings/Shortcuts'
+import SettingsAccount from './pages/settings/Account'
+import AdminMenu from './pages/settings/AdminMenu'
+import AdminUsers from './pages/settings/admin/Users'
+import AdminNewUser from './pages/settings/admin/NewUser'
+import AdminUserDetail from './pages/settings/admin/UserDetail'
+import AdminRoleDefinitions from './pages/settings/admin/RoleDefinitions'
+import AdminAi from './pages/settings/admin/Ai'
+import AdminGeneral from './pages/settings/admin/General'
+import AdminTeam from './pages/settings/admin/Team'
+import AdminHousehold from './pages/settings/admin/Household'
+import AdminHosting from './pages/settings/admin/Hosting'
 import Calendar from './pages/Calendar'
 import Household from './pages/Household'
 import Team from './pages/Team'
@@ -72,9 +84,21 @@ export default function App() {
                 <Route path="/brain"     element={<Brain />} />
                 <Route path="/profile"   element={<Profile />} />
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/settings/appearance" element={<SettingsAppearance />} />
+                <Route path="/settings/notifications" element={<SettingsNotifications />} />
+                <Route path="/settings/shortcuts" element={<SettingsShortcuts />} />
+                <Route path="/settings/account" element={<SettingsAccount />} />
+                <Route path="/settings/admin" element={<AdminOnly><AdminMenu /></AdminOnly>} />
+                <Route path="/settings/admin/users" element={<AdminOnly><AdminUsers /></AdminOnly>} />
+                <Route path="/settings/admin/users/new" element={<AdminOnly><AdminNewUser /></AdminOnly>} />
+                <Route path="/settings/admin/users/roles" element={<AdminOnly><AdminRoleDefinitions /></AdminOnly>} />
+                <Route path="/settings/admin/users/:userId" element={<AdminOnly><AdminUserDetail /></AdminOnly>} />
+                <Route path="/settings/admin/ai" element={<AdminOnly><AdminAi /></AdminOnly>} />
+                <Route path="/settings/admin/general" element={<AdminOnly><AdminGeneral /></AdminOnly>} />
+                <Route path="/settings/admin/team" element={<AdminOnly><AdminTeam /></AdminOnly>} />
+                <Route path="/settings/admin/household" element={<AdminOnly><AdminHousehold /></AdminOnly>} />
+                <Route path="/settings/admin/hosting" element={<AdminOnly><AdminHosting /></AdminOnly>} />
                 <Route path="/help"     element={<Help />} />
-                <Route path="/admin"    element={<AdminOnly><Admin /></AdminOnly>} />
-                <Route path="/admin/ai-usage" element={<AdminOnly><AiUsage /></AdminOnly>} />
               </Route>
             </Routes>
           </BrowserRouter>
