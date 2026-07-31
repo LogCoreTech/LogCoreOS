@@ -70,9 +70,13 @@ Skip only if the turn was purely Q&A — no files changed, no decisions made. Af
 
 ## 5. Git Workflow
 
+`origin` is the public HTTPS remote (`https://github.com/LogCoreTech/LogCoreOS.git`) — deliberate, so the updater's cron user can `git fetch` without needing an SSH agent (see MEMORY.md gotcha, 2026-07-20). That means `git push origin master` has no credentials and will fail with "could not read Username." Push straight to the SSH URL instead, without changing `origin`:
+
 ```bash
-GIT_SSH_COMMAND="ssh -i /home/logcore/.ssh/logcore_github" git push origin master
+GIT_SSH_COMMAND="ssh -i /home/logcore/.ssh/logcore_github" git push git@github.com:LogCoreTech/LogCoreOS.git master
 ```
+
+Always `git fetch origin master` and check for divergence (`git status`) before pushing — another parallel session may have pushed directly in the meantime (see MEMORY.md gotcha, 2026-07-31).
 
 Commit message prefixes (imperative mood, present tense):
 - `feat:` new feature or capability
