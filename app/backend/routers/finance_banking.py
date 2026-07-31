@@ -80,10 +80,10 @@ def request_connection(
             admin,
             "🏦 Bank connection request",
             f"{current_user['name']} asked to connect a bank account via SimpleFIN. "
-            "Add their setup token in Admin → Bank Connections.",
+            "Add their setup token in Settings → Admin Settings → Users & Roles.",
             source="finance",
-            action={"type": "open_admin_banking"},
-            url="/admin",
+            action={"type": "open_admin_banking", "user_id": current_user["id"]},
+            url=f"/settings/admin/users/{current_user['id']}",
         )
     return {"ok": True, "notified_admins": len(admins)}
 
@@ -149,6 +149,18 @@ def list_connections(
             }
         )
     return out
+
+
+@router.get("/simplefin/pool-summary")
+def pool_bank_summary(
+    pool: str,
+    current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_read_limit),
+):
+    """Read-only: which members have accounts mapped into this pool's books."""
+    if pool not in ("household", "team"):
+        raise HTTPException(status_code=400, detail="pool must be 'household' or 'team'")
+    return simplefin_service.pool_summary(pool)
 
 
 @router.post("/simplefin/claim")

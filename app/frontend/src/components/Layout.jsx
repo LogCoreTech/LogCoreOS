@@ -6,8 +6,6 @@ import { ALL_MODULES, getShortcutsForUser } from '../lib/constants'
 import { suggestions as sugApi, assets as assetsApi, finance as financeApi, contacts as contactsApi, notes as notesApi } from '../lib/api'
 import WhatsNewBanner from './WhatsNewBanner'
 
-const ADMIN_NAV = { to: '/admin', icon: '⬡', label: 'Admin' }
-
 function NotifBell() {
   const [notifs, setNotifs] = useState([])
   const [open, setOpen] = useState(false)
@@ -20,7 +18,7 @@ function NotifBell() {
   function navTarget(action) {
     if (action?.type === 'open_asset') return `/assets?asset=${action.asset_id}`
     if (action?.type === 'open_inbox') return `/automations?view=inbox&inbox=${action.inbox_id || ''}`
-    if (action?.type === 'open_admin_banking') return '/admin'
+    if (action?.type === 'open_admin_banking') return `/settings/admin/users/${action.user_id || ''}`
     if (action?.type === 'open_finance_book') return `/finance?book=${action.book_id || ''}`
     if (action?.type === 'open_contact') return '/contacts'
     if (action?.type === 'open_settings') return '/settings'
@@ -318,22 +316,6 @@ export default function Layout() {
         </nav>
 
         <div className="p-2 border-t border-charcoal-200 dark:border-charcoal-800 space-y-0.5">
-          {user?.role === 'admin' && (
-            <NavLink
-              to="/admin"
-              title={collapsed ? 'Admin' : undefined}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 text-sm font-medium transition-colors border-l-2 rounded-r-lg ${
-                  isActive
-                    ? 'border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400'
-                    : 'border-transparent text-charcoal-600 dark:text-charcoal-400 hover:bg-charcoal-100 dark:hover:bg-charcoal-800'
-                } ${collapsed ? 'justify-center' : ''}`
-              }
-            >
-              <span className="text-base shrink-0">🛡</span>
-              {!collapsed && 'Admin'}
-            </NavLink>
-          )}
           <NavLink
             to="/settings"
             title={collapsed ? 'Settings' : undefined}
@@ -489,15 +471,6 @@ export default function Layout() {
             </div>
 
             <div className="p-3 border-t border-charcoal-200 dark:border-charcoal-800 space-y-1">
-              {user?.role === 'admin' && (
-                <button
-                  onClick={() => navTo('/admin')}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-charcoal-600 dark:text-charcoal-400 hover:bg-charcoal-100 dark:hover:bg-charcoal-800 transition-colors"
-                >
-                  <span className="text-base">🛡</span>
-                  Admin
-                </button>
-              )}
               <button
                 onClick={() => navTo('/settings')}
                 className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-charcoal-600 dark:text-charcoal-400 hover:bg-charcoal-100 dark:hover:bg-charcoal-800 transition-colors"

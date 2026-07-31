@@ -77,6 +77,34 @@ def connection_status(user_name: str) -> dict:
     }
 
 
+def pool_summary(pool: str) -> list[dict]:
+    """Read-only: which members have accounts mapped into `pool`'s books.
+
+    Derived on read from each user's own account_map — there is no separate
+    pool-level SimpleFIN connection today (connections are always tied to a
+    real user; only the mapping *target* can point at a pool book).
+    """
+    from services import auth_service
+
+    out = []
+    for user in auth_service.list_users():
+        conn = get_connection(user["name"])
+        if not conn:
+            continue
+        mapped = [
+            e for e in conn.get("account_map", []) if (e.get("target") or {}).get("store") == pool
+        ]
+        if mapped:
+            out.append(
+                {
+                    "user_id": user["id"],
+                    "name": user["name"],
+                    "mapped_accounts": len(mapped),
+                }
+            )
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Claim flow (setup token → access URL)
 # ---------------------------------------------------------------------------
