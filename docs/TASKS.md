@@ -392,6 +392,33 @@ Generated across a systematic search→generate→compare→document pass over t
 **Performance & DX**
 - Streak freeze / grace period (a Duolingo-style forgiveness mechanic) — currently one missed day zeroes the count with no mercy.
 
+**New module ideas — conversational brainstorm (2026-08-02, not code-audited like the rest of this backlog)**
+- **Health/Fitness** — meds, appointments, biometrics, workout log; complements the existing Journal insight-loop idea.
+- **Meal planning + pantry** — recipes, grocery list generation, expiration tracking; strong Household-pool fit.
+- **Vehicle/equipment maintenance** — dedicated service-schedule view with due-date reminders (mirrors Finance's recurring-bill matching) instead of folding into generic Assets templates.
+- **Digital Legacy / Time Capsule** — letters/instructions delivered to family on a future date or via a "dead man's switch" (no login for N days → admin notified → trusted contact granted access); reuses the scheduler + notification stack almost entirely.
+- **Break-glass emergency vault** — hardened Assets variant for wills/deeds/policies where a designated contact can request access, owner/admin gets notified, and it auto-grants after a timeout unless denied.
+- **Family tree / genealogy** — visualizes person↔person relationships on top of the affiliation-linking already planned for Contacts.
+- **Decision journal** — structured big-decision records (options, reasoning, AI-assisted pros/cons) revisited later to see how the choice played out; distinct from Journal's daily-entry format.
+- **Chores marketplace for kids** — Household tasks pay out points that redeem for allowance logged as a real Finance transaction.
+- **Dream journal** — literal sleep dreams, separate from the reflective Journal, with AI symbol/theme pattern-detection over time.
+- **Disaster-prep / muster module** — emergency plans, supply checklists, a household "where's everyone" check-in board.
+- **Memorial mode for Contacts** — a deceased contact flips from an active CRM entry into a read-only memory page others can add letters/memories to, reusing the comment infrastructure Assets/Contacts already have.
+- **Self-hosting meta-dashboard** — Homepage/Heimdall-style status panel for the *other* self-hosted services a LogCoreOS admin probably also runs (n8n, ntfy, Plex, Pi-hole, etc.) — unrelated to life management, but fits the target audience.
+- **RSS reader / read-later** — self-hosted Instapaper/Feedly alternative, feeding into the Library/Archive idea above.
+- **Chat-agent easter egg** — hidden retro game or text-adventure powered by the existing tool-calling agent; cheap, memorable personality piece.
+- **"This day in history" / daily curiosity widget** on the Dashboard — no functional purpose, just a reason to open the app unrelated to chores.
+- **Investing/portfolio tracker** — stocks/crypto/retirement accounts (price feeds, cost basis, unrealized gains); distinct from Finance's cash-flow ledger model, which doesn't fit this shape.
+- **Career module** — job applications (stage, follow-ups, tied to a recruiter Contact), resume/CV versions, performance-review notes, skills tracked over time.
+- **Travel module** — trip itineraries, packing lists, passport/visa expiry reminders tied into Calendar.
+- **Pets module** — vet records, medication schedules, weight/vaccination history.
+- **Caregiving / elder care module** — shared medication schedules + caregiver shift log for an aging parent, living in the Household pool.
+- **Kids/parenting milestones module** — growth charts, immunizations, school info; Household-pool fit.
+- **Faith / spiritual practice module** — prayer/reflection log, scripture or meditation plans, shared prayer requests within a Household.
+- **Collections module** — coins, cards, wine, etc.; Assets-template-shaped but with market-value tracking instead of insurance-value tracking.
+- **Legal/contracts vault** — leases, POAs, NDAs with renewal-date reminders, more precise than dumping documents in Assets attachments.
+- **Language/skill learning practice logs** — streak-based practice tracking (instrument, language, any skill), riding on the existing recurring-task/habit machinery.
+
 ### ⚪ P3
 
 - Affiliate/creator partnerships (r/selfhosted YouTubers etc.) — sequence after the product is more polished and pricing is live.
