@@ -57,7 +57,8 @@ function TreeNode({ node, depth, selectedPath, openFolders, onSelectNote, onTogg
             {isOpen ? '▼' : '▶'}
           </span>
           <span className="text-base leading-none shrink-0">{isOpen ? '📂' : '📁'}</span>
-          <span className="flex-1 text-sm font-medium truncate">{node.name}</span>
+          <span className={`flex-1 text-sm font-medium truncate ${node.archived ? 'line-through text-charcoal-400' : ''}`}>{node.name}</span>
+          {node.archived && <span className="text-[10px] text-charcoal-400 shrink-0">archived</span>}
           {node._owner && <span className="text-[10px] shrink-0 text-blue-500" title={`Shared: ${node._owner}`}>{node._owner === 'household' ? '🏠' : node._owner === 'team' ? '🧑‍🤝‍🧑' : '↗'}</span>}
           <button
             onClick={e => { e.stopPropagation(); onAction('folderMenu', node) }}
@@ -98,7 +99,8 @@ function TreeNode({ node, depth, selectedPath, openFolders, onSelectNote, onTogg
       onClick={() => onSelectNote(node.path)}
     >
       <span className="text-base leading-none shrink-0">📝</span>
-      <span className="flex-1 text-sm truncate">{node.name}</span>
+      <span className={`flex-1 text-sm truncate ${node.archived ? 'line-through text-charcoal-400' : ''}`}>{node.name}</span>
+      {node.archived && <span className="text-[10px] text-charcoal-400 shrink-0">archived</span>}
       {node._owner && <span className="text-[10px] shrink-0 text-blue-500" title={`Shared: ${node._owner}`}>{node._owner === 'household' ? '🏠' : node._owner === 'team' ? '🧑‍🤝‍🧑' : '↗'}</span>}
       <button
         onClick={e => { e.stopPropagation(); onAction('noteMenu', node) }}
@@ -113,29 +115,37 @@ function TreeNode({ node, depth, selectedPath, openFolders, onSelectNote, onTogg
 
 // ── Context menu ──────────────────────────────────────────────────────────────
 
-function ContextMenu({ node, folders, onClose, onRename, onMove, onDelete, onShare, onLeave }) {
-  // You can only reshare/manage your OWN items (no _owner). Shared-to-you items
-  // offer Leave instead.
+function ContextMenu({ node, folders, onClose, onRename, onMove, onDelete, onShare, onLeave, onArchive }) {
+  // Own items (no _owner) are always manageable. Pool items (household/team)
+  // are collectively visible, not a personal share — "Leave" makes no sense
+  // there; instead an admin (or a by-name edit-level contributor) can manage
+  // them via _access, same pattern as Assets/Finance/Contacts. Only a genuine
+  // personal share-to-you (a real user's name as _owner) offers Leave.
   const own = !node._owner
+  const isPool = node._owner === 'household' || node._owner === 'team'
+  const canManage = own || (isPool && node._access === 'edit')
+  const canLeave = !own && !isPool
   const btn = 'w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-charcoal-100 dark:hover:bg-charcoal-700'
   const danger = 'w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400'
   if (node.type === 'folder') {
     return (
       <div className="card p-1 w-44 shadow-lg z-50">
-        {own && <button onClick={() => { onClose(); onRename(node) }} className={btn}>Rename folder</button>}
-        {own && <button onClick={() => { onClose(); onShare(node) }} className={btn}>Share…</button>}
-        {own && <button onClick={() => { onClose(); onDelete(node) }} className={danger}>Delete folder…</button>}
-        {!own && <button onClick={() => { onClose(); onLeave(node) }} className={danger}>Leave</button>}
+        {canManage && <button onClick={() => { onClose(); onRename(node) }} className={btn}>Rename folder</button>}
+        {canManage && <button onClick={() => { onClose(); onArchive(node) }} className={btn}>{node.archived ? 'Unarchive folder' : 'Archive folder'}</button>}
+        {canManage && <button onClick={() => { onClose(); onShare(node) }} className={btn}>Share…</button>}
+        {canManage && <button onClick={() => { onClose(); onDelete(node) }} className={danger}>Delete folder…</button>}
+        {canLeave && <button onClick={() => { onClose(); onLeave(node) }} className={danger}>Leave</button>}
       </div>
     )
   }
   return (
     <div className="card p-1 w-44 shadow-lg z-50">
-      {own && <button onClick={() => { onClose(); onRename(node) }} className={btn}>Rename note</button>}
-      {own && <button onClick={() => { onClose(); onMove(node) }} className={btn}>Move to folder</button>}
-      {own && <button onClick={() => { onClose(); onShare(node) }} className={btn}>Share…</button>}
-      {own && <button onClick={() => { onClose(); onDelete(node) }} className={danger}>Delete note…</button>}
-      {!own && <button onClick={() => { onClose(); onLeave(node) }} className={danger}>Leave</button>}
+      {canManage && <button onClick={() => { onClose(); onRename(node) }} className={btn}>Rename note</button>}
+      {canManage && <button onClick={() => { onClose(); onMove(node) }} className={btn}>Move to folder</button>}
+      {canManage && <button onClick={() => { onClose(); onArchive(node) }} className={btn}>{node.archived ? 'Unarchive note' : 'Archive note'}</button>}
+      {canManage && <button onClick={() => { onClose(); onShare(node) }} className={btn}>Share…</button>}
+      {canManage && <button onClick={() => { onClose(); onDelete(node) }} className={danger}>Delete note…</button>}
+      {canLeave && <button onClick={() => { onClose(); onLeave(node) }} className={danger}>Leave</button>}
     </div>
   )
 }
@@ -221,6 +231,7 @@ export default function Notes() {
   const [modalTarget, setModalTarget] = useState('')
   const [modalBusy, setModalBusy]   = useState(false)
   const [showSidebar, setShowSidebar] = useState(true)
+  const [showArchived, setShowArchived] = useState(false)
   const [dragActive, setDragActive] = useState(false)
   const [overFolder, setOverFolder] = useState(null)   // folder path ('' = root) under the pointer
   const autoSaveTimer = useRef(null)
@@ -230,7 +241,7 @@ export default function Notes() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await notesApi.list()
+      const data = await notesApi.list(showArchived)
       setItems(data)
       setTree(buildTree(data))
     } catch {
@@ -238,9 +249,18 @@ export default function Notes() {
     } finally {
       setLoading(false)
     }
-  }, [workspace])
+  }, [workspace, showArchived])
 
   useEffect(() => { load() }, [load])
+
+  async function handleArchiveToggle(node) {
+    try {
+      await notesApi.setArchived(node.path, !node.archived)
+      await load()
+    } catch (e) {
+      setError(e.message || 'Could not update archive state.')
+    }
+  }
 
   // ── Drag a note into a folder (desktop pointer + touch long-press) ────────────
   async function moveNoteTo(node, targetFolder) {
@@ -535,6 +555,17 @@ export default function Notes() {
         </button>
       </div>
 
+      <div className="px-3 pt-2">
+        <button
+          onClick={() => setShowArchived(s => !s)}
+          className={`text-xs px-2 py-1 rounded-md transition-colors ${
+            showArchived ? 'bg-charcoal-600 text-white' : 'bg-charcoal-100 dark:bg-charcoal-800 text-charcoal-500 dark:text-charcoal-400'
+          }`}
+        >
+          {showArchived ? 'Archived shown' : 'Show archived'}
+        </button>
+      </div>
+
       {/* Tree — the container is the root ("no folder") drop target */}
       <div
         data-folder-path=""
@@ -586,6 +617,7 @@ export default function Notes() {
             onDelete={node => openModal(node.type === 'folder' ? 'deleteFolder' : 'deleteNote', node)}
             onShare={node => setShareModal({ node })}
             onLeave={handleLeave}
+            onArchive={handleArchiveToggle}
           />
         </div>
       )}

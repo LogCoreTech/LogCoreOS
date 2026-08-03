@@ -72,9 +72,14 @@ def _folder_path(user_name: str, path: str, workspace: str = "personal") -> Path
 
 
 def list_notes(
-    user_name: str, workspace: str = "personal", create_default: bool = True
+    user_name: str,
+    workspace: str = "personal",
+    create_default: bool = True,
+    include_archived: bool = False,
 ) -> list[dict]:
     """Return a flat list of all notes and folders (recursive) for tree-building.
+    Every item carries `archived` (bool); by default archived items are omitted
+    from the list (pass `include_archived=True` to include them too).
 
     `create_default=False` for pool/foreign stores so we never write a Getting
     Started note into someone else's or a pool store."""
@@ -119,6 +124,12 @@ def list_notes(
                 "modified_at": datetime.fromtimestamp(p.stat().st_mtime).isoformat(),
             }
         )
+
+    archived_paths = set(load_archived(user_name, workspace))
+    for item in items:
+        item["archived"] = _is_archived_path(archived_paths, item["path"])
+    if not include_archived:
+        items = [i for i in items if not i["archived"]]
 
     return items
 
@@ -176,6 +187,7 @@ def delete_note(user_name: str, path: str, workspace: str = "personal") -> bool:
     if not p.exists():
         return False
     p.unlink()
+    _drop_archived_entry(user_name, workspace, path)
     return True
 
 
@@ -194,6 +206,7 @@ def delete_folder(user_name: str, path: str, workspace: str = "personal") -> boo
     if not p.exists() or not p.is_dir():
         return False
     shutil.rmtree(p)
+    _drop_archived_prefix(user_name, workspace, path)
     return True
 
 
@@ -217,6 +230,61 @@ def move_item(
     dst.parent.mkdir(parents=True, exist_ok=True)
     src.rename(dst)
     return {"from_path": from_path, "to_path": to_path, "type": item_type}
+
+
+# ---------------------------------------------------------------------------
+# Archiving (sidecar list keyed by path — a folder archive cascades to its
+# subtree, same ancestor-walk cascade rule as sharing's _entry_for_path)
+# ---------------------------------------------------------------------------
+
+
+def _archive_file(store_user: str, workspace: str) -> Path:
+    return _notes_root(store_user, workspace) / "_archive.json"
+
+
+def load_archived(store_user: str, workspace: str) -> list[str]:
+    return read_json(_archive_file(store_user, workspace), default={"archived": []}).get(
+        "archived", []
+    )
+
+
+def _save_archived(store_user: str, workspace: str, paths: list[str]) -> None:
+    write_json(_archive_file(store_user, workspace), {"archived": sorted(set(paths))})
+
+
+def _is_archived_path(archived_paths: set[str], path: str) -> bool:
+    """True if `path` itself, or any ancestor folder, is archived — a folder
+    archive cascades to everything inside it, same as a folder share does."""
+    candidate = path
+    while True:
+        if candidate in archived_paths:
+            return True
+        if "/" not in candidate:
+            return False
+        candidate = candidate.rsplit("/", 1)[0]
+
+
+def set_archived(store_user: str, workspace: str, path: str, archived: bool) -> None:
+    _validate_path(path)
+    current = set(load_archived(store_user, workspace))
+    if archived:
+        current.add(path)
+    else:
+        current.discard(path)
+    _save_archived(store_user, workspace, list(current))
+
+
+def _drop_archived_entry(store_user: str, workspace: str, path: str) -> None:
+    current = load_archived(store_user, workspace)
+    if path in current:
+        _save_archived(store_user, workspace, [p for p in current if p != path])
+
+
+def _drop_archived_prefix(store_user: str, workspace: str, path: str) -> None:
+    current = load_archived(store_user, workspace)
+    remaining = [p for p in current if p != path and not p.startswith(f"{path}/")]
+    if remaining != current:
+        _save_archived(store_user, workspace, remaining)
 
 
 # ---------------------------------------------------------------------------
@@ -349,16 +417,26 @@ def store_for_owner(owner: str | None, viewer: str) -> str:
     return owner or viewer
 
 
-def list_visible_notes(viewer: str, role: str, is_admin: bool, workspace: str) -> list[dict]:
+def list_visible_notes(
+    viewer: str, role: str, is_admin: bool, workspace: str, include_archived: bool = False
+) -> list[dict]:
     """Own notes + workspace-pool notes + notes/folders shared to the viewer,
-    each annotated with _owner/_access. Own items carry no _owner."""
+    each annotated with _owner/_access (and `archived`). Own items carry no
+    _owner. Archived items are omitted by default, per store, same as list_notes."""
     from services.notes_index import sharers_for
 
-    results = [dict(i) for i in list_notes(viewer, workspace, create_default=True)]
+    results = [
+        dict(i)
+        for i in list_notes(
+            viewer, workspace, create_default=True, include_archived=include_archived
+        )
+    ]
     stores = [pool_for(workspace)]
     stores += [s for s in sharers_for(viewer, role, workspace) if s not in stores]
     for store_user in stores:
-        for item in list_notes(store_user, workspace, create_default=False):
+        for item in list_notes(
+            store_user, workspace, create_default=False, include_archived=include_archived
+        ):
             access = resolve_access(viewer, role, is_admin, store_user, workspace, item["path"])
             if access:
                 results.append(_annotate(item, store_user, viewer, access))
@@ -468,6 +546,106 @@ def _clean_hidden(hidden) -> list[str]:
             resolve_target_users(token)
         out.append(token)
     return out
+
+
+def transfer_ownership(
+    store_user: str, workspace: str, path: str, item_type: str, *, new_owner: str, by: str = ""
+) -> None:
+    """Move a note file or folder (+ everything inside, for a folder) to another
+    store — a named user's store in the SAME workspace, or that workspace's
+    pool. Also relocates every _shares.json entry equal to `path` or nested
+    under it (path/...).
+
+    Unlike a pool-conversion-style move, share fields are preserved: for a
+    named-user destination shared_with/contributors/hidden_from carry over
+    unchanged. For a pool destination, each shared_with entry is converted to
+    an equivalent contributors entry — pool notes never read shared_with.
+    """
+    _validate_path(path)
+    src_root = _notes_root(store_user, workspace)
+    dst_root = _notes_root(new_owner, workspace)
+    if item_type == "note":
+        src = src_root / f"{path}.md"
+        dst = dst_root / f"{path}.md"
+    else:
+        src = src_root / path
+        dst = dst_root / path
+    if not src.exists():
+        raise ValueError(f"Source not found: {path!r}")
+    if dst.exists():
+        raise ValueError(f"Destination already exists: {path!r}")
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(src), str(dst))
+
+    dest_is_pool = is_pool(new_owner)
+    src_shares = load_shares(store_user, workspace)
+    dst_shares = load_shares(new_owner, workspace)
+    moved_keys = [k for k in src_shares if k == path or k.startswith(f"{path}/")]
+    for key in moved_keys:
+        entry = src_shares.pop(key)
+        if dest_is_pool:
+            converted = list(entry.get("contributors") or [])
+            for share in entry.get("shared_with") or []:
+                converted.append({"target": share["target"], "access": share.get("access", "read")})
+            entry["contributors"] = converted
+            entry["shared_with"] = []
+        dst_shares[key] = entry
+    if moved_keys:
+        _save_shares(store_user, workspace, src_shares)
+        _save_shares(new_owner, workspace, dst_shares)
+
+    src_archived = load_archived(store_user, workspace)
+    moved_archived = [p for p in src_archived if p == path or p.startswith(f"{path}/")]
+    if moved_archived:
+        _save_archived(store_user, workspace, [p for p in src_archived if p not in moved_archived])
+        dst_archived = set(load_archived(new_owner, workspace))
+        dst_archived.update(moved_archived)
+        _save_archived(new_owner, workspace, list(dst_archived))
+
+    from services.notes_index import reindex_owner
+
+    reindex_owner(store_user)
+    if not dest_is_pool:
+        reindex_owner(new_owner)
+
+
+def strip_user_references(user_name: str) -> None:
+    """Remove `user_name` from shared_with/contributors/hidden_from/accepted[]
+    across every OTHER store's _shares.json (real users + pools)."""
+    from services import auth_service
+
+    stores = [(u["name"], ws) for u in auth_service.list_users() for ws in ("personal", "business")]
+    stores += [(POOL_HOUSEHOLD, "personal"), (POOL_TEAM, "business")]
+    for store_user, workspace in stores:
+        if store_user == user_name:
+            continue
+        shares = load_shares(store_user, workspace)
+        changed = False
+        for entry in shares.values():
+            kept = []
+            for s in entry.get("shared_with") or []:
+                if s.get("target") == user_name:
+                    changed = True
+                    continue
+                accepted = s.get("accepted")
+                if isinstance(accepted, list) and user_name in accepted:
+                    s = {**s, "accepted": [n for n in accepted if n != user_name]}
+                    changed = True
+                kept.append(s)
+            entry["shared_with"] = kept
+
+            contrib = entry.get("contributors") or []
+            new_contrib = [c for c in contrib if c.get("target") != user_name]
+            if len(new_contrib) != len(contrib):
+                entry["contributors"] = new_contrib
+                changed = True
+
+            hidden = entry.get("hidden_from") or []
+            if user_name in hidden:
+                entry["hidden_from"] = [h for h in hidden if h != user_name]
+                changed = True
+        if changed:
+            _save_shares(store_user, workspace, shares)
 
 
 def respond_share(viewer: str, owner: str, workspace: str, path: str, accept: bool) -> bool:

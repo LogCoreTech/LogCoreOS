@@ -187,3 +187,83 @@ def test_move_existing_destination_raises(notes_root):
 def test_invalid_paths_rejected(notes_root, bad_path):
     with pytest.raises(ValueError):
         svc.get_note(USER, bad_path)
+
+
+# ---------------------------------------------------------------------------
+# Archiving
+# ---------------------------------------------------------------------------
+
+
+def test_archived_note_hidden_by_default_shown_with_flag(notes_root):
+    svc.create_note(USER, "hello", "hi")
+    svc.set_archived(USER, "personal", "hello", True)
+    assert svc.list_notes(USER) == []
+    shown = svc.list_notes(USER, include_archived=True)
+    assert len(shown) == 1
+    assert shown[0]["archived"] is True
+
+
+def test_unarchive_restores_visibility(notes_root):
+    svc.create_note(USER, "hello", "hi")
+    svc.set_archived(USER, "personal", "hello", True)
+    svc.set_archived(USER, "personal", "hello", False)
+    items = svc.list_notes(USER)
+    assert len(items) == 1
+    assert items[0]["archived"] is False
+
+
+def test_active_items_not_flagged_archived(notes_root):
+    svc.create_note(USER, "hello", "hi")
+    items = svc.list_notes(USER, include_archived=True)
+    assert items[0]["archived"] is False
+
+
+def test_archiving_folder_cascades_to_contents(notes_root):
+    svc.create_folder(USER, "Projects")
+    svc.create_note(USER, "Projects/readme", "hi")
+    svc.create_folder(USER, "Projects/Sub")
+    svc.create_note(USER, "Projects/Sub/deep", "deeper")
+    svc.set_archived(USER, "personal", "Projects", True)
+
+    assert svc.list_notes(USER) == []
+    shown = {i["path"]: i["archived"] for i in svc.list_notes(USER, include_archived=True)}
+    assert shown["Projects"] is True
+    assert shown["Projects/readme"] is True
+    assert shown["Projects/Sub"] is True
+    assert shown["Projects/Sub/deep"] is True
+
+
+def test_unarchiving_folder_restores_cascaded_children(notes_root):
+    svc.create_folder(USER, "Projects")
+    svc.create_note(USER, "Projects/readme", "hi")
+    svc.set_archived(USER, "personal", "Projects", True)
+    svc.set_archived(USER, "personal", "Projects", False)
+    items = svc.list_notes(USER)
+    assert {i["path"] for i in items} == {"Projects", "Projects/readme"}
+
+
+def test_delete_note_clears_archive_entry(notes_root):
+    svc.create_note(USER, "hello", "hi")
+    svc.set_archived(USER, "personal", "hello", True)
+    svc.delete_note(USER, "hello")
+    assert svc.load_archived(USER, "personal") == []
+
+
+def test_delete_folder_clears_nested_archive_entries(notes_root):
+    svc.create_folder(USER, "Projects")
+    svc.create_note(USER, "Projects/readme", "hi")
+    svc.set_archived(USER, "personal", "Projects/readme", True)
+    svc.delete_folder(USER, "Projects")
+    assert svc.load_archived(USER, "personal") == []
+
+
+def test_transfer_ownership_carries_archived_flag(notes_root):
+    from services import auth_service
+
+    auth_service.create_user("bob@example.com", "password123", "Bob")
+    svc.create_note(USER, "hello", "hi")
+    svc.set_archived(USER, "personal", "hello", True)
+    svc.transfer_ownership(USER, "personal", "hello", "note", new_owner="Bob", by=USER)
+    assert "hello" in svc.load_archived("Bob", "personal")
+    assert svc.load_archived(USER, "personal") == []
+    auth_service._revoked_jtis.clear()

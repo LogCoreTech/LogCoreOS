@@ -153,6 +153,8 @@ export const admin = {
   createUser:        (u)                         => post('/auth/admin/users', u),
   updateUserRole:    (id, role)                  => patch(`/auth/admin/users/${id}`, { role }),
   deleteUser:        (id)                        => del(`/auth/admin/users/${id}`),
+  deletionPreview:   (id)                        => get(`/auth/admin/users/${id}/deletion-preview`),
+  deletionExecute:   (id, decisions)              => post(`/auth/admin/users/${id}/deletion-execute`, { decisions }),
   updateModules:          (userId, disabledModules)          => patch(`/auth/users/${userId}/modules`, { disabled_modules: disabledModules }),
   updateWorkspaceModules: (userId, workspace, disabledModules) => patch(`/auth/admin/users/${userId}/workspace-modules`, { workspace, disabled_modules: disabledModules }),
   updateWorkspaces:       (userId, workspaces)               => patch(`/auth/admin/users/${userId}/workspaces`, { workspaces }),
@@ -429,7 +431,8 @@ export const contacts = {
 }
 
 export const notes = {
-  list:         ()                            => get('/notes'),
+  list:         (includeArchived = false)     => get(`/notes${includeArchived ? '?include_archived=true' : ''}`),
+  setArchived:  (path, archived = true)       => post('/notes/archive', { path, archived }),
   get:          (path)                        => get(`/notes/file/${encodePath(path)}`),
   create:       (path, content = '')          => post('/notes/file', { path, content }),
   update:       (path, content)               => request('PUT', `/notes/file/${encodePath(path)}`, { content }),

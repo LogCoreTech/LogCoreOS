@@ -62,6 +62,11 @@ class LeaveRequest(BaseModel):
     path: str = Field(..., min_length=1, max_length=500)
 
 
+class ArchiveRequest(BaseModel):
+    path: str = Field(..., min_length=1, max_length=500)
+    archived: bool = True
+
+
 def _resolve(current_user: dict, workspace: str, path: str, need: str):
     """Return the store_user for a path the viewer can reach at >= `need`
     access (read|contribute|edit), or 404/403."""
@@ -88,12 +93,14 @@ def _resolve(current_user: dict, workspace: str, path: str, need: str):
 def list_notes(
     current_user: dict = Depends(_require_notes),
     workspace: str = Depends(get_workspace),
+    include_archived: bool = False,
 ):
     return notes_service.list_visible_notes(
         current_user["name"],
         current_user.get("feature_role", "member"),
         current_user.get("role") == "admin",
         workspace,
+        include_archived=include_archived,
     )
 
 
@@ -229,6 +236,18 @@ def move_item(
             409 if "already exists" in str(e) else 404 if "not found" in str(e).lower() else 400
         )
         raise HTTPException(status_code=status, detail=str(e))
+
+
+@router.post("/archive")
+def set_archived(
+    req: ArchiveRequest,
+    current_user: dict = Depends(_require_notes),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_write_limit),
+):
+    store_user = _resolve(current_user, workspace, req.path, "edit")
+    notes_service.set_archived(store_user, workspace, req.path, req.archived)
+    return {"ok": True}
 
 
 # ── Sharing ────────────────────────────────────────────────────────────────────

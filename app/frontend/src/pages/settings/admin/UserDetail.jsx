@@ -43,8 +43,6 @@ export default function UserDetail() {
   const [moduleOverrides, setModuleOverrides] = useState({ personal: [], business: [] })
   const [moduleSaving, setModuleSaving] = useState(false)
 
-  const [deleting, setDeleting] = useState(false)
-
   // Bank connection
   const [bankRow, setBankRow] = useState(null) // null = loading
   const [tokenInput, setTokenInput] = useState('')
@@ -169,17 +167,9 @@ export default function UserDetail() {
     }
   }
 
-  async function confirmDelete() {
+  function goToDelete() {
     if (!target) return
-    if (!window.confirm(`Delete ${target.name}? This cannot be undone.`)) return
-    setDeleting(true)
-    try {
-      await adminApi.deleteUser(userId)
-      navigate('/settings/admin/users')
-    } catch (err) {
-      flash(false, err.message || 'Failed to delete user')
-      setDeleting(false)
-    }
+    navigate(`/settings/admin/users/${userId}/delete`)
   }
 
   // --- Bank connection actions ---
@@ -456,12 +446,12 @@ export default function UserDetail() {
           Permanently delete this user and their Brain folder. This cannot be undone.
         </p>
         <button
-          onClick={confirmDelete}
-          disabled={isSelf || deleting}
+          onClick={goToDelete}
+          disabled={isSelf}
           title={isSelf ? 'Cannot delete your own account' : ''}
           className="text-sm text-red-500 hover:text-red-600 font-medium disabled:opacity-30 disabled:cursor-not-allowed"
         >
-          {deleting ? 'Deleting…' : 'Delete User'}
+          Delete User
         </button>
       </div>
     </div>

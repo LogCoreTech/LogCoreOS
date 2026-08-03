@@ -592,6 +592,118 @@ def _apply_categories(
     return new_categories
 
 
+def transfer_ownership(
+    store_user: str, workspace: str, book_id: str, *, new_owner: str, by: str = ""
+) -> dict:
+    """Move a book (registry entry + its whole data directory — transactions,
+    rules, receipts) to another store — a named user's store in the SAME
+    workspace, or that workspace's pool.
+
+    Unlike a pool-conversion-style move, share fields are preserved: for a
+    named-user destination shared_with/contributors/hidden_from (book- and
+    account-level) carry over unchanged. For a pool destination, each
+    shared_with entry (book + account) is converted to an equivalent
+    contributors entry — pool books never read shared_with (update_access
+    rejects it outright), so this keeps the grant functioning.
+    """
+    import shutil
+
+    data = _load(store_user, workspace)
+    books = data.get("books", [])
+    book = next((b for b in books if b["id"] == book_id), None)
+    if book is None:
+        raise ValueError("Book not found")
+    data["books"] = [b for b in books if b["id"] != book_id]
+    _save(store_user, workspace, data)
+
+    dest_is_pool = is_pool(new_owner)
+
+    def _convert(record: dict) -> None:
+        converted = list(record.get("contributors") or [])
+        for share in record.get("shared_with") or []:
+            entry = {"target": share["target"], "access": share.get("access", "read")}
+            if share.get("access") == "contribute" and "caps" in share:
+                entry["caps"] = share["caps"]
+            converted.append(entry)
+        record["contributors"] = converted
+        record["shared_with"] = []
+
+    if dest_is_pool:
+        _convert(book)
+        for account in book.get("accounts", []):
+            _convert(account)
+
+    dest_data = _load(new_owner, workspace)
+    dest_data.setdefault("books", []).append(book)
+    _save(new_owner, workspace, dest_data)
+
+    src_ws = store_workspace(store_user, workspace)
+    dst_ws = store_workspace(new_owner, workspace)
+    src_dir = finance_book_dir(store_user, book_id, src_ws)
+    dst_dir = finance_book_dir(new_owner, book_id, dst_ws)
+    if src_dir.exists():
+        dst_dir.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src_dir), str(dst_dir))
+
+    from services.finance_index import reindex_owner
+
+    reindex_owner(store_user)
+    if not dest_is_pool:
+        reindex_owner(new_owner)
+
+    return book
+
+
+def strip_user_references(user_name: str) -> None:
+    """Remove `user_name` from shared_with/contributors/hidden_from/accepted[]
+    (book- and account-level) across every OTHER store (real users + pools)."""
+    from services import auth_service
+
+    stores = [(u["name"], ws) for u in auth_service.list_users() for ws in ("personal", "business")]
+    stores += [(POOL_HOUSEHOLD, "personal"), (POOL_TEAM, "business")]
+    for store_user, workspace in stores:
+        if store_user == user_name:
+            continue
+        data = _load(store_user, workspace)
+        changed = False
+        for book in data.get("books", []):
+            if _strip_entries(book, user_name):
+                changed = True
+            hidden = book.get("hidden_from") or []
+            if user_name in hidden:
+                book["hidden_from"] = [h for h in hidden if h != user_name]
+                changed = True
+            for account in book.get("accounts", []):
+                if _strip_entries(account, user_name):
+                    changed = True
+        if changed:
+            _save(store_user, workspace, data)
+
+
+def _strip_entries(record: dict, user_name: str) -> bool:
+    """Remove user_name from one record's shared_with/contributors. Returns
+    whether anything changed."""
+    changed = False
+    kept = []
+    for s in record.get("shared_with") or []:
+        if s.get("target") == user_name:
+            changed = True
+            continue
+        accepted = s.get("accepted")
+        if isinstance(accepted, list) and user_name in accepted:
+            s = {**s, "accepted": [n for n in accepted if n != user_name]}
+            changed = True
+        kept.append(s)
+    record["shared_with"] = kept
+
+    contrib = record.get("contributors") or []
+    new_contrib = [c for c in contrib if c.get("target") != user_name]
+    if len(new_contrib) != len(contrib):
+        record["contributors"] = new_contrib
+        changed = True
+    return changed
+
+
 def delete_book(store_user: str, workspace: str, book_id: str) -> bool:
     data = _load(store_user, workspace)
     books = data.get("books", [])
