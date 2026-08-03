@@ -284,7 +284,61 @@ Stores workspace-keyed disabled modules in auth.json. Backward compat: if `disab
 **Response** `{ "ok": true }`
 
 ### `DELETE /auth/admin/users/{user_id}`
-Delete a user and their Brain folder.
+Delete a user and their Brain folder. **`409`** if the user owns any item already shared with
+someone else (an Asset tree, Finance book, Contact, or shared Notes folder/note) — use the
+deletion-preview/deletion-execute endpoints below to resolve those first. Users with nothing
+shared still delete immediately.
+
+### `GET /auth/admin/users/{user_id}/deletion-preview`
+Everything needed to build the delete-review page for this user.
+
+**Response**
+```json
+{
+  "eligible_items": [
+    { "module": "assets", "workspace": "personal", "item_id": "...", "item_type": null,
+      "label": "Garage", "shared_with": [...], "contributors": [...] }
+  ],
+  "blast_radius": [
+    { "module": "finance", "workspace": "personal", "owner": "Carol", "item_id": "...",
+      "label": "Family Budget", "access": "read" }
+  ],
+  "candidate_users": [ { "id": "...", "name": "Bob", "workspaces": ["personal", "business"] } ]
+}
+```
+`eligible_items` — items this user OWNS that are already shared with someone (the whole tree/book/
+folder is one atomic unit; `item_type` is `"note"`/`"folder"`, only meaningful for `notes`). Every
+entry here needs an explicit decision before the account can be deleted. `blast_radius` — read-only:
+what the user will separately lose access to elsewhere (items owned by others or a pool). `module` is
+one of `assets`/`finance`/`contacts`/`notes`.
+
+### `POST /auth/admin/users/{user_id}/deletion-execute`
+Resolve every eligible item, then delete the account. Rejects (400) if any eligible item (recomputed
+fresh server-side — never trusts the client's set) is missing a decision, or if a `transfer_user`
+target doesn't have the item's workspace enabled.
+
+**Body**
+```json
+{
+  "decisions": [
+    { "module": "assets", "workspace": "personal", "item_id": "...",
+      "action": "transfer_user", "target_user_id": "..." },
+    { "module": "finance", "workspace": "personal", "item_id": "...",
+      "action": "transfer_pool", "target_user_id": null },
+    { "module": "contacts", "workspace": "business", "item_id": "...",
+      "action": "delete", "target_user_id": null }
+  ]
+}
+```
+`action`: `transfer_user` (needs `target_user_id`) | `transfer_pool` (the item's own workspace's
+`_household`/`_team`) | `delete`. Existing `shared_with`/`contributors`/`hidden_from` on a transferred
+item are preserved unchanged for a user destination; for a pool destination `shared_with` entries are
+converted to equivalent `contributors` entries (pool items never read `shared_with`). Recipients of a
+`transfer_user` get one batched in-app notification per delete-run, not one per item. References to
+the departing user in every OTHER store are stripped automatically as part of the same call — no
+decision needed for that. The account + Brain folder are only deleted after every decision succeeds.
+
+**Response** `{ "ok": true }`
 
 ---
 
@@ -516,7 +570,18 @@ All endpoints require the `notes` module to be enabled.
 Notes support **asset-style sharing**: the response of `GET /notes` includes the viewer's own notes plus **pool** (household/team) and **shared-to-me** notes/folders, each annotated `_owner`/`_access`. Share metadata lives in a sidecar `Notes/_shares.json` (content stays plain `.md`). A share on a folder cascades to its subtree. Every read/write resolves access server-side (`read` < `contribute` (edit content) < `edit` (move/delete/reshare)).
 
 ### `GET /notes`
-List all notes and folders visible to the current user (own + pool + shared), annotated `_owner`/`_access`.
+List all notes and folders visible to the current user (own + pool + shared), annotated
+`_owner`/`_access`/`archived`. Archived items are omitted by default — pass `?include_archived=true`
+to include them too.
+
+### `POST /notes/archive`
+Archive or unarchive a note/folder (edit-level access required — same gate as delete). Archiving is
+per-node, not cascaded (mirrors Assets' archive rule): archiving a folder does not archive its
+contents. Purely organizational — has no effect on delete permissions.
+
+**Body** `{ "path": "Projects/old-plan", "archived": true }`
+
+**Response** `{ "ok": true }`
 
 ### `GET /notes/file/{path}`
 Read a note file. Resolves the note's store (own/pool/shared) and requires read access.

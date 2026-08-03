@@ -429,6 +429,102 @@ def delete_contact(store_user: str, workspace: str, contact_id: str) -> bool:
     return True
 
 
+def transfer_ownership(
+    store_user: str, workspace: str, contact_id: str, *, new_owner: str, by: str = ""
+) -> dict:
+    """Move a contact (+ its interactions/deals, which live in separate flat
+    per-store files) to another store — a named user's store in the SAME
+    workspace, or that workspace's pool.
+
+    Unlike a pool-conversion-style move, share fields are preserved: for a
+    named-user destination shared_with/contributors/hidden_from carry over
+    unchanged. For a pool destination, each shared_with entry is converted to
+    an equivalent contributors entry — pool contacts never read shared_with.
+    """
+    contacts = list_contacts(store_user, workspace)
+    contact = next((c for c in contacts if c["id"] == contact_id), None)
+    if contact is None:
+        raise ValueError("Contact not found")
+    _save_contacts(store_user, workspace, [c for c in contacts if c["id"] != contact_id])
+
+    dest_is_pool = is_pool(new_owner)
+    if dest_is_pool:
+        converted = list(contact.get("contributors") or [])
+        for share in contact.get("shared_with") or []:
+            converted.append({"target": share["target"], "access": share.get("access", "read")})
+        contact["contributors"] = converted
+        contact["shared_with"] = []
+
+    dest_contacts = list_contacts(new_owner, workspace)
+    dest_contacts.append(contact)
+    _save_contacts(new_owner, workspace, dest_contacts)
+
+    src_ints = _list_interactions(store_user, workspace)
+    moving_ints = [x for x in src_ints if x.get("contact_id") == contact_id]
+    if moving_ints:
+        _save_interactions(
+            store_user, workspace, [x for x in src_ints if x.get("contact_id") != contact_id]
+        )
+        dest_ints = _list_interactions(new_owner, workspace)
+        _save_interactions(new_owner, workspace, dest_ints + moving_ints)
+
+    src_deals = _list_deals(store_user, workspace)
+    moving_deals = [d for d in src_deals if d.get("contact_id") == contact_id]
+    if moving_deals:
+        _save_deals(
+            store_user, workspace, [d for d in src_deals if d.get("contact_id") != contact_id]
+        )
+        dest_deals = _list_deals(new_owner, workspace)
+        _save_deals(new_owner, workspace, dest_deals + moving_deals)
+
+    from services.contacts_index import reindex_owner
+
+    reindex_owner(store_user)
+    if not dest_is_pool:
+        reindex_owner(new_owner)
+
+    return contact
+
+
+def strip_user_references(user_name: str) -> None:
+    """Remove `user_name` from shared_with/contributors/hidden_from/accepted[]
+    across every OTHER store (real users + pools)."""
+    from services import auth_service
+
+    stores = [(u["name"], ws) for u in auth_service.list_users() for ws in ("personal", "business")]
+    stores += [(POOL_HOUSEHOLD, "personal"), (POOL_TEAM, "business")]
+    for store_user, workspace in stores:
+        if store_user == user_name:
+            continue
+        contacts = list_contacts(store_user, workspace)
+        changed = False
+        for c in contacts:
+            kept = []
+            for s in c.get("shared_with") or []:
+                if s.get("target") == user_name:
+                    changed = True
+                    continue
+                accepted = s.get("accepted")
+                if isinstance(accepted, list) and user_name in accepted:
+                    s = {**s, "accepted": [n for n in accepted if n != user_name]}
+                    changed = True
+                kept.append(s)
+            c["shared_with"] = kept
+
+            contrib = c.get("contributors") or []
+            new_contrib = [x for x in contrib if x.get("target") != user_name]
+            if len(new_contrib) != len(contrib):
+                c["contributors"] = new_contrib
+                changed = True
+
+            hidden = c.get("hidden_from") or []
+            if user_name in hidden:
+                c["hidden_from"] = [h for h in hidden if h != user_name]
+                changed = True
+        if changed:
+            _save_contacts(store_user, workspace, contacts)
+
+
 def resolve_target_users(target: str) -> list[str]:
     """Concrete user names for a share target. Raises ValueError on unknowns."""
     from services import auth_service

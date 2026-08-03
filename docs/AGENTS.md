@@ -436,7 +436,56 @@ In-app help + AI-readable product knowledge. Help is **not a module** — it's a
 - Getting Started note: created automatically if user has no notes (own store only — `list_notes(create_default=False)` for pool/foreign stores).
 - Folder deselection: clicking a selected folder deselects it (notes created at root).
 - Drag-and-drop: pointer-based (mouse threshold + touch long-press); drop a note onto a folder to move; the "Move to folder" menu is the fallback.
-- **Sharing**: sidecar `Notes/_shares.json` index (content stays plain `.md`); a folder share cascades to its subtree; household/team pool notes (`_household`/`_team` Notes); read/contribute(edit-content)/edit; personal = handshake, pool = contributors. Every read/write routes through `find_note_store` access resolution (`_validate_path` rejects traversal); cross-store routing via `notes_index.py`. Frontend: Share modal + Leave + read-only editor + owner badges; NotifBell handles `notes_share`.
+- **Sharing**: sidecar `Notes/_shares.json` index (content stays plain `.md`); a folder share cascades to its subtree; household/team pool notes (`_household`/`_team` Notes); read/contribute(edit-content)/edit; personal = handshake, pool = contributors. Every read/write routes through `find_note_store` access resolution (`_validate_path` rejects traversal); cross-store routing via `notes_index.py`. Frontend: Share modal + Leave + read-only editor + owner badges; NotifBell handles `notes_share`. **Admins already get `edit` access on pool notes server-side** (`resolve_access`'s pool branch returns `"edit"` for `is_admin`) — the frontend context menu (`Notes.jsx`) must gate Rename/Move/Share/Delete on `_access === 'edit'` (with an explicit `isPool` check), not on whether `_owner` is set at all; a blanket `!node._owner` check wrongly treats admin-manageable pool items the same as a personal share-to-you (which should offer Leave instead) — fixed 2026-08-02, see the matching Key Decisions Log entry. When auditing a module for this same class of bug, check whether its frontend distinguishes `isPool` from a generic "foreign" owner before gating management controls — Assets/Finance/Contacts already did; Notes was the one gap.
+- **Archiving** (added 2026-08-02): sidecar `Notes/_archive.json` (`{"archived": [path, ...]}`). Archiving a folder **cascades to its whole subtree** (matches sharing's rule, not Assets') — `_is_archived_path()` walks up ancestors the same way `_entry_for_path` does for shares, so a note under an archived folder shows as archived even though only the folder's own path is in the sidecar list; correspondingly a child can't be individually un-archived while its parent stays archived (same limitation sharing already has — you can't un-share just one item under a shared folder either). `set_archived()`/`load_archived()` in `notes_service.py`; `list_notes()`/`list_visible_notes()` take `include_archived` (default `False`, annotates every item with `archived: bool` regardless). `POST /notes/archive` (edit-level gate, same as delete). Purely organizational — has no bearing on delete permissions or any access rule.
+
+## Admin — User Deletion
+
+Deleting a user who owns items already shared with someone (an Asset tree, Finance book, Contact,
+or shared Notes folder/note) requires an explicit per-item decision instead of silently destroying
+shared data. `services/user_deletion_service.py` orchestrates it; `DELETE /auth/admin/users/{id}`
+now 409s when such items exist, pointing to `GET .../deletion-preview` + `POST .../deletion-execute`
+(users with nothing shared still delete instantly via the bare `DELETE`).
+
+- **Item scope**: only items the departing user *owns* that are *already shared* with someone
+  appear in the review — owned-but-never-shared items just die with the account as before. A
+  tree/book/folder always moves as **one atomic unit** (no splitting a subtree across destinations);
+  a nested Notes sub-path with its own distinct share entry travels silently with its parent.
+- **Completeness gate**: every eligible item needs a decision — transfer to a named user, transfer
+  to that item's own workspace pool, or delete — before the account can be removed. The execute
+  endpoint recomputes the eligible set fresh from disk and rejects (400) if anything is missing;
+  it never trusts the client's submitted set.
+- **`transfer_ownership()`** exists on each of the 4 module services (`assets_service`,
+  `finance_service`, `contacts_service`, `notes_service`) as a sibling to Assets'
+  `convert_to_pool()` — same physical-move pattern (whole subtree/book/folder + its files/dirs move
+  together), but **share fields are preserved, not stripped**: for a named-user destination
+  `shared_with`/`contributors`/`hidden_from` carry over unchanged; for a pool destination, each
+  `shared_with` entry is converted to an equivalent `contributors` entry (dropping the accept-
+  handshake `accepted` key) since pool items never read `shared_with` — this is the citable
+  precedent for any future "move ownership between stores" need. Finance additionally moves the
+  book's whole data directory (`shutil.move` on `Finance/books/{id}/`, bringing transactions/rules/
+  receipts for free); Contacts additionally moves that contact's entries out of the owner's flat
+  `interactions.json`/`deals.json` into the destination's; Notes additionally relocates every
+  `_shares.json` key equal to the moved path or nested under it.
+- **Reference cleanup is separate and automatic**: `strip_user_references(user_name)` on each of the
+  4 services does a full scan of every *other* store (real users + both pools) removing the
+  departing user's name from `shared_with[].target`, `contributors[].target`, `hidden_from[]`, and
+  `accepted[]` — no admin decision needed. This can't be index-driven (the 4 share-indexes only
+  track `shared_with`, never `contributors`/`hidden_from`/`accepted[]`), so it's a real scan; at
+  self-hosted scale this is cheap and admin-triggered, not a hot path. It's also surfaced read-only
+  on the review page beforehand (the "blast radius", built by filtering each module's own
+  `list_visible*`/`list_visible_books`/etc. for entries carrying `_owner` — reusing the real access
+  resolver rather than hand-rolling one).
+- **Execute order, "destroy last"**: run every transfer/delete → strip references everywhere →
+  `rebuild_share_index()` on all 4 derived caches → one batched notification per recipient (not per
+  item) → only then `auth_service.delete_user()` + `shutil.rmtree()` the Brain folder. No cross-store
+  operation in this codebase is transactional, so if anything above raises, the account and folder
+  are never touched and the admin can retry — same risk profile `convert_to_pool` already accepts.
+- **Cross-module pointers are NOT repaired** (an Asset's `contact` field, a Deal's
+  `linked_asset_ids`, an Invoice's `contact_id`) when one side transfers to a different owner than
+  the other, or one transfers while the other is deleted — explicitly out of scope, matching the
+  app's existing tolerance for stale ids elsewhere (e.g. AssetView already renders `"(contact)"` for
+  a dead reference). Tracked as a `docs/TASKS.md` follow-up, not attempted here.
 
 ## n8n Bundled-Container Lifecycle
 

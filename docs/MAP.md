@@ -96,7 +96,8 @@ LogCoreOS/
 │   │   │   ├── help_service.py        → Help content single source (loads content/help.json): get_content, as_text (markdown for the AI, incl. /help#id anchors), capabilities_index (enabled-modules index for chat context), onboarding state get/set
 │   │   │   ├── whats_new_service.py    → on version bump, notify every user once (announce_if_updated at boot) + drive the few-day What's-New banner (get_banner); state in _system/whats_new_state.json
 │   │   │   ├── update_service.py      → GitHub release check (cached 4h), pending_update flag trigger, update log reader
-│   │   │   └── ai_usage_service.py     → AI usage metering + caps: daily-bucketed usage in _system/ai_usage.json, derived daily/weekly/monthly totals, per-user hard/soft cap enforcement + warn/over notifications; the single place chat_completion/agent_completion record usage
+│   │   │   ├── ai_usage_service.py     → AI usage metering + caps: daily-bucketed usage in _system/ai_usage.json, derived daily/weekly/monthly totals, per-user hard/soft cap enforcement + warn/over notifications; the single place chat_completion/agent_completion record usage
+│   │   │   └── user_deletion_service.py → admin user-deletion orchestration: preview (owned+shared items across Assets/Finance/Contacts/Notes + read-only blast radius), completeness validation, execute (transfer/delete decisions → reference cleanup in every other store → index rebuild → batched new-owner notifications → account+Brain-folder delete, in that order)
 │   │   ├── content/
 │   │   │   └── help.json         → authored Help content (sections + FAQ + support + whats_new); SINGLE source read by the Help page, the ⓘ buttons, and the AI's get_help tool
 │   │   ├── automations_stubs/    → committed stub files (*.stub.json) that drive business workflow auto-sync; each has name/key/tags only — no workflow logic ever committed here
@@ -140,7 +141,8 @@ LogCoreOS/
 │           │   │   └── admin/            → one page per Admin Settings row (relocated from the old Admin.jsx + AiUsage.jsx, not rewritten):
 │           │   │       ├── Users.jsx           → user list; "+ Add User" and "Role Definitions →" rows
 │           │   │       ├── NewUser.jsx         → create-user form as its own page
-│           │   │       ├── UserDetail.jsx      → per-user page: role, feature role, workspace access, pool-edit grants, module overrides, bank connection (claim/reveal/sync/disconnect), delete
+│           │   │       ├── UserDetail.jsx      → per-user page: role, feature role, workspace access, pool-edit grants, module overrides, bank connection (claim/reveal/sync/disconnect), delete (routes to UserDeletionReview when the user owns shared items)
+│           │   │       ├── UserDeletionReview.jsx → delete-review page: per-item transfer-to-user / transfer-to-pool / delete decisions (bulk-default + per-item override) for everything the user owns that's already shared, plus a read-only "will also lose access to" section
 │           │   │       ├── RoleDefinitions.jsx → custom feature-role editor (create/edit/delete + module toggles)
 │           │   │       ├── Ai.jsx              → AI Provider + Web Search + AI Usage & Limits (month picker, stat cards, defaults, per-user limits) — 3 sections, one page
 │           │   │       ├── General.jsx         → Registration, Workspace visibility, Session Length (single global admin-set value, no per-user override), Updates
