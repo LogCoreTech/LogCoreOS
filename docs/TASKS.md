@@ -132,6 +132,11 @@ Cross-reference: the per-user JSON write race (`task_service.py` has no read-mod
 
 ## Product Backlog (pull in when demand appears)
 
+- [ ] **In-app Module Store (owner direction, 2026-08-03)** — owner wants to build out the growing module wishlist (see Idea Backlog below) personally, in-house, prioritizing quality over speed — not a third-party plugin marketplace. The product answer is an in-app **Module Store**: a browsable catalog (by category — Life/Home/Business/Finance/etc.) where a user self-service **activates/deactivates** modules, reusing the existing `disabled_modules` + feature-role gating machinery (no new permission model needed) instead of a plugin manifest/sandboxing system — every module still ships first-party in every release, "activating" one is just flipping the flag that already exists. Module descriptions can reuse `content/help.json`'s per-section blurbs rather than authoring new copy.
+  - **Prerequisite — code-splitting becomes mandatory, not optional**: today all pages ship in one JS bundle (already flagged under Idea Backlog P2: "Route-level code-splitting via `React.lazy()`"). Tolerable at ~14 modules; not tolerable once most users have most of 30-40 modules switched *off* and are still downloading all that code. Needs to land before/alongside the store, not after.
+  - **Onboarding needs curation, not just a bigger store**: a new user shouldn't face a 40-tile store on day one. Ship a small sensible default-on set per profile type (personal/business), let the store be where people go to add more once past onboarding — ties to the existing "Progressive module/nav disclosure for new users" backlog item.
+  - **Store-eligibility is admin-controlled, per feature role/instance** — a guest or restricted feature role shouldn't get a self-service button for Finance/Automations/anything cost- or token-bearing; this is a filter on top of the existing `disabled_modules`/feature-role gate, not a new mechanism.
+  - Feeds directly from the module ideas accumulating in the Idea Backlog below — this item is the organizing strategy for building and shipping that whole list, not a module itself.
 - [ ] **Profit First method for Finance** — allocation-based budgeting per the Profit First ideology (Income → Profit / Owner's Comp / Tax / Opex allocation accounts with target percentages, instant-assessment view, quarterly profit distributions); needs a design pass before build (owner request, 2026-07-16). Likely built on top of the cross-book Transfer primitive + recurring % auto-transfers (see Features that unblock scale — owner note, 2026-07-20)
 - [ ] **Real pool-level (non-user) SimpleFIN bank connections for Household/Team** (owner request, 2026-07-16; UI grouping shipped 2026-07-30 as part of the Settings/Admin restructure) — the household/team grouping half of this is done: Settings → Admin Settings → Team/Household each show a read-only, derived summary of which members currently have accounts mapped into that pool's books (`GET /finance/simplefin/pool-summary`), plus a visibly-labeled "coming soon" section. Still open: an actual bank connection tied directly to the `_household`/`_team` pseudo-user (a joint family or business account), independent of any one member's own SimpleFIN token — needs new storage + claim/reveal/sync logic scoped to the pool, mirroring the per-user flow in `simplefin_service.py` but keyed to the pool instead of a real user
 - [ ] **Cross-module linking: any-to-any generalization (last piece)** — rounds 1+2 SHIPPED 2026-07-18 (see Done): Deal↔Asset, Transaction↔Asset/Deal, Invoice↔Deal, Asset→Contact (contact field type), contact References view — the full client → job → money circle works as one-way-pointer + derived-scan links. Remaining only: a *generic* any-record-to-any-record link primitive if the pointer-per-pair pattern ever gets unwieldy (owner request, 2026-07-16)
@@ -392,6 +397,48 @@ Generated across a systematic search→generate→compare→document pass over t
 
 **Performance & DX**
 - Streak freeze / grace period (a Duolingo-style forgiveness mechanic) — currently one missed day zeroes the count with no mercy.
+
+**New module ideas — conversational brainstorm (2026-08-02, not code-audited like the rest of this backlog)**
+- **Health/Fitness** — meds, appointments, biometrics, workout log; complements the existing Journal insight-loop idea.
+- **Meal planning + pantry** — recipes, grocery list generation, expiration tracking; strong Household-pool fit.
+- **Vehicle/equipment maintenance** — dedicated service-schedule view with due-date reminders (mirrors Finance's recurring-bill matching) instead of folding into generic Assets templates.
+- **Digital Legacy / Time Capsule** — letters/instructions delivered to family on a future date or via a "dead man's switch" (no login for N days → admin notified → trusted contact granted access); reuses the scheduler + notification stack almost entirely.
+- **Break-glass emergency vault** — hardened Assets variant for wills/deeds/policies where a designated contact can request access, owner/admin gets notified, and it auto-grants after a timeout unless denied.
+- **Family tree / genealogy** — visualizes person↔person relationships on top of the affiliation-linking already planned for Contacts.
+- **Decision journal** — structured big-decision records (options, reasoning, AI-assisted pros/cons) revisited later to see how the choice played out; distinct from Journal's daily-entry format.
+- **Chores marketplace for kids** — Household tasks pay out points that redeem for allowance logged as a real Finance transaction.
+- **Dream journal** — literal sleep dreams, separate from the reflective Journal, with AI symbol/theme pattern-detection over time.
+- **Disaster-prep / muster module** — emergency plans, supply checklists, a household "where's everyone" check-in board.
+- **Memorial mode for Contacts** — a deceased contact flips from an active CRM entry into a read-only memory page others can add letters/memories to, reusing the comment infrastructure Assets/Contacts already have.
+- **Self-hosting meta-dashboard** — Homepage/Heimdall-style status panel for the *other* self-hosted services a LogCoreOS admin probably also runs (n8n, ntfy, Plex, Pi-hole, etc.) — unrelated to life management, but fits the target audience.
+- **RSS reader / read-later** — self-hosted Instapaper/Feedly alternative, feeding into the Library/Archive idea above.
+- **Chat-agent easter egg** — hidden retro game or text-adventure powered by the existing tool-calling agent; cheap, memorable personality piece.
+- **"This day in history" / daily curiosity widget** on the Dashboard — no functional purpose, just a reason to open the app unrelated to chores.
+- **Investing/portfolio tracker** — stocks/crypto/retirement accounts (price feeds, cost basis, unrealized gains); distinct from Finance's cash-flow ledger model, which doesn't fit this shape.
+- **Career module** — job applications (stage, follow-ups, tied to a recruiter Contact), resume/CV versions, performance-review notes, skills tracked over time.
+- **Travel module** — trip itineraries, packing lists, passport/visa expiry reminders tied into Calendar.
+- **Pets module** — vet records, medication schedules, weight/vaccination history.
+- **Caregiving / elder care module** — shared medication schedules + caregiver shift log for an aging parent, living in the Household pool.
+- **Kids/parenting milestones module** — growth charts, immunizations, school info; Household-pool fit.
+- **Faith / spiritual practice module** — prayer/reflection log, scripture or meditation plans, shared prayer requests within a Household.
+- **Collections module** — coins, cards, wine, etc.; Assets-template-shaped but with market-value tracking instead of insurance-value tracking.
+- **Legal/contracts vault** — leases, POAs, NDAs with renewal-date reminders, more precise than dumping documents in Assets attachments.
+- **Language/skill learning practice logs** — streak-based practice tracking (instrument, language, any skill), riding on the existing recurring-task/habit machinery.
+
+**New module ideas — competitive research pass (2026-08-03, cross-referenced against real self-hosted OSS projects for demand signal; Reddit itself blocks Anthropic's crawler, so Hacker News + GitHub issues/discussions + community roundups were used instead)**
+- **Password/secrets vault** (Vaultwarden-tier) — self-hosted password manager module; LogCoreOS already runs its own auth/JWT and stores sensitive Brain data, so a first-class encrypted vault fits the "own your whole digital life" pitch.
+- **Photo/video library** (Immich-tier) — one of the fastest-growing self-hosted categories: AI face/object recognition, timeline, map view, mobile auto-backup. Real gap — Assets/Notes only handle generic file attachments today, no dedicated photo library.
+- **Document scanning + OCR** (Paperless-ngx-tier) — drop in a scanned doc/photo, it OCRs, tags, and becomes full-text searchable. Distinct from Assets attachments, which store files but don't read them; extends the Legal/contracts vault idea above into something mechanically real.
+- **Household bill-splitting / IOU settle-up** (Splitwise-tier — at least 4 independent OSS clones exist: SplitPro, Spliit, Cospend, ihatemoney). "Who owes who" + settle-up is a distinct mechanic from Finance's per-book ledger; the clone count alone is a strong demand signal.
+- **Consumables/expiration inventory** (Grocy, literally branded "ERP beyond your fridge") — batteries, meds, cleaning supplies, not just groceries; validates and broadens the pantry idea above.
+- **Freelance/solopreneur billing suite** — billable-hours time tracking + client portal + proposals (Kimai, Solidtime, Logr all thriving). Sharpens the Career module idea above into something that could hook straight into Finance invoicing.
+- **E-signature** (DocuSeal, OpenSign, LibreSign) — contract signing tied to Contacts/Deals and the Legal vault idea; a real category with several healthy OSS projects.
+- **Public appointment booking** (Cal.com-tier) — a "book 30 min with me" link, distinct from the personal Calendar module; useful for Business (client booking) and Personal (family scheduling requests) alike.
+- **Personal knowledge management / spaced repetition** (Anki-tier flashcards) tied to Notes/Library — for actual retention, not just storage.
+- **"Aspirations" / identity domain** — a design idea, not an off-the-shelf project: Daniel Miessler's LifeOS (a comparable "personal AI operating system") added a 5th domain, Aspirations, after realizing its other four domains (what's happening to you, what others need from you, what you owe, what you have) were all reactive/external and missed "who you're becoming." LogCoreOS's Goals module is close but oriented around concrete short-term targets; a values/character-growth layer would be a genuine differentiator.
+- **Family presence/location board** — an everyday "who's home" board, distinct from the disaster-prep muster idea above (which is emergency-only); family-organizer research keeps surfacing location-sharing bundled with scheduling (e.g. FamilyWall).
+- **Internal team/household chat module (Slack/Discord-style)** — real-time channels + DMs for household or business-team communication, distinct from the existing AI chat assistant entirely; a Redditor specifically asked for this. Would need its own storage/delivery model (not Brain-markdown-file-shaped like the rest of the app) and a decision on whether it's pool-scoped (Household/Team) like other shared surfaces.
+- **Notes module improvements inspired by Trilium Notes** (owner recommendation, 2026-08-03) — Trilium is a strong reference for where Notes could grow: note attributes (arbitrary key/value metadata per note, not just folders/tags), note relations/cloning (one note appearing in multiple tree locations without duplicating content), built-in per-note encryption for sensitive entries, and a calendar/day-journal view over the note tree. Worth a design pass on which of these are worth porting rather than adopting wholesale.
 
 ### ⚪ P3
 
