@@ -19,7 +19,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from config import settings
-from services import auth_service
+from services import auth_service, user_deletion_service
 from services.features_service import get_effective_disabled
 from services.file_service import brain_path, read_json, user_path, write_json
 from services.hosting_service import effective_cookie_secure
@@ -937,10 +937,61 @@ def admin_delete_user(user_id: str, current_user: dict = Depends(require_admin))
     target = auth_service.get_user_by_id(user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    preview = user_deletion_service.build_preview(target)
+    if preview["eligible_items"]:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This user owns items already shared with someone — use "
+                "GET/POST .../deletion-preview and .../deletion-execute to resolve them first."
+            ),
+        )
     auth_service.delete_user(user_id)
     brain_dir = user_path(target["name"])
     if brain_dir.exists():
         shutil.rmtree(brain_dir)
+
+
+class DeletionDecision(BaseModel):
+    module: Literal["assets", "finance", "contacts", "notes"]
+    workspace: Literal["personal", "business"]
+    item_id: str
+    action: Literal["transfer_user", "transfer_pool", "delete"]
+    target_user_id: str | None = None
+
+
+class DeletionExecuteRequest(BaseModel):
+    decisions: list[DeletionDecision] = Field(default_factory=list, max_length=500)
+
+
+@router.get("/admin/users/{user_id}/deletion-preview")
+def admin_user_deletion_preview(user_id: str, current_user: dict = Depends(require_admin)):
+    target = auth_service.get_user_by_id(user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user_deletion_service.build_preview(target)
+
+
+@router.post("/admin/users/{user_id}/deletion-execute")
+def admin_user_deletion_execute(
+    user_id: str,
+    req: DeletionExecuteRequest,
+    current_user: dict = Depends(require_admin),
+):
+    if user_id == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    target = auth_service.get_user_by_id(user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        user_deletion_service.execute(
+            target,
+            [d.model_dump() for d in req.decisions],
+            executed_by=current_user["name"],
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------

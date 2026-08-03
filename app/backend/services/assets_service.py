@@ -1420,6 +1420,100 @@ def convert_to_pool(owner: str, asset_id: str, workspace: str = "personal", by: 
     return next(a for a in moving if a["id"] == asset_id)
 
 
+def transfer_ownership(
+    owner: str, asset_id: str, workspace: str = "personal", *, new_owner: str, by: str = ""
+) -> dict:
+    """Move an asset subtree (records + attachment dirs) to another store — a
+    named user's store in the SAME workspace, or that workspace's pool.
+
+    Unlike convert_to_pool, share fields are preserved rather than stripped:
+    for a named-user destination shared_with/contributors/hidden_from carry over
+    unchanged (only the owning store changes). For a pool destination, each
+    shared_with entry is converted to an equivalent contributors entry (dropping
+    the accept-handshake `accepted` key) since pool assets never read
+    shared_with — this keeps the grant functioning instead of silently dying.
+    """
+    store = _load(owner, workspace)
+    if not any(a["id"] == asset_id for a in store["assets"]):
+        raise ValueError("Asset not found")
+
+    ids = collect_subtree_ids(store["assets"], asset_id)
+    moving = [a for a in store["assets"] if a["id"] in ids]
+    store["assets"] = [a for a in store["assets"] if a["id"] not in ids]
+
+    dest_is_pool = new_owner in POOL_USERS.values()
+    for asset in moving:
+        if dest_is_pool:
+            converted = list(asset.get("contributors") or [])
+            for share in asset.get("shared_with") or []:
+                entry = {"target": share["target"], "access": share.get("access", "read")}
+                if share.get("access") == "contribute" and "caps" in share:
+                    entry["caps"] = share["caps"]
+                converted.append(entry)
+            asset["contributors"] = converted
+            asset["shared_with"] = []
+        if asset["id"] == asset_id:
+            asset["parent_id"] = None
+            _push_history(asset, by, "transfer_ownership", {"new_owner": [owner, new_owner]})
+
+    dest_store = _load(new_owner, workspace)
+    dest_store["assets"].extend(moving)
+    _save(owner, workspace, store)
+    _save(new_owner, workspace, dest_store)
+
+    assets_index.reindex_owner(owner, workspace)
+    if not dest_is_pool:
+        assets_index.reindex_owner(new_owner, workspace)
+
+    src_base = assets_files_path(owner, workspace)
+    dst_base = assets_files_path(new_owner, workspace)
+    for moved_id in ids:
+        src = src_base / moved_id
+        if src.exists():
+            dst_base.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(src), str(dst_base / moved_id))
+
+    return next(a for a in moving if a["id"] == asset_id)
+
+
+def strip_user_references(user_name: str) -> None:
+    """Remove `user_name` from shared_with/contributors/hidden_from/accepted[]
+    across every OTHER store (real users + pools). Used when a user account is
+    deleted so their name doesn't linger as a dangling reference elsewhere —
+    a by-name shared_with entry is dropped entirely (mirrors _respond_shares'
+    decline behavior); a group entry just loses them from its accepted[] list."""
+    for store_user, workspace in _all_stores():
+        if store_user == user_name:
+            continue
+        store = _load(store_user, workspace)
+        changed = False
+        for asset in store.get("assets", []):
+            kept = []
+            for s in asset.get("shared_with") or []:
+                if s.get("target") == user_name:
+                    changed = True
+                    continue
+                accepted = s.get("accepted")
+                if isinstance(accepted, list) and user_name in accepted:
+                    s = {**s, "accepted": [n for n in accepted if n != user_name]}
+                    changed = True
+                kept.append(s)
+            asset["shared_with"] = kept
+
+            contrib = asset.get("contributors") or []
+            new_contrib = [c for c in contrib if c.get("target") != user_name]
+            if len(new_contrib) != len(contrib):
+                asset["contributors"] = new_contrib
+                changed = True
+
+            hidden = asset.get("hidden_from") or []
+            if user_name in hidden:
+                asset["hidden_from"] = [h for h in hidden if h != user_name]
+                changed = True
+        if changed:
+            _save(store_user, workspace, store)
+
+
 # ---------------------------------------------------------------------------
 # Attachments
 # ---------------------------------------------------------------------------

@@ -126,11 +126,14 @@
         "Create a note or folder from the sidebar; click a note to edit it in Markdown.",
         "There's no Save button — notes auto-save about a second and a half after you stop typing.",
         "Drag a note onto a folder to move it, or use the \"Move to folder\" menu.",
-        "Share a note or a whole folder with another user or a pool from the Share menu."
+        "Share a note or a whole folder with another user or a pool from the Share menu.",
+        "Archive a note or folder from its ··· menu to tuck it out of the way without deleting it; toggle \"Show archived\" to see archived items again."
       ],
       "tips": [
         "Sharing a folder cascades to everything inside it.",
-        "Shared notes stay plain Markdown — the sharing info is kept separately so your files remain portable."
+        "Shared notes stay plain Markdown — the sharing info is kept separately so your files remain portable.",
+        "Archiving a folder doesn't archive what's inside it — archive each item you want tucked away.",
+        "Admins can rename, move, share, archive, and delete notes shared into the household/team pool, same as any other shared module."
       ],
       "modules": ["notes"]
     },
@@ -373,7 +376,8 @@
         "Create feature roles (e.g. cleaner, crew) from Users & Roles → Role Definitions to control which modules groups of users can see.",
         "Configure the AI provider and web search from Admin Settings → AI — AI Usage & Limits (instance/personal/business totals + per-user daily/weekly/monthly caps) is on the same page.",
         "Configure hosting, managed hosting, and n8n from Admin Settings → Hosting; Smart Home and bank connections live on the Household/Team pages.",
-        "Grant \"Can manage\" on Household/Team pools from a user's own page in Users & Roles."
+        "Grant \"Can manage\" on Household/Team pools from a user's own page in Users & Roles.",
+        "Deleting a user who owns items already shared with someone else opens a review page — choose per item whether it transfers to another user, transfers to the household/team pool, or is deleted, before the account can be removed."
       ],
       "tips": [
         "The first registered user becomes admin; after that, registration is closed by default so accounts are added deliberately."
