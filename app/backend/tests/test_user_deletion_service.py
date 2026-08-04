@@ -151,6 +151,19 @@ def test_contacts_transfer_moves_interactions_and_deals(users):
     assert crm.list_interactions("Alice", "personal", contact["id"]) == []
 
 
+def test_self_contact_excluded_from_eligible_even_when_shared(users):
+    """A self-contact must never surface as needing a transfer/delete decision
+    — it dies with the account like today. Without this exclusion, admin
+    deletion would hard-fail mid-execute() since contacts_service now rejects
+    transfer/delete on a self-contact."""
+    self_contact = crm.create_self_contact("Alice")
+    crm.update_access(
+        "Alice", "personal", self_contact["id"], shared_with=[{"target": "Carol", "access": "read"}]
+    )
+    eligible = uds._contacts_eligible("Alice", ["personal", "business"])
+    assert all(i["item_id"] != self_contact["id"] for i in eligible)
+
+
 # ---------------------------------------------------------------------------
 # Per-module transfer_ownership — Notes
 # ---------------------------------------------------------------------------

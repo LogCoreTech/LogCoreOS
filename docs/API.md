@@ -679,20 +679,6 @@ Delete a calendar event.
 
 ---
 
-## Profile
-
-### `GET /profile`
-Read the current user's `Profile.md` content.
-
-**Response** `{ "content": "# Profile\n\n..." }`
-
-### `PUT /profile`
-Replace the current user's `Profile.md`.
-
-**Body** `{ "content": "# Profile\n\n..." }`
-
----
-
 ## Suggestions
 
 ### `GET /suggestions`
@@ -980,11 +966,28 @@ Book audience follows the Assets model. Entry: `{target: <name>|team|household|r
 
 ## Contacts (CRM)
 
-Router mounted at `/api/v1/contacts`. Requires the `contacts` module (both workspaces, `X-Workspace`-scoped; **disabled for `guest`** by default). The **Contact** is the canonical person/company; Finance payees (`payee_contact_id`) and invoice clients (`contact_id`) link to it. Storage: `ws_path/Contacts/{contacts,interactions,deals,pipeline}.json`; admin custom-field defs at `_system/contact_fields.json`; pool contacts in `_household`/`_team`. Contact responses are annotated `_owner`/`_access`. Sharing mirrors Finance/Assets (read/contribute/edit; **contribute = log interactions + create/advance deals only**; personal = accept handshake, pool = contributors; `hidden_from` beats shares).
+Router mounted at `/api/v1/contacts`. Requires the `contacts` module (both workspaces, `X-Workspace`-scoped; **disabled for `guest`** by default) — **except `/contacts/me`, gated by login only** (see below). The **Contact** is the canonical person/company **and, since the Profile/Contacts merge, every user's own Profile too**; Finance payees (`payee_contact_id`) and invoice clients (`contact_id`) link to it. Storage: `ws_path/Contacts/{contacts,interactions,deals,pipeline}.json` + `Contacts/photos/{contact_id}.{ext}` for uploaded photos; admin custom-field defs at `_system/contact_fields.json`; pool contacts in `_household`/`_team`. Contact responses are annotated `_owner`/`_access`/`_pinned` (self-contact only, own view only). Sharing mirrors Finance/Assets (read/contribute/edit; **contribute = log interactions + create/advance deals only**; personal = accept handshake, pool = contributors; `hidden_from` beats shares) — **except a fixed set of "private" fields (health, finances, AI preferences, daily routine) which are never shareable, regardless of access level, and a self-contact can never be shared at `edit` — only `read`/`contribute`, so nobody but its owner can ever change it**.
+
+### Self-contact (Profile)
 
 | Method | Path | Access | Notes |
 |--------|------|--------|-------|
-| `GET` | `/contacts?include_archived=` | module users | own + pool + shared-to-me contacts |
+| `GET` | `/contacts/me` | **login only, no module gate** | the caller's own self-contact (`self_of` = their name), auto-created on first access. Physically stored in the **personal** workspace store but resolvable/editable from either workspace — one record, not per-workspace |
+| `PATCH` | `/contacts/me` | **login only, no module gate** | same body shape as `PATCH /contacts/{id}` below |
+| `POST`/`DELETE` | `/contacts/{id}/affiliations/{other_id}` | module users, edit on **both** contacts | general bidirectional Contact↔Contact link (family, company↔person, etc.) — a dedicated mutation, never part of the general PATCH; cross-owner linking (edit on only one side) is rejected |
+| `POST` | `/contacts/{id}/photo` | edit | multipart `file` — JPEG/PNG/WebP/AVIF, 5 MB cap. Any contact with edit access, not just self-contacts. Replaces any existing photo |
+| `GET` | `/contacts/{id}/photo` | any access | binary response; `404` if none uploaded |
+| `DELETE` | `/contacts/{id}/photo` | edit | `204` |
+
+`ContactCreate`/`ContactUpdate` also accept the merged-in profile fields: **basic** (shareable) — `pronouns, gender ("male"|"female"), city, state, country, occupation, marital_status, pets, life_mission, core_values, key_constraints`, `priority_order: {"personal": [...], "business": [...]}` (the one workspace-keyed field), and `career_history` (resume-style list, see below); **private** (never shareable, stripped for any viewer who isn't the record's own owner) — `wake_weekday, wake_weekend, bedtime, work_start, work_end, height_cm, height_unit ("ftin"|"cm"), weight_kg, weight_unit ("lbs"|"kg"), blood_type, conditions, medications, diet, exercise, income_range, budget_style, communication_style, tone, response_language, topics_to_emphasize, topics_to_avoid`. `self_of` and `affiliated_contact_ids` are never settable through these models — only via `/contacts/me`'s auto-creation and the dedicated affiliation endpoints respectively.
+
+**`career_history`** — a resume-style list, each entry `{id, title, company_id, industry, education, years_experience, skills, start_date, end_date, archived}`. `education` must be one of a fixed list (`EDUCATION_LEVELS` in `contacts_service.py`: Junior High, High School, Some College, Trade/Vocational School, Associate's/Bachelor's/Master's Degree, Doctorate, Other) — anything else 400s. `company_id` links to a company-type Contact. Not a separate resource: send the whole array on `PATCH`; the client marks the current entry `archived: true` + sets `end_date` and appends a fresh entry to "start a new role." Superseded the old flat `employer`/`industry`/`education`/`years_experience`/`skills` fields.
+
+**`phones`** is a list of `{country_code, number, extension}` (digits-only; `number` ≤10 digits, `country_code` ≤3, `extension` ≤6) — a plain string is still accepted for backward compat (legacy data, CSV import, automation) and gets wrapped. **`emails`** now validates format (basic regex) — an invalid address 400s the whole request instead of silently saving.
+
+| Method | Path | Access | Notes |
+|--------|------|--------|-------|
+| `GET` | `/contacts?include_archived=` | module users | own + pool + shared-to-me contacts; the viewer's own self-contact is always pinned first (annotated `_pinned: true`), regardless of active workspace |
 | `POST` | `/contacts` | module users | `{type, name, emails?, phones?, address?, tags?, birthday?, status?, notes?, custom?, pool?}`; `pool:true` = admin, creates in the workspace pool |
 | `GET`/`PATCH`/`DELETE` | `/contacts/{id}` | per access | PATCH needs edit; DELETE cascades interactions+deals (pool DELETE admin-only) |
 | `POST` | `/contacts/{id}/archive` · `/unarchive` | edit | |

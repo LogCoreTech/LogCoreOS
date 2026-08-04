@@ -96,41 +96,19 @@ def setup_user(req: SetupRequest, current_user: dict = Depends(get_current_user)
     except FileExistsError:
         return {"ok": True, "message": "User folder already exists"}
 
-    # Build profile content
-    template_profile = dest / "Profile.md"
-    profile_content = template_profile.read_text()
-    profile_content = profile_content.replace("{Full Name}", name)
-    profile_content = profile_content.replace("{e.g., Electrician, Teacher, Student}", safe_role)
-    profile_content = profile_content.replace("{e.g., America/Chicago}", safe_timezone)
+    # Validate free-text categories (still used for the sanitize side-effect / error surfacing)
+    for c in req.custom_categories:
+        _sanitize(c, "category")
 
-    # Inject priority order — priority_order already includes custom cats; never concatenate again
-    priority_lines = "\n".join(f"{i+1}. {cat}" for i, cat in enumerate(req.priority_order))
-    custom_lines = (
-        "\n".join(f"- {_sanitize(cat, 'category')}" for cat in req.custom_categories) or "- (none)"
+    # Create the user's self-contact — their Contact record IS their profile
+    # now (Profile.md/profile.json are retired). priority_order is the one
+    # field kept workspace-keyed inside the record.
+    from services import contacts_service
+
+    contact = contacts_service.create_self_contact(name, occupation=safe_role or None)
+    contacts_service.update_contact(
+        name, "personal", contact["id"], {"priority_order": {"personal": req.priority_order}}
     )
-
-    profile_content = re.sub(
-        r"(Base categories in order.*?:)\n((?:\d+\..*\n?)+)",
-        f"\\1\n{priority_lines}\n",
-        profile_content,
-        flags=re.MULTILINE,
-    )
-    profile_content = re.sub(
-        r"(Custom categories.*?:)\n((?:-.*\n?)+)",
-        f"\\1\n{custom_lines}\n",
-        profile_content,
-        flags=re.MULTILINE,
-    )
-
-    write_markdown(dest / "Profile.md", profile_content)
-
-    # Seed profile.json so the Profile page reads canonical data without parsing Profile.md
-    profile_json: dict = {"priority_order": req.priority_order}
-    if safe_role:
-        profile_json["occupation"] = safe_role
-    from services.file_service import write_json
-
-    write_json(dest / "profile.json", profile_json)
 
     # Replace placeholders in memory files (atomic writes)
     for md_file in [dest / "Long_Term_Memory.md", dest / "Short_Term_Memory.md"]:

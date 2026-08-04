@@ -56,7 +56,7 @@ Exception: external HTTP calls (AI provider, n8n, HA, Tavily) should be mocked w
 
 ---
 
-## Current Coverage (474 tests, 27 files)
+## Current Coverage (527 tests, 27 files)
 
 Core-service coverage below (the module suites — finance, contacts, assets, help, etc. — make up the remainder of the 27 files):
 
@@ -64,7 +64,7 @@ Core-service coverage below (the module suites — finance, contacts, assets, he
 |------|-------|----------------|
 | `test_file_service.py` | 25 | Atomic reads/writes, path resolution, `user_path`, `ws_path` |
 | `test_notes_service.py` | 21 | Notes CRUD, folder management, move operations |
-| `test_profile_service.py` | 17 | Profile read/write, workspace-scoped paths, priority order |
+| `test_profile_service.py` | 5 | Pool (`_household`/`_team`) priority order only — real-user profile behavior moved to `test_contacts.py` (self-contact) after the Profile/Contacts merge |
 | `test_events_service.py` | 16 | Calendar event CRUD |
 | `test_priority_service.py` | 14 | Scoring formula, top3 logic, category weights, urgency bonus |
 | `test_suggestions_service.py` | 19 | Suggestion types, custom schedule management, **channel-rotation reminder sweep (dedup + reset-on-rotation)** |

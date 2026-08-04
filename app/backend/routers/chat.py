@@ -10,7 +10,6 @@ from services.agent_service import run_agent
 from services.ai_provider import chat_completion, is_ai_configured
 from services.auth_service import today_for_user
 from services.file_service import (
-    profile_path,
     read_json,
     read_markdown,
     tasks_path,
@@ -40,16 +39,19 @@ def _safe(content: str) -> str:
 def _build_context(user_name: str, workspace: str = "personal") -> str:
     """Assemble the user's Brain context for the AI system prompt.
 
-    Profile.md is personal-only. Memory and tasks are scoped to the active workspace.
+    The Profile is the user's self-contact (one record shared across both
+    workspaces) — this is workspace-agnostic by construction, unlike the old
+    Profile.md which was personal-only regardless of the active workspace.
+    Memory and tasks are scoped to the active workspace.
     """
-    from services import profile_service
+    from services import contacts_service, profile_service
 
     parts = []
     base = ws_path(user_name, workspace)
 
-    pf = profile_path(user_name)
-    if pf.exists():
-        parts.append(f"# User Profile\n\n{_safe(read_markdown(pf))}")
+    self_contact = contacts_service.get_self_contact(user_name, create_if_missing=True)
+    if self_contact:
+        parts.append(f"# User Profile\n\n{_safe(contacts_service.format_profile_text(self_contact))}")
 
     # Life priorities for the ACTIVE workspace (personal profile order in personal;
     # business profile order in business) plus the relevant shared-pool order. The

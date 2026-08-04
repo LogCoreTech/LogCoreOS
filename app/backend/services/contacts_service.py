@@ -14,6 +14,7 @@ Design mirrors finance_service / assets_service:
   own finance access — this service never reads finance stores.
 """
 
+import re
 import uuid
 from datetime import date, datetime, timezone
 
@@ -35,6 +36,53 @@ INTERACTION_TYPES = {"call", "email", "meeting", "text", "note"}
 FIELD_TYPES = {"text", "number", "date", "boolean", "select"}
 ACCESS_LEVELS = {"read", "contribute", "edit"}
 DEFAULT_STAGES = ["Lead", "Contacted", "Proposal", "Negotiation", "Won", "Lost"]
+
+# Self-contact profile fields (merged from the retired Profile module). "Basic"
+# fields share like any other contact field; "private" fields never leave the
+# record's own store_user's view regardless of sharing config, enforced in
+# _strip_private() below — this is a general Contacts-module rule, not a
+# self-contact-specific check, so it costs nothing on ordinary contacts.
+_BASIC_SHORT_FIELDS = {
+    "pronouns", "city", "state", "country", "occupation", "gender", "marital_status", "pets",
+}
+_BASIC_LONG_FIELDS = {"life_mission", "core_values", "key_constraints"}
+_PRIVATE_SHORT_FIELDS = {
+    "wake_weekday", "wake_weekend", "bedtime", "work_start", "work_end",
+    "height_cm", "height_unit", "weight_kg", "weight_unit", "blood_type",
+    "income_range", "budget_style", "communication_style", "tone", "response_language",
+}
+_PRIVATE_LONG_FIELDS = {
+    "conditions", "medications", "diet", "exercise", "topics_to_emphasize", "topics_to_avoid",
+}
+_PRIVATE_FIELDS = _PRIVATE_SHORT_FIELDS | _PRIVATE_LONG_FIELDS
+_PROFILE_WORKSPACES = ("personal", "business")
+
+# Short fields validated as plain trimmed/capped strings via the generic loop
+# in _validate_contact — every _BASIC_SHORT_FIELDS/_PRIVATE_SHORT_FIELDS entry
+# EXCEPT the ones with their own dedicated enum/numeric/time validation below.
+# Listed explicitly (not "all minus a subtraction") so adding a new
+# specially-validated field can't silently fall through to plain-string
+# handling — that exact bug (height_cm treated as a string) happened once.
+_PLAIN_STRING_SHORT_FIELDS = (_BASIC_SHORT_FIELDS | _PRIVATE_SHORT_FIELDS) - {
+    "gender", "height_unit", "weight_unit", "blood_type", "height_cm", "weight_kg",
+    "wake_weekday", "wake_weekend", "bedtime", "work_start", "work_end",
+}
+
+GENDERS = {"male", "female"}
+HEIGHT_UNITS = {"ftin", "cm"}
+WEIGHT_UNITS = {"lbs", "kg"}
+BLOOD_TYPES = {"A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "Unknown"}
+EDUCATION_LEVELS = [
+    "Junior High", "High School", "Some College", "Trade/Vocational School",
+    "Associate's Degree", "Bachelor's Degree", "Master's Degree", "Doctorate", "Other",
+]
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+# Career history: a resume-style list of entries on the self-contact (or any
+# contact). Exactly the fields inside each entry are "career" fields — they
+# are NOT top-level Contact fields anymore (employer/industry/education/
+# years_experience/skills all moved here from the flat schema).
+_CAREER_FIELDS = {"title", "industry", "education", "years_experience", "skills"}
 
 
 def _now() -> str:
@@ -86,6 +134,49 @@ def _save_deals(store_user: str, workspace: str, items: list[dict]) -> None:
 
 def get_contact(store_user: str, workspace: str, contact_id: str) -> dict | None:
     return next((c for c in list_contacts(store_user, workspace) if c["id"] == contact_id), None)
+
+
+# ---------------------------------------------------------------------------
+# Self-contact — the user's own Contact record IS their profile. Physically
+# always stored in the user's PERSONAL store (one record shared across both
+# workspaces), never a pool store.
+# ---------------------------------------------------------------------------
+
+
+def get_self_contact(user_name: str, create_if_missing: bool = False) -> dict | None:
+    if is_pool(user_name):
+        return None
+    for c in list_contacts(user_name, "personal"):
+        if c.get("self_of") == user_name:
+            return c
+    return create_self_contact(user_name) if create_if_missing else None
+
+
+def create_self_contact(
+    user_name: str, *, display_name: str | None = None, occupation: str | None = None
+) -> dict:
+    """Idempotent — returns the existing self-contact if one is already there."""
+    existing = get_self_contact(user_name)
+    if existing:
+        return existing
+    contact = create_contact(
+        user_name,
+        "personal",
+        {"type": "person", "name": display_name or user_name},
+        created_by=user_name,
+    )
+    contacts = list_contacts(user_name, "personal")
+    for i, c in enumerate(contacts):
+        if c["id"] != contact["id"]:
+            continue
+        c["self_of"] = user_name
+        contacts[i] = c
+        _save_contacts(user_name, "personal", contacts)
+        contact = c
+        break
+    if occupation:
+        contact = update_contact(user_name, "personal", contact["id"], {"occupation": occupation}) or contact
+    return contact
 
 
 # ---------------------------------------------------------------------------
@@ -181,6 +272,73 @@ def _clean_list(values, cap: int = 20, item_cap: int = 200) -> list[str]:
     return out
 
 
+def _validate_emails(values) -> list[str]:
+    out = []
+    for v in values or []:
+        s = str(v).strip()[:200]
+        if not s:
+            continue
+        if not _EMAIL_RE.match(s):
+            raise ValueError(f"{s!r} is not a valid email address")
+        if s not in out:
+            out.append(s)
+        if len(out) >= 20:
+            break
+    return out
+
+
+def _validate_phones(values) -> list[dict]:
+    """Each entry is {country_code, number, extension} — digits only, capped
+    to plausible lengths. A plain string is accepted for backward
+    compatibility (legacy data, CSV import, automation) and wrapped."""
+    out = []
+    for v in values or []:
+        if isinstance(v, str):
+            v = {"number": v}
+        if not isinstance(v, dict):
+            continue
+        digits = re.sub(r"\D", "", str(v.get("number") or ""))[:10]
+        if not digits:
+            continue
+        country = re.sub(r"\D", "", str(v.get("country_code") or "1"))[:3] or "1"
+        ext = re.sub(r"\D", "", str(v.get("extension") or ""))[:6]
+        entry = {"country_code": country, "number": digits, "extension": ext}
+        if entry not in out:
+            out.append(entry)
+        if len(out) >= 20:
+            break
+    return out
+
+
+def _validate_career_history(values) -> list[dict]:
+    """Resume-style list: one entry per role. `archived` (end_date set) marks
+    a past role; at most the caller's UI keeps one non-archived "current"
+    entry, but this validator doesn't enforce that — it's a display/workflow
+    convention, not a data invariant worth hard-blocking on."""
+    out = []
+    for v in values or []:
+        if not isinstance(v, dict):
+            continue
+        entry = {
+            "id": str(v.get("id") or uuid.uuid4()),
+            "title": (v.get("title") or "").strip()[:200],
+            "company_id": (v.get("company_id") or None) or None,
+            "industry": (v.get("industry") or "").strip()[:200],
+            "education": (v.get("education") or "").strip()[:60],
+            "years_experience": (v.get("years_experience") or "").strip()[:20],
+            "skills": (v.get("skills") or "").strip()[:2000],
+            "start_date": (v.get("start_date") or "").strip()[:7] or None,
+            "end_date": (v.get("end_date") or "").strip()[:7] or None,
+            "archived": bool(v.get("archived")),
+        }
+        if entry["education"] and entry["education"] not in EDUCATION_LEVELS:
+            raise ValueError(f"Unknown education level: {entry['education']!r}")
+        out.append(entry)
+        if len(out) >= 40:
+            break
+    return out
+
+
 def _validate_contact(data: dict, partial: bool = False) -> dict:
     out: dict = {}
     if "type" in data or not partial:
@@ -194,9 +352,9 @@ def _validate_contact(data: dict, partial: bool = False) -> dict:
             raise ValueError("Contact name must be 1-200 characters")
         out["name"] = name
     if "emails" in data:
-        out["emails"] = _clean_list(data.get("emails"))
+        out["emails"] = _validate_emails(data.get("emails"))
     if "phones" in data:
-        out["phones"] = _clean_list(data.get("phones"))
+        out["phones"] = _validate_phones(data.get("phones"))
     if "address" in data:
         out["address"] = (data.get("address") or "").strip()[:500]
     if "company_id" in data:
@@ -217,7 +375,78 @@ def _validate_contact(data: dict, partial: bool = False) -> dict:
         out["notes"] = (data.get("notes") or "").strip()[:5000]
     if "custom" in data:
         out["custom"] = _validate_custom(data.get("custom"))
+    if "gender" in data:
+        g = (data.get("gender") or "").strip().lower()
+        if g and g not in GENDERS:
+            raise ValueError("gender must be 'male' or 'female'")
+        out["gender"] = g
+    if "height_unit" in data:
+        hu = (data.get("height_unit") or "").strip()
+        if hu and hu not in HEIGHT_UNITS:
+            raise ValueError("height_unit must be 'ftin' or 'cm'")
+        out["height_unit"] = hu
+    if "weight_unit" in data:
+        wu = (data.get("weight_unit") or "").strip()
+        if wu and wu not in WEIGHT_UNITS:
+            raise ValueError("weight_unit must be 'lbs' or 'kg'")
+        out["weight_unit"] = wu
+    if "blood_type" in data:
+        bt = (data.get("blood_type") or "").strip()
+        if bt and bt not in BLOOD_TYPES:
+            raise ValueError(f"Unknown blood type: {bt!r}")
+        out["blood_type"] = bt
+    if "height_cm" in data:
+        hc = data.get("height_cm")
+        out["height_cm"] = _validate_number(hc, "height_cm", 0, 300)
+    if "weight_kg" in data:
+        wk = data.get("weight_kg")
+        out["weight_kg"] = _validate_number(wk, "weight_kg", 0, 500)
+    if "career_history" in data:
+        out["career_history"] = _validate_career_history(data.get("career_history"))
+    for key in ("wake_weekday", "wake_weekend", "bedtime", "work_start", "work_end"):
+        if key in data:
+            val = (data.get(key) or "").strip()[:5]
+            if val:
+                try:
+                    datetime.strptime(val, "%H:%M")
+                except ValueError:
+                    raise ValueError(f"{key} must be HH:MM")
+            out[key] = val
+    for key in _PLAIN_STRING_SHORT_FIELDS:
+        if key in data:
+            out[key] = (data.get(key) or "").strip()[:200]
+    for key in _BASIC_LONG_FIELDS | _PRIVATE_LONG_FIELDS:
+        if key in data:
+            out[key] = (data.get(key) or "").strip()[:2000]
+    if data.get("priority_order") is not None:
+        out["priority_order"] = _validate_priority_order(data.get("priority_order"))
     return out
+
+
+def _validate_number(value, field: str, lo: float, hi: float):
+    if value in (None, ""):
+        return ""
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{field} must be a number")
+    if not (lo <= num <= hi):
+        raise ValueError(f"{field} must be between {lo} and {hi}")
+    return num
+
+
+def _validate_priority_order(value) -> dict:
+    if not isinstance(value, dict):
+        raise ValueError("priority_order must be an object with personal/business keys")
+    cleaned: dict = {}
+    for ws in _PROFILE_WORKSPACES:
+        if ws not in value:
+            continue
+        items = value[ws]
+        if not isinstance(items, list):
+            raise ValueError(f"priority_order.{ws} must be a list")
+        cleaned[ws] = [str(x).strip()[:50] for x in items if str(x).strip()][:20]
+    return cleaned
 
 
 # ---------------------------------------------------------------------------
@@ -296,8 +525,18 @@ def resolve_access(
     return _rung_access(by_name) or _rung_access(group)
 
 
+def _strip_private(contact: dict, store_user: str, viewer: str) -> dict:
+    """Health/finance/AI-preference fields never leave the record's own
+    store_user's view, regardless of sharing config — a general Contacts rule
+    (not self-contact-specific) that happens to be what keeps a shared
+    self-contact's sensitive fields locked to its owner."""
+    if store_user == viewer:
+        return contact
+    return {k: v for k, v in contact.items() if k not in _PRIVATE_FIELDS}
+
+
 def annotate(contact: dict, store_user: str, viewer: str, access: str) -> dict:
-    out = dict(contact)
+    out = dict(_strip_private(contact, store_user, viewer))
     if store_user == POOL_HOUSEHOLD:
         out["_owner"] = "household"
     elif store_user == POOL_TEAM:
@@ -305,6 +544,8 @@ def annotate(contact: dict, store_user: str, viewer: str, access: str) -> dict:
     elif store_user != viewer:
         out["_owner"] = store_user
     out["_access"] = access
+    if contact.get("self_of") == viewer:
+        out["_pinned"] = True
     return out
 
 
@@ -323,24 +564,45 @@ def list_visible_contacts(
     from services.contacts_index import sharers_for
 
     results = []
+    seen_ids: set[str] = set()
+
+    # The viewer's own self-contact is pinned to the top of THEIR OWN list,
+    # regardless of active workspace — it's one record shared across both
+    # workspaces, physically stored in the personal store (item 8/9 of the
+    # design). Other users' self-contacts are not made cross-workspace-visible
+    # here; they're still resolved the normal way below via sharing.
+    self_contact = get_self_contact(viewer, create_if_missing=True)
+    if self_contact:
+        results.append(annotate(self_contact, viewer, viewer, "edit"))
+        seen_ids.add(self_contact["id"])
+
     stores = [viewer, pool_for(workspace)]
     stores += [s for s in sharers_for(viewer, viewer_role, workspace) if s not in stores]
     for store_user in stores:
         for contact in list_contacts(store_user, workspace):
+            if contact["id"] in seen_ids:
+                continue
             if contact.get("archived") and not include_archived:
                 continue
             access = resolve_access(viewer, viewer_role, is_admin, store_user, contact, workspace)
             if not access:
                 continue
             results.append(annotate(contact, store_user, viewer, access))
+            seen_ids.add(contact["id"])
     return results
 
 
 def find_contact(
     viewer: str, viewer_role: str, is_admin: bool, workspace: str, contact_id: str
 ) -> tuple[str, dict, str] | None:
-    """Returns (store_user, contact, access) or None."""
+    """Returns (store_user, contact, access) or None. The viewer's own
+    self-contact short-circuits here so it resolves regardless of the active
+    `workspace` — see list_visible_contacts for why."""
     from services.contacts_index import sharers_for
+
+    self_contact = get_self_contact(viewer)
+    if self_contact and self_contact["id"] == contact_id:
+        return (viewer, self_contact, "edit")
 
     stores = [viewer, pool_for(workspace)]
     stores += [s for s in sharers_for(viewer, viewer_role, workspace) if s not in stores]
@@ -348,7 +610,12 @@ def find_contact(
         contact = get_contact(store_user, workspace, contact_id)
         if contact:
             access = resolve_access(viewer, viewer_role, is_admin, store_user, contact, workspace)
-            return (store_user, contact, access) if access else None
+            if not access:
+                return None
+            # Defense-in-depth: strip here too (not just in annotate()) so a
+            # caller that reads this tuple's raw contact directly — e.g. the
+            # agent's get_contact tool — can never leak private fields.
+            return (store_user, _strip_private(contact, store_user, viewer), access)
     return None
 
 
@@ -375,6 +642,9 @@ def create_contact(store_user: str, workspace: str, data: dict, created_by: str)
         "shared_with": [],
         "contributors": [],
         "hidden_from": [],
+        "affiliated_contact_ids": [],
+        "career_history": [],
+        "photo_ext": None,
         "archived": False,
         "created_by": created_by,
         "created_at": _now(),
@@ -387,7 +657,17 @@ def create_contact(store_user: str, workspace: str, data: dict, created_by: str)
     return contact
 
 
-def update_contact(store_user: str, workspace: str, contact_id: str, updates: dict) -> dict | None:
+def update_contact(
+    store_user: str, workspace: str, contact_id: str, updates: dict, *, viewer: str | None = None
+) -> dict | None:
+    """`viewer` is optional and only matters when it differs from `store_user`
+    (an edit-level sharee patching someone else's contact) — private fields
+    are stripped from the incoming update in that case, so a third party can
+    never inject data into fields only the owner will ever be able to read
+    back. Callers that always act as their own store_user (self/`/contacts/me`,
+    automation, setup, migrations) can omit it."""
+    if viewer is not None and viewer != store_user:
+        updates = {k: v for k, v in updates.items() if k not in _PRIVATE_FIELDS}
     fields = _validate_contact(updates, partial=True)
     contacts = list_contacts(store_user, workspace)
     for i, c in enumerate(contacts):
@@ -405,7 +685,48 @@ def set_archived(store_user: str, workspace: str, contact_id: str, archived: boo
     for i, c in enumerate(contacts):
         if c["id"] != contact_id:
             continue
+        if c.get("self_of"):
+            raise ValueError("A user's own contact can't be archived")
         c["archived"] = bool(archived)
+        c["updated_at"] = _now()
+        contacts[i] = c
+        _save_contacts(store_user, workspace, contacts)
+        return c
+    return None
+
+
+def set_contact_photo(store_user: str, workspace: str, contact_id: str, ext: str) -> dict | None:
+    """Record the uploaded photo's extension on the contact. The router owns
+    writing/deleting the actual file — this just keeps the pointer in sync,
+    clearing out an old file of a different extension if one exists."""
+    from services.file_service import contact_photo_path
+
+    contacts = list_contacts(store_user, workspace)
+    for i, c in enumerate(contacts):
+        if c["id"] != contact_id:
+            continue
+        old_ext = c.get("photo_ext")
+        if old_ext and old_ext != ext:
+            contact_photo_path(store_user, workspace, contact_id, old_ext).unlink(missing_ok=True)
+        c["photo_ext"] = ext
+        c["updated_at"] = _now()
+        contacts[i] = c
+        _save_contacts(store_user, workspace, contacts)
+        return c
+    return None
+
+
+def clear_contact_photo(store_user: str, workspace: str, contact_id: str) -> dict | None:
+    from services.file_service import contact_photo_path
+
+    contacts = list_contacts(store_user, workspace)
+    for i, c in enumerate(contacts):
+        if c["id"] != contact_id:
+            continue
+        ext = c.get("photo_ext")
+        if ext:
+            contact_photo_path(store_user, workspace, contact_id, ext).unlink(missing_ok=True)
+        c["photo_ext"] = None
         c["updated_at"] = _now()
         contacts[i] = c
         _save_contacts(store_user, workspace, contacts)
@@ -415,9 +736,16 @@ def set_archived(store_user: str, workspace: str, contact_id: str, archived: boo
 
 def delete_contact(store_user: str, workspace: str, contact_id: str) -> bool:
     contacts = list_contacts(store_user, workspace)
-    remaining = [c for c in contacts if c["id"] != contact_id]
-    if len(remaining) == len(contacts):
+    target = next((c for c in contacts if c["id"] == contact_id), None)
+    if target is None:
         return False
+    if target.get("self_of"):
+        raise ValueError("A user's own contact can't be deleted directly — delete the account instead")
+    if target.get("photo_ext"):
+        from services.file_service import contact_photo_path
+
+        contact_photo_path(store_user, workspace, contact_id, target["photo_ext"]).unlink(missing_ok=True)
+    remaining = [c for c in contacts if c["id"] != contact_id]
     _save_contacts(store_user, workspace, remaining)
     # Cascade delete this contact's interactions + deals in the same store.
     ints = [
@@ -426,6 +754,18 @@ def delete_contact(store_user: str, workspace: str, contact_id: str) -> bool:
     _save_interactions(store_user, workspace, ints)
     deals = [d for d in _list_deals(store_user, workspace) if d.get("contact_id") != contact_id]
     _save_deals(store_user, workspace, deals)
+    # Strip any dangling affiliation back-references within the SAME store
+    # (v1 scope — affiliation linking requires edit on both ends, so both
+    # sides always live in a store this function can see; cross-store
+    # staleness is accepted, matching the app's existing tolerance elsewhere).
+    changed = False
+    for c in remaining:
+        ids = c.get("affiliated_contact_ids") or []
+        if contact_id in ids:
+            c["affiliated_contact_ids"] = [i for i in ids if i != contact_id]
+            changed = True
+    if changed:
+        _save_contacts(store_user, workspace, remaining)
     return True
 
 
@@ -445,6 +785,8 @@ def transfer_ownership(
     contact = next((c for c in contacts if c["id"] == contact_id), None)
     if contact is None:
         raise ValueError("Contact not found")
+    if contact.get("self_of"):
+        raise ValueError("A user's own contact can't be transferred")
     _save_contacts(store_user, workspace, [c for c in contacts if c["id"] != contact_id])
 
     dest_is_pool = is_pool(new_owner)
@@ -484,6 +826,75 @@ def transfer_ownership(
         reindex_owner(new_owner)
 
     return contact
+
+
+# ---------------------------------------------------------------------------
+# Affiliations — general bidirectional Contact<->Contact links (family,
+# company<->person, etc.). A flat symmetric id list, maintained on both ends
+# via this dedicated mutation — mirrors the Deal<->Asset linked_asset_ids
+# pointer + dedicated-mutation precedent. Never part of the general
+# ContactUpdate PATCH. v1 scope: both contacts must resolve to `edit` for the
+# acting viewer — cross-owner linking is out of scope (raises ValueError).
+# ---------------------------------------------------------------------------
+
+
+def link_affiliation(
+    viewer: str, viewer_role: str, is_admin: bool, workspace: str, contact_id: str, other_id: str
+) -> tuple[dict, dict]:
+    if contact_id == other_id:
+        raise ValueError("A contact can't be affiliated with itself")
+    a = find_contact(viewer, viewer_role, is_admin, workspace, contact_id)
+    b = find_contact(viewer, viewer_role, is_admin, workspace, other_id)
+    if a is None or b is None:
+        raise ValueError("Contact not found")
+    store_a, contact_a, access_a = a
+    store_b, contact_b, access_b = b
+    if access_a != "edit" or access_b != "edit":
+        raise ValueError("You need edit access to both contacts to link them")
+    ws_a = "personal" if contact_a.get("self_of") else workspace
+    ws_b = "personal" if contact_b.get("self_of") else workspace
+    ids_a = list(contact_a.get("affiliated_contact_ids") or [])
+    if other_id not in ids_a:
+        ids_a.append(other_id)
+    ids_b = list(contact_b.get("affiliated_contact_ids") or [])
+    if contact_id not in ids_b:
+        ids_b.append(contact_id)
+    updated_a = _set_affiliations(store_a, ws_a, contact_id, ids_a)
+    updated_b = _set_affiliations(store_b, ws_b, other_id, ids_b)
+    return updated_a, updated_b
+
+
+def unlink_affiliation(
+    viewer: str, viewer_role: str, is_admin: bool, workspace: str, contact_id: str, other_id: str
+) -> tuple[dict, dict]:
+    a = find_contact(viewer, viewer_role, is_admin, workspace, contact_id)
+    b = find_contact(viewer, viewer_role, is_admin, workspace, other_id)
+    if a is None or b is None:
+        raise ValueError("Contact not found")
+    store_a, contact_a, access_a = a
+    store_b, contact_b, access_b = b
+    if access_a != "edit" or access_b != "edit":
+        raise ValueError("You need edit access to both contacts to unlink them")
+    ws_a = "personal" if contact_a.get("self_of") else workspace
+    ws_b = "personal" if contact_b.get("self_of") else workspace
+    ids_a = [i for i in (contact_a.get("affiliated_contact_ids") or []) if i != other_id]
+    ids_b = [i for i in (contact_b.get("affiliated_contact_ids") or []) if i != contact_id]
+    updated_a = _set_affiliations(store_a, ws_a, contact_id, ids_a)
+    updated_b = _set_affiliations(store_b, ws_b, other_id, ids_b)
+    return updated_a, updated_b
+
+
+def _set_affiliations(store_user: str, workspace: str, contact_id: str, ids: list[str]) -> dict:
+    contacts = list_contacts(store_user, workspace)
+    for i, c in enumerate(contacts):
+        if c["id"] != contact_id:
+            continue
+        c["affiliated_contact_ids"] = ids
+        c["updated_at"] = _now()
+        contacts[i] = c
+        _save_contacts(store_user, workspace, contacts)
+        return c
+    raise ValueError("Contact not found")
 
 
 def strip_user_references(user_name: str) -> None:
@@ -608,6 +1019,11 @@ def update_access(
         to_notify: list[str] = []
         if shared_with is not None:
             cleaned = _clean_share_entries(shared_with, c.get("shared_with"), pool=False)
+            if c.get("self_of") and any(e.get("access") == "edit" for e in cleaned):
+                raise ValueError(
+                    "A self-contact can only be shared at read or contribute access — "
+                    "nobody but its owner can ever edit it"
+                )
             c["shared_with"] = cleaned
             for entry in cleaned:
                 accepted = set(entry.get("accepted") or [])
@@ -617,7 +1033,10 @@ def update_access(
         if contributors is not None:
             c["contributors"] = _clean_share_entries(contributors, c.get("contributors"), pool=True)
         if hidden_from is not None:
-            c["hidden_from"] = _clean_hidden(hidden_from)
+            cleaned_hidden = _clean_hidden(hidden_from)
+            if c.get("self_of") and c["self_of"] in cleaned_hidden:
+                raise ValueError("A self-contact can never be hidden from its own owner")
+            c["hidden_from"] = cleaned_hidden
         c["updated_at"] = _now()
         contacts[i] = c
         _save_contacts(store_user, workspace, contacts)
@@ -768,8 +1187,24 @@ def find_deal(
 ) -> tuple[str, dict, dict, str] | None:
     """Locate a deal across viewer + pool + sharer stores. A deal has no access
     of its own — it inherits the parent contact's resolve_access result.
-    Returns (store_user, deal, contact, access) or None."""
+    Returns (store_user, deal, contact, access) or None. Deals on the viewer's
+    own self-contact are anchored to the personal store regardless of the
+    active workspace, so they're checked first here the same way
+    find_contact() short-circuits the self-contact itself."""
     from services.contacts_index import sharers_for
+
+    self_contact = get_self_contact(viewer)
+    if self_contact:
+        self_deal = next(
+            (
+                d
+                for d in _list_deals(viewer, "personal")
+                if d["id"] == deal_id and d.get("contact_id") == self_contact["id"]
+            ),
+            None,
+        )
+        if self_deal:
+            return (viewer, self_deal, self_contact, "edit")
 
     stores = [viewer, pool_for(workspace)]
     stores += [s for s in sharers_for(viewer, viewer_role, workspace) if s not in stores]
@@ -890,6 +1325,157 @@ def unlink_asset(store_user: str, workspace: str, deal_id: str, asset_id: str) -
         _save_deals(store_user, workspace, items)
         return items[i]
     return None
+
+
+def format_height(height_cm, unit: str) -> str:
+    if not height_cm:
+        return ""
+    cm = float(height_cm)
+    if unit == "cm":
+        return f"{cm:.0f} cm"
+    total_in = cm / 2.54
+    ft, inch = divmod(round(total_in), 12)
+    return f"{ft}'{inch}\""
+
+
+def format_weight(weight_kg, unit: str) -> str:
+    if not weight_kg:
+        return ""
+    kg = float(weight_kg)
+    if unit == "kg":
+        return f"{kg:.1f} kg"
+    return f"{kg * 2.20462:.1f} lbs"
+
+
+def format_profile_text(contact: dict) -> str:
+    """Render a self-contact as readable text for the AI chat system prompt —
+    the successor to the old Profile.md, but generated on the fly from the
+    live self-contact record instead of a stored file."""
+    lines = [f"# {contact.get('name', 'User')} — Profile", ""]
+
+    basics = []
+    if contact.get("occupation"):
+        basics.append(f"**Occupation:** {contact['occupation']}")
+    loc = ", ".join(x for x in [contact.get("city"), contact.get("state"), contact.get("country")] if x)
+    if loc:
+        basics.append(f"**Location:** {loc}")
+    if contact.get("pronouns"):
+        basics.append(f"**Pronouns:** {contact['pronouns']}")
+    if contact.get("gender"):
+        basics.append(f"**Gender:** {contact['gender']}")
+    lines.extend(basics)
+    if basics:
+        lines.append("")
+
+    routine = [
+        (lbl, contact[k])
+        for k, lbl in [
+            ("wake_weekday", "Wake (weekdays)"),
+            ("wake_weekend", "Wake (weekends)"),
+            ("bedtime", "Bedtime"),
+        ]
+        if contact.get(k)
+    ]
+    if contact.get("work_start") or contact.get("work_end"):
+        routine.append(("Work hours", f"{contact.get('work_start', '')}–{contact.get('work_end', '')}"))
+    if routine:
+        lines.append("## Daily Routine")
+        lines.extend(f"- {lbl}: {v}" for lbl, v in routine)
+        lines.append("")
+
+    health = []
+    height_str = format_height(contact.get("height_cm"), contact.get("height_unit") or "ftin")
+    weight_str = format_weight(contact.get("weight_kg"), contact.get("weight_unit") or "lbs")
+    hw = " · ".join(x for x in [height_str, weight_str] if x)
+    if hw:
+        health.append(("Height/Weight", hw))
+    for k, lbl in [
+        ("blood_type", "Blood type"),
+        ("diet", "Dietary restrictions"),
+        ("exercise", "Exercise"),
+        ("conditions", "Conditions"),
+        ("medications", "Medications"),
+    ]:
+        if contact.get(k):
+            health.append((lbl, contact[k]))
+    if health:
+        lines.append("## Health")
+        lines.extend(f"- {lbl}: {v}" for lbl, v in health)
+        lines.append("")
+
+    careers = [c for c in (contact.get("career_history") or []) if not c.get("archived")]
+    past_careers = [c for c in (contact.get("career_history") or []) if c.get("archived")]
+    if careers or past_careers:
+        lines.append("## Work & Career")
+        for c in careers:
+            when = f" ({c['start_date']}–present)" if c.get("start_date") else ""
+            lines.append(f"- **Current:** {c.get('title', '')}{when}")
+            for k, lbl in [("industry", "Industry"), ("education", "Education"), ("skills", "Skills")]:
+                if c.get(k):
+                    lines.append(f"  - {lbl}: {c[k]}")
+        for c in past_careers:
+            when = f" ({c.get('start_date', '?')}–{c.get('end_date', '?')})"
+            lines.append(f"- Previously: {c.get('title', '')}{when}")
+        lines.append("")
+
+    family_lines = []
+    if contact.get("marital_status"):
+        family_lines.append(f"- Marital status: {contact['marital_status']}")
+    if contact.get("affiliated_contact_ids"):
+        family_lines.append(f"- Affiliated contacts: {len(contact['affiliated_contact_ids'])} linked")
+    if contact.get("pets"):
+        family_lines.append(f"- Pets: {contact['pets']}")
+    if family_lines:
+        lines.append("## Family")
+        lines.extend(family_lines)
+        lines.append("")
+
+    finances = [
+        (lbl, contact[k])
+        for k, lbl in [("income_range", "Income range"), ("budget_style", "Budget style")]
+        if contact.get(k)
+    ]
+    if finances:
+        lines.append("## Finances")
+        lines.extend(f"- {lbl}: {v}" for lbl, v in finances)
+        lines.append("")
+
+    gv = [
+        (lbl, contact[k])
+        for k, lbl in [
+            ("life_mission", "Life mission"),
+            ("core_values", "Core values"),
+            ("key_constraints", "Key constraints"),
+        ]
+        if contact.get(k)
+    ]
+    if gv:
+        lines.append("## Values & Principles")
+        lines.extend(f"- {lbl}: {v}" for lbl, v in gv)
+        lines.append("")
+
+    ai = [
+        (lbl, contact[k])
+        for k, lbl in [
+            ("communication_style", "Communication style"),
+            ("tone", "Tone"),
+            ("response_language", "Response language"),
+            ("topics_to_emphasize", "Emphasize"),
+            ("topics_to_avoid", "Avoid"),
+        ]
+        if contact.get(k)
+    ]
+    if ai:
+        lines.append("## AI Preferences")
+        lines.extend(f"- {lbl}: {v}" for lbl, v in ai)
+        lines.append("")
+
+    if contact.get("notes"):
+        lines.append("## Personal Notes")
+        lines.append(contact["notes"])
+        lines.append("")
+
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------

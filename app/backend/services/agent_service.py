@@ -267,13 +267,15 @@ _USER_TOOLS: list[dict] = [
     {
         "name": "get_profile",
         "description": (
-            "Read the user's full profile. Fields include: occupation, city, state, country, pronouns, "
-            "wake_weekday, wake_weekend, bedtime, work_hours, height, weight, blood_type, diet, exercise, "
-            "conditions, medications, employer, industry, education, years_experience, skills, "
-            "marital_status, partner, children (list of {name, age}), pets, income_range, savings_goal, "
-            "budget_style, life_mission, big_goal, core_values, key_constraints, communication_style, "
-            "tone, response_language, topics_to_emphasize, topics_to_avoid, notes, "
-            "priority_order (list of category strings)."
+            "Read the user's full profile — their own Contact record (self_of the user). Fields include: "
+            "occupation, gender, city, state, country, pronouns, wake_weekday, wake_weekend, bedtime, "
+            "work_start, work_end, height_cm, height_unit, weight_kg, weight_unit, blood_type, diet, "
+            "exercise, conditions, medications, marital_status, affiliated_contact_ids (linked family/"
+            "company contacts), pets, income_range, budget_style, life_mission, core_values, "
+            "key_constraints, communication_style, tone, response_language, topics_to_emphasize, "
+            "topics_to_avoid, notes, priority_order ({personal: [...], business: [...]}), "
+            "career_history (resume-style list: [{title, company_id, industry, education, "
+            "years_experience, skills, start_date, end_date, archived}])."
         ),
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
@@ -400,8 +402,8 @@ _USER_TOOLS: list[dict] = [
     {
         "name": "update_profile",
         "description": (
-            "Update one or more profile fields. Pass only the fields you want to change — existing fields "
-            "are preserved. Automatically regenerates Profile.md. "
+            "Update one or more profile fields on the user's own Contact record. Pass only the fields you "
+            "want to change — existing fields are preserved. "
             "Goals and completable items belong in tasks (type='goal'), not here. "
             "This is for biographical/aspirational context: life mission, values, health, family, work, AI preferences."
         ),
@@ -410,7 +412,7 @@ _USER_TOOLS: list[dict] = [
             "properties": {
                 "fields": {
                     "type": "object",
-                    "description": 'Dict of profile fields to update, e.g. {"big_goal": "Run a marathon", "occupation": "Engineer"}',
+                    "description": 'Dict of profile fields to update, e.g. {"life_mission": "Run a marathon", "occupation": "Engineer"}',
                 },
             },
             "required": ["fields"],
@@ -1365,7 +1367,9 @@ def _execute_tool(
                 return {"deleted": ok}
 
             case "get_profile":
-                return profile_service.load_profile(user["name"])
+                from services import contacts_service
+
+                return contacts_service.get_self_contact(user["name"], create_if_missing=True)
 
             case "get_help":
                 from services import help_service
@@ -1463,11 +1467,16 @@ def _execute_tool(
                 )
                 if not found:
                     return {"error": "Contact not found"}
-                store_user, _c, access = found
+                store_user, contact, access = found
                 if access != "edit":
                     return {"error": "You don't have edit access to this contact"}
+                ws = "personal" if contact.get("self_of") else workspace
                 updated = contacts_service.update_contact(
-                    store_user, workspace, inputs["contact_id"], inputs.get("fields", {})
+                    store_user,
+                    ws,
+                    inputs["contact_id"],
+                    inputs.get("fields", {}),
+                    viewer=user["name"],
                 )
                 return {"updated": bool(updated)}
 
@@ -1512,9 +1521,15 @@ def _execute_tool(
                 return {"created": True, "deal_id": deal["id"]}
 
             case "update_profile":
-                current = profile_service.load_profile(user["name"])
-                current.update(inputs.get("fields", {}))
-                return profile_service.save_profile(user["name"], current)
+                from services import contacts_service
+
+                self_contact = contacts_service.get_self_contact(user["name"], create_if_missing=True)
+                try:
+                    return contacts_service.update_contact(
+                        user["name"], "personal", self_contact["id"], inputs.get("fields", {})
+                    )
+                except ValueError as exc:
+                    return {"error": str(exc)}
 
             case "append_memory":
                 from datetime import date

@@ -165,6 +165,115 @@ def m007_finance_guest_disabled(brain: Path) -> None:
     write_json(features_file, data)
 
 
+def m009_migrate_profiles_to_self_contacts(brain: Path) -> None:
+    """Merge each real user's Profile (profile.json) into a new self-contact —
+    a Contact record marked self_of=<user>, the single source of truth going
+    forward. Idempotent per-user (skips if a self-contact already exists) and
+    never touches/deletes the old profile.json/Profile.md files. One user's
+    failure never blocks the rest."""
+    from services import contacts_service
+    from services.file_service import read_json, ws_path
+
+    users_dir = brain / "USERS"
+    if not users_dir.exists():
+        return
+
+    field_map = {
+        "pronouns": "pronouns",
+        "city": "city",
+        "state": "state",
+        "country": "country",
+        "occupation": "occupation",
+        "marital_status": "marital_status",
+        "pets": "pets",
+        "life_mission": "life_mission",
+        "core_values": "core_values",
+        "key_constraints": "key_constraints",
+        "wake_weekday": "wake_weekday",
+        "wake_weekend": "wake_weekend",
+        "bedtime": "bedtime",
+        "blood_type": "blood_type",
+        "conditions": "conditions",
+        "medications": "medications",
+        "diet": "diet",
+        "exercise": "exercise",
+        "income_range": "income_range",
+        "budget_style": "budget_style",
+        "communication_style": "communication_style",
+        "tone": "tone",
+        "response_language": "response_language",
+        "topics_to_emphasize": "topics_to_emphasize",
+        "topics_to_avoid": "topics_to_avoid",
+        "notes": "notes",
+    }
+    # Not migrated: old free-text `height`/`weight`/`work_hours` — the new
+    # schema needs structured numbers/times (height_cm, work_start/end) and
+    # there's no reliable way to parse "5'11", 175 lbs" or "8 AM - 5 PM" into
+    # that shape. No real installs have used the merged Profile yet (shipped
+    # this same day), so this is an acceptable one-time loss, not a
+    # regression against real user data.
+
+    migrated = 0
+    for user_dir in users_dir.iterdir():
+        if not user_dir.is_dir() or user_dir.name.startswith("_"):
+            continue
+        name = user_dir.name
+        try:
+            if contacts_service.get_self_contact(name) is not None:
+                continue  # already migrated (or lazily created) — never overwrite
+
+            personal = read_json(ws_path(name, "personal") / "profile.json", default={})
+            business = read_json(ws_path(name, "business") / "profile.json", default={})
+
+            updates: dict = {}
+            for src_key, dst_key in field_map.items():
+                if personal.get(src_key):
+                    updates[dst_key] = personal[src_key]
+            if personal.get("dob") and not updates.get("birthday"):
+                updates["birthday"] = personal["dob"]
+            if personal.get("phone"):
+                updates["phones"] = [str(personal["phone"])]
+
+            # Old flat employer/industry/education/years_experience/skills
+            # become a single "current" career_history entry, if any are set.
+            career_fields = {
+                k: personal[k]
+                for k in ("employer", "industry", "education", "years_experience", "skills")
+                if personal.get(k)
+            }
+            if career_fields:
+                education = career_fields.get("education", "")
+                if education not in contacts_service.EDUCATION_LEVELS:
+                    education = ""  # legacy free text didn't match the new fixed list
+                updates["career_history"] = [{
+                    "title": personal.get("occupation") or "",
+                    "industry": career_fields.get("industry", ""),
+                    "education": education,
+                    "years_experience": career_fields.get("years_experience", ""),
+                    "skills": career_fields.get("skills", ""),
+                    "archived": False,
+                }]
+
+            priority_order: dict = {}
+            if personal.get("priority_order"):
+                priority_order["personal"] = personal["priority_order"]
+            if business.get("priority_order"):
+                priority_order["business"] = business["priority_order"]
+            if priority_order:
+                updates["priority_order"] = priority_order
+
+            occupation = updates.pop("occupation", None)
+            contact = contacts_service.create_self_contact(name, occupation=occupation)
+            if updates:
+                contacts_service.update_contact(name, "personal", contact["id"], updates)
+            migrated += 1
+        except Exception:
+            logger.exception("m009: failed to migrate profile for user %r — skipping", name)
+
+    if migrated:
+        logger.info("m009: migrated %d user profile(s) into self-contacts", migrated)
+
+
 def m008_contacts_guest_disabled(brain: Path) -> None:
     """Disable the new Contacts (CRM) module for the built-in guest role on
     existing installs — contacts hold PII, so guests must be granted access
@@ -191,6 +300,7 @@ MIGRATIONS: list[tuple[str, MigrationFn]] = [
     ("m006_seed_folder_template", m006_seed_folder_template),
     ("m007_finance_guest_disabled", m007_finance_guest_disabled),
     ("m008_contacts_guest_disabled", m008_contacts_guest_disabled),
+    ("m009_migrate_profiles_to_self_contacts", m009_migrate_profiles_to_self_contacts),
 ]
 
 # ── Runner ─────────────────────────────────────────────────────────────────────
