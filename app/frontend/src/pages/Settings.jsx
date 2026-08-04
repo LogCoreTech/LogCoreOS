@@ -9,7 +9,7 @@ export default function Settings() {
       <h1 className="text-2xl font-bold">Settings</h1>
 
       <div className="card divide-y divide-charcoal-100 dark:divide-charcoal-800">
-        <MenuRow icon="👤" label="Profile" subtitle="Life priorities, goals, and values" to="/profile" />
+        <MenuRow icon="👤" label="Profile" subtitle="Your details, priorities, and values" to="/profile" />
         <MenuRow icon="🎨" label="Appearance" subtitle="Dark mode, accent color, background, density" to="/settings/appearance" />
         <MenuRow icon="🔔" label="Notifications" subtitle="ntfy, push notifications, proactive suggestions" to="/settings/notifications" />
         <div className="md:hidden">

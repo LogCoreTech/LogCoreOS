@@ -47,11 +47,23 @@
     overflow: hidden;
   }
 
+  /* `overflow: hidden` alone does not reliably stop iOS Safari (including
+     standalone PWA mode) from letting a touch-drag rubber-band the whole
+     document — a long-documented WebKit quirk separate from the phantom-
+     toolbar bug above. `position: fixed` removes body from the normal
+     scrolling flow entirely, which is the standard, well-established fix.
+     `top/left/right` (not `bottom`, and not `inset`) so `height: 100%` still
+     resolves against html's deliberately-oversized height above — swapping
+     to `inset: 0` would clamp body to the raw viewport and undo that fix. */
   body {
     @apply bg-white text-charcoal-900 dark:bg-charcoal-900 dark:text-gray-100;
     background-image: var(--bg-image, none);
     background-size: cover;
     background-position: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
     height: 100%;
     overflow: hidden;
   }
@@ -89,7 +101,7 @@
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
   .modal-card {
-    @apply card w-full overflow-y-auto;
+    @apply card w-full overflow-y-auto overflow-x-hidden;
     max-height: 85dvh;
   }
 

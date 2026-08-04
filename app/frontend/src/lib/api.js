@@ -131,11 +131,6 @@ export const priorities = {
   setPool:      (data)    => request('PUT', '/priorities/pool', data),
 }
 
-export const profile = {
-  get:  ()     => get('/profile'),
-  save: (data) => request('PUT', '/profile', data),
-}
-
 export const chat = {
   send:       (message, history, mode = 'approve', crossWorkspace = false, acceptOverage = false) => post('/chat', { message, history, mode, cross_workspace: crossWorkspace, accept_overage: acceptOverage }),
   saveMemory: (history, target = 'short') => post('/chat/save-memory',  { history, target }),
@@ -388,6 +383,13 @@ export const finance = {
 
 export const contacts = {
   list:         (includeArchived = false) => get(`/contacts${includeArchived ? '?include_archived=true' : ''}`),
+  me:           ()                  => get('/contacts/me'),
+  updateMe:     (data)               => request('PATCH', '/contacts/me', data),
+  linkAffiliation:   (id, otherId)  => post(`/contacts/${id}/affiliations/${otherId}`, {}),
+  unlinkAffiliation: (id, otherId)  => del(`/contacts/${id}/affiliations/${otherId}`),
+  uploadPhoto:  (id, file)          => requestFile('POST', `/contacts/${id}/photo`, file),
+  photoBlob:    (id)                => requestBlob(`/contacts/${id}/photo`),
+  removePhoto:  (id)                => del(`/contacts/${id}/photo`),
   get:          (id)                => get(`/contacts/${id}`),
   create:       (data)              => post('/contacts', data),
   update:       (id, data)          => patch(`/contacts/${id}`, data),

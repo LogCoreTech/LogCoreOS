@@ -116,6 +116,11 @@ def contact_pipeline_path(user_name: str, workspace: str = "personal") -> Path:
     return ws_path(user_name, workspace) / "Contacts" / "pipeline.json"
 
 
+def contact_photo_path(user_name: str, workspace: str, contact_id: str, ext: str) -> Path:
+    """Uploaded profile/contact photo — one file per contact, extension varies."""
+    return ws_path(user_name, workspace) / "Contacts" / "photos" / f"{contact_id}.{ext}"
+
+
 def finance_books_path(user_name: str, workspace: str = "personal") -> Path:
     return ws_path(user_name, workspace) / "Finance" / "books.json"
 

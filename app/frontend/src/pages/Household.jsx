@@ -256,6 +256,9 @@ export default function Household() {
         </>
       )}
 
+      {/* Clears the fixed mobile footer nav so the bottom of either tab is never hidden behind it */}
+      <div className="h-20 md:hidden" aria-hidden="true" />
+
       {/* Modals */}
       {showTaskModal && (
         <TaskModal

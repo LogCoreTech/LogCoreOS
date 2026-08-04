@@ -83,6 +83,12 @@ def _contacts_eligible(name: str, workspaces: list[str]) -> list[dict]:
     out = []
     for ws in workspaces:
         for c in contacts_service.list_contacts(name, ws):
+            if c.get("self_of"):
+                # A user's own contact dies with their account like today —
+                # it can never be transferred/deleted independently (enforced
+                # in contacts_service too), so it must never surface here as
+                # something needing a decision.
+                continue
             if not (c.get("shared_with") or c.get("contributors")):
                 continue
             out.append(

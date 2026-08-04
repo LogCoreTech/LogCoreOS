@@ -74,9 +74,12 @@ def _seed_tasks(brain, tasks: list[dict]) -> None:
     user_dir = brain / "USERS" / PRIORITY_USER
     tasks_dir = user_dir / "Tasks"
     tasks_dir.mkdir(parents=True, exist_ok=True)
-    from services.profile_service import save_profile
+    from services import contacts_service
 
-    save_profile(PRIORITY_USER, {"priority_order": ORDER})
+    contact = contacts_service.create_self_contact(PRIORITY_USER)
+    contacts_service.update_contact(
+        PRIORITY_USER, "personal", contact["id"], {"priority_order": {"personal": ORDER}}
+    )
     rows = [
         {
             "id": str(i),

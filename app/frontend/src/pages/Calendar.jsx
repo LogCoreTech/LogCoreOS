@@ -193,6 +193,9 @@ export default function Calendar() {
         />
       </div>
 
+      {/* Clears the fixed mobile footer nav so the bottom of the grid/day panel is never hidden behind it */}
+      <div className="h-20 md:hidden" aria-hidden="true" />
+
       {showModal && (
         <TaskModal
           task={editTask}

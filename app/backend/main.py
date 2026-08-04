@@ -39,7 +39,6 @@ from routers import (
     journal,
     notes,
     priorities,
-    profile,
     push,
     setup,
     shared,
@@ -292,7 +291,6 @@ app.include_router(push.router, prefix="/api/v1/push", tags=["push"])
 app.include_router(notes.router, prefix="/api/v1/notes", tags=["notes"])
 app.include_router(journal.router, prefix="/api/v1/journal", tags=["journal"])
 app.include_router(calendar.router, prefix="/api/v1/calendar", tags=["calendar"])
-app.include_router(profile.router, prefix="/api/v1/profile", tags=["profile"])
 app.include_router(suggestions.router, prefix="/api/v1/suggestions", tags=["suggestions"])
 app.include_router(infisical.router, prefix="/api/v1/auth", tags=["infisical"])
 app.include_router(features.router, prefix="/api/v1/auth", tags=["features"])

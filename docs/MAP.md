@@ -41,7 +41,6 @@ LogCoreOS/
 │   │   │   ├── team.py           → business team pool: tasks at /team/tasks, events at /team/events; own _team pseudo-user; separate from household
 │   │   │   ├── push.py           → web push subscriptions (VAPID), subscribe/unsubscribe/test
 │   │   │   ├── suggestions.py    → proactive AI suggestion engine + per-user custom schedules + notification inbox
-│   │   │   ├── profile.py        → user Profile.md read/write
 │   │   │   ├── infisical.py      → Infisical secrets manager integration (admin only; status, token set/clear)
 │   │   │   ├── features.py       → feature flags + custom role management (admin only)
 │   │   │   ├── automations.py    → automations module: import/run/logs n8n workflows (personal + business scopes)
@@ -51,7 +50,7 @@ LogCoreOS/
 │   │   │   ├── finance_planning.py → budgets (+status), recurring bills (+upcoming), planned one-offs, balance projection endpoints
 │   │   │   ├── finance_invoicing.py → clients CRUD + AR rollup, invoices CRUD, partial payments (w/ linked income tx)
 │   │   │   ├── finance_sharing.py → book/account audience (shares + contributors + hidden_from), share handshake respond, leave, member/role pickers
-│   │   │   ├── contacts.py        → Contacts (CRM): contacts/interactions/deals CRUD, pipeline, admin custom fields, sharing handshake, CSV import/export, contact money view, write-focused n8n automation API
+│   │   │   ├── contacts.py        → Contacts (CRM): contacts/interactions/deals CRUD, pipeline, admin custom fields, sharing handshake, CSV import/export, contact money view, write-focused n8n automation API, self-contact (GET/PATCH /contacts/me — login-gated only, not the contacts module), affiliation link/unlink
 │   │   │   ├── home.py           → Home Assistant module: entity control, scenes, automations, favourites, admin config
 │   │   │   ├── help.py            → Help system: GET /help/content (authored guide), /help/whats-new (banner state), GET/PUT /help/onboarding (first-run checklist); auth required, NO module gate (like Settings)
 │   │   │   ├── update.py         → update status check + trigger (admin only); works with update.sh on host
@@ -65,7 +64,7 @@ LogCoreOS/
 │   │   │   ├── events_service.py      → calendar event CRUD
 │   │   │   ├── notes_service.py       → notes CRUD, folder management, move; + sharing (sidecar Notes/_shares.json, folder-cascade resolve_access, pool notes, handshake, list_visible_notes/find_note_store)
 │   │   │   ├── journal_service.py     → daily journal entry CRUD
-│   │   │   ├── profile_service.py     → user Profile.md + profile.json read/write
+│   │   │   ├── profile_service.py     → pool (_household/_team) priority order only — real users' profile data lives on their self-contact (contacts_service.py) since the Profile/Contacts merge
 │   │   │   ├── priority_service.py    → life priority scoring formula + top3 logic
 │   │   │   ├── hosting_service.py     → runtime hosting config (reads brain/hosting.json at request time)
 │   │   │   ├── rate_limiter.py        → IP-based rate limiting (respects trust_proxy_headers)
@@ -86,7 +85,7 @@ LogCoreOS/
 │   │   │   ├── finance_planning_service.py → budgets+alerts, recurring bills (matching/advance/missed), planned items, projection, deviation checks, nightly sweep
 │   │   │   ├── finance_invoice_service.py → clients (reserved contact_id for future CRM), invoices (derived totals/overdue, auto-numbering), payments, AR rollup
 │   │   │   ├── finance_index.py       → derived share-routing cache (_system/finance_share_index.json); rebuildable, warmed at startup; sharers_for()/reindex_owner()
-│   │   │   ├── contacts_service.py     → Contacts core: contacts/interactions/deals, custom fields, pipeline, asset-style sharing (resolve_access read/contribute/edit), find_match dedup, follow-up reminders
+│   │   │   ├── contacts_service.py     → Contacts core: contacts/interactions/deals, custom fields, pipeline, asset-style sharing (resolve_access read/contribute/edit), find_match dedup, follow-up reminders, self-contact (self_of marker, get/create_self_contact, cross-workspace resolution), affiliated_contact_ids link/unlink, private-field stripping (_strip_private), format_profile_text() (AI chat context)
 │   │   │   ├── contacts_index.py       → derived share-routing cache for Contacts (_system/contacts_share_index.json); warmed at startup
 │   │   │   ├── notes_index.py          → derived share-routing cache for Notes (_system/notes_share_index.json); scans each store's Notes/_shares.json; warmed at startup
 │   │   │   ├── automations_config.py  → instance automation API token (generate/rotate/verify) for n8n → LogCore writes
@@ -124,7 +123,7 @@ LogCoreOS/
 │           │   ├── Notes.jsx      → markdown notes with folder tree, auto-save, create/delete/move
 │           │   ├── Journal.jsx    → daily journal (date picker, markdown editor per day, entry list)
 │           │   ├── Brain.jsx      → browse + edit user's Brain markdown files directly
-│           │   ├── Profile.jsx    → edit Profile.md and profile.json fields (priorities, occupation, etc.)
+│           │   ├── Profile.jsx    → thin self-view: fetches the user's self-contact via /contacts/me, renders components/contacts/ContactDetail.jsx (read) / ContactModal.jsx (edit) with a local view/edit mode switch
 │           │   ├── Automations.jsx → automations: Workflows|Inbox views — n8n workflow cards (import/run/logs) + Automation Inbox (item review actions, named-inbox chips, settings modal, ?view=inbox deep link)
 │           │   ├── Assets.jsx      → assets: template-driven object tree (expand/collapse, filters, archived toggle), both workspaces
 │           │   ├── Finance.jsx     → finance: book chips, Overview (balances + monthly summary) | Transactions (filters, add/edit) views, both workspaces
@@ -163,7 +162,7 @@ LogCoreOS/
 │               ├── EmojiPicker.jsx → curated self-contained emoji grid popover (right-aligned) for template icons
 │               ├── AssetTreePicker.jsx → foldered expand/collapse asset picker; reused by Move + create-asset parent chooser
 │               ├── finance/       → finance components: TransactionModal.jsx (+tax flags+receipts+ContactPicker payee), BookSettings.jsx (accounts/categories/tax buckets/CSV import), SimpleFinPanel.jsx (bank connect+mapping), BudgetsPanel.jsx, RecurringPanel.jsx (+planned one-offs+deductible), InvoicesPanel.jsx (invoices/payments via ContactPicker + AR + printable InvoicePrint), ReportsPanel.jsx (P&L + tax export), money.js (cents↔display helpers)
-│               ├── contacts/      → ContactPicker.jsx (search-first contact autocomplete + quick-create; reused by transaction payee + invoice client)
+│               ├── contacts/      → ContactDetail.jsx (read-first `<dl>`-grid card, shared by Contacts.jsx and Profile.jsx — self-contact "(ME)" badge, affiliated-contacts chips, career history, profile-merge field sections, `fullPage` mode), ContactModal.jsx (edit form — same profile-merge fields, private-only-when-self, affiliation picker, career history resume editor, photo upload, priorities reorder editor, `fullPage` mode), ContactAvatar.jsx (shared photo-or-fallback-icon avatar + `useContactPhotoUrl()` hook — fetches the photo as an authenticated blob since a plain `<img src>` can't carry the `X-Workspace` header; used by the Contacts list, ContactDetail's header, and ContactModal's photo uploader preview), ContactPicker.jsx (search-first contact autocomplete + quick-create; reused by transaction payee + invoice client + affiliation/employer pickers)
 │               ├── EventModal.jsx → create/edit calendar event form (title, dates, times, all_day, color, notes)
 │               ├── CalendarGrid.jsx → month view: day cells with event/task indicators, click to open detail
 │               ├── HelpButton.jsx  → small ⓘ affordance next to a page title; deep-links to /help#<section>

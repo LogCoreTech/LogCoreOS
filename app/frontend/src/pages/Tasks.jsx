@@ -260,6 +260,9 @@ export default function Tasks() {
           onDelete={() => { setShowModal(false); setEditTask(null); load() }}
         />
       )}
+
+      {/* Clears the fixed mobile footer nav so the last task is never hidden behind it */}
+      <div className="h-20 md:hidden" aria-hidden="true" />
     </div>
   )
 }

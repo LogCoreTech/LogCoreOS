@@ -43,11 +43,41 @@ def test_create_and_get(brain):
 
 def test_update_and_archive(brain):
     c = _contact(name="Bob")
-    crm.update_contact("Owner", "personal", c["id"], {"status": "lead", "phones": ["555"]})
+    crm.update_contact(
+        "Owner", "personal", c["id"], {"status": "lead", "phones": [{"number": "5551234567"}]}
+    )
     got = crm.get_contact("Owner", "personal", c["id"])
-    assert got["status"] == "lead" and got["phones"] == ["555"]
+    assert got["status"] == "lead"
+    assert got["phones"] == [{"country_code": "1", "number": "5551234567", "extension": ""}]
     crm.set_archived("Owner", "personal", c["id"], True)
     assert crm.get_contact("Owner", "personal", c["id"])["archived"] is True
+
+
+def test_phones_wrap_legacy_plain_strings(brain):
+    c = _contact(name="Legacy")
+    updated = crm.update_contact("Owner", "personal", c["id"], {"phones": ["555-123-4567"]})
+    assert updated["phones"] == [{"country_code": "1", "number": "5551234567", "extension": ""}]
+
+
+def test_phones_support_country_code_and_extension(brain):
+    c = _contact(name="Intl")
+    updated = crm.update_contact(
+        "Owner", "personal", c["id"],
+        {"phones": [{"country_code": "44", "number": "2079460958", "extension": "12"}]},
+    )
+    assert updated["phones"] == [{"country_code": "44", "number": "2079460958", "extension": "12"}]
+
+
+def test_invalid_email_rejected(brain):
+    c = _contact(name="Bad Email")
+    with pytest.raises(ValueError):
+        crm.update_contact("Owner", "personal", c["id"], {"emails": ["not-an-email"]})
+
+
+def test_valid_email_accepted(brain):
+    c = _contact(name="Good Email")
+    updated = crm.update_contact("Owner", "personal", c["id"], {"emails": ["a@b.com"]})
+    assert updated["emails"] == ["a@b.com"]
 
 
 def test_delete_cascades_interactions_and_deals(brain):
@@ -282,3 +312,292 @@ def test_find_deal_pool_readable_by_members(brain):
     found = crm.find_deal("Worker", "member", False, "personal", pd["id"])
     assert found is not None
     assert found[3] == "read"
+
+
+# --- Self-contact (Profile/Contacts merge) ---------------------------------
+
+
+def test_create_self_contact_is_idempotent(brain):
+    c1 = crm.create_self_contact("Owner", occupation="Electrician")
+    c2 = crm.create_self_contact("Owner", occupation="Should be ignored")
+    assert c1["id"] == c2["id"]
+    assert c2["occupation"] == "Electrician"
+    assert c2["self_of"] == "Owner"
+    # Only one self-contact ever exists for a user
+    matches = [x for x in crm.list_contacts("Owner", "personal") if x.get("self_of") == "Owner"]
+    assert len(matches) == 1
+
+
+def test_get_self_contact_lazy_create(brain):
+    assert crm.get_self_contact("Owner") is None
+    created = crm.get_self_contact("Owner", create_if_missing=True)
+    assert created is not None and created["self_of"] == "Owner"
+    assert crm.get_self_contact("Owner") is not None  # now exists without create_if_missing
+
+
+def test_get_self_contact_never_for_pool(brain):
+    assert crm.get_self_contact("_household", create_if_missing=True) is None
+
+
+def test_list_visible_contacts_pins_own_self_contact_first(brain):
+    _contact(name="Zack the client")  # ordinary contact, created first
+    self_c = crm.create_self_contact("Owner")
+    visible = crm.list_visible_contacts("Owner", "member", False, "personal")
+    assert visible[0]["id"] == self_c["id"]
+    assert visible[0].get("_pinned") is True
+    assert visible[0]["_access"] == "edit"
+    # Never duplicated even though it also lives in Owner's own store
+    assert sum(1 for v in visible if v["id"] == self_c["id"]) == 1
+
+
+def test_list_visible_contacts_lazily_creates_self_contact(brain):
+    visible = crm.list_visible_contacts("Owner", "member", False, "personal")
+    assert any(v.get("self_of") == "Owner" for v in visible)
+
+
+def test_self_contact_resolves_across_workspaces(brain):
+    self_c = crm.create_self_contact("Owner")
+    # find_contact in the BUSINESS workspace still resolves the personal-store self-contact
+    found = crm.find_contact("Owner", "member", False, "business", self_c["id"])
+    assert found is not None
+    store_user, contact, access = found
+    assert store_user == "Owner" and access == "edit"
+
+
+def test_self_contact_pinned_only_in_own_list_not_others(brain):
+    self_c = crm.create_self_contact("Owner")
+    visible_to_worker = crm.list_visible_contacts("Worker", "member", False, "personal")
+    assert not any(v["id"] == self_c["id"] for v in visible_to_worker)
+
+
+def test_private_fields_stripped_for_non_owner_but_visible_to_owner(brain):
+    self_c = crm.create_self_contact("Owner")
+    crm.update_contact(
+        "Owner", "personal", self_c["id"], {"conditions": "asthma", "income_range": "$100k+"}
+    )
+    crm.update_access(
+        "Owner", "personal", self_c["id"], shared_with=[{"target": "Worker", "access": "read"}]
+    )
+    crm.respond_share("Worker", "Owner", "personal", self_c["id"], accept=True)
+
+    owner_view = crm.find_contact("Owner", "member", False, "personal", self_c["id"])
+    assert owner_view[1]["conditions"] == "asthma"
+
+    worker_view = crm.find_contact("Worker", "member", False, "personal", self_c["id"])
+    assert "conditions" not in worker_view[1]
+    assert "income_range" not in worker_view[1]
+
+    annotated = crm.annotate(owner_view[1], "Owner", "Worker", "read")
+    assert "conditions" not in annotated
+
+
+def test_private_fields_stripped_on_ordinary_shared_contact_too(brain):
+    # The stripping rule is general (store_user == viewer), not self-contact-specific.
+    c = _contact()
+    c = crm.update_contact("Owner", "personal", c["id"], {"conditions": "n/a"})
+    annotated = crm.annotate(c, "Owner", "Worker", "read")
+    assert "conditions" not in annotated
+    same_owner = crm.annotate(c, "Owner", "Owner", "edit")
+    assert same_owner.get("conditions") == "n/a"
+
+
+def test_hidden_from_can_never_include_self_contact_owner(brain):
+    self_c = crm.create_self_contact("Owner")
+    with pytest.raises(ValueError):
+        crm.update_access("Owner", "personal", self_c["id"], hidden_from=["Owner"])
+
+
+def test_admin_cannot_delete_archive_or_transfer_self_contact(brain):
+    self_c = crm.create_self_contact("Owner")
+    with pytest.raises(ValueError):
+        crm.delete_contact("Owner", "personal", self_c["id"])
+    with pytest.raises(ValueError):
+        crm.set_archived("Owner", "personal", self_c["id"], True)
+    with pytest.raises(ValueError):
+        crm.transfer_ownership("Owner", "personal", self_c["id"], new_owner="Worker")
+    # Untouched — still there, still not archived
+    assert crm.get_contact("Owner", "personal", self_c["id"])["archived"] is False
+
+
+def test_priority_order_workspace_keyed_validation(brain):
+    self_c = crm.create_self_contact("Owner")
+    updated = crm.update_contact(
+        "Owner",
+        "personal",
+        self_c["id"],
+        {"priority_order": {"personal": ["Health", "Family"], "business": ["Revenue"]}},
+    )
+    assert updated["priority_order"] == {"personal": ["Health", "Family"], "business": ["Revenue"]}
+    with pytest.raises(ValueError):
+        crm.update_contact("Owner", "personal", self_c["id"], {"priority_order": ["not", "a", "dict"]})
+
+
+def test_affiliated_contact_ids_never_settable_via_update_contact(brain):
+    c = _contact()
+    updated = crm.update_contact("Owner", "personal", c["id"], {"affiliated_contact_ids": ["x", "y"]})
+    assert updated["affiliated_contact_ids"] == []
+
+
+def test_self_of_never_settable_via_update_contact(brain):
+    c = _contact()
+    updated = crm.update_contact("Owner", "personal", c["id"], {"self_of": "Owner"})
+    assert updated.get("self_of") is None
+
+
+def test_link_and_unlink_affiliation_is_symmetric(brain):
+    self_c = crm.create_self_contact("Owner")
+    partner = _contact(name="Partner")
+    a, b = crm.link_affiliation("Owner", "member", False, "personal", self_c["id"], partner["id"])
+    assert partner["id"] in a["affiliated_contact_ids"]
+    assert self_c["id"] in b["affiliated_contact_ids"]
+
+    a2, b2 = crm.unlink_affiliation("Owner", "member", False, "personal", self_c["id"], partner["id"])
+    assert partner["id"] not in a2["affiliated_contact_ids"]
+    assert self_c["id"] not in b2["affiliated_contact_ids"]
+
+
+def test_link_affiliation_requires_edit_on_both_ends(brain):
+    self_c = crm.create_self_contact("Owner")
+    other_self = crm.create_self_contact("Worker")
+    with pytest.raises(ValueError):
+        crm.link_affiliation("Owner", "member", False, "personal", self_c["id"], other_self["id"])
+
+
+def test_link_affiliation_rejects_self_link(brain):
+    self_c = crm.create_self_contact("Owner")
+    with pytest.raises(ValueError):
+        crm.link_affiliation("Owner", "member", False, "personal", self_c["id"], self_c["id"])
+
+
+def test_delete_contact_strips_dangling_affiliation_refs(brain):
+    self_c = crm.create_self_contact("Owner")
+    partner = _contact(name="Partner")
+    crm.link_affiliation("Owner", "member", False, "personal", self_c["id"], partner["id"])
+    crm.delete_contact("Owner", "personal", partner["id"])
+    refreshed = crm.get_contact("Owner", "personal", self_c["id"])
+    assert refreshed["affiliated_contact_ids"] == []
+
+
+def test_update_contact_strips_private_fields_when_viewer_is_not_owner(brain):
+    # General write-guard, exercised on an ordinary (non-self) contact since
+    # self-contacts can no longer be shared at edit level at all (see
+    # test_self_contact_sharing_capped_below_edit).
+    c = _contact(name="Ordinary")
+    crm.update_access(
+        "Owner", "personal", c["id"], shared_with=[{"target": "Worker", "access": "edit"}]
+    )
+    crm.respond_share("Worker", "Owner", "personal", c["id"], accept=True)
+    # Worker has edit access but must never be able to inject private data,
+    # even though they can't read it back themselves.
+    updated = crm.update_contact(
+        "Owner", "personal", c["id"], {"conditions": "sneaky"}, viewer="Worker"
+    )
+    assert updated.get("conditions") in (None, "")
+    # The owner, acting as themselves, can still set it normally.
+    updated2 = crm.update_contact(
+        "Owner", "personal", c["id"], {"conditions": "asthma"}, viewer="Owner"
+    )
+    assert updated2["conditions"] == "asthma"
+
+
+def test_self_contact_sharing_capped_below_edit(brain):
+    self_c = crm.create_self_contact("Owner")
+    with pytest.raises(ValueError):
+        crm.update_access(
+            "Owner", "personal", self_c["id"], shared_with=[{"target": "Worker", "access": "edit"}]
+        )
+    # read and contribute are still fine — nobody but the owner can ever edit,
+    # but sharing basic info / allowing interactions+deals still works.
+    rec, _ = crm.update_access(
+        "Owner", "personal", self_c["id"], shared_with=[{"target": "Worker", "access": "contribute"}]
+    )
+    assert rec["shared_with"][0]["access"] == "contribute"
+
+
+def test_gender_validation(brain):
+    c = _contact(name="G")
+    with pytest.raises(ValueError):
+        crm.update_contact("Owner", "personal", c["id"], {"gender": "other"})
+    updated = crm.update_contact("Owner", "personal", c["id"], {"gender": "female"})
+    assert updated["gender"] == "female"
+
+
+def test_height_weight_validation(brain):
+    c = _contact(name="H")
+    updated = crm.update_contact(
+        "Owner", "personal", c["id"],
+        {"height_cm": 180, "height_unit": "cm", "weight_kg": 75, "weight_unit": "kg"},
+    )
+    assert updated["height_cm"] == 180 and updated["weight_kg"] == 75
+    with pytest.raises(ValueError):
+        crm.update_contact("Owner", "personal", c["id"], {"height_cm": 999})
+    with pytest.raises(ValueError):
+        crm.update_contact("Owner", "personal", c["id"], {"height_unit": "miles"})
+
+
+def test_blood_type_validation(brain):
+    c = _contact(name="B")
+    with pytest.raises(ValueError):
+        crm.update_contact("Owner", "personal", c["id"], {"blood_type": "Z+"})
+    updated = crm.update_contact("Owner", "personal", c["id"], {"blood_type": "O-"})
+    assert updated["blood_type"] == "O-"
+
+
+def test_time_field_validation(brain):
+    c = _contact(name="T")
+    updated = crm.update_contact("Owner", "personal", c["id"], {"wake_weekday": "06:30"})
+    assert updated["wake_weekday"] == "06:30"
+    with pytest.raises(ValueError):
+        crm.update_contact("Owner", "personal", c["id"], {"bedtime": "not-a-time"})
+
+
+def test_career_history_add_and_archive_flow(brain):
+    c = _contact(name="Career")
+    updated = crm.update_contact(
+        "Owner", "personal", c["id"],
+        {"career_history": [{
+            "title": "Junior Dev", "education": "Bachelor's Degree",
+            "years_experience": "1-2", "start_date": "2020-01", "archived": False,
+        }]},
+    )
+    assert len(updated["career_history"]) == 1
+    entry_id = updated["career_history"][0]["id"]
+    # Archive it and add a new current role.
+    updated2 = crm.update_contact(
+        "Owner", "personal", c["id"],
+        {"career_history": [
+            {**updated["career_history"][0], "end_date": "2022-06", "archived": True},
+            {"title": "Senior Dev", "start_date": "2022-06", "archived": False},
+        ]},
+    )
+    assert len(updated2["career_history"]) == 2
+    assert updated2["career_history"][0]["id"] == entry_id
+    assert updated2["career_history"][0]["archived"] is True
+    assert updated2["career_history"][1]["archived"] is False
+
+
+def test_career_history_rejects_unknown_education(brain):
+    c = _contact(name="Career2")
+    with pytest.raises(ValueError):
+        crm.update_contact(
+            "Owner", "personal", c["id"],
+            {"career_history": [{"title": "X", "education": "Made Up Degree"}]},
+        )
+
+
+def test_set_and_clear_contact_photo(brain):
+    c = _contact(name="Photo")
+    updated = crm.set_contact_photo("Owner", "personal", c["id"], "jpg")
+    assert updated["photo_ext"] == "jpg"
+    cleared = crm.clear_contact_photo("Owner", "personal", c["id"])
+    assert cleared["photo_ext"] is None
+
+
+def test_format_profile_text_includes_populated_sections_only(brain):
+    self_c = crm.create_self_contact("Owner", occupation="Baker")
+    text = crm.format_profile_text(self_c)
+    assert "Baker" in text
+    assert "## Health" not in text
+    crm.update_contact("Owner", "personal", self_c["id"], {"conditions": "none"})
+    refreshed = crm.get_contact("Owner", "personal", self_c["id"])
+    assert "## Health" in crm.format_profile_text(refreshed)

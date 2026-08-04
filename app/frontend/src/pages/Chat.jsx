@@ -572,6 +572,9 @@ export default function Chat() {
         </button>
       </form>
 
+      {/* Clears the fixed mobile footer nav so the input row is never hidden behind it */}
+      <div className="h-20 md:hidden shrink-0" aria-hidden="true" />
+
       {/* Saved chats drawer */}
       {showHistory && (
         <div className="fixed inset-0 z-50 flex">
