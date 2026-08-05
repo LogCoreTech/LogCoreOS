@@ -23,6 +23,8 @@ export default function Settings() {
           <MenuRow icon="🛡" label="Admin Settings" subtitle="Users, AI, hosting, and instance-wide settings" to="/settings/admin" />
         </div>
       )}
+
+      <div className="h-20 md:hidden" aria-hidden="true" />
     </div>
   )
 }

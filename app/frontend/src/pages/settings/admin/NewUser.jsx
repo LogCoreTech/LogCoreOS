@@ -129,6 +129,8 @@ export default function NewUser() {
           {creating ? 'Creating…' : 'Create User'}
         </button>
       </form>
+
+      <div className="h-20 md:hidden" aria-hidden="true" />
     </div>
   )
 }

@@ -54,7 +54,8 @@ LogCoreOS/
 │   │   │   ├── home.py           → Home Assistant module: entity control, scenes, automations, favourites, admin config
 │   │   │   ├── help.py            → Help system: GET /help/content (authored guide), /help/whats-new (banner state), GET/PUT /help/onboarding (first-run checklist); auth required, NO module gate (like Settings)
 │   │   │   ├── update.py         → update status check + trigger (admin only); works with update.sh on host
-│   │   │   └── ai_usage.py       → AI usage metering + caps: GET /overview, /users, /defaults (admin), PATCH /defaults, /users/{id}/limits (admin), GET /me (any user, for the Chat toolbar indicator)
+│   │   │   ├── ai_usage.py       → AI usage metering + caps: GET /overview, /users, /defaults (admin), PATCH /defaults, /users/{id}/limits (admin), GET /me (any user, for the Chat toolbar indicator)
+│   │   │   └── dashboards.py     → Custom Dashboards: standalone dashboard CRUD/access/render, sharing handshake, catalog, cross-module reference lookup
 │   │   ├── services/
 │   │   │   ├── file_service.py        → atomic Brain file reads/writes — ALWAYS use this, never open(...,'w')
 │   │   │   ├── auth_service.py        → user CRUD, JWT create/verify, bcrypt, JTI revocation
@@ -96,6 +97,9 @@ LogCoreOS/
 │   │   │   ├── whats_new_service.py    → on version bump, notify every user once (announce_if_updated at boot) + drive the few-day What's-New banner (get_banner); state in _system/whats_new_state.json
 │   │   │   ├── update_service.py      → GitHub release check (cached 4h), pending_update flag trigger, update log reader
 │   │   │   ├── ai_usage_service.py     → AI usage metering + caps: daily-bucketed usage in _system/ai_usage.json, derived daily/weekly/monthly totals, per-user hard/soft cap enforcement + warn/over notifications; the single place chat_completion/agent_completion record usage
+│   │   │   ├── dashboards_service.py   → Custom Dashboards core: CRUD, resolve_access() (mirrors finance_service._resolve_book_access), floor-of-one delete protection, share_underlying_data owner-only setter, self-healing default resolution
+│   │   │   ├── dashboard_index.py      → derived share-routing + reverse "referenced by" cache for Dashboards (_system/dashboard_index.json); mirrors assets_index.py, keyed off each block type's declared record_ref_fields (no per-block-type hardcoding)
+│   │   │   ├── dashboard_blocks/       → block-type registry + resolver package: registry.py (BlockSpec/REGISTRY), render.py (the security-critical two-pass render_block — read-through-never-a-bypass + the one share_underlying_data exception), _tasks.py/_home.py/_pool.py/_calendar.py/_finance.py/_contacts.py/_assets.py/_notes.py/_journal.py/_automations.py/_ai_usage.py/_freeform.py (one resolver module per source module family)
 │   │   │   └── user_deletion_service.py → admin user-deletion orchestration: preview (owned+shared items across Assets/Finance/Contacts/Notes + read-only blast radius), completeness validation, execute (transfer/delete decisions → reference cleanup in every other store → index rebuild → batched new-owner notifications → account+Brain-folder delete, in that order)
 │   │   ├── content/
 │   │   │   └── help.json         → authored Help content (sections + FAQ + support + whats_new); SINGLE source read by the Help page, the ⓘ buttons, and the AI's get_help tool
@@ -113,7 +117,7 @@ LogCoreOS/
 │           │   ├── workspace.jsx  → WorkspaceProvider context + useWorkspace() hook; persists active workspace to localStorage
 │           │   └── theme.js       → CSS variable theme engine (accent color, dark mode, background, density, corners)
 │           ├── pages/
-│           │   ├── Dashboard.jsx  → dashboard: top 3 scored tasks, today's tasks, streaks, Smart Home favourites widget
+│           │   ├── Dashboard.jsx  → Custom Dashboards: single-dashboard viewer/editor (?id= deep link, falls back to the resolved default), view/edit mode, delegates rendering to components/dashboard/
 │           │   ├── Tasks.jsx      → personal task management (list, filter, priority reorder, edit modal, household assigned tasks)
 │           │   ├── Goals.jsx      → standalone Goals page at /goals (gated by tasks module): filters tasks where type='goal', progress bar, category grouping
 │           │   ├── Chat.jsx       → AI chat: plan/auto/research modes, proposal cards, step trace, memory save, chat save/load
@@ -157,6 +161,7 @@ LogCoreOS/
 │               ├── AssetModal.jsx → asset modal: opens an existing asset in read-first view (AssetView), Edit flips to the editor (dynamic template fields, attachments, share/hide selectors, history, 3-choice archive, delete/convert); auto-flips create→edit
 │               ├── AssetView.jsx  → read-only asset overview: header, attachments, fields as label/value pairs, notes, child list (drill-in), linked tasks, sharing summary, history; ✎ Edit button (owner/editor only)
 │               ├── assetDisplay.jsx → shared asset display helpers (no circular import): AttachmentThumb, FieldInput, CapsSelector (contribute caps checkbox panel), formatChanges(), fieldDisplay()
+│               ├── dashboard/     → Custom Dashboards UI: DashboardGrid.jsx (react-grid-layout wrapper, drag/resize disabled below the sm breakpoint), BlockRenderer.jsx (dispatch by type + locked placeholder), blockRegistry.js (frontend render-component map, mirrors the backend registry), blocks.jsx (27 block presentational components), BlockPicker.jsx ("+ Add Block" catalog + config form), DashboardAccessModal.jsx (sharing + share_underlying_data toggle), DashboardSwitcher.jsx (searchable dashboard picker), LockedBlockPlaceholder.jsx
 │               ├── TemplateManager.jsx → admin template editor: ordered typed fields (TagInput options), EmojiPicker icon, defaults, example insert
 │               ├── TagInput.jsx    → GitHub-topics-style chip input (free-text or strict selector mode); inline capped suggestion box — template options, share/hide members
 │               ├── EmojiPicker.jsx → curated self-contained emoji grid popover (right-aligned) for template icons

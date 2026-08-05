@@ -374,6 +374,8 @@ export default function Home() {
 
       {/* HA Automations */}
       <AutomationsPanel automations={haAutomations} onTrigger={handleTriggerAutomation} />
+
+      <div className="h-20 md:hidden" aria-hidden="true" />
     </div>
   )
 }

@@ -80,6 +80,8 @@ export default function Team() {
       </div>
 
       <PoolBankConnections pool="team" accountLabel="business" />
+
+      <div className="h-20 md:hidden" aria-hidden="true" />
     </div>
   )
 }

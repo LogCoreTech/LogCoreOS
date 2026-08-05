@@ -372,7 +372,7 @@ export default function Layout() {
 
         <WhatsNewBanner />
 
-        <main className="flex-1 min-h-0 overflow-y-scroll overflow-x-hidden p-4 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:p-6 flex flex-col">
+        <main className="flex-1 min-h-0 overflow-y-scroll overflow-x-hidden overscroll-y-contain p-4 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:p-6 flex flex-col">
           <Outlet />
         </main>
       </div>

@@ -274,6 +274,112 @@ def m009_migrate_profiles_to_self_contacts(brain: Path) -> None:
         logger.info("m009: migrated %d user profile(s) into self-contacts", migrated)
 
 
+def m010_seed_home_dashboards(brain: Path) -> None:
+    """Seed one 'Home' dashboard per existing user x workspace they have,
+    replicating today's fixed Dashboard.jsx widgets as blocks, and set it as
+    that user's default_dashboard_id for that workspace. Idempotent per
+    user+workspace (skips if they already have any dashboard there); one
+    user's failure never blocks the rest."""
+    import uuid
+
+    from services import auth_service, dashboards_service
+    from services.file_service import brain_path as _brain_path
+
+    # Route dashboards_service's file I/O through the SAME brain root the
+    # migration runner was invoked with (matters for tests using a temp brain).
+    if brain != _brain_path():
+        return
+
+    users_dir = brain / "USERS"
+    if not users_dir.exists():
+        return
+
+    def _lg(x, y, w, h):
+        return {"x": x, "y": y, "w": w, "h": h}
+
+    def _sm(y):
+        return {"x": 0, "y": y, "w": 2, "h": 3}
+
+    seeded = 0
+    for user in auth_service.list_users():
+        name = user["name"]
+        record = auth_service.get_user_by_name(name) or {}
+        default_map = dict(record.get("default_dashboard_id") or {})
+        changed_default = False
+        for workspace in record.get("workspaces", ["personal"]):
+            try:
+                if dashboards_service.list_dashboards(name, workspace):
+                    continue  # already has one — never overwrite
+
+                blocks = [
+                    {
+                        "id": str(uuid.uuid4()),
+                        "type": "top3_tasks",
+                        "config": {"scope": "viewer"},
+                        "layout": {"lg": _lg(0, 0, 4, 3), "sm": _sm(0)},
+                    },
+                    {
+                        "id": str(uuid.uuid4()),
+                        "type": "due_today",
+                        "config": {"scope": "viewer"},
+                        "layout": {"lg": _lg(4, 0, 4, 3), "sm": _sm(3)},
+                    },
+                    {
+                        "id": str(uuid.uuid4()),
+                        "type": "streaks",
+                        "config": {"scope": "viewer"},
+                        "layout": {"lg": _lg(8, 0, 4, 3), "sm": _sm(6)},
+                    },
+                ]
+                if workspace == "personal":
+                    blocks.append(
+                        {
+                            "id": str(uuid.uuid4()),
+                            "type": "home_favourites",
+                            "config": {"scope": "viewer"},
+                            "layout": {"lg": _lg(0, 3, 6, 3), "sm": _sm(9)},
+                        }
+                    )
+                else:
+                    blocks.append(
+                        {
+                            "id": str(uuid.uuid4()),
+                            "type": "pool_tasks",
+                            "config": {},
+                            "layout": {"lg": _lg(0, 3, 6, 3), "sm": _sm(9)},
+                        }
+                    )
+                blocks.append(
+                    {
+                        "id": str(uuid.uuid4()),
+                        "type": "my_assets_summary",
+                        "config": {"scope": "viewer"},
+                        "layout": {"lg": _lg(6, 3, 6, 3), "sm": _sm(12)},
+                    }
+                )
+
+                dashboard = dashboards_service.create_dashboard(name, workspace, name, "Home", "🏠")
+                dashboards_service.update_dashboard(
+                    name, workspace, dashboard["id"], {"blocks": blocks}, by=name
+                )
+                if workspace not in default_map:
+                    default_map[workspace] = dashboard["id"]
+                    changed_default = True
+                seeded += 1
+            except Exception:
+                logger.exception(
+                    "m010: failed to seed Home dashboard for %r/%r — skipping", name, workspace
+                )
+        if changed_default:
+            try:
+                auth_service.update_user(user["id"], {"default_dashboard_id": default_map})
+            except Exception:
+                logger.exception("m010: failed to set default_dashboard_id for %r", name)
+
+    if seeded:
+        logger.info("m010: seeded %d Home dashboard(s)", seeded)
+
+
 def m008_contacts_guest_disabled(brain: Path) -> None:
     """Disable the new Contacts (CRM) module for the built-in guest role on
     existing installs — contacts hold PII, so guests must be granted access
@@ -301,6 +407,7 @@ MIGRATIONS: list[tuple[str, MigrationFn]] = [
     ("m007_finance_guest_disabled", m007_finance_guest_disabled),
     ("m008_contacts_guest_disabled", m008_contacts_guest_disabled),
     ("m009_migrate_profiles_to_self_contacts", m009_migrate_profiles_to_self_contacts),
+    ("m010_seed_home_dashboards", m010_seed_home_dashboards),
 ]
 
 # ── Runner ─────────────────────────────────────────────────────────────────────

@@ -143,6 +143,20 @@ def simplefin_path(user_name: str) -> Path:
     return user_path(user_name) / "Finance" / "simplefin.json"
 
 
+def dashboards_path(user_name: str, workspace: str = "personal") -> Path:
+    return ws_path(user_name, workspace) / "Dashboards" / "dashboards.json"
+
+
+def dashboard_templates_path(user_name: str) -> Path:
+    # Per-user (workspace-agnostic) template store — mirrors personal_templates_path.
+    return user_path(user_name) / "Dashboards" / "templates.json"
+
+
+def external_sources_path() -> Path:
+    """Instance-level admin-configured named external data integrations."""
+    return brain_path() / "_system" / "external_sources.json"
+
+
 def read_json(path: Path, default: Any = None) -> Any:
     """Read JSON file; return default (or {}) if missing or empty."""
     if not path.exists():

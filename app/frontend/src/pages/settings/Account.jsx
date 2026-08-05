@@ -113,6 +113,8 @@ export default function Account() {
           {exporting ? 'Preparing download…' : '⬇ Export Brain (zip)'}
         </button>
       </div>
+
+      <div className="h-20 md:hidden" aria-hidden="true" />
     </div>
   )
 }

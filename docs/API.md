@@ -1273,6 +1273,66 @@ admins are also notified when a user hits a **hard** cap.
 
 ---
 
+## Custom Dashboards
+
+Router mounted at `/api/v1/dashboards`. Requires the existing `dashboard` module (both workspaces,
+`X-Workspace`-scoped — no new `require_module` registry entry). A dashboard is a **standalone,
+unlimited, user-created object** — like Notes/Assets, never owned by a Contact/Asset record —
+storing an ordered list of typed **blocks** on a freeform grid. Storage: `ws_path/Dashboards/dashboards.json`;
+pool dashboards live under `_household`/`_team` the same way pool Assets/Finance/Contacts do.
+
+Sharing mirrors Assets/Notes/Contacts exactly: `shared_with` (personal, accept-handshake,
+read/contribute/edit), `hidden_from` (beats shares), `contributors` (pool, no handshake). Access
+resolution goes through `dashboards_service.resolve_access()`/`find_dashboard()`.
+
+**Security model**: every block re-resolves the *current viewer's* own access to whatever it points
+at, through that module's own existing gate — a dashboard is a read-through view, never an access
+bypass. The one deliberate exception is the owner-only `share_underlying_data` toggle (default
+`false`): when on, a shared viewer sees every block rendered *as the dashboard owner* would see it
+(even past admin-only block gating), but never more than the owner can independently see — if the
+owner's own access is revoked, the block locks for every viewer too. Implemented as a single
+two-pass function in `services/dashboard_blocks/render.py`, not per-block-type special-casing.
+
+**Floor-of-one delete protection**: if a user owns exactly one dashboard in a workspace, deleting it
+is rejected (`409`) and it's automatically their default for that workspace — computed at read/delete
+time, no stored "protected" flag.
+
+| Method | Path | Access | Notes |
+|--------|------|--------|-------|
+| `GET` | `/dashboards` | module users | Own + pool + shared-to-viewer dashboards (annotated `_owner`/`_access`), plus the resolved `default_id` for the active workspace |
+| `POST` | `/dashboards` | module users | `{name, icon?, pool?}` — `pool:true` = admin only, creates in the workspace pool |
+| `GET` | `/dashboards/{id}` | per access | Raw record (edit-mode source of truth) |
+| `GET` | `/dashboards/{id}/render` | per access | **Core endpoint** — resolves dashboard access once, renders every block through the registry, returns `{..., blocks: [{id, type, config, layout, ok, data, locked_reason}]}` |
+| `PATCH` | `/dashboards/{id}` | contribute+ | `{name?, icon?, blocks?}` — `blocks` is a bulk array replace; triggers a reindex for the cross-module reference lookup |
+| `PUT` | `/dashboards/{id}/access` | edit | `{shared_with?, hidden_from?, contributors?}` |
+| `PUT` | `/dashboards/{id}/share-underlying-data` | **owner only** (not just edit-level) | `{value: bool}` |
+| `DELETE` | `/dashboards/{id}` | edit (owner/pool admin) | `409` if it's the caller's only dashboard in this workspace |
+| `POST` | `/dashboards/{id}/leave` | share recipient | Remove self from a dashboard shared with you |
+| `POST` | `/dashboards/shares/respond` | recipient | `{owner, dashboard_id, accept}` |
+| `GET` | `/dashboards/catalog` | module users | Block-type registry metadata (label/category/`admin_only`/workspace), pre-filtered for the caller's admin status |
+| `GET` | `/dashboards/references/{module}/{record_id}` | module users | "Referenced by N dashboards" — viewer-filtered so a caller never learns a dashboard exists unless they can already see it |
+
+**Block catalog** (27 types across `live_aggregate` / `record_linked` / `freeform` categories) —
+Tasks/Goals (`top3_tasks`, `due_today`, `streaks`, `goals_progress`, `single_task`), Smart Home
+(`home_favourites`, personal only), Household/Team (`pool_tasks`), Calendar (`upcoming_events`,
+`single_event`), Finance (`finance_activity` — asset/contact/book variants, `finance_book_report`),
+Contacts (`linked_deals`, `custom_fields`, `linked_assets`), Assets (`documents`, `linked_tasks`,
+`linked_contact`, `my_assets_summary`), Notes (`note_embed`), Journal (`journal_entry`), Automations
+(`workflow_status`, `inbox_summary`), AI (`ai_usage_me`, `ai_usage_overview` — **admin-only**,
+`recent_ai_actions`), Freeform (`text_block`, `link_button`, `heading_divider`). Every
+`live_aggregate` block takes a `scope: "owner"|"viewer"` config — `"owner"` only ever resolves when
+the viewer IS the owner (directly, or via the `share_underlying_data` exception's Pass 2).
+
+**Not yet built** (deliberately deferred, not cut from scope — see `docs/TASKS.md`): dashboard
+templates, the "Referenced by" UI hooks on non-Assets/Contacts view surfaces, Module Engagement and
+External Data block types, and Net Worth/Spending/Completion trend blocks (need new aggregation
+endpoints that don't exist yet).
+
+`PATCH /auth/me` also accepts `default_dashboard_id: {personal, business}` (same workspace-keyed
+shape as `shortcuts`) — which dashboard opens when the Dashboard nav link is clicked.
+
+---
+
 ## Health
 
 ### `GET /health`

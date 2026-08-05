@@ -158,6 +158,8 @@ export default function Shortcuts() {
           Save Shortcuts
         </button>
       </div>
+
+      <div className="h-20 md:hidden" aria-hidden="true" />
     </div>
   )
 }
