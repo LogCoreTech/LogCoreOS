@@ -376,6 +376,8 @@ export default function Assets() {
           onChanged={load}
         />
       )}
+
+      <div className="h-20 md:hidden" aria-hidden="true" />
     </div>
   )
 }

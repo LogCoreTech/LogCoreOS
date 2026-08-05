@@ -252,6 +252,8 @@ export default function UserDeletionReview() {
           <p className="text-xs text-charcoal-400 mt-2">Choose a destination for every item above first.</p>
         )}
       </div>
+
+      <div className="h-20 md:hidden" aria-hidden="true" />
     </div>
   )
 }

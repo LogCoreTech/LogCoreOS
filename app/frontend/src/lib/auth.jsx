@@ -32,6 +32,7 @@ export function AuthProvider({ children }) {
         density:         me.density      || 'comfortable',
         cornerStyle:     me.corner_style || 'rounded',
         shortcuts:       me.shortcuts    || {},
+        defaultDashboardId: me.default_dashboard_id || {},
       }
       // Persist theme prefs too so the pre-React FOUC script in main.jsx can
       // apply the real background/accent before first paint (otherwise the

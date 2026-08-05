@@ -454,6 +454,8 @@ export default function UserDetail() {
           Delete User
         </button>
       </div>
+
+      <div className="h-20 md:hidden" aria-hidden="true" />
     </div>
   )
 }

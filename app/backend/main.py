@@ -25,6 +25,7 @@ from routers import (
     calendar,
     chat,
     contacts,
+    dashboards,
     export,
     features,
     finance,
@@ -99,6 +100,12 @@ def _warm_share_index() -> None:
         rebuild_notes_index()
     except Exception:
         logger.exception("notes share index rebuild failed (will lazy-build on first use)")
+    try:
+        from services.dashboard_index import rebuild_index as rebuild_dashboard_index
+
+        rebuild_dashboard_index()
+    except Exception:
+        logger.exception("dashboard index rebuild failed (will lazy-build on first use)")
 
 
 def _startup_checks() -> None:
@@ -307,6 +314,7 @@ app.include_router(team.router, prefix="/api/v1/team", tags=["team"])
 app.include_router(update.router, prefix="/api/v1/update", tags=["update"])
 app.include_router(help.router, prefix="/api/v1/help", tags=["help"])
 app.include_router(ai_usage.router, prefix="/api/v1/ai-usage", tags=["ai-usage"])
+app.include_router(dashboards.router, prefix="/api/v1/dashboards", tags=["dashboards"])
 
 # Serve React frontend — must come last
 static_dir = Path(__file__).parent.parent / "frontend" / "dist"

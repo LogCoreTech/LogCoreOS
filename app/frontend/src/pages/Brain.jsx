@@ -64,7 +64,7 @@ export default function Brain() {
   if (selected) {
     const fromChat = location.state?.from === '/chat'
     return (
-      <div className="max-w-2xl mx-auto flex flex-col h-[calc(100vh-6rem)]">
+      <div className="max-w-2xl mx-auto flex flex-col h-[calc(100dvh-6rem)]">
         <div className="flex items-center gap-3 mb-3">
           <button
             onClick={() => fromChat ? navigate('/chat') : (setSelected(null), setError(''))}
@@ -84,12 +84,20 @@ export default function Brain() {
           </button>
         </div>
         {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
-        <textarea
-          value={editContent}
-          onChange={e => setEditContent(e.target.value)}
-          spellCheck={false}
-          className="flex-1 font-mono text-sm p-4 rounded-xl border border-charcoal-200 dark:border-charcoal-700 bg-white dark:bg-charcoal-800 resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 leading-relaxed"
-        />
+        {/* A textarea set directly as the flex-1 item doesn't reliably honor
+            min-height: 0 (form controls get special-cased in the flex sizing
+            algorithm), which can force this whole panel taller than its
+            h-[calc] budget — wrap it in a plain div instead (see MEMORY.md's
+            Journal fixed-layout gotcha for the full history of this class of bug). */}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <textarea
+            value={editContent}
+            onChange={e => setEditContent(e.target.value)}
+            spellCheck={false}
+            className="w-full h-full font-mono text-sm p-4 rounded-xl border border-charcoal-200 dark:border-charcoal-700 bg-white dark:bg-charcoal-800 resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 leading-relaxed overscroll-contain"
+          />
+        </div>
+        <div className="h-20 md:hidden shrink-0" aria-hidden="true" />
       </div>
     )
   }
@@ -155,6 +163,8 @@ export default function Brain() {
           ))}
         </div>
       )}
+
+      <div className="h-20 md:hidden" aria-hidden="true" />
     </div>
   )
 }

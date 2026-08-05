@@ -653,14 +653,21 @@ export default function Notes() {
 
       {error && <p className="text-red-500 text-sm px-4 py-2">{error}</p>}
 
-      <textarea
-        value={editContent}
-        onChange={e => setEditContent(e.target.value)}
-        spellCheck={false}
-        readOnly={readOnly}
-        placeholder="Start writing…"
-        className="flex-1 w-full font-mono text-sm p-4 bg-white dark:bg-charcoal-900 resize-none focus:outline-none leading-relaxed overflow-x-hidden"
-      />
+      {/* Wrapped in a plain div, not set as the flex-1 item directly — a
+          <textarea> as a direct flex child doesn't reliably honor
+          min-height: 0 (see MEMORY.md's Journal fixed-layout gotcha), which
+          can force this panel taller than its bounds and leak scroll up to
+          the page shell instead of staying contained inside the textarea. */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <textarea
+          value={editContent}
+          onChange={e => setEditContent(e.target.value)}
+          spellCheck={false}
+          readOnly={readOnly}
+          placeholder="Start writing…"
+          className="w-full h-full font-mono text-sm p-4 bg-white dark:bg-charcoal-900 resize-none focus:outline-none leading-relaxed overflow-x-hidden overscroll-contain"
+        />
+      </div>
     </div>
   ) : (
     <div className="flex-1 flex items-center justify-center text-charcoal-400 dark:text-charcoal-500">
@@ -673,7 +680,7 @@ export default function Notes() {
   )
 
   return (
-    <div className="h-[calc(100vh-8rem)] md:h-[calc(100vh-3rem)] flex overflow-hidden -mx-4 -mt-4 md:-mx-6 md:-mt-6">
+    <div className="h-[calc(100dvh-8rem)] md:h-[calc(100dvh-3rem)] flex overflow-hidden -mx-4 -mt-4 md:-mx-6 md:-mt-6">
       {/* Sidebar */}
       <div className={`
         ${showSidebar ? 'flex' : 'hidden'} md:flex

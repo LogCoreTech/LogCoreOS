@@ -434,6 +434,8 @@ export default function General() {
       <WorkspaceVisibilitySection />
       <SessionLengthSection />
       <UpdateSection />
+
+      <div className="h-20 md:hidden" aria-hidden="true" />
     </div>
   )
 }

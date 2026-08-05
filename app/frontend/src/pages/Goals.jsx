@@ -238,6 +238,8 @@ export default function Goals() {
           onSave={() => { setShowModal(false); setEditTask(null); load() }}
         />
       )}
+
+      <div className="h-20 md:hidden" aria-hidden="true" />
     </div>
   )
 }

@@ -374,6 +374,7 @@ class MeUpdateRequest(BaseModel):
     density: str | None = Field(None, max_length=15)
     corner_style: str | None = Field(None, max_length=10)
     shortcuts: dict | None = None  # {"personal": [...], "business": [...]}
+    default_dashboard_id: dict | None = None  # {"personal": id|None, "business": id|None}
 
 
 @router.patch("/me")
@@ -410,6 +411,15 @@ def update_me(
                     status_code=400,
                     detail="shortcuts per workspace must be a list of up to 4 module IDs",
                 )
+    if "default_dashboard_id" in updates:
+        dd = updates["default_dashboard_id"]
+        if not isinstance(dd, dict):
+            raise HTTPException(status_code=400, detail="default_dashboard_id must be an object")
+        for ws_key in dd:
+            if ws_key not in _VALID_SHORTCUT_WORKSPACES:
+                raise HTTPException(
+                    status_code=400, detail=f"Invalid workspace key in default_dashboard_id: {ws_key!r}"
+                )
     if not updates:
         return {"ok": True}
     auth_service.update_user(current_user["id"], updates)
@@ -435,6 +445,7 @@ def me(current_user: dict = Depends(get_current_user), _rl: None = Depends(_get_
         "density": current_user.get("density", "comfortable"),
         "corner_style": current_user.get("corner_style", "rounded"),
         "shortcuts": current_user.get("shortcuts", {}),
+        "default_dashboard_id": current_user.get("default_dashboard_id", {}),
     }
 
 

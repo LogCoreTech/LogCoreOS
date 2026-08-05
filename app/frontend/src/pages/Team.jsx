@@ -276,6 +276,8 @@ export default function Team() {
           onSave={() => { setShowEventModal(false); setEditEvent(null); load() }}
         />
       )}
+
+      <div className="h-20 md:hidden" aria-hidden="true" />
     </div>
   )
 }

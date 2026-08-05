@@ -45,6 +45,7 @@
     height: 100%;
     min-height: calc(100% + env(safe-area-inset-top));
     overflow: hidden;
+    overscroll-behavior: none;
   }
 
   /* `overflow: hidden` alone does not reliably stop iOS Safari (including
@@ -66,6 +67,12 @@
     right: 0;
     height: 100%;
     overflow: hidden;
+    /* Belt-and-suspenders alongside `position: fixed` above: even a fixed,
+       non-scrolling body can still hand a touch-drag's rubber-band/bounce
+       overscroll up to the browser chrome on iOS once an inner scroller (main)
+       hits its own scroll boundary. overscroll-behavior stops that handoff at
+       the source instead of relying on containment alone. */
+    overscroll-behavior: none;
   }
 
   /* React mount point — needs an explicit height so Layout's `h-full` has a

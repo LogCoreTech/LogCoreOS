@@ -264,6 +264,8 @@ export default function Appearance() {
           Save Appearance
         </button>
       </div>
+
+      <div className="h-20 md:hidden" aria-hidden="true" />
     </div>
   )
 }

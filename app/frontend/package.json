@@ -13,6 +13,7 @@
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-grid-layout": "^1.5.4",
     "react-router-dom": "^6.24.0"
   },
   "devDependencies": {

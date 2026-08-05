@@ -22,15 +22,19 @@
       "id": "dashboard",
       "icon": "🏠",
       "title": "Dashboard",
-      "blurb": "Your home screen. It surfaces the few things that matter right now: your top-3 scored tasks, what's due today, your streaks, and smart-home favourites.",
+      "blurb": "Your home screen — now build-it-yourself. Create as many dashboards as you want, each a freeform grid of blocks pulling live data from almost any module: tasks, streaks, Smart Home, Finance, Contacts, Assets, Notes, Calendar, Automations, and more.",
       "howto": [
-        "The Top 3 card shows the highest-priority tasks based on your life priorities, urgency, and due dates.",
-        "Check tasks off directly from the dashboard — completed items drop off automatically.",
-        "The dashboard changes with your workspace: personal shows Smart Home favourites, business shows your team's tasks.",
+        "Click the dashboard name at the top to switch between your dashboards or create a new one.",
+        "Click \"Edit Layout\" to drag/resize blocks (desktop), add new ones, or remove existing ones.",
+        "Click \"+ Add Block\" to pick from the full catalog, grouped into live data, record-linked, and freeform (text/links/headings).",
+        "Share a dashboard with another person or your household/team pool from the Share button — pick read, contribute, or edit access.",
+        "As the owner, you can turn on \"Share underlying data\" so people you've shared with see the same live data you do, even things they normally couldn't access on their own — off by default, and they never see more than you can see.",
+        "Click \"Set as default\" to make a dashboard the one that opens when you click Dashboard in the sidebar.",
         "New here? The Getting Started card walks you through first steps and hides once you're set up."
       ],
       "tips": [
-        "The Top 3 is recomputed every time you open it — complete one and the next most important task takes its place."
+        "Your first dashboard, \"Home,\" was created automatically from your old fixed dashboard widgets — fully editable and deletable like any other, as long as you have at least one other dashboard.",
+        "A dashboard with only one block left can't be deleted while it's your only dashboard in that workspace — LogCore always keeps you at least one landing page."
       ],
       "modules": ["dashboard"]
     },

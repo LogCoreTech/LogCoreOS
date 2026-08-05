@@ -549,6 +549,21 @@ export const update = {
   patchSettings: (body)       => patch('/update/settings', body),
 }
 
+export const dashboards = {
+  list:          ()                       => get('/dashboards'),
+  get:           (id)                     => get(`/dashboards/${id}`),
+  render:        (id)                     => get(`/dashboards/${id}/render`),
+  create:        (name, icon, pool = false) => post('/dashboards', { name, icon, pool }),
+  update:        (id, data)               => patch(`/dashboards/${id}`, data),
+  remove:        (id)                     => del(`/dashboards/${id}`),
+  catalog:       ()                       => get('/dashboards/catalog'),
+  updateAccess:  (id, data)               => request('PUT', `/dashboards/${id}/access`, data),
+  setShareUnderlyingData: (id, value)     => request('PUT', `/dashboards/${id}/share-underlying-data`, { value }),
+  leave:         (id)                     => post(`/dashboards/${id}/leave`, {}),
+  respondShare:  (owner, dashboardId, accept) => post('/dashboards/shares/respond', { owner, dashboard_id: dashboardId, accept }),
+  references:    (module, recordId)       => get(`/dashboards/references/${module}/${recordId}`),
+}
+
 export const user = {
   async export() {
     const res = await fetch(`${BASE}/user/export`, { headers: headers(), credentials: 'include' })
