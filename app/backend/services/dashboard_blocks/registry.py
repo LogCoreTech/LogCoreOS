@@ -68,6 +68,7 @@ def catalog(is_admin: bool) -> list[dict]:
 def _load_all_resolvers() -> None:
     """Import every resolver module once so their register() calls run."""
     from services.dashboard_blocks import (  # noqa: F401
+        _actions,
         _ai_usage,
         _assets,
         _automations,

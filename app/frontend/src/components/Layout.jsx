@@ -4,6 +4,7 @@ import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
 import { ALL_MODULES, getShortcutsForUser } from '../lib/constants'
 import { suggestions as sugApi, assets as assetsApi, finance as financeApi, contacts as contactsApi, notes as notesApi } from '../lib/api'
+import { deepLinkUrl } from '../lib/deepLinks'
 import WhatsNewBanner from './WhatsNewBanner'
 
 function NotifBell() {
@@ -16,11 +17,11 @@ function NotifBell() {
   // Navigation actions rendered as a View → button. open_inbox may need a
   // workspace switch first (e.g. business inbox ping while in personal).
   function navTarget(action) {
-    if (action?.type === 'open_asset') return `/assets?asset=${action.asset_id}`
+    if (action?.type === 'open_asset') return deepLinkUrl('assets', action.asset_id)
     if (action?.type === 'open_inbox') return `/automations?view=inbox&inbox=${action.inbox_id || ''}`
     if (action?.type === 'open_admin_banking') return `/settings/admin/users/${action.user_id || ''}`
-    if (action?.type === 'open_finance_book') return `/finance?book=${action.book_id || ''}`
-    if (action?.type === 'open_contact') return '/contacts'
+    if (action?.type === 'open_finance_book') return deepLinkUrl('finance', action.book_id)
+    if (action?.type === 'open_contact') return deepLinkUrl('contacts', action.contact_id)
     if (action?.type === 'open_settings') return '/settings'
     if (action?.type === 'notes_share') return null  // request → Accept/Decline, not a nav
     return null

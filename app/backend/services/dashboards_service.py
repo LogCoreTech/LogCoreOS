@@ -322,8 +322,8 @@ def _validate_blocks(blocks: list[dict]) -> list[dict]:
                 "type": btype,
                 "config": b.get("config") or {},
                 "layout": {
-                    "lg": layout.get("lg") or {"x": 0, "y": 0, "w": 4, "h": 3},
-                    "sm": layout.get("sm") or {"x": 0, "y": 0, "w": 2, "h": 3},
+                    "lg": layout.get("lg") or {"x": 0, "y": 0, "w": 12, "h": 9},
+                    "sm": layout.get("sm") or {"x": 0, "y": 0, "w": 12, "h": 9},
                 },
             }
         )

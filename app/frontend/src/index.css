@@ -122,6 +122,18 @@
     border-radius: calc(var(--card-radius) * 0.6);
   }
 
+  /* Dashboard action-button blocks (Navigate To…/Status-Archive Action) —
+     always a true pill regardless of the corner-style setting, since the
+     bare-pill shape is the point (owner: "only the pill button so there can
+     be many of them added on a small space"). */
+  .btn-pill {
+    @apply inline-flex items-center justify-center bg-orange-500 hover:bg-orange-600 text-white font-medium text-sm px-4 py-1.5 transition-colors disabled:opacity-60 whitespace-nowrap max-w-full truncate;
+    border-radius: 9999px;
+  }
+  .btn-pill-error {
+    @apply bg-red-500 hover:bg-red-600;
+  }
+
   .input {
     @apply bg-white dark:bg-charcoal-700 border border-charcoal-300 dark:border-charcoal-600 px-3 py-2 text-charcoal-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500 w-full;
     border-radius: calc(var(--card-radius) * 0.6);
@@ -143,3 +155,50 @@ html.compact h1           { @apply text-xl; }
 html.compact h2           { @apply text-base; }
 html.compact .btn-primary { @apply px-3 py-1.5 text-sm; }
 html.compact .btn-ghost   { @apply px-2 py-1.5 text-sm; }
+
+/* Dashboard grid — react-resizable's default handle is a ~20x20px hit area
+   with a corner glyph baked at 30% opacity into the image data itself (not
+   overridable via CSS opacity), which in practice is too faint to notice at
+   this grid's smaller cell size — owner feedback: "unless the method to
+   resize isn't normal," i.e. couldn't find it. Drop the built-in image and
+   draw a clearly visible accent-colored corner bracket instead, on a larger
+   hit area, brightening further on hover so it reads as interactive. */
+.dashboard-grid .react-resizable-handle {
+  width: 28px;
+  height: 28px;
+  background-image: none;
+}
+.dashboard-grid .react-resizable-handle::after {
+  content: '';
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid rgb(var(--accent-500) / 0.65);
+  border-bottom: 2px solid rgb(var(--accent-500) / 0.65);
+  border-radius: 0 0 2px 0;
+  pointer-events: none;
+}
+.dashboard-grid .react-resizable-handle:hover::after {
+  border-color: rgb(var(--accent-500) / 1);
+}
+
+/* The resize handle is a small, deliberate hit target (~28px corner) — a
+   touchstart there is never ambiguous with a scroll attempt, so it keeps the
+   simple always-none treatment. Block dragging is different: the whole card
+   is the drag surface, so touch-action:none there would block normal page
+   scroll for as long as edit mode is on (owner report: "so users can still
+   swipe the whole screen to scroll while in edit mode"). Blocks now default
+   to touch-action:auto and only switch to none for the specific block
+   DashboardGrid.jsx has armed via long-press (see .touch-drag-armed below) —
+   still not verifiable on a real device by anything in this environment. */
+.dashboard-grid .react-resizable-handle {
+  touch-action: none;
+}
+.dashboard-grid .block-drag-handle.touch-drag-armed {
+  touch-action: none;
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.28);
+  outline: 2px solid rgb(var(--accent-500) / 0.6);
+  outline-offset: 2px;
+}

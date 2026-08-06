@@ -1,55 +1,130 @@
 import { useEffect, useState } from 'react'
 import { dashboards as dashboardsApi } from '../../lib/api'
-import { BLOCK_REGISTRY } from './blockRegistry'
+import { BLOCK_REGISTRY, CONFIG_FIELD_SCHEMAS } from './blockRegistry'
+import ContactPicker from '../contacts/ContactPicker'
+import AssetPickerField from '../AssetPickerField'
+import TaskPicker from '../TaskPicker'
+import EventPicker from '../EventPicker'
+import NotePicker from '../NotePicker'
+import WorkflowPicker from '../WorkflowPicker'
+import FinanceBookPicker from '../finance/FinanceBookPicker'
+import ModuleAndRecordPicker from './ModuleAndRecordPicker'
+import AssetSelectFieldPicker from './AssetSelectFieldPicker'
 
-const CATEGORY_LABELS = { live_aggregate: 'Live data', record_linked: 'Record-linked', freeform: 'Freeform' }
-
-// Config fields each record-linked / configurable block type needs, keyed the
-// same way the backend resolvers read ctx.config — kept minimal (plain text
-// id entry) for v1; a polished search-picker per record type is follow-up work.
-const CONFIG_FIELDS = {
-  single_task: [{ key: 'task_id', label: 'Task ID' }],
-  finance_activity: [
-    { key: 'asset_id', label: 'Asset ID (optional)' },
-    { key: 'contact_id', label: 'Contact ID (optional)' },
-    { key: 'book_id', label: 'Finance Book ID (optional)' },
-  ],
-  finance_book_report: [{ key: 'book_id', label: 'Finance Book ID' }],
-  linked_deals: [{ key: 'contact_id', label: 'Contact ID' }],
-  custom_fields: [
-    { key: 'contact_id', label: 'Contact ID (optional)' },
-    { key: 'asset_id', label: 'Asset ID (optional)' },
-  ],
-  linked_assets: [{ key: 'contact_id', label: 'Contact ID' }],
-  documents: [{ key: 'asset_id', label: 'Asset ID' }],
-  linked_tasks: [{ key: 'asset_id', label: 'Asset ID' }],
-  linked_contact: [{ key: 'asset_id', label: 'Asset ID' }],
-  note_embed: [{ key: 'path', label: 'Note path' }],
-  journal_entry: [{ key: 'date', label: 'Date (YYYY-MM-DD)' }],
-  single_event: [{ key: 'event_id', label: 'Event ID' }],
-  workflow_status: [{ key: 'workflow_id', label: 'Workflow ID' }],
-  text_block: [{ key: 'text', label: 'Text', textarea: true }],
-  link_button: [{ key: 'label', label: 'Button label' }, { key: 'url', label: 'URL (https://...)' }],
-  heading_divider: [
-    { key: 'text', label: 'Heading text (leave blank for a plain divider)' },
-    { key: 'style', label: 'Style: "heading" or "divider"' },
-  ],
+const CATEGORY_LABELS = {
+  live_aggregate: 'Live data',
+  record_linked: 'Record-linked',
+  freeform: 'Freeform',
+  action: 'Actions',
 }
 
-export default function BlockPicker({ onAdd, onClose }) {
-  const [catalog, setCatalog] = useState(null)
-  const [selected, setSelected] = useState(null)
-  const [config, setConfig] = useState({})
+// Dispatches a config field to the real picker/input for its `kind` (see
+// CONFIG_FIELD_SCHEMAS in blockRegistry.js). Record-referencing kinds render
+// a real search/tree/select picker — never a raw id/path text box — and
+// render their own label internally; the plain input kinds render a label here.
+function renderField(f, config, setConfig) {
+  const val = config[f.key]
+  const set = v => setConfig({ ...config, [f.key]: v })
+  const label = f.optional ? `${f.label} (optional)` : f.label
 
-  useEffect(() => { dashboardsApi.catalog().then(setCatalog).catch(() => setCatalog([])) }, [])
+  switch (f.kind) {
+    case 'contact':
+      return (
+        <ContactPicker
+          label={label}
+          value={{ contactId: val }}
+          onChange={(_name, id) => set(id)}
+          placeholder="Search contacts…"
+        />
+      )
+    case 'asset':
+      return <AssetPickerField label={label} value={val} onChange={set} />
+    case 'task':
+      return <TaskPicker label={label} value={val} onChange={set} />
+    case 'event':
+      return <EventPicker label={label} value={val} onChange={set} />
+    case 'note':
+      return <NotePicker label={label} value={val} onChange={set} />
+    case 'workflow':
+      return <WorkflowPicker label={label} value={val} onChange={set} />
+    case 'financeBook':
+      return <FinanceBookPicker label={label} value={val} onChange={set} optional={f.optional} />
+    case 'moduleAndRecord':
+      return (
+        <ModuleAndRecordPicker
+          label={label}
+          value={{ module: config.module, record_id: config.record_id }}
+          onChange={(module, recordId) => setConfig({ ...config, module, record_id: recordId })}
+        />
+      )
+    case 'assetSelectField':
+      return (
+        <AssetSelectFieldPicker
+          label={label}
+          assetId={config[f.dependsOn]}
+          value={val}
+          onChange={set}
+        />
+      )
+    case 'date':
+      return (
+        <div>
+          <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>
+          <input type="date" className="input w-full" value={val || ''} onChange={e => set(e.target.value)} />
+        </div>
+      )
+    case 'select':
+      return (
+        <div>
+          <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>
+          <select className="input w-full" value={val || f.options[0].value} onChange={e => set(e.target.value)}>
+            {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+      )
+    case 'textarea':
+      return (
+        <div>
+          <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>
+          <textarea className="input w-full" rows={4} value={val || ''} onChange={e => set(e.target.value)} />
+        </div>
+      )
+    default:
+      return (
+        <div>
+          <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>
+          <input className="input w-full" value={val || ''} onChange={e => set(e.target.value)} />
+        </div>
+      )
+  }
+}
+
+/**
+ * Add-a-block picker, dual-purpose: pass `editingBlock` ({type, config}) to
+ * reopen an existing block's config for editing instead of picking a new
+ * type — same renderField dispatcher either way, just skips the type-grid
+ * step. Add mode calls onAdd(type, config); edit mode calls onSave(config).
+ */
+export default function BlockPicker({ editingBlock = null, onAdd, onSave, onClose }) {
+  const isEditing = !!editingBlock
+  const [catalog, setCatalog] = useState(null)
+  const [selected, setSelected] = useState(editingBlock?.type || null)
+  const [config, setConfig] = useState(editingBlock?.config || {})
+
+  useEffect(() => {
+    if (isEditing) return // no type-grid step to populate in edit mode
+    dashboardsApi.catalog().then(setCatalog).catch(() => setCatalog([]))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function pick(type) {
     setSelected(type)
     setConfig({})
   }
 
-  function add() {
-    onAdd(selected, { ...config })
+  function submit() {
+    if (isEditing) onSave({ ...config })
+    else onAdd(selected, { ...config })
   }
 
   const grouped = (catalog || []).reduce((acc, c) => {
@@ -59,11 +134,14 @@ export default function BlockPicker({ onAdd, onClose }) {
     return acc
   }, {})
 
+  const fields = (selected ? CONFIG_FIELD_SCHEMAS[selected] || [] : [])
+    .filter(f => !f.showIf || config[f.showIf.key] === f.showIf.equals)
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card max-w-lg" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold">Add block</h2>
+          <h2 className="font-semibold">{isEditing ? 'Edit block config' : 'Add block'}</h2>
           <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-600">✕</button>
         </div>
 
@@ -91,31 +169,13 @@ export default function BlockPicker({ onAdd, onClose }) {
         ) : (
           <div className="space-y-3">
             <p className="text-sm font-medium">{BLOCK_REGISTRY[selected].icon} {BLOCK_REGISTRY[selected].label}</p>
-            {(CONFIG_FIELDS[selected] || []).map(f => (
-              <div key={f.key}>
-                <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{f.label}</label>
-                {f.textarea ? (
-                  <textarea
-                    className="input w-full"
-                    rows={4}
-                    value={config[f.key] || ''}
-                    onChange={e => setConfig({ ...config, [f.key]: e.target.value })}
-                  />
-                ) : (
-                  <input
-                    className="input w-full"
-                    value={config[f.key] || ''}
-                    onChange={e => setConfig({ ...config, [f.key]: e.target.value })}
-                  />
-                )}
-              </div>
-            ))}
-            {!CONFIG_FIELDS[selected] && (
+            {fields.map(f => <div key={f.key}>{renderField(f, config, setConfig)}</div>)}
+            {fields.length === 0 && (
               <p className="text-xs text-charcoal-400">No configuration needed — shows your own data.</p>
             )}
             <div className="flex justify-end gap-2 pt-2">
-              <button className="btn-ghost" onClick={() => setSelected(null)}>Back</button>
-              <button className="btn-primary" onClick={add}>Add to dashboard</button>
+              {!isEditing && <button className="btn-ghost" onClick={() => setSelected(null)}>Back</button>}
+              <button className="btn-primary" onClick={submit}>{isEditing ? 'Save changes' : 'Add to dashboard'}</button>
             </div>
           </div>
         )}

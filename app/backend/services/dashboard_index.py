@@ -47,8 +47,17 @@ def _refs_for_dashboard(store_user: str, workspace: str, dashboard: dict) -> lis
         config = block.get("config") or {}
         for config_key, module in spec.record_ref_fields.items():
             record_id = config.get(config_key)
-            if record_id:
-                refs.append((module, record_id))
+            if not record_id:
+                continue
+            if module.startswith("$"):
+                # Target module varies per block instance (e.g. nav_button can
+                # point at any module) rather than being fixed per block type —
+                # resolve it from the block's own config instead of treating
+                # the declared value as a literal module name.
+                module = config.get(module[1:])
+                if not module:
+                    continue
+            refs.append((module, record_id))
     return refs
 
 

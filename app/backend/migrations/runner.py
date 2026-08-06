@@ -397,6 +397,118 @@ def m008_contacts_guest_disabled(brain: Path) -> None:
 
 
 # Ordered list — append new migrations here; never reorder or remove
+def m011_rescale_dashboard_grid_units(brain: Path) -> None:
+    """Dashboard grid moved from 12 cols/80px rows to 36 cols/24px rows (finer
+    positioning/resizing). Every already-saved block layout predates this and
+    is expressed in the OLD units — reinterpreted against the new grid they'd
+    render as tiny slivers clustered in the top-left corner. Multiply every
+    saved block's layout.lg/layout.sm x/y/w/h by 3 (the scale factor) so
+    existing dashboards keep their visual position/size. Covers every user
+    store AND both pool stores (_household/_team) via _all_stores() — m010's
+    narrower per-user-workspace loop would miss pool dashboards entirely."""
+    from services import dashboards_service
+    from services.file_service import brain_path as _brain_path
+
+    if brain != _brain_path():
+        return
+
+    SCALE = 3
+
+    def _scale(v: dict) -> dict:
+        return {k: (v[k] * SCALE if k in ("x", "y", "w", "h") else v[k]) for k in v}
+
+    rescaled = 0
+    for store_user, workspace in dashboards_service._all_stores():
+        try:
+            dashboards = dashboards_service.list_dashboards(store_user, workspace)
+            for d in dashboards:
+                new_blocks = []
+                changed = False
+                for b in d.get("blocks", []):
+                    layout = b.get("layout") or {}
+                    new_layout = dict(layout)
+                    if "lg" in layout:
+                        new_layout["lg"] = _scale(layout["lg"])
+                        changed = True
+                    if "sm" in layout:
+                        new_layout["sm"] = _scale(layout["sm"])
+                        changed = True
+                    new_blocks.append({**b, "layout": new_layout})
+                if changed:
+                    dashboards_service.update_dashboard(
+                        store_user, workspace, d["id"], {"blocks": new_blocks}
+                    )
+                    rescaled += 1
+        except Exception:
+            logger.exception(
+                "m011: failed to rescale dashboards for %r/%r — skipping", store_user, workspace
+            )
+
+    if rescaled:
+        logger.info("m011: rescaled %d dashboard(s) to the new grid units", rescaled)
+
+
+def m012_rescale_dashboard_mobile_grid_units(brain: Path) -> None:
+    """Mobile dashboard grid moved from 2 cols (never actually read — layout.sm
+    was always ignored at render time, ever since Custom Dashboards shipped;
+    the frontend hardcoded an auto-stack instead) to 12 cols (real mobile
+    drag/resize, layout.sm now genuinely read/written).
+
+    Deliberately NOT a multiply like m011 — every stored sm.x/w's provenance
+    is ambiguous by the time this runs: some predate m011 (x:0, w:2), some
+    were blindly ×3'd BY m011 itself (x:0, w:6, since m011 rescaled whatever
+    layout.sm dict it found without knowing it was dead data), and any block
+    added through the UI between m011 shipping and this migration shipping
+    used addBlock()'s then-current hardcoded w:2 default again. All three
+    are pre-real-mobile-editing artifacts with the same one true meaning —
+    "full width, stacked" was the ONLY value the UI ever showed, since mobile
+    was never actually interactive — so normalizing x/w to a fixed full-width
+    value is correct regardless of which artifact a given block has, and
+    sidesteps needing to know which. y/h are untouched: rowHeight didn't
+    change again here, so m011's earlier ×3 on those is still correct.
+
+    Bonus property this approach has that m011's multiply doesn't: setting a
+    fixed value is idempotent. Running this twice is harmless.
+    """
+    from services import dashboards_service
+    from services.file_service import brain_path as _brain_path
+
+    if brain != _brain_path():
+        return
+
+    MOBILE_COLS = 12
+
+    rescaled = 0
+    for store_user, workspace in dashboards_service._all_stores():
+        try:
+            dashboards = dashboards_service.list_dashboards(store_user, workspace)
+            for d in dashboards:
+                new_blocks = []
+                changed = False
+                for b in d.get("blocks", []):
+                    layout = b.get("layout") or {}
+                    sm = layout.get("sm")
+                    if sm and (sm.get("x") != 0 or sm.get("w") != MOBILE_COLS):
+                        new_layout = dict(layout)
+                        new_layout["sm"] = {**sm, "x": 0, "w": MOBILE_COLS}
+                        new_blocks.append({**b, "layout": new_layout})
+                        changed = True
+                    else:
+                        new_blocks.append(b)
+                if changed:
+                    dashboards_service.update_dashboard(
+                        store_user, workspace, d["id"], {"blocks": new_blocks}
+                    )
+                    rescaled += 1
+        except Exception:
+            logger.exception(
+                "m012: failed to rescale mobile layout for %r/%r — skipping", store_user, workspace
+            )
+
+    if rescaled:
+        logger.info("m012: normalized mobile grid units for %d dashboard(s)", rescaled)
+
+
 MIGRATIONS: list[tuple[str, MigrationFn]] = [
     ("m001_task_type_field", m001_task_type_field),
     ("m002_task_notes_field", m002_task_notes_field),
@@ -408,6 +520,8 @@ MIGRATIONS: list[tuple[str, MigrationFn]] = [
     ("m008_contacts_guest_disabled", m008_contacts_guest_disabled),
     ("m009_migrate_profiles_to_self_contacts", m009_migrate_profiles_to_self_contacts),
     ("m010_seed_home_dashboards", m010_seed_home_dashboards),
+    ("m011_rescale_dashboard_grid_units", m011_rescale_dashboard_grid_units),
+    ("m012_rescale_dashboard_mobile_grid_units", m012_rescale_dashboard_mobile_grid_units),
 ]
 
 # ── Runner ─────────────────────────────────────────────────────────────────────

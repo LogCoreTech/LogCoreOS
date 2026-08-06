@@ -25,16 +25,19 @@
       "blurb": "Your home screen — now build-it-yourself. Create as many dashboards as you want, each a freeform grid of blocks pulling live data from almost any module: tasks, streaks, Smart Home, Finance, Contacts, Assets, Notes, Calendar, Automations, and more.",
       "howto": [
         "Click the dashboard name at the top to switch between your dashboards or create a new one.",
-        "Click \"Edit Layout\" to drag/resize blocks (desktop), add new ones, or remove existing ones.",
-        "Click \"+ Add Block\" to pick from the full catalog, grouped into live data, record-linked, and freeform (text/links/headings).",
-        "Share a dashboard with another person or your household/team pool from the Share button — pick read, contribute, or edit access.",
-        "As the owner, you can turn on \"Share underlying data\" so people you've shared with see the same live data you do, even things they normally couldn't access on their own — off by default, and they never see more than you can see.",
-        "Click \"Set as default\" to make a dashboard the one that opens when you click Dashboard in the sidebar.",
+        "Click \"Edit Dashboard\" to drag/resize blocks, add new ones, or remove existing ones — works the same way on desktop and mobile, and each remembers its own arrangement, so a dashboard can be laid out differently on your phone than on your laptop. On a touchscreen, press and hold a block for a moment before it starts moving — a quick swipe scrolls the page as normal instead.",
+        "Click \"+ Add Block\" to pick from the full catalog, grouped into live data, record-linked, actions, and freeform (text/links/headings). Record-linked blocks (Single Task, Linked Contact, Finance Book Report, etc.) let you search for and pick the exact task, contact, asset, event, book, note, or workflow — you never need to know or type an internal ID.",
+        "Two Action blocks render as a small standalone button with nothing else around it, so you can fit several in a small space: \"Navigate To…\" jumps to any page or a specific record; \"Status/Archive Action\" marks a task done/pending/skipped, archives or unarchives a contact or asset, or sets one of an asset's own fields with one click. Every option in both is picked from a real list, never typed.",
+        "While editing, click \"⚙ Settings\" to rename the dashboard, change its icon, share it, set it as your default, or delete it — all in one place.",
+        "Sharing (inside ⚙ Settings) lets you share a dashboard with another person or your household/team pool at read, contribute, or edit access.",
+        "As the owner, you can turn on \"Share underlying data\" (also inside ⚙ Settings) so people you've shared with see the same live data you do, even things they normally couldn't access on their own — off by default, and they never see more than you can see.",
         "New here? The Getting Started card walks you through first steps and hides once you're set up."
       ],
       "tips": [
         "Your first dashboard, \"Home,\" was created automatically from your old fixed dashboard widgets — fully editable and deletable like any other, as long as you have at least one other dashboard.",
-        "A dashboard with only one block left can't be deleted while it's your only dashboard in that workspace — LogCore always keeps you at least one landing page."
+        "A dashboard with only one block left can't be deleted while it's your only dashboard in that workspace — LogCore always keeps you at least one landing page.",
+        "Picked the wrong record for a block? Click its \"✎\" button while editing to change what it points to, without deleting and re-adding the block.",
+        "To resize a block, drag the small orange corner mark in its bottom-right corner while editing (desktop only)."
       ],
       "modules": ["dashboard"]
     },

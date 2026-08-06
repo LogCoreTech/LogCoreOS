@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import HelpButton from '../components/HelpButton'
 import { calendar as calendarApi, shared as sharedApi, team as teamApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -51,6 +52,17 @@ export default function Calendar() {
   const [showEventModal, setShowEventModal] = useState(false)
   const [editEvent, setEditEvent]       = useState(null)
   const [loading, setLoading] = useState(true)
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // Deep link (?event=<id>) — dashboard nav-button clicks land here.
+  useEffect(() => {
+    const target = searchParams.get('event')
+    if (!target || loading) return
+    const found = events.find(e => e.id === target)
+    if (found) { setEditEvent(found); setShowEventModal(true) }
+    searchParams.delete('event')
+    setSearchParams(searchParams, { replace: true })
+  }, [loading, events, searchParams])
 
   const poolEventApi = {
     add:    body       => poolApi.addSharedEvent(body),

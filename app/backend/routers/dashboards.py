@@ -116,6 +116,22 @@ def get_catalog(current_user: dict = Depends(_require_dashboards)):
     return catalog(current_user.get("role") == "admin")
 
 
+@router.get("/members")
+def list_members(current_user: dict = Depends(_require_dashboards)):
+    """Member display names for the share/hide pickers. Mirrors assets.py's list_members."""
+    from services.auth_service import list_users
+
+    return [{"name": u["name"]} for u in list_users()]
+
+
+@router.get("/roles")
+def list_roles(current_user: dict = Depends(_require_dashboards)):
+    """Feature-role names for the share-by-role picker."""
+    from services.features_service import load_features
+
+    return sorted((load_features().get("roles") or {}).keys())
+
+
 @router.get("/references/{module}/{record_id}")
 def get_references(
     module: str,

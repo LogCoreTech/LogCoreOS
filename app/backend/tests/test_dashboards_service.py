@@ -192,3 +192,78 @@ def test_viewer_scope_default_always_succeeds_without_toggle(users):
     block = {"id": "b4", "type": "top3_tasks", "config": {"scope": "viewer"}, "layout": {}}
     result = render_block(dashboard, block, "Bob", "member", False, "personal", None)
     assert result.ok is True
+
+
+# ---------------------------------------------------------------------------
+# m011 — grid rescale (12 cols/80px rows -> 36 cols/24px rows) migration
+# ---------------------------------------------------------------------------
+
+
+def test_m011_rescales_existing_dashboard_grid_units(users, brain):
+    from migrations.runner import m011_rescale_dashboard_grid_units
+
+    d = svc.create_dashboard("Alice", "personal", "Alice", "Old Board")
+    old_block = {
+        "id": "block-1",
+        "type": "top3_tasks",
+        "config": {},
+        "layout": {"lg": {"x": 4, "y": 0, "w": 4, "h": 3}, "sm": {"x": 0, "y": 0, "w": 2, "h": 3}},
+    }
+    svc.update_dashboard("Alice", "personal", d["id"], {"blocks": [old_block]})
+
+    m011_rescale_dashboard_grid_units(brain)
+
+    rescaled = svc.get_dashboard("Alice", d["id"], "personal")
+    block = rescaled["blocks"][0]
+    assert block["layout"]["lg"] == {"x": 12, "y": 0, "w": 12, "h": 9}
+    assert block["layout"]["sm"] == {"x": 0, "y": 0, "w": 6, "h": 9}
+
+    # Not idempotent by design (documented, accepted risk — see docs/MEMORY.md
+    # and the plan this shipped from): a second run scales again. Asserting
+    # this explicitly so a future idempotency guard is a deliberate change,
+    # not a silent behavior shift this test would otherwise mask.
+    m011_rescale_dashboard_grid_units(brain)
+    twice = svc.get_dashboard("Alice", d["id"], "personal")
+    assert twice["blocks"][0]["layout"]["lg"]["w"] == 36
+
+
+# ---------------------------------------------------------------------------
+# m012 — mobile grid rescale (cols.sm 2 -> 12), normalize not multiply
+# ---------------------------------------------------------------------------
+
+
+def test_m012_normalizes_mobile_layout_regardless_of_prior_width(users, brain):
+    from migrations.runner import m012_rescale_dashboard_mobile_grid_units
+
+    d = svc.create_dashboard("Alice", "personal", "Alice", "Board")
+    # Two blocks with different sm-width provenance: one still at the
+    # pre-m011 value (w:2), one already blindly ×3'd BY m011 (w:6) — m012
+    # must normalize both to the same w:12, since neither value was ever
+    # actually meaningful (sm was never read at render time until now).
+    blocks = [
+        {
+            "id": "block-1", "type": "top3_tasks", "config": {},
+            "layout": {"lg": {"x": 0, "y": 0, "w": 12, "h": 9}, "sm": {"x": 0, "y": 0, "w": 2, "h": 9}},
+        },
+        {
+            "id": "block-2", "type": "due_today", "config": {},
+            "layout": {"lg": {"x": 12, "y": 0, "w": 12, "h": 9}, "sm": {"x": 0, "y": 9, "w": 6, "h": 9}},
+        },
+    ]
+    svc.update_dashboard("Alice", "personal", d["id"], {"blocks": blocks})
+
+    m012_rescale_dashboard_mobile_grid_units(brain)
+
+    result = svc.get_dashboard("Alice", d["id"], "personal")
+    b1, b2 = result["blocks"]
+    assert b1["layout"]["sm"] == {"x": 0, "y": 0, "w": 12, "h": 9}
+    assert b2["layout"]["sm"] == {"x": 0, "y": 9, "w": 12, "h": 9}
+    # lg untouched — this migration only concerns the sm breakpoint
+    assert b1["layout"]["lg"] == {"x": 0, "y": 0, "w": 12, "h": 9}
+    assert b2["layout"]["lg"] == {"x": 12, "y": 0, "w": 12, "h": 9}
+
+    # Idempotent by design (unlike m011's multiply) — a second run is a no-op
+    m012_rescale_dashboard_mobile_grid_units(brain)
+    twice = svc.get_dashboard("Alice", d["id"], "personal")
+    assert twice["blocks"][0]["layout"]["sm"] == {"x": 0, "y": 0, "w": 12, "h": 9}
+    assert twice["blocks"][1]["layout"]["sm"] == {"x": 0, "y": 9, "w": 12, "h": 9}
