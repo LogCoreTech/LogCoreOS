@@ -196,6 +196,22 @@ html.compact .btn-ghost   { @apply px-2 py-1.5 text-sm; }
 .dashboard-grid .react-resizable-handle {
   touch-action: none;
 }
+
+/* A long-press on any element with text is ALSO the browser's own gesture
+   for text selection (the magnifier + Copy/Select All callout) — it races
+   the press-and-hold-to-drag timer above, and since nothing here ever
+   suppresses it, it can win, which is what "the touch and hold makes the
+   select text thing pop up" was (owner report, 2026-08-06). Needs to be
+   off for the whole handle, not just once armed — the callout can appear
+   during the hold itself, before DashboardGrid.jsx ever sets the armed
+   class. -webkit-touch-callout is the actual iOS Safari property; the
+   user-select lines are the corresponding (and Android/desktop) selection
+   suppression. */
+.dashboard-grid .block-drag-handle {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
 .dashboard-grid .block-drag-handle.touch-drag-armed {
   touch-action: none;
   box-shadow: 0 10px 28px rgb(0 0 0 / 0.28);
