@@ -45,31 +45,53 @@ export default function DashboardGrid({ blocks, editing, onRemoveBlock, onEditBl
   const gestureRef = useRef(null)
   const [dragVisual, setDragVisual] = useState(null) // { id, dx, dy } while held/dragging
 
-  // A committed touch-drag only ever reaches the parent as onLayoutChange ->
-  // pendingLayouts (Dashboard.jsx doesn't apply it to `blocks` until "Save
-  // Layout" is clicked) — so without a local echo here, `layouts` below still
-  // reflects the pre-drag position and the block visually snaps back the
-  // instant the drag ends. react-grid-layout's own mouse drag never has this
-  // problem because it holds the dropped position in its own internal state;
-  // this hand-rolled touch path needs to do that itself. Cleared whenever
-  // `blocks` changes (Save Layout persisting, or switching dashboards) since
-  // the server-authoritative data has caught up by then.
-  const [localOverrides, setLocalOverrides] = useState({}) // { [bp]: { [blockId]: {x,y} } }
-  useEffect(() => { setLocalOverrides({}) }, [blocks])
+  // Neither a committed touch-drag nor a native resize/mouse-drag is enough
+  // on its own to reach the actual rendered grid — both only ever inform the
+  // parent's pendingLayouts (Dashboard.jsx doesn't apply anything to `blocks`
+  // until "Save Layout" is clicked). Confirmed in react-grid-layout's own
+  // source (node_modules): its `Responsive` wrapper has its OWN
+  // getDerivedStateFromProps, entirely separate from the inner grid's
+  // activeDrag-aware one, that regenerates its whole internal layout from
+  // scratch the moment the `layouts` PROP we pass it changes at all — with no
+  // concept of "but that other block's resize was never in this prop to
+  // begin with." So a resize on block A survives right up until literally
+  // any other layout change touches this prop (e.g. dragging block B), at
+  // which point A's resize is silently discarded because the regenerated
+  // layout never knew about it. The fix is the same shape either way: keep a
+  // full, up-to-date echo of the current layout locally, fed by BOTH paths
+  // (this hand-rolled touch-drag AND react-grid-layout's own native
+  // drag/resize, wired below), so the prop we hand back in is never stale
+  // for any block, no matter which mechanism last changed it. Cleared
+  // whenever `blocks` itself changes (Save Layout persisting, or switching
+  // dashboards) since the server-authoritative data has caught up by then.
+  const [pendingLocalLayouts, setPendingLocalLayouts] = useState(null) // { lg, sm } | null
+  useEffect(() => { setPendingLocalLayouts(null) }, [blocks])
 
-  const layouts = useMemo(() => {
-    const build = (bp, defaultW, defaultH) => blocks.map(b => {
-      const entry = {
-        i: b.id,
-        minW: MIN_W,
-        minH: MIN_H,
-        ...(b.layout?.[bp] || { x: 0, y: 0, w: defaultW, h: defaultH }),
-      }
-      const override = localOverrides[bp]?.[b.id]
-      return override ? { ...entry, x: override.x, y: override.y } : entry
-    })
-    return { lg: build('lg', 12, 9), sm: build('sm', MOBILE_COLS, 9) }
-  }, [blocks, localOverrides])
+  const baseLayouts = useMemo(() => ({
+    lg: blocks.map(b => ({
+      i: b.id,
+      minW: MIN_W,
+      minH: MIN_H,
+      ...(b.layout?.lg || { x: 0, y: 0, w: 12, h: 9 }),
+    })),
+    sm: blocks.map(b => ({
+      i: b.id,
+      minW: MIN_W,
+      minH: MIN_H,
+      ...(b.layout?.sm || { x: 0, y: 0, w: MOBILE_COLS, h: 9 }),
+    })),
+  }), [blocks])
+
+  const layouts = pendingLocalLayouts || baseLayouts
+
+  // Wraps whatever the parent's onLayoutChange prop does (Dashboard.jsx just
+  // stashes it as pendingLayouts for the "Save Layout" button) so every
+  // layout report — from react-grid-layout's own native drag/resize, or from
+  // commitDrag below — also updates what's actually rendered.
+  const reportLayoutChange = useCallback((allLayouts) => {
+    setPendingLocalLayouts(allLayouts)
+    onLayoutChange?.(allLayouts)
+  }, [onLayoutChange])
 
   const clearGesture = useCallback(() => {
     if (gestureRef.current?.timer) clearTimeout(gestureRef.current.timer)
@@ -101,15 +123,11 @@ export default function DashboardGrid({ blocks, editing, onRemoveBlock, onEditBl
       nextY < l.y + l.h && nextY + moved.h > l.y
     ))
     if (!overlaps && (nextX !== g.startX || nextY !== g.startY)) {
-      setLocalOverrides(prev => ({
-        ...prev,
-        [bp]: { ...prev[bp], [g.blockId]: { x: nextX, y: nextY } },
-      }))
       const nextList = list.map(l => (l.i === g.blockId ? { ...l, x: nextX, y: nextY } : l))
-      onLayoutChange?.({ ...layouts, [bp]: nextList })
+      reportLayoutChange({ ...layouts, [bp]: nextList })
     }
     clearGesture()
-  }, [layouts, onLayoutChange, clearGesture])
+  }, [layouts, reportLayoutChange, clearGesture])
 
   useEffect(() => {
     const el = containerRef.current
@@ -218,7 +236,7 @@ export default function DashboardGrid({ blocks, editing, onRemoveBlock, onEditBl
         preventCollision={true}
         isDraggable={editing}
         isResizable={editing}
-        onLayoutChange={(_current, all) => onLayoutChange?.(all)}
+        onLayoutChange={(_current, all) => reportLayoutChange(all)}
         draggableHandle=".block-drag-handle"
       >
         {blocks.map(b => {
