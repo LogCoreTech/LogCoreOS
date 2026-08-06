@@ -45,20 +45,31 @@ export default function DashboardGrid({ blocks, editing, onRemoveBlock, onEditBl
   const gestureRef = useRef(null)
   const [dragVisual, setDragVisual] = useState(null) // { id, dx, dy } while held/dragging
 
-  const layouts = useMemo(() => ({
-    lg: blocks.map(b => ({
-      i: b.id,
-      minW: MIN_W,
-      minH: MIN_H,
-      ...(b.layout?.lg || { x: 0, y: 0, w: 12, h: 9 }),
-    })),
-    sm: blocks.map(b => ({
-      i: b.id,
-      minW: MIN_W,
-      minH: MIN_H,
-      ...(b.layout?.sm || { x: 0, y: 0, w: MOBILE_COLS, h: 9 }),
-    })),
-  }), [blocks])
+  // A committed touch-drag only ever reaches the parent as onLayoutChange ->
+  // pendingLayouts (Dashboard.jsx doesn't apply it to `blocks` until "Save
+  // Layout" is clicked) — so without a local echo here, `layouts` below still
+  // reflects the pre-drag position and the block visually snaps back the
+  // instant the drag ends. react-grid-layout's own mouse drag never has this
+  // problem because it holds the dropped position in its own internal state;
+  // this hand-rolled touch path needs to do that itself. Cleared whenever
+  // `blocks` changes (Save Layout persisting, or switching dashboards) since
+  // the server-authoritative data has caught up by then.
+  const [localOverrides, setLocalOverrides] = useState({}) // { [bp]: { [blockId]: {x,y} } }
+  useEffect(() => { setLocalOverrides({}) }, [blocks])
+
+  const layouts = useMemo(() => {
+    const build = (bp, defaultW, defaultH) => blocks.map(b => {
+      const entry = {
+        i: b.id,
+        minW: MIN_W,
+        minH: MIN_H,
+        ...(b.layout?.[bp] || { x: 0, y: 0, w: defaultW, h: defaultH }),
+      }
+      const override = localOverrides[bp]?.[b.id]
+      return override ? { ...entry, x: override.x, y: override.y } : entry
+    })
+    return { lg: build('lg', 12, 9), sm: build('sm', MOBILE_COLS, 9) }
+  }, [blocks, localOverrides])
 
   const clearGesture = useCallback(() => {
     if (gestureRef.current?.timer) clearTimeout(gestureRef.current.timer)
@@ -90,6 +101,10 @@ export default function DashboardGrid({ blocks, editing, onRemoveBlock, onEditBl
       nextY < l.y + l.h && nextY + moved.h > l.y
     ))
     if (!overlaps && (nextX !== g.startX || nextY !== g.startY)) {
+      setLocalOverrides(prev => ({
+        ...prev,
+        [bp]: { ...prev[bp], [g.blockId]: { x: nextX, y: nextY } },
+      }))
       const nextList = list.map(l => (l.i === g.blockId ? { ...l, x: nextX, y: nextY } : l))
       onLayoutChange?.({ ...layouts, [bp]: nextList })
     }
