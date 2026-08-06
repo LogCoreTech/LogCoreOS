@@ -109,6 +109,9 @@ export default function Dashboard() {
 
   async function removeBlock(blockId) {
     if (!current) return
+    const block = current.blocks.find(b => b.id === blockId)
+    const label = BLOCK_REGISTRY[block?.type]?.label || 'this block'
+    if (!window.confirm(`Remove "${label}" from this dashboard?`)) return
     const nextBlocks = current.blocks.filter(b => b.id !== blockId)
     await saveBlocks(nextBlocks)
   }
