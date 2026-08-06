@@ -135,6 +135,13 @@ export default function DashboardGrid({ blocks, editing, onRemoveBlock, onEditBl
 
     function onTouchStartCapture(e) {
       if (e.target.closest('.react-resizable-handle')) return
+      // A tap on an actual button (✎/✕) or link (a chromeless nav_button's
+      // own pill is a <Link>, i.e. an <a>) is never a drag attempt — leave it
+      // alone entirely, untouched by stopPropagation below, so its own click
+      // fires normally. Discovered real, not theoretical: intercepting these
+      // too made every ✎/✕ tap (and every nav_button tap) a no-op on real
+      // touch input even when it landed squarely on the element.
+      if (e.target.closest('button, a')) return
       const handleEl = e.target.closest('.block-drag-handle')
       if (!handleEl) return
       // Keep react-draggable from ever seeing this touch — it has no start
@@ -238,6 +245,18 @@ export default function DashboardGrid({ blocks, editing, onRemoveBlock, onEditBl
         isResizable={editing}
         onLayoutChange={(_current, all) => reportLayoutChange(all)}
         draggableHandle=".block-drag-handle"
+        // react-draggable's own handleDragStart calls e.preventDefault() on
+        // touchstart unconditionally for anything matching draggableHandle —
+        // confirmed in its source — which suppresses the browser's tap->click
+        // synthesis regardless of whether a real drag ever follows. Since
+        // every ✎/✕ button (and a chromeless nav_button's own <a> pill) lives
+        // inside .block-drag-handle, every tap on them was being silently
+        // eaten before this. draggableCancel (mirrors draggableHandle, same
+        // library, checked *before* the preventDefault call) is the correct
+        // exclusion — the onTouchStartCapture button/link check below stops
+        // this component's own gesture tracking from engaging too, but only
+        // this prop stops react-draggable itself from ever seeing the touch.
+        draggableCancel="button, a"
       >
         {blocks.map(b => {
           const dragging = dragVisual?.id === b.id
