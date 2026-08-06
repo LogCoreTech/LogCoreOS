@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import HelpButton from '../components/HelpButton'
 import GettingStarted from '../components/GettingStarted'
-import DashboardGrid from '../components/dashboard/DashboardGrid'
+import DashboardGrid, { MOBILE_COLS } from '../components/dashboard/DashboardGrid'
 import BlockPicker from '../components/dashboard/BlockPicker'
 import DashboardAccessModal from '../components/dashboard/DashboardAccessModal'
+import DashboardSettingsModal from '../components/dashboard/DashboardSettingsModal'
 import DashboardSwitcher from '../components/dashboard/DashboardSwitcher'
 import { BLOCK_REGISTRY } from '../components/dashboard/blockRegistry'
 import { auth as authApi, dashboards as dashboardsApi } from '../lib/api'
@@ -29,7 +30,9 @@ export default function Dashboard() {
   const [editing, setEditing] = useState(false)
   const [pendingLayouts, setPendingLayouts] = useState(null)
   const [showPicker, setShowPicker] = useState(false)
+  const [editingBlockConfig, setEditingBlockConfig] = useState(null)
   const [showAccess, setShowAccess] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const [showSwitcher, setShowSwitcher] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -93,12 +96,12 @@ export default function Dashboard() {
     setShowPicker(false)
     if (!current) return
     const meta = BLOCK_REGISTRY[type]
-    const w = meta?.defaultLayout?.w || 4
-    const h = meta?.defaultLayout?.h || 3
+    const w = meta?.defaultLayout?.w || 12
+    const h = meta?.defaultLayout?.h || 9
     const newBlock = {
       type,
       config,
-      layout: { lg: { x: 0, y: Infinity, w, h }, sm: { x: 0, y: Infinity, w: 2, h } },
+      layout: { lg: { x: 0, y: Infinity, w, h }, sm: { x: 0, y: Infinity, w: MOBILE_COLS, h } },
     }
     const nextBlocks = [...current.blocks, newBlock]
     await saveBlocks(nextBlocks)
@@ -107,6 +110,19 @@ export default function Dashboard() {
   async function removeBlock(blockId) {
     if (!current) return
     const nextBlocks = current.blocks.filter(b => b.id !== blockId)
+    await saveBlocks(nextBlocks)
+  }
+
+  function openBlockConfigEditor(block) {
+    setEditingBlockConfig(block)
+  }
+
+  async function saveBlockConfig(newConfig) {
+    if (!current || !editingBlockConfig) return
+    const nextBlocks = current.blocks.map(b =>
+      b.id === editingBlockConfig.id ? { ...b, config: newConfig } : b
+    )
+    setEditingBlockConfig(null)
     await saveBlocks(nextBlocks)
   }
 
@@ -170,7 +186,7 @@ export default function Dashboard() {
   const isOwner = current?.owner === user?.name
 
   return (
-    <div key={workspace} className="max-w-5xl mx-auto space-y-4">
+    <div key={workspace} className="w-full max-w-5xl mx-auto space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <span className="flex items-center gap-2">
@@ -185,7 +201,7 @@ export default function Dashboard() {
           </button>
           {current && canEdit && (
             <button className="btn-ghost text-sm" onClick={() => setEditing(e => !e)}>
-              {editing ? 'Done editing' : 'Edit Layout'}
+              {editing ? 'Done editing' : 'Edit Dashboard'}
             </button>
           )}
         </div>
@@ -214,9 +230,7 @@ export default function Dashboard() {
                   {saving ? 'Saving…' : 'Save Layout'}
                 </button>
               )}
-              <button className="btn-ghost text-sm" onClick={() => setShowAccess(true)}>Share</button>
-              <button className="btn-ghost text-sm" onClick={setAsDefault}>Set as default</button>
-              <button className="btn-ghost text-sm text-red-500" onClick={deleteDashboard}>Delete dashboard</button>
+              <button className="btn-ghost text-sm" onClick={() => setShowSettings(true)}>⚙ Settings</button>
             </div>
           )}
 
@@ -224,6 +238,8 @@ export default function Dashboard() {
             blocks={current.blocks}
             editing={editing}
             onRemoveBlock={removeBlock}
+            onEditBlock={openBlockConfigEditor}
+            onBlockAction={() => loadCurrent(current.id)}
             onLayoutChange={onLayoutChange}
           />
         </>
@@ -233,6 +249,14 @@ export default function Dashboard() {
 
       {showPicker && <BlockPicker onAdd={addBlock} onClose={() => setShowPicker(false)} />}
 
+      {editingBlockConfig && (
+        <BlockPicker
+          editingBlock={editingBlockConfig}
+          onSave={saveBlockConfig}
+          onClose={() => setEditingBlockConfig(null)}
+        />
+      )}
+
       {showAccess && current && (
         <DashboardAccessModal
           dashboard={current}
@@ -240,6 +264,18 @@ export default function Dashboard() {
           isOwner={isOwner}
           onClose={() => setShowAccess(false)}
           onSaved={() => loadCurrent(current.id)}
+        />
+      )}
+
+      {showSettings && current && (
+        <DashboardSettingsModal
+          dashboard={current}
+          isOwner={isOwner}
+          onClose={() => setShowSettings(false)}
+          onSaved={async () => { await loadCurrent(current.id); setShowSettings(false) }}
+          onShare={() => { setShowSettings(false); setShowAccess(true) }}
+          onSetDefault={async () => { await setAsDefault(); setShowSettings(false) }}
+          onDelete={() => { setShowSettings(false); deleteDashboard() }}
         />
       )}
 

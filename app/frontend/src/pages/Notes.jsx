@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import HelpButton from '../components/HelpButton'
 import { notes as notesApi } from '../lib/api'
 import { useWorkspace } from '../lib/workspace'
@@ -233,6 +234,17 @@ export default function Notes() {
   const [showSidebar, setShowSidebar] = useState(true)
   const [showArchived, setShowArchived] = useState(false)
   const [dragActive, setDragActive] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // Deep link (?path=<note path>) — dashboard nav-button clicks land here.
+  useEffect(() => {
+    const target = searchParams.get('path')
+    if (!target || loading) return
+    openNote(target)
+    searchParams.delete('path')
+    setSearchParams(searchParams, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, searchParams])
   const [overFolder, setOverFolder] = useState(null)   // folder path ('' = root) under the pointer
   const autoSaveTimer = useRef(null)
   const dragRef = useRef(null)

@@ -1311,6 +1311,8 @@ time, no stored "protected" flag.
 | `POST` | `/dashboards/shares/respond` | recipient | `{owner, dashboard_id, accept}` |
 | `GET` | `/dashboards/catalog` | module users | Block-type registry metadata (label/category/`admin_only`/workspace), pre-filtered for the caller's admin status |
 | `GET` | `/dashboards/references/{module}/{record_id}` | module users | "Referenced by N dashboards" — viewer-filtered so a caller never learns a dashboard exists unless they can already see it |
+| `GET` | `/dashboards/members` | module users | Member display names for the share picker, mirrors `assets.py`'s `/assets/members` |
+| `GET` | `/dashboards/roles` | module users | Feature-role names for the share-by-role picker |
 
 **Block catalog** (27 types across `live_aggregate` / `record_linked` / `freeform` categories) —
 Tasks/Goals (`top3_tasks`, `due_today`, `streaks`, `goals_progress`, `single_task`), Smart Home

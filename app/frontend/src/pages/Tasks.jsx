@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import HelpButton from '../components/HelpButton'
 import { tasks as tasksApi, priorities as prioritiesApi, shared as sharedApi, team as teamApi, assets as assetsApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -23,6 +24,17 @@ export default function Tasks() {
   const [loading, setLoading] = useState(true)
   const [assetList, setAssetList] = useState([])
   const assetsEnabled = !user?.disabledModules?.includes('assets')
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // Deep link (?task=<id>) — dashboard nav-button clicks land here.
+  useEffect(() => {
+    const target = searchParams.get('task')
+    if (!target || loading) return
+    const found = taskList.find(t => t.id === target)
+    if (found) { setEditTask(found); setShowModal(true) }
+    searchParams.delete('task')
+    setSearchParams(searchParams, { replace: true })
+  }, [loading, taskList, searchParams])
 
   async function load() {
     setLoading(true)

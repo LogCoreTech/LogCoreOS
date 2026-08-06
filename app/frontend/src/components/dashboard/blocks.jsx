@@ -1,6 +1,9 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fmtMoney } from '../finance/money'
-import { catColor } from '../../lib/constants'
+import { ALL_MODULES, catColor } from '../../lib/constants'
+import { deepLinkUrl } from '../../lib/deepLinks'
+import { assets as assetsApi, contacts as contactsApi, tasks as tasksApi } from '../../lib/api'
 
 function priorityDot(p) {
   return p === 'High' ? 'bg-red-500' : p === 'Medium' ? 'bg-yellow-500' : 'bg-charcoal-400'
@@ -339,4 +342,83 @@ export function LinkButtonBlock({ data }) {
 export function HeadingDividerBlock({ data }) {
   if (data?.style === 'divider') return <hr className="border-charcoal-200 dark:border-charcoal-700" />
   return <h3 className="font-semibold text-sm uppercase tracking-wide text-charcoal-500 dark:text-charcoal-400">{data?.text}</h3>
+}
+
+export function NavButtonBlock({ data }) {
+  if (!data?.module) return <Empty text="No destination configured." />
+  const url = deepLinkUrl(data.module, data.record_id)
+  const moduleLabel = ALL_MODULES.find(m => m.id === data.module)?.label || data.module
+  const label = data.label || data.title || `Go to ${moduleLabel}`
+  return (
+    <Link to={url} className="btn-pill" title={label}>
+      {label}
+    </Link>
+  )
+}
+
+// The first write-capable block in an otherwise entirely passive dashboard —
+// the click goes straight to each target module's own existing endpoint
+// (same gate a normal page use would hit), never through the dashboard at
+// all. Needs real feedback since a legitimate 403 is possible (a shared
+// viewer can see a button labeled using the owner's visibility via
+// share_underlying_data, but the click always resolves as their own
+// identity) — a silent no-op would look broken.
+export function StatusButtonBlock({ data, onAction }) {
+  const [state, setState] = useState('idle') // idle | busy | done | error
+  const [errorMsg, setErrorMsg] = useState('')
+
+  if (!data?.record_type) return <Empty text="No action configured." />
+
+  function defaultLabel() {
+    if (data.record_type === 'task') {
+      const map = { pending: 'Mark Pending', done: 'Mark Done', skipped: 'Mark Skipped' }
+      return map[data.target_status] || 'Update Task'
+    }
+    if (data.action === 'archive') return 'Archive'
+    if (data.action === 'unarchive') return 'Unarchive'
+    if (data.action === 'set_field') return `Set ${data.field_key || 'field'}`
+    return 'Run Action'
+  }
+
+  async function run() {
+    setState('busy')
+    setErrorMsg('')
+    try {
+      if (data.record_type === 'task') {
+        await tasksApi.update(data.record_id, { status: data.target_status })
+      } else if (data.record_type === 'contact') {
+        if (data.action === 'unarchive') await contactsApi.unarchive(data.record_id)
+        else await contactsApi.archive(data.record_id)
+      } else if (data.record_type === 'asset') {
+        if (data.action === 'unarchive') await assetsApi.unarchive(data.record_id)
+        else if (data.action === 'set_field' && data.field_key) {
+          await assetsApi.update(data.record_id, { fields: { [data.field_key]: data.field_value } })
+        } else {
+          await assetsApi.archive(data.record_id)
+        }
+      }
+      setState('done')
+      onAction?.()
+      setTimeout(() => setState('idle'), 2000)
+    } catch (e) {
+      setState('error')
+      setErrorMsg(e.message || 'Action failed — you may not have permission.')
+      setTimeout(() => setState('idle'), 3000)
+    }
+  }
+
+  const label = data.label || defaultLabel()
+  const text = state === 'busy' ? 'Working…' : state === 'done' ? '✓ Done' : state === 'error' ? '⚠ Failed' : label
+  const tooltip = state === 'error' ? errorMsg : data.title ? `${label} — ${data.title}` : label
+
+  return (
+    <button
+      className={`btn-pill ${state === 'error' ? 'btn-pill-error' : ''}`}
+      onClick={run}
+      disabled={state === 'busy'}
+      title={tooltip}
+    >
+      {text}
+    </button>
+  )
 }

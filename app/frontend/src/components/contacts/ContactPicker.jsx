@@ -24,6 +24,17 @@ export default function ContactPicker({ value, onChange, label, placeholder }) {
 
   useEffect(() => { setText(value?.name || '') }, [value?.name])
 
+  // Callers that only have a contactId (no cached display name — e.g. a
+  // dashboard block re-opening its saved config) get the name resolved once
+  // the contact list loads. No-op for existing callers, which always pass
+  // `name` explicitly and so never hit the `!value?.name` guard below.
+  useEffect(() => {
+    if (value?.name) return
+    if (!value?.contactId) return
+    const match = all.find(c => c.id === value.contactId)
+    if (match) setText(match.name)
+  }, [value?.contactId, value?.name, all])
+
   useEffect(() => {
     if (!open) return
     const close = e => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false) }
