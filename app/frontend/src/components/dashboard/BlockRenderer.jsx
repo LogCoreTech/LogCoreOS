@@ -43,13 +43,18 @@ export default function BlockRenderer({ block, onRemove, onEdit, onAction, editi
     )
   }
 
+  // The icon+label header is edit-mode-only now (owner: "hide that until
+  // edit mode is open. makes it look cleaner") — it exists purely to
+  // identify/manage a block while arranging the dashboard, not as permanent
+  // view-mode chrome. No reserved space for it at all in view mode, not just
+  // hidden-but-present, so content gets the card's full height back.
   return (
     <div className="card h-full p-3 overflow-hidden flex flex-col">
-      <div className="flex items-center justify-between mb-2 shrink-0">
-        <span className="text-xs font-semibold uppercase tracking-wide text-charcoal-500 dark:text-charcoal-400 truncate flex items-center gap-1">
-          <span>{meta.icon}</span>{meta.label}
-        </span>
-        {editing && (
+      {editing && (
+        <div className="flex items-center justify-between mb-2 shrink-0">
+          <span className="text-xs font-semibold uppercase tracking-wide text-charcoal-500 dark:text-charcoal-400 truncate flex items-center gap-1">
+            <span>{meta.icon}</span>{meta.label}
+          </span>
           <span className="flex items-center gap-2 shrink-0">
             {isConfigurable(block.type) && (
               <button
@@ -68,8 +73,8 @@ export default function BlockRenderer({ block, onRemove, onEdit, onAction, editi
               ✕
             </button>
           </span>
-        )}
-      </div>
+        </div>
+      )}
       <div className="flex-1 min-h-0 overflow-auto">
         {block.ok ? <Comp data={block.data} onAction={onAction} /> : <LockedBlockPlaceholder reason={block.locked_reason} />}
       </div>

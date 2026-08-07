@@ -19,7 +19,10 @@ def resolve_documents(ctx: BlockRenderCtx) -> BlockRenderResult:
     found = _find(ctx, asset_id)
     if found is None:
         return BlockRenderResult(ok=False, locked_reason="no_access")
-    return BlockRenderResult(ok=True, data={"attachments": found["asset"].get("attachments", [])})
+    return BlockRenderResult(
+        ok=True,
+        data={"asset_id": asset_id, "attachments": found["asset"].get("attachments", [])},
+    )
 
 
 def resolve_linked_tasks(ctx: BlockRenderCtx) -> BlockRenderResult:

@@ -4,6 +4,7 @@ import { fmtMoney } from '../finance/money'
 import { ALL_MODULES, catColor } from '../../lib/constants'
 import { deepLinkUrl } from '../../lib/deepLinks'
 import { assets as assetsApi, contacts as contactsApi, tasks as tasksApi } from '../../lib/api'
+import { AttachmentThumb } from '../assetDisplay'
 
 function priorityDot(p) {
   return p === 'High' ? 'bg-red-500' : p === 'Medium' ? 'bg-yellow-500' : 'bg-charcoal-400'
@@ -209,8 +210,10 @@ export function DocumentsBlock({ data }) {
   const files = data?.attachments || []
   if (!files.length) return <Empty text="No attachments." />
   return (
-    <div className="space-y-1.5">
-      {files.map(f => <p key={f.id} className="text-sm truncate">📎 {f.filename}</p>)}
+    <div className="grid grid-cols-3 gap-2">
+      {files.map(f => (
+        <AttachmentThumb key={f.id} assetId={data.asset_id} file={f} canEdit={false} onDelete={() => {}} />
+      ))}
     </div>
   )
 }
@@ -346,8 +349,10 @@ export function HeadingDividerBlock({ data }) {
 
 export function NavButtonBlock({ data }) {
   if (!data?.module) return <Empty text="No destination configured." />
-  const url = deepLinkUrl(data.module, data.record_id)
-  const moduleLabel = ALL_MODULES.find(m => m.id === data.module)?.label || data.module
+  const url = deepLinkUrl(data.module, data.record_id, data.section)
+  const moduleLabel = data.module === 'settings'
+    ? 'Settings'
+    : ALL_MODULES.find(m => m.id === data.module)?.label || data.module
   const label = data.label || data.title || `Go to ${moduleLabel}`
   return (
     <Link to={url} className="btn-pill" title={label}>
@@ -374,6 +379,7 @@ export function StatusButtonBlock({ data, onAction }) {
       const map = { pending: 'Mark Pending', done: 'Mark Done', skipped: 'Mark Skipped' }
       return map[data.target_status] || 'Update Task'
     }
+    if (data.record_type === 'contact') return `Set ${data.field_key || 'field'}`
     if (data.action === 'archive') return 'Archive'
     if (data.action === 'unarchive') return 'Unarchive'
     if (data.action === 'set_field') return `Set ${data.field_key || 'field'}`
@@ -387,8 +393,11 @@ export function StatusButtonBlock({ data, onAction }) {
       if (data.record_type === 'task') {
         await tasksApi.update(data.record_id, { status: data.target_status })
       } else if (data.record_type === 'contact') {
-        if (data.action === 'unarchive') await contactsApi.unarchive(data.record_id)
-        else await contactsApi.archive(data.record_id)
+        // Contacts have no "fields" wrapper like Assets do — PATCH /contacts/{id}
+        // is a flat body, so this must be {gender: 'male'}, never
+        // {fields: {gender: 'male'}}, or the API silently accepts it and
+        // changes nothing (pydantic ignores unknown keys).
+        if (data.field_key) await contactsApi.update(data.record_id, { [data.field_key]: data.field_value })
       } else if (data.record_type === 'asset') {
         if (data.action === 'unarchive') await assetsApi.unarchive(data.record_id)
         else if (data.action === 'set_field' && data.field_key) {

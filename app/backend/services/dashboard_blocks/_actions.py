@@ -66,7 +66,16 @@ def resolve_nav_button(ctx: BlockRenderCtx) -> BlockRenderResult:
     if not module:
         return BlockRenderResult(ok=False, locked_reason="not_found")
     title = _resolve_record_title(ctx, module, record_id) if record_id else None
-    return BlockRenderResult(ok=True, data={"module": module, "record_id": record_id, "title": title})
+    return BlockRenderResult(
+        ok=True,
+        data={
+            "module": module,
+            "record_id": record_id,
+            "section": ctx.config.get("section"),
+            "title": title,
+            "label": ctx.config.get("label"),
+        },
+    )
 
 
 def resolve_status_button(ctx: BlockRenderCtx) -> BlockRenderResult:
@@ -88,6 +97,7 @@ def resolve_status_button(ctx: BlockRenderCtx) -> BlockRenderResult:
                 "title": task.get("title"),
                 "current_status": task.get("status"),
                 "target_status": ctx.config.get("new_status"),
+                "label": ctx.config.get("label"),
             },
         )
 
@@ -99,14 +109,24 @@ def resolve_status_button(ctx: BlockRenderCtx) -> BlockRenderResult:
         if found is None:
             return BlockRenderResult(ok=False, locked_reason="no_access")
         _store_user, contact, _access = found
+        # Contacts have no admin-configurable per-field option system the way
+        # Asset templates do, so the pickable field set is this small, fixed
+        # list of genuinely enumerable Contact fields (never free text) — see
+        # docs/MEMORY.md for why status/archive aren't offered here: contact
+        # `status` is freeform text with no enum, and the owner explicitly
+        # asked for real data updates over archiving. The actual PATCH is a
+        # direct contactsApi.update() call on click, gated by that endpoint's
+        # own real edit-access requirement — this resolver only labels it.
+        contact_field = ctx.config.get("contact_field") or {}
         return BlockRenderResult(
             ok=True,
             data={
                 "record_type": "contact",
                 "record_id": contact_id,
                 "title": contact.get("name"),
-                "archived": bool(contact.get("archived")),
-                "action": ctx.config.get("contact_action"),
+                "field_key": contact_field.get("field_key"),
+                "field_value": contact_field.get("value"),
+                "label": ctx.config.get("label"),
             },
         )
 
@@ -131,6 +151,7 @@ def resolve_status_button(ctx: BlockRenderCtx) -> BlockRenderResult:
                 "action": ctx.config.get("asset_action"),
                 "field_key": select_field.get("field_key"),
                 "field_value": select_field.get("value"),
+                "label": ctx.config.get("label"),
             },
         )
 

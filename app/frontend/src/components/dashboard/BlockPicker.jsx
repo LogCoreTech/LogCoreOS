@@ -10,6 +10,7 @@ import WorkflowPicker from '../WorkflowPicker'
 import FinanceBookPicker from '../finance/FinanceBookPicker'
 import ModuleAndRecordPicker from './ModuleAndRecordPicker'
 import AssetSelectFieldPicker from './AssetSelectFieldPicker'
+import ContactFieldPicker from './ContactFieldPicker'
 
 const CATEGORY_LABELS = {
   live_aggregate: 'Live data',
@@ -53,8 +54,8 @@ function renderField(f, config, setConfig) {
       return (
         <ModuleAndRecordPicker
           label={label}
-          value={{ module: config.module, record_id: config.record_id }}
-          onChange={(module, recordId) => setConfig({ ...config, module, record_id: recordId })}
+          value={{ module: config.module, record_id: config.record_id, section: config.section }}
+          onChange={(module, recordId, section) => setConfig({ ...config, module, record_id: recordId, section })}
         />
       )
     case 'assetSelectField':
@@ -66,6 +67,8 @@ function renderField(f, config, setConfig) {
           onChange={set}
         />
       )
+    case 'contactField':
+      return <ContactFieldPicker label={label} value={val} onChange={set} />
     case 'date':
       return (
         <div>
