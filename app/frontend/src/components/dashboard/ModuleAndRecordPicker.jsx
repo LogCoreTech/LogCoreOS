@@ -8,6 +8,7 @@ import NotePicker from '../NotePicker'
 import AssetPickerField from '../AssetPickerField'
 import FinanceBookPicker from '../finance/FinanceBookPicker'
 import ContactPicker from '../contacts/ContactPicker'
+import DashboardPicker from './DashboardPicker'
 
 // Modules with an existing single-record picker component. Automations has
 // no per-workflow detail page to land on yet, so workflow-specific deep
@@ -19,6 +20,7 @@ const RECORD_PICKERS = {
   notes: NotePicker,
   assets: AssetPickerField,
   finance: FinanceBookPicker,
+  dashboard: DashboardPicker,
 }
 
 const NAV_MODULE_OPTIONS = ALL_MODULES.filter(m => m.to)
