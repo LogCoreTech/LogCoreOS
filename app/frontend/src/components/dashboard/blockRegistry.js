@@ -26,12 +26,17 @@ export const BLOCK_REGISTRY = {
   single_event: { Component: SingleEventBlock, icon: '📌', label: 'Single Event', defaultLayout: { w: 9, h: 6 } },
   finance_activity: { Component: FinanceActivityBlock, icon: '💰', label: 'Finance Activity', defaultLayout: { w: 12, h: 9 } },
   finance_book_report: { Component: FinanceBookReportBlock, icon: '📊', label: 'Finance Book Report', defaultLayout: { w: 9, h: 9 } },
-  linked_deals: { Component: LinkedDealsBlock, icon: '🤝', label: 'Linked Deals', defaultLayout: { w: 12, h: 9 } },
-  custom_fields: { Component: CustomFieldsBlock, icon: '🗂️', label: 'Custom Fields', defaultLayout: { w: 9, h: 9 } },
-  linked_assets: { Component: LinkedAssetsBlock, icon: '🔗', label: 'Linked Assets', defaultLayout: { w: 9, h: 9 } },
-  documents: { Component: DocumentsBlock, icon: '📎', label: 'Documents/Attachments', defaultLayout: { w: 9, h: 9 } },
-  linked_tasks: { Component: LinkedTasksBlock, icon: '✅', label: 'Linked Tasks', defaultLayout: { w: 12, h: 9 } },
-  linked_contact: { Component: LinkedContactBlock, icon: '👤', label: 'Linked Contact', defaultLayout: { w: 9, h: 6 } },
+  // Labels below spell out the data's actual source (a linked Contact or
+  // Asset) rather than just the shape of what's shown — owner feedback:
+  // these "record widget" names were confusing without that context. Kept
+  // short since both the catalog grid and the (edit-mode-only) block header
+  // truncate long labels.
+  linked_deals: { Component: LinkedDealsBlock, icon: '🤝', label: "Contact's Deals", defaultLayout: { w: 12, h: 9 } },
+  custom_fields: { Component: CustomFieldsBlock, icon: '🗂️', label: 'Custom Fields (Contact/Asset)', defaultLayout: { w: 9, h: 9 } },
+  linked_assets: { Component: LinkedAssetsBlock, icon: '🔗', label: "Contact's Linked Assets", defaultLayout: { w: 9, h: 9 } },
+  documents: { Component: DocumentsBlock, icon: '📎', label: 'Asset Documents/Files', defaultLayout: { w: 9, h: 9 } },
+  linked_tasks: { Component: LinkedTasksBlock, icon: '✅', label: "Asset's Linked Tasks", defaultLayout: { w: 12, h: 9 } },
+  linked_contact: { Component: LinkedContactBlock, icon: '👤', label: "Asset's Linked Contact", defaultLayout: { w: 9, h: 6 } },
   my_assets_summary: { Component: MyAssetsSummaryBlock, icon: '🗃️', label: 'My Assets Summary', defaultLayout: { w: 12, h: 9 } },
   note_embed: { Component: NoteEmbedBlock, icon: '📝', label: 'Note Embed', defaultLayout: { w: 12, h: 9 } },
   journal_entry: { Component: JournalEntryBlock, icon: '📔', label: 'Journal Entry', defaultLayout: { w: 12, h: 9 } },
@@ -124,13 +129,9 @@ export const CONFIG_FIELD_SCHEMAS = {
     },
     { key: 'contact_id', label: 'Contact', kind: 'contact', showIf: { key: 'record_type', equals: 'contact' } },
     {
-      key: 'contact_action',
-      label: 'Action',
-      kind: 'select',
-      options: [
-        { value: 'archive', label: 'Archive' },
-        { value: 'unarchive', label: 'Unarchive' },
-      ],
+      key: 'contact_field',
+      label: 'Field to update',
+      kind: 'contactField',
       showIf: { key: 'record_type', equals: 'contact' },
     },
     { key: 'asset_id', label: 'Asset', kind: 'asset', showIf: { key: 'record_type', equals: 'asset' } },
