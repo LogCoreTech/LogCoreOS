@@ -13,8 +13,8 @@ share_underlying_data toggle, with nothing new to keep in sync. See the
 against a unified write endpoint.
 """
 
-from services import assets_service, contacts_service, events_service, finance_service, n8n_service
-from services import notes_service, task_service
+from services import assets_service, contacts_service, dashboards_service, events_service, finance_service
+from services import n8n_service, notes_service, task_service
 from services.dashboard_blocks._tasks import _scoped_target
 from services.dashboard_blocks.registry import BlockRenderCtx, BlockRenderResult, BlockSpec, register
 
@@ -55,6 +55,11 @@ def _resolve_record_title(ctx: BlockRenderCtx, module: str, record_id: str) -> s
             target = _scoped_target(ctx)
             wf = n8n_service.find_workflow(record_id, target) if target else None
             return wf.get("name") if wf else None
+        if module == "dashboard":
+            found = dashboards_service.find_dashboard(
+                ctx.viewer, ctx.viewer_role, ctx.is_admin, ctx.workspace, record_id
+            )
+            return found["dashboard"].get("name") if found else None
     except Exception:
         return None
     return None
