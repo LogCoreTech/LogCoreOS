@@ -9,6 +9,7 @@ import DashboardSettingsModal from '../components/dashboard/DashboardSettingsMod
 import DashboardSwitcher from '../components/dashboard/DashboardSwitcher'
 import CreateDashboardModal from '../components/dashboard/CreateDashboardModal'
 import DashboardTemplateManager from '../components/dashboard/DashboardTemplateManager'
+import DashboardHero from '../components/dashboard/DashboardHero'
 import { BLOCK_REGISTRY } from '../components/dashboard/blockRegistry'
 import { auth as authApi, dashboardTemplates as dashboardTemplatesApi, dashboards as dashboardsApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -240,6 +241,8 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
+          <DashboardHero subject={current.subject} templateLabel={current.template_label} />
+
           {editing && (
             <div className="flex items-center gap-2 flex-wrap">
               {!current.template_id && (

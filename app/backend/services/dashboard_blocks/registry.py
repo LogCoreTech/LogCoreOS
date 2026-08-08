@@ -73,6 +73,7 @@ def _load_all_resolvers() -> None:
         _assets,
         _automations,
         _calendar,
+        _collections,
         _contacts,
         _finance,
         _freeform,

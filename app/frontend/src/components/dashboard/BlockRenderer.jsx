@@ -51,10 +51,22 @@ export default function BlockRenderer({ block, onRemove, onEdit, onAction, editi
   // identify/manage a block while arranging the dashboard, not as permanent
   // view-mode chrome. No reserved space for it at all in view mode, not just
   // hidden-but-present, so content gets the card's full height back.
+  //
+  // `shape` (default 'detail') is the content-aware styling pass — a block
+  // that's just rows of related items (Top 3 Tasks, a contact's linked
+  // assets, …) drops the bordered/frosted `.card` treatment entirely, since
+  // every block getting identical box chrome regardless of what's inside it
+  // was the single biggest contributor to the dashboard reading as "blocky."
+  // 'detail'-shaped blocks (single-record content) keep today's card look
+  // unchanged. The header row itself stays the same across shapes — only the
+  // content wrapper's chrome changes.
+  const shape = meta.shape || 'detail'
+  const isListShape = shape === 'list'
+
   return (
-    <div className="card h-full p-3 overflow-hidden flex flex-col">
+    <div className={isListShape ? 'h-full p-2 overflow-hidden flex flex-col' : 'card h-full p-3 overflow-hidden flex flex-col'}>
       {editing && (
-        <div className="flex items-center justify-between mb-2 shrink-0">
+        <div className={`flex items-center justify-between mb-2 shrink-0 ${isListShape ? 'pb-2 border-b border-charcoal-200 dark:border-charcoal-700' : ''}`}>
           <span className="text-xs font-semibold uppercase tracking-wide text-charcoal-500 dark:text-charcoal-400 truncate flex items-center gap-1">
             <span>{meta.icon}</span>{meta.label}
           </span>

@@ -1266,6 +1266,19 @@ def list_visible(
     return result
 
 
+def asset_links_contact(asset: dict, template: dict | None, contact_id: str) -> bool:
+    """True if `asset` references `contact_id` in any contact-type field of
+    its own template. Shared by list_assets_for_contact (below) and the
+    dashboard Collection block resolver — one implementation of "does this
+    asset link to this contact," not two."""
+    tmpl = template or {}
+    contact_keys = [f["key"] for f in tmpl.get("fields", []) if f.get("type") == "contact"]
+    if not contact_keys:
+        return False
+    fields = asset.get("fields") or {}
+    return any(fields.get(k) == contact_id for k in contact_keys)
+
+
 def list_assets_for_contact(
     viewer: str,
     workspace: str,
@@ -1284,19 +1297,16 @@ def list_assets_for_contact(
     )
     for a in visible:
         tmpl = a.get("_template") or {}
-        contact_keys = [f["key"] for f in tmpl.get("fields", []) if f.get("type") == "contact"]
-        if not contact_keys:
+        if not asset_links_contact(a, tmpl, contact_id):
             continue
-        fields = a.get("fields") or {}
-        if any(fields.get(k) == contact_id for k in contact_keys):
-            results.append(
-                {
-                    "id": a["id"],
-                    "name": a.get("name", ""),
-                    "icon": tmpl.get("icon", ""),
-                    "template_label": tmpl.get("label", ""),
-                }
-            )
+        results.append(
+            {
+                "id": a["id"],
+                "name": a.get("name", ""),
+                "icon": tmpl.get("icon", ""),
+                "template_label": tmpl.get("label", ""),
+            }
+        )
     return results
 
 

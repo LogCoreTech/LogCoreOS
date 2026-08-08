@@ -11,6 +11,8 @@ import FinanceBookPicker from '../finance/FinanceBookPicker'
 import ModuleAndRecordPicker from './ModuleAndRecordPicker'
 import AssetSelectFieldPicker from './AssetSelectFieldPicker'
 import ContactFieldPicker from './ContactFieldPicker'
+import TemplatePicker from './TemplatePicker'
+import TemplateFieldsPicker from './TemplateFieldsPicker'
 
 const CATEGORY_LABELS = {
   live_aggregate: 'Live data',
@@ -93,6 +95,26 @@ function renderField(f, config, setConfig, templateMode = false, subjectType = n
       )
     case 'contactField':
       return <ContactFieldPicker label={label} value={val} onChange={set} />
+    case 'assetTemplate':
+      return <TemplatePicker label={label} value={val} onChange={set} />
+    case 'templateFields':
+      return (
+        <TemplateFieldsPicker
+          label={label}
+          templateId={config[f.dependsOn]}
+          value={val}
+          onChange={set}
+        />
+      )
+    case 'templateSelectField':
+      return (
+        <AssetSelectFieldPicker
+          label={label}
+          templateId={config[f.dependsOn]}
+          value={val}
+          onChange={set}
+        />
+      )
     case 'date':
       return (
         <div>
@@ -141,6 +163,7 @@ export default function BlockPicker({ editingBlock = null, onAdd, onSave, onClos
   const [catalog, setCatalog] = useState(null)
   const [selected, setSelected] = useState(editingBlock?.type || null)
   const [config, setConfig] = useState(editingBlock?.config || {})
+  const [query, setQuery] = useState('')
 
   useEffect(() => {
     if (isEditing) return // no type-grid step to populate in edit mode
@@ -158,8 +181,10 @@ export default function BlockPicker({ editingBlock = null, onAdd, onSave, onClos
     else onAdd(selected, { ...config })
   }
 
+  const q = query.trim().toLowerCase()
   const grouped = (catalog || []).reduce((acc, c) => {
     if (!BLOCK_REGISTRY[c.type]) return acc
+    if (q && !BLOCK_REGISTRY[c.type].label.toLowerCase().includes(q)) return acc
     acc[c.category] = acc[c.category] || []
     acc[c.category].push(c)
     return acc
@@ -177,8 +202,21 @@ export default function BlockPicker({ editingBlock = null, onAdd, onSave, onClos
         </div>
 
         {!selected ? (
-          <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+          <div className="space-y-4">
+            {catalog !== null && catalog.length > 0 && (
+              <input
+                className="input w-full"
+                placeholder="Search blocks…"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                autoFocus
+              />
+            )}
+            <div className="space-y-4 max-h-[55vh] overflow-y-auto">
             {catalog === null && <p className="text-sm text-charcoal-400">Loading…</p>}
+            {catalog !== null && Object.keys(grouped).length === 0 && (
+              <p className="text-sm text-charcoal-400">No blocks match &quot;{query}&quot;.</p>
+            )}
             {Object.entries(grouped).map(([cat, items]) => (
               <div key={cat}>
                 <h3 className="text-xs uppercase tracking-wide text-charcoal-400 mb-2">{CATEGORY_LABELS[cat] || cat}</h3>
@@ -196,6 +234,7 @@ export default function BlockPicker({ editingBlock = null, onAdd, onSave, onClos
                 </div>
               </div>
             ))}
+            </div>
           </div>
         ) : (
           <div className="space-y-3">
