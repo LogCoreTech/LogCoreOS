@@ -1,5 +1,5 @@
 import {
-  AiUsageMeBlock, AiUsageOverviewBlock, CustomFieldsBlock, DocumentsBlock, DueTodayBlock,
+  AiUsageMeBlock, AiUsageOverviewBlock, CollectionBlock, CustomFieldsBlock, DocumentsBlock, DueTodayBlock,
   FinanceActivityBlock, FinanceBookReportBlock, GoalsProgressBlock, HeadingDividerBlock,
   HomeFavouritesBlock, InboxSummaryBlock, JournalEntryBlock, LinkButtonBlock, LinkedAssetsBlock,
   LinkedContactBlock, LinkedDealsBlock, LinkedTasksBlock, MyAssetsSummaryBlock, NavButtonBlock,
@@ -14,37 +14,49 @@ import {
 // Grid units are 36 cols / 24px rows / 6px margin (see DashboardGrid.jsx) — every
 // defaultLayout below is ×3 the pre-rescale values so blocks keep their original
 // visual proportions on the finer grid.
+// `shape` (default 'detail' when absent) tells BlockRenderer.jsx how much
+// chrome the content area gets: 'list' drops the padded/bordered wrapper for
+// blocks that are just rows + dividers, 'stat' is a bare number (currently
+// only the Collection block's Count view), 'detail' (the default) keeps
+// today's bordered card for single-record content. Owner feedback: every
+// block looked like the same box regardless of what was inside it.
 export const BLOCK_REGISTRY = {
-  top3_tasks: { Component: Top3TasksBlock, icon: '🎯', label: 'Top 3 Tasks', defaultLayout: { w: 12, h: 9 } },
-  due_today: { Component: DueTodayBlock, icon: '📅', label: 'Due Today', defaultLayout: { w: 12, h: 9 } },
-  streaks: { Component: StreaksBlock, icon: '🔥', label: 'Active Streaks', defaultLayout: { w: 12, h: 9 } },
-  goals_progress: { Component: GoalsProgressBlock, icon: '🏆', label: 'Goals Progress', defaultLayout: { w: 12, h: 9 } },
+  top3_tasks: { Component: Top3TasksBlock, icon: '🎯', label: 'Top 3 Tasks', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
+  due_today: { Component: DueTodayBlock, icon: '📅', label: 'Due Today', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
+  streaks: { Component: StreaksBlock, icon: '🔥', label: 'Active Streaks', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
+  goals_progress: { Component: GoalsProgressBlock, icon: '🏆', label: 'Goals Progress', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
   single_task: { Component: SingleTaskBlock, icon: '✅', label: 'Single Task', defaultLayout: { w: 9, h: 6 } },
   home_favourites: { Component: HomeFavouritesBlock, icon: '💡', label: 'Smart Home Favourites', defaultLayout: { w: 18, h: 9 } },
-  pool_tasks: { Component: PoolTasksBlock, icon: '🧑‍🤝‍🧑', label: 'Household/Team Tasks', defaultLayout: { w: 12, h: 9 } },
-  upcoming_events: { Component: UpcomingEventsBlock, icon: '📆', label: 'Upcoming Events', defaultLayout: { w: 12, h: 9 } },
+  pool_tasks: { Component: PoolTasksBlock, icon: '🧑‍🤝‍🧑', label: 'Household/Team Tasks', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
+  upcoming_events: { Component: UpcomingEventsBlock, icon: '📆', label: 'Upcoming Events', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
   single_event: { Component: SingleEventBlock, icon: '📌', label: 'Single Event', defaultLayout: { w: 9, h: 6 } },
-  finance_activity: { Component: FinanceActivityBlock, icon: '💰', label: 'Finance Activity', defaultLayout: { w: 12, h: 9 } },
+  finance_activity: { Component: FinanceActivityBlock, icon: '💰', label: 'Finance Activity', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
   finance_book_report: { Component: FinanceBookReportBlock, icon: '📊', label: 'Finance Book Report', defaultLayout: { w: 9, h: 9 } },
   // Labels below spell out the data's actual source (a linked Contact or
   // Asset) rather than just the shape of what's shown — owner feedback:
   // these "record widget" names were confusing without that context. Kept
   // short since both the catalog grid and the (edit-mode-only) block header
   // truncate long labels.
-  linked_deals: { Component: LinkedDealsBlock, icon: '🤝', label: "Contact's Deals", defaultLayout: { w: 12, h: 9 } },
+  linked_deals: { Component: LinkedDealsBlock, icon: '🤝', label: "Contact's Deals", defaultLayout: { w: 12, h: 9 }, shape: 'list' },
   custom_fields: { Component: CustomFieldsBlock, icon: '🗂️', label: 'Custom Fields (Contact/Asset)', defaultLayout: { w: 9, h: 9 } },
-  linked_assets: { Component: LinkedAssetsBlock, icon: '🔗', label: "Contact's Linked Assets", defaultLayout: { w: 9, h: 9 } },
+  linked_assets: { Component: LinkedAssetsBlock, icon: '🔗', label: "Contact's Linked Assets", defaultLayout: { w: 9, h: 9 }, shape: 'list' },
   documents: { Component: DocumentsBlock, icon: '📎', label: 'Asset Documents/Files', defaultLayout: { w: 9, h: 9 } },
-  linked_tasks: { Component: LinkedTasksBlock, icon: '✅', label: "Asset's Linked Tasks", defaultLayout: { w: 12, h: 9 } },
+  linked_tasks: { Component: LinkedTasksBlock, icon: '✅', label: "Asset's Linked Tasks", defaultLayout: { w: 12, h: 9 }, shape: 'list' },
   linked_contact: { Component: LinkedContactBlock, icon: '👤', label: "Asset's Linked Contact", defaultLayout: { w: 9, h: 6 } },
-  my_assets_summary: { Component: MyAssetsSummaryBlock, icon: '🗃️', label: 'My Assets Summary', defaultLayout: { w: 12, h: 9 } },
+  my_assets_summary: { Component: MyAssetsSummaryBlock, icon: '🗃️', label: 'My Assets Summary', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
+  // The generic block: pick a template, optionally link it to this
+  // dashboard's own contact ($subject-aware like any other contact field),
+  // pick which fields to show and which select field is the status — no
+  // new code needed for a new use case, just configuration. See
+  // dashboard_blocks/_collections.py for the resolver.
+  collection: { Component: CollectionBlock, icon: '📋', label: 'Collection (List/Board)', defaultLayout: { w: 18, h: 12 } },
   note_embed: { Component: NoteEmbedBlock, icon: '📝', label: 'Note Embed', defaultLayout: { w: 12, h: 9 } },
   journal_entry: { Component: JournalEntryBlock, icon: '📔', label: 'Journal Entry', defaultLayout: { w: 12, h: 9 } },
   workflow_status: { Component: WorkflowStatusBlock, icon: '⚙️', label: 'Automation Workflow Status', defaultLayout: { w: 9, h: 6 } },
-  inbox_summary: { Component: InboxSummaryBlock, icon: '📥', label: 'Automation Inbox Summary', defaultLayout: { w: 9, h: 6 } },
+  inbox_summary: { Component: InboxSummaryBlock, icon: '📥', label: 'Automation Inbox Summary', defaultLayout: { w: 9, h: 6 }, shape: 'list' },
   ai_usage_me: { Component: AiUsageMeBlock, icon: '🤖', label: 'AI Usage — My Usage', defaultLayout: { w: 9, h: 6 } },
-  ai_usage_overview: { Component: AiUsageOverviewBlock, icon: '🛡️', label: 'AI Usage — All Users', defaultLayout: { w: 12, h: 9 } },
-  recent_ai_actions: { Component: RecentAiActionsBlock, icon: '🕘', label: 'Recent AI Actions', defaultLayout: { w: 12, h: 9 } },
+  ai_usage_overview: { Component: AiUsageOverviewBlock, icon: '🛡️', label: 'AI Usage — All Users', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
+  recent_ai_actions: { Component: RecentAiActionsBlock, icon: '🕘', label: 'Recent AI Actions', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
   text_block: { Component: TextBlock, icon: '📄', label: 'Text', defaultLayout: { w: 12, h: 6 } },
   link_button: { Component: LinkButtonBlock, icon: '🔘', label: 'Custom Link/Button', defaultLayout: { w: 6, h: 3 } },
   heading_divider: { Component: HeadingDividerBlock, icon: '➖', label: 'Heading/Divider', defaultLayout: { w: 12, h: 3 } },
@@ -76,6 +88,22 @@ export const CONFIG_FIELD_SCHEMAS = {
     { key: 'asset_id', label: 'Asset', kind: 'asset', optional: true },
   ],
   linked_assets: [{ key: 'contact_id', label: 'Contact (shows the assets linked to them)', kind: 'contact' }],
+  collection: [
+    { key: 'template_id', label: 'Show records from', kind: 'assetTemplate' },
+    { key: 'link_contact_id', label: 'Only ones linked to a contact', kind: 'contact', optional: true },
+    { key: 'display_fields', label: 'Fields to show', kind: 'templateFields', dependsOn: 'template_id' },
+    { key: 'status_field', label: 'Status field (optional — adds a one-click status control)', kind: 'templateSelectField', dependsOn: 'template_id', optional: true },
+    {
+      key: 'view',
+      label: 'Layout',
+      kind: 'select',
+      options: [
+        { value: 'list', label: 'List' },
+        { value: 'kanban', label: 'Kanban (grouped by status)' },
+        { value: 'count', label: 'Count only' },
+      ],
+    },
+  ],
   documents: [{ key: 'asset_id', label: 'Asset', kind: 'asset' }],
   linked_tasks: [{ key: 'asset_id', label: 'Asset', kind: 'asset' }],
   linked_contact: [{ key: 'asset_id', label: 'Asset (shows its linked contact)', kind: 'asset' }],

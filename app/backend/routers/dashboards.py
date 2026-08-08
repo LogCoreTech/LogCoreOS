@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from routers.auth import get_workspace, require_module
-from services import dashboard_index, dashboard_templates_service, dashboards_service
+from services import assets_service, contacts_service, dashboard_index, dashboard_templates_service, dashboards_service
 from services.dashboard_blocks.registry import catalog
 from services.dashboard_blocks.render import render_dashboard
 from services.rate_limiter import rate_limit
@@ -102,6 +102,43 @@ class ShareRespond(BaseModel):
     owner: str
     dashboard_id: str
     accept: bool
+
+
+def _resolve_subject(current_user: dict, workspace: str, dashboard: dict) -> dict | None:
+    """Small identity summary for the dashboard hero header — never the whole
+    record, and never raises: a subject the viewer has lost access to (or a
+    dangling id) just means no hero, not a broken dashboard render."""
+    subject_type = dashboard.get("subject_type")
+    subject_id = dashboard.get("subject_id")
+    if not subject_type or not subject_id:
+        return None
+    viewer = current_user["name"]
+    role = current_user.get("feature_role", "member")
+    is_admin = current_user.get("role") == "admin"
+    try:
+        if subject_type == "contact":
+            found = contacts_service.find_contact(viewer, role, is_admin, workspace, subject_id)
+            if found is None:
+                return None
+            _store_user, contact, _access = found
+            return {
+                "type": "contact", "id": subject_id, "name": contact.get("name") or "",
+                "contact_type": contact.get("type"), "gender": contact.get("gender"),
+                "photo_ext": contact.get("photo_ext"),
+            }
+        if subject_type == "asset":
+            found = assets_service.find_asset(viewer, workspace, subject_id, is_admin, viewer_role=role)
+            if found is None:
+                return None
+            asset = found["asset"]
+            template = assets_service.resolve_template(asset)
+            return {
+                "type": "asset", "id": subject_id, "name": asset.get("name") or "",
+                "icon": (template or {}).get("icon"),
+            }
+    except Exception:
+        return None
+    return None
 
 
 def _find(current_user: dict, workspace: str, dashboard_id: str, need: str = "read"):
@@ -368,6 +405,7 @@ def get_render(
         "template_label": template.get("label") if template else None,
         "subject_type": found["dashboard"].get("subject_type"),
         "subject_id": found["dashboard"].get("subject_id"),
+        "subject": _resolve_subject(current_user, workspace, found["dashboard"]),
         "share_underlying_data": found["dashboard"].get("share_underlying_data", False),
         "shared_with": found["dashboard"].get("shared_with", []),
         "hidden_from": found["dashboard"].get("hidden_from", []),
