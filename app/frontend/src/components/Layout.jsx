@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
 import { ALL_MODULES, getShortcutsForUser } from '../lib/constants'
-import { suggestions as sugApi, assets as assetsApi, finance as financeApi, contacts as contactsApi, notes as notesApi } from '../lib/api'
+import { suggestions as sugApi, assets as assetsApi, finance as financeApi, contacts as contactsApi, notes as notesApi, dashboards as dashboardsApi, dashboardTemplates as dashboardTemplatesApi } from '../lib/api'
 import { deepLinkUrl } from '../lib/deepLinks'
 import WhatsNewBanner from './WhatsNewBanner'
 
@@ -72,6 +72,11 @@ function NotifBell() {
       if (n.action?.type === 'finance_share') await financeApi.respondShare(n.id, accept)
       else if (n.action?.type === 'contacts_share') await contactsApi.respondShare(n.id, accept)
       else if (n.action?.type === 'notes_share') await notesApi.respondShare(n.id, accept)
+      // dashboard_share/dashboard_template_share take (owner, id, accept) —
+      // a different shape than the notif-id-keyed respondShare every other
+      // module above uses — so they can't fall through to the assets default.
+      else if (n.action?.type === 'dashboard_share') await dashboardsApi.respondShare(n.action.owner, n.action.dashboard_id, accept)
+      else if (n.action?.type === 'dashboard_template_share') await dashboardTemplatesApi.respondShare(n.action.owner, n.action.template_id, accept)
       else await assetsApi.respondShare(n.id, accept)
     } catch { /* keep resolved locally */ }
     load()

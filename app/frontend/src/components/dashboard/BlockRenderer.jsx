@@ -1,7 +1,7 @@
 import { BLOCK_REGISTRY, isConfigurable } from './blockRegistry'
 import LockedBlockPlaceholder from './LockedBlockPlaceholder'
 
-export default function BlockRenderer({ block, onRemove, onEdit, onAction, editing }) {
+export default function BlockRenderer({ block, onRemove, onEdit, onAction, editing, locked = false }) {
   const meta = BLOCK_REGISTRY[block.type]
   if (!meta) {
     return (
@@ -15,11 +15,14 @@ export default function BlockRenderer({ block, onRemove, onEdit, onAction, editi
   // Chromeless blocks (action buttons) skip the card/header entirely — just
   // the bare pill filling the cell. Edit/remove still need a way in while
   // editing, so they get a tiny corner overlay instead of a reserved header.
+  // `locked` (a templated dashboard — see Dashboard.jsx) suppresses both:
+  // the block SET is template-controlled there, only layout is this
+  // instance's own to customize, so there's nothing for ✎/✕ to do.
   if (meta.chromeless) {
     return (
       <div className="h-full w-full relative flex items-center justify-center">
         {block.ok ? <Comp data={block.data} onAction={onAction} /> : <LockedBlockPlaceholder reason={block.locked_reason} />}
-        {editing && (
+        {editing && !locked && (
           <span className="absolute -top-2 -right-2 flex items-center gap-1 bg-white dark:bg-charcoal-800 border border-charcoal-200 dark:border-charcoal-600 rounded-full px-1.5 py-0.5 shadow shrink-0">
             {isConfigurable(block.type) && (
               <button
@@ -55,24 +58,26 @@ export default function BlockRenderer({ block, onRemove, onEdit, onAction, editi
           <span className="text-xs font-semibold uppercase tracking-wide text-charcoal-500 dark:text-charcoal-400 truncate flex items-center gap-1">
             <span>{meta.icon}</span>{meta.label}
           </span>
-          <span className="flex items-center gap-2 shrink-0">
-            {isConfigurable(block.type) && (
+          {!locked && (
+            <span className="flex items-center gap-2 shrink-0">
+              {isConfigurable(block.type) && (
+                <button
+                  onClick={() => onEdit(block)}
+                  className="text-charcoal-400 hover:text-orange-500 text-xs"
+                  title="Edit block config"
+                >
+                  ✎
+                </button>
+              )}
               <button
-                onClick={() => onEdit(block)}
-                className="text-charcoal-400 hover:text-orange-500 text-xs"
-                title="Edit block config"
+                onClick={() => onRemove(block.id)}
+                className="text-charcoal-400 hover:text-red-500 text-xs"
+                title="Remove block"
               >
-                ✎
+                ✕
               </button>
-            )}
-            <button
-              onClick={() => onRemove(block.id)}
-              className="text-charcoal-400 hover:text-red-500 text-xs"
-              title="Remove block"
-            >
-              ✕
-            </button>
-          </span>
+            </span>
+          )}
         </div>
       )}
       <div className="flex-1 min-h-0 overflow-auto">

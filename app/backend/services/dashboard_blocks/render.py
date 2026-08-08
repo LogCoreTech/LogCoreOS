@@ -11,6 +11,24 @@ from services.dashboard_blocks.registry import REGISTRY, BlockRenderCtx, BlockRe
 
 _load_all_resolvers()
 
+_SUBJECT_SENTINEL = "$subject"
+
+
+def _resolve_subject_config(config: dict, dashboard: dict) -> tuple[dict, bool]:
+    """Substitute the literal "$subject" sentinel (authored into a template's
+    block config — see dashboard_templates_service.py) with this dashboard
+    instance's own subject_id. Centralized here so no individual resolver
+    needs to know the sentinel exists. Returns (config, ready) — ready is
+    False if a sentinel survives unsubstituted because the dashboard has no
+    subject set yet, letting the caller show a clear "not set up" state
+    instead of a generic not-found from whatever module happens to fail to
+    find a record literally named "$subject"."""
+    subject_id = dashboard.get("subject_id")
+    if subject_id:
+        return {k: (subject_id if v == _SUBJECT_SENTINEL else v) for k, v in config.items()}, True
+    ready = not any(v == _SUBJECT_SENTINEL for v in config.values())
+    return config, ready
+
 
 def render_block(
     dashboard: dict,
@@ -32,6 +50,10 @@ def render_block(
     if spec.admin_only and not is_admin and not can_exception:
         return BlockRenderResult(ok=False, locked_reason="admin_only")
 
+    resolved_config, ready = _resolve_subject_config(block.get("config") or {}, dashboard)
+    if not ready:
+        return BlockRenderResult(ok=False, locked_reason="no_subject")
+
     # Pass 1 — always resolve as the viewer's own identity first. This is the
     # ONLY path exercised when share_underlying_data is off, and it never
     # special-cases block type: every resolver independently re-checks access
@@ -41,7 +63,7 @@ def render_block(
         viewer_role=viewer_role,
         is_admin=is_admin,
         workspace=workspace,
-        config=block.get("config") or {},
+        config=resolved_config,
         dashboard_owner=owner,
     )
     try:
@@ -65,7 +87,7 @@ def render_block(
         viewer_role=owner_user.get("feature_role", "member"),
         is_admin=owner_user.get("role") == "admin",
         workspace=workspace,
-        config=block.get("config") or {},
+        config=resolved_config,
         dashboard_owner=owner,
     )
     try:

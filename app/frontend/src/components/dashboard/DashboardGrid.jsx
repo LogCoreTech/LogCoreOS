@@ -40,7 +40,7 @@ const LG_BREAKPOINT = 768
 const LONG_PRESS_MS = 550
 const MOVE_CANCEL_PX = 10
 
-export default function DashboardGrid({ blocks, editing, onRemoveBlock, onEditBlock, onBlockAction, onLayoutChange }) {
+export default function DashboardGrid({ blocks, editing, blocksLocked = false, onRemoveBlock, onEditBlock, onBlockAction, onLayoutChange }) {
   const containerRef = useRef(null)
   const gestureRef = useRef(null)
   const [dragVisual, setDragVisual] = useState(null) // { id, dx, dy } while held/dragging
@@ -275,7 +275,7 @@ export default function DashboardGrid({ blocks, editing, onRemoveBlock, onEditBl
                 className="h-full w-full"
                 style={dragging ? { transform: `translate(${dragVisual.dx}px, ${dragVisual.dy}px)` } : undefined}
               >
-                <BlockRenderer block={b} onRemove={onRemoveBlock} onEdit={onEditBlock} onAction={onBlockAction} editing={editing} />
+                <BlockRenderer block={b} onRemove={onRemoveBlock} onEdit={onEditBlock} onAction={onBlockAction} editing={editing} locked={blocksLocked} />
               </div>
             </div>
           )
