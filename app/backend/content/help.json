@@ -24,9 +24,10 @@
       "title": "Dashboard",
       "blurb": "Your home screen — now build-it-yourself. Create as many dashboards as you want, each a freeform grid of blocks pulling live data from almost any module: tasks, streaks, Smart Home, Finance, Contacts, Assets, Notes, Calendar, Automations, and more.",
       "howto": [
-        "Click the dashboard name at the top to switch between your dashboards or create a new one.",
+        "Click the dashboard name at the top to switch between your dashboards — grouped by template if you use them — or create a new one.",
         "Click \"Edit Dashboard\" to drag/resize blocks, add new ones, or remove existing ones — works the same way on desktop and mobile, and each remembers its own arrangement, so a dashboard can be laid out differently on your phone than on your laptop. On a touchscreen, press and hold a block for a moment before it starts moving — a quick swipe scrolls the page as normal instead. Removing a block asks you to confirm first. Every block's name and icon only show up while you're editing — dashboards look clean and uncluttered the rest of the time.",
         "Click \"+ Add Block\" to pick from the full catalog, grouped into live data, record-linked, actions, and freeform (text/links/headings). Record-linked blocks (Single Task, Contact's Deals, Finance Book Report, etc.) let you search for and pick the exact task, contact, asset, event, book, note, or workflow — you never need to know or type an internal ID. The Documents/Files block shows real image previews and lets you click any file to open it.",
+        "When creating a new dashboard, you can start blank or pick a template to build from a reusable block set instantly — templates are entirely optional. Some templates ask you to pick a contact or asset first (their \"subject\"); any block set up to use \"this dashboard's own contact/asset\" then shows that record's data. A dashboard made from a template keeps its block set in sync with the template automatically, but its own layout stays yours to rearrange — use \"Detach from template\" (in ⚙ Settings) for full independent control over its blocks too.",
         "Two Action blocks render as a small standalone button with nothing else around it, so you can fit several in a small space: \"Navigate To…\" jumps to any page, a specific section within Finance/Automations/Settings, a specific record, or a specific dashboard; \"Status/Archive Action\" marks a task done/pending/skipped, updates a contact's gender or marital status, or archives/unarchives an asset or sets one of its own fields, with one click. Every option in both is picked from a real list, never typed — including the button's own label, if you want something more specific than the default.",
         "While editing, click \"⚙ Settings\" to rename the dashboard, change its icon, share it, set it as your default, or delete it — all in one place.",
         "Sharing (inside ⚙ Settings) lets you share a dashboard with another person or your household/team pool at read, contribute, or edit access.",
@@ -37,6 +38,8 @@
         "Your first dashboard, \"Home,\" was created automatically from your old fixed dashboard widgets — fully editable and deletable like any other, as long as you have at least one other dashboard.",
         "A dashboard with only one block left can't be deleted while it's your only dashboard in that workspace — LogCore always keeps you at least one landing page.",
         "Picked the wrong record for a block? Click its \"✎\" button while editing to change what it points to, without deleting and re-adding the block.",
+        "Manage templates from the \"Templates\" button next to \"+ New Dashboard.\" Admins can build global templates for everyone; anyone can also build and share their own personal ones — just like Asset Templates.",
+        "Made a dashboard from a template? ⚙ Settings lets you change which contact/asset it's about (\"Change subject\") at any time.",
         "To resize a block, drag the small orange corner mark in its bottom-right corner while editing (desktop only)."
       ],
       "modules": ["dashboard"]

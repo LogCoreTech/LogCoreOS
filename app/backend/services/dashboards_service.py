@@ -185,6 +185,7 @@ def find_dashboard(
     """
     own = get_dashboard(viewer, dashboard_id, workspace)
     if own is not None:
+        own = _sync_templated_dashboard(viewer, workspace, own)
         return {
             "store": viewer,
             "store_workspace": workspace,
@@ -199,6 +200,7 @@ def find_dashboard(
         access = resolve_access(viewer, viewer_role, is_admin, pool_user, pool_dash, workspace)
         if access is None:
             return None
+        pool_dash = _sync_templated_dashboard(pool_user, "personal", pool_dash)
         return {
             "store": pool_user,
             "store_workspace": "personal",
@@ -216,6 +218,7 @@ def find_dashboard(
         access = resolve_access(viewer, viewer_role, is_admin, owner, dash, workspace)
         if access is None:
             return None
+        dash = _sync_templated_dashboard(owner, workspace, dash)
         return {
             "store": owner,
             "store_workspace": workspace,
@@ -252,7 +255,29 @@ def list_visible_dashboards(
                 continue
             result.append({**d, "_owner": owner, "_access": access})
 
-    return result
+    return _attach_template_labels(result)
+
+
+def _attach_template_labels(items: list[dict]) -> list[dict]:
+    """Denormalize each dashboard's template label/icon onto the list item so
+    the switcher/picker can group by template without needing per-viewer
+    template visibility — a shared dashboard shows its group label even if the
+    viewer doesn't own that template themselves (same rationale as
+    assets_service.attach_templates)."""
+    from services import dashboard_templates_service
+
+    by_id = dashboard_templates_service.all_templates_by_id()
+    out = []
+    for d in items:
+        tmpl = by_id.get(d.get("template_id"))
+        out.append(
+            {
+                **d,
+                "_template_label": tmpl.get("label") if tmpl else None,
+                "_template_icon": tmpl.get("icon") if tmpl else None,
+            }
+        )
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -261,7 +286,13 @@ def list_visible_dashboards(
 
 
 def create_dashboard(
-    store_user: str, workspace: str, owner: str, name: str, icon: str = "📊"
+    store_user: str,
+    workspace: str,
+    owner: str,
+    name: str,
+    icon: str = "📊",
+    template_id: str | None = None,
+    subject_id: str | None = None,
 ) -> dict:
     name = (name or "").strip()[:_NAME_MAX] or "Untitled Dashboard"
     now = _now()
@@ -271,6 +302,9 @@ def create_dashboard(
         "icon": (icon or "📊").strip()[:8],
         "owner": owner,
         "blocks": [],
+        "template_id": None,
+        "subject_type": None,
+        "subject_id": None,
         "shared_with": [],
         "hidden_from": [],
         "contributors": [],
@@ -278,8 +312,134 @@ def create_dashboard(
         "created_at": now,
         "updated_at": now,
     }
+    if template_id:
+        from services import dashboard_templates_service
+
+        template = dashboard_templates_service.get_template_by_id(template_id)
+        if template is None:
+            raise ValueError("Template not found")
+        if template.get("subject_type") and not subject_id:
+            raise ValueError("This template requires a subject")
+        dashboard["template_id"] = template_id
+        dashboard["subject_type"] = template.get("subject_type")
+        dashboard["subject_id"] = subject_id
+        dashboard["blocks"] = _sync_blocks_from_template([], template.get("blocks") or [])
     store = _load(store_user, workspace)
     store["dashboards"].append(dashboard)
+    _save(store_user, workspace, store)
+    return dashboard
+
+
+# ---------------------------------------------------------------------------
+# Templates — block-set sync (live) + per-instance layout independence
+# ---------------------------------------------------------------------------
+
+
+def _stacked_layout(existing_blocks: list[dict]) -> dict:
+    """A fresh full-width slot stacked below everything already placed —
+    mirrors Dashboard.jsx::addBlock()'s y:Infinity auto-stack, computed here
+    since this runs at sync time on the backend, not at add-block time in the
+    browser."""
+
+    def bottom(bp: str) -> int:
+        ys = [
+            (b.get("layout", {}).get(bp) or {}).get("y", 0)
+            + (b.get("layout", {}).get(bp) or {}).get("h", 0)
+            for b in existing_blocks
+        ]
+        return max(ys) if ys else 0
+
+    return {
+        "lg": {"x": 0, "y": bottom("lg"), "w": 12, "h": 9},
+        "sm": {"x": 0, "y": bottom("sm"), "w": 12, "h": 9},
+    }
+
+
+def _sync_blocks_from_template(current_blocks: list[dict], template_blocks: list[dict]) -> list[dict]:
+    """Reconcile an instance's blocks against its template's current blocks,
+    keyed by slot id. Type/config/existence are fully template-controlled; an
+    EXISTING slot's own stored layout is left untouched — that's the entire
+    mechanism behind "block set stays synced, layout goes independent." A new
+    slot gets a freshly stacked layout, which immediately becomes that
+    instance's own independent layout from then on."""
+    existing_by_id = {b["id"]: b for b in current_blocks if b.get("id")}
+    synced: list[dict] = []
+    for tb in template_blocks:
+        slot_id = tb["id"]
+        existing = existing_by_id.get(slot_id)
+        layout = existing["layout"] if existing and existing.get("layout") else _stacked_layout(synced)
+        synced.append(
+            {
+                "id": slot_id,
+                "type": tb["type"],
+                "config": tb.get("config") or {},
+                "layout": layout,
+            }
+        )
+    return synced
+
+
+def _persist_single(store_user: str, workspace: str, dashboard: dict) -> None:
+    store = _load(store_user, workspace)
+    for i, d in enumerate(store["dashboards"]):
+        if d["id"] == dashboard["id"]:
+            store["dashboards"][i] = dashboard
+            break
+    _save(store_user, workspace, store)
+
+
+def _sync_templated_dashboard(store_user: str, workspace: str, dashboard: dict) -> dict:
+    """Self-healing sync-on-read (same shape as resolve_default_dashboard_id's
+    self-healing): if the template's block set has changed since this instance
+    was last read, reconcile and persist. A deleted template leaves the
+    instance frozen at its last-synced blocks rather than erroring — templates
+    can't actually be deleted while referenced (see
+    dashboard_templates_service.delete_template), so this is defense in depth,
+    not the primary guarantee."""
+    tid = dashboard.get("template_id")
+    if not tid:
+        return dashboard
+    from services import dashboard_templates_service
+
+    template = dashboard_templates_service.get_template_by_id(tid)
+    if template is None:
+        return dashboard
+    synced = _sync_blocks_from_template(dashboard.get("blocks") or [], template.get("blocks") or [])
+    if synced == dashboard.get("blocks"):
+        return dashboard
+    dashboard["blocks"] = synced
+    dashboard["updated_at"] = _now()
+    _persist_single(store_user, workspace, dashboard)
+    return dashboard
+
+
+def set_subject(
+    store_user: str, workspace: str, dashboard_id: str, subject_id: str | None, by: str = ""
+) -> dict | None:
+    store = _load(store_user, workspace)
+    dashboard = _by_id(store["dashboards"]).get(dashboard_id)
+    if dashboard is None:
+        return None
+    if not dashboard.get("template_id"):
+        raise ValueError("Only a dashboard created from a template has a subject")
+    dashboard["subject_id"] = (subject_id or "").strip() or None
+    dashboard["updated_at"] = _now()
+    _save(store_user, workspace, store)
+    return dashboard
+
+
+def detach_template(store_user: str, workspace: str, dashboard_id: str, by: str = "") -> dict | None:
+    """Escape hatch: freezes the dashboard's currently-synced blocks/layout in
+    place as an ordinary freeform dashboard — no more template sync, and its
+    blocks become independently addable/removable/editable again."""
+    store = _load(store_user, workspace)
+    dashboard = _by_id(store["dashboards"]).get(dashboard_id)
+    if dashboard is None:
+        return None
+    dashboard["template_id"] = None
+    dashboard["subject_type"] = None
+    dashboard["subject_id"] = None
+    dashboard["updated_at"] = _now()
     _save(store_user, workspace, store)
     return dashboard
 
@@ -298,12 +458,34 @@ def update_dashboard(
     if "icon" in updates:
         dashboard["icon"] = str(updates["icon"] or "📊").strip()[:8]
     if "blocks" in updates:
-        dashboard["blocks"] = _validate_blocks(updates["blocks"])
+        if dashboard.get("template_id"):
+            dashboard["blocks"] = _apply_layout_only(dashboard["blocks"], updates["blocks"])
+        else:
+            dashboard["blocks"] = _validate_blocks(updates["blocks"])
 
     dashboard["updated_at"] = _now()
     _save(store_user, workspace, store)
     dashboard_index.reindex_dashboard(store_user, workspace, dashboard)
     return dashboard
+
+
+def _apply_layout_only(current_blocks: list[dict], incoming: list[dict]) -> list[dict]:
+    """Templated dashboards: the block set (type/config/existence) is
+    template-controlled — only position/size can be customized per instance.
+    Enforced here regardless of what the client sends, mirroring how e.g.
+    assets re-validates contribute-caps server-side rather than trusting the UI."""
+    incoming_by_id = {b.get("id"): b for b in incoming or [] if b.get("id")}
+    out = []
+    for b in current_blocks:
+        inc = incoming_by_id.get(b["id"])
+        layout = b["layout"]
+        if inc and inc.get("layout"):
+            layout = {
+                "lg": inc["layout"].get("lg") or layout.get("lg"),
+                "sm": inc["layout"].get("sm") or layout.get("sm"),
+            }
+        out.append({**b, "layout": layout})
+    return out
 
 
 def _validate_blocks(blocks: list[dict]) -> list[dict]:

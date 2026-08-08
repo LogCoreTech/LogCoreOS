@@ -7,8 +7,10 @@ import BlockPicker from '../components/dashboard/BlockPicker'
 import DashboardAccessModal from '../components/dashboard/DashboardAccessModal'
 import DashboardSettingsModal from '../components/dashboard/DashboardSettingsModal'
 import DashboardSwitcher from '../components/dashboard/DashboardSwitcher'
+import CreateDashboardModal from '../components/dashboard/CreateDashboardModal'
+import DashboardTemplateManager from '../components/dashboard/DashboardTemplateManager'
 import { BLOCK_REGISTRY } from '../components/dashboard/blockRegistry'
-import { auth as authApi, dashboards as dashboardsApi } from '../lib/api'
+import { auth as authApi, dashboardTemplates as dashboardTemplatesApi, dashboards as dashboardsApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
 
@@ -34,6 +36,9 @@ export default function Dashboard() {
   const [showAccess, setShowAccess] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showSwitcher, setShowSwitcher] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showTemplateManager, setShowTemplateManager] = useState(false)
+  const [templates, setTemplates] = useState([])
   const [saving, setSaving] = useState(false)
 
   const idParam = searchParams.get('id')
@@ -85,11 +90,21 @@ export default function Dashboard() {
     setSearchParams({ id })
   }
 
-  async function createDashboard() {
-    const d = await dashboardsApi.create('New Dashboard', '📊')
+  async function onDashboardCreated(d) {
     await loadList()
     setShowSwitcher(false)
+    setShowCreateModal(false)
     setSearchParams({ id: d.id })
+  }
+
+  async function refreshTemplates() {
+    setTemplates(await dashboardTemplatesApi.list().catch(() => []))
+  }
+
+  async function openTemplateManager() {
+    await refreshTemplates()
+    setShowSwitcher(false)
+    setShowTemplateManager(true)
   }
 
   async function addBlock(type, config) {
@@ -221,13 +236,15 @@ export default function Dashboard() {
       ) : !current ? (
         <div className="card p-8 text-center">
           <p className="text-charcoal-500 dark:text-charcoal-400 mb-3">You don't have any dashboards yet.</p>
-          <button className="btn-primary" onClick={createDashboard}>+ Create your first dashboard</button>
+          <button className="btn-primary" onClick={() => setShowCreateModal(true)}>+ Create your first dashboard</button>
         </div>
       ) : (
         <>
           {editing && (
             <div className="flex items-center gap-2 flex-wrap">
-              <button className="btn-primary text-sm" onClick={() => setShowPicker(true)}>+ Add Block</button>
+              {!current.template_id && (
+                <button className="btn-primary text-sm" onClick={() => setShowPicker(true)}>+ Add Block</button>
+              )}
               {pendingLayouts && (
                 <button className="btn-ghost text-sm" onClick={saveLayout} disabled={saving}>
                   {saving ? 'Saving…' : 'Save Layout'}
@@ -240,6 +257,7 @@ export default function Dashboard() {
           <DashboardGrid
             blocks={current.blocks}
             editing={editing}
+            blocksLocked={!!current.template_id}
             onRemoveBlock={removeBlock}
             onEditBlock={openBlockConfigEditor}
             onBlockAction={() => loadCurrent(current.id)}
@@ -287,8 +305,25 @@ export default function Dashboard() {
           items={items}
           activeId={current?.id}
           onSelect={selectDashboard}
-          onCreate={createDashboard}
+          onCreateNew={() => { setShowSwitcher(false); setShowCreateModal(true) }}
+          onManageTemplates={openTemplateManager}
           onClose={() => setShowSwitcher(false)}
+        />
+      )}
+
+      {showCreateModal && (
+        <CreateDashboardModal
+          onCreated={onDashboardCreated}
+          onClose={() => setShowCreateModal(false)}
+        />
+      )}
+
+      {showTemplateManager && (
+        <DashboardTemplateManager
+          templates={templates}
+          user={user}
+          onClose={() => setShowTemplateManager(false)}
+          onChanged={refreshTemplates}
         />
       )}
     </div>

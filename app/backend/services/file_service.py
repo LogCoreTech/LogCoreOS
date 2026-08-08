@@ -152,6 +152,11 @@ def dashboard_templates_path(user_name: str) -> Path:
     return user_path(user_name) / "Dashboards" / "templates.json"
 
 
+def global_dashboard_templates_path() -> Path:
+    # Admin-curated, instance-wide — mirrors asset_templates_path.
+    return brain_path() / "_system" / "dashboard_templates.json"
+
+
 def external_sources_path() -> Path:
     """Instance-level admin-configured named external data integrations."""
     return brain_path() / "_system" / "external_sources.json"

@@ -23,10 +23,34 @@ const CATEGORY_LABELS = {
 // CONFIG_FIELD_SCHEMAS in blockRegistry.js). Record-referencing kinds render
 // a real search/tree/select picker — never a raw id/path text box — and
 // render their own label internally; the plain input kinds render a label here.
-function renderField(f, config, setConfig) {
+//
+// templateMode + subjectType (only meaningful when editing a dashboard
+// TEMPLATE's block, not a real dashboard's) offer a "$subject" toggle on any
+// contact/asset field whose kind matches the template's own declared subject
+// type — checking it stores the literal sentinel "$subject" instead of a
+// concrete id, resolved per-instance at render time against that dashboard's
+// own subject (see dashboard_blocks/render.py's _resolve_subject_config).
+function renderField(f, config, setConfig, templateMode = false, subjectType = null) {
   const val = config[f.key]
   const set = v => setConfig({ ...config, [f.key]: v })
   const label = f.optional ? `${f.label} (optional)` : f.label
+
+  if (templateMode && subjectType && f.kind === subjectType) {
+    const usingSubject = val === '$subject'
+    return (
+      <div className="space-y-1.5">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={usingSubject}
+            onChange={e => set(e.target.checked ? '$subject' : '')}
+          />
+          Use this dashboard&apos;s own {subjectType}
+        </label>
+        {!usingSubject && renderField(f, config, setConfig)}
+      </div>
+    )
+  }
 
   switch (f.kind) {
     case 'contact':
@@ -107,8 +131,12 @@ function renderField(f, config, setConfig) {
  * reopen an existing block's config for editing instead of picking a new
  * type — same renderField dispatcher either way, just skips the type-grid
  * step. Add mode calls onAdd(type, config); edit mode calls onSave(config).
+ *
+ * templateMode + subjectType: pass when this picker is editing a dashboard
+ * TEMPLATE's block (see DashboardTemplateManager.jsx) rather than a real
+ * dashboard's — enables the "$subject" toggle in renderField.
  */
-export default function BlockPicker({ editingBlock = null, onAdd, onSave, onClose }) {
+export default function BlockPicker({ editingBlock = null, onAdd, onSave, onClose, templateMode = false, subjectType = null }) {
   const isEditing = !!editingBlock
   const [catalog, setCatalog] = useState(null)
   const [selected, setSelected] = useState(editingBlock?.type || null)
@@ -172,7 +200,7 @@ export default function BlockPicker({ editingBlock = null, onAdd, onSave, onClos
         ) : (
           <div className="space-y-3">
             <p className="text-sm font-medium">{BLOCK_REGISTRY[selected].icon} {BLOCK_REGISTRY[selected].label}</p>
-            {fields.map(f => <div key={f.key}>{renderField(f, config, setConfig)}</div>)}
+            {fields.map(f => <div key={f.key}>{renderField(f, config, setConfig, templateMode, subjectType)}</div>)}
             {fields.length === 0 && (
               <p className="text-xs text-charcoal-400">No configuration needed — shows your own data.</p>
             )}

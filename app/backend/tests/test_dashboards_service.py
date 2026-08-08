@@ -10,6 +10,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import pytest
 
 from services import auth_service
+from services import contacts_service
+from services import dashboard_templates_service as tmpl_svc
 from services import dashboards_service as svc
 from services.dashboard_blocks.registry import BlockRenderCtx, REGISTRY, _load_all_resolvers
 from services.dashboard_blocks.render import render_block
@@ -266,4 +268,158 @@ def test_m012_normalizes_mobile_layout_regardless_of_prior_width(users, brain):
     m012_rescale_dashboard_mobile_grid_units(brain)
     twice = svc.get_dashboard("Alice", d["id"], "personal")
     assert twice["blocks"][0]["layout"]["sm"] == {"x": 0, "y": 0, "w": 12, "h": 9}
-    assert twice["blocks"][1]["layout"]["sm"] == {"x": 0, "y": 9, "w": 12, "h": 9}
+
+
+# ---------------------------------------------------------------------------
+# Dashboard Templates — CRUD, live block-set sync, per-instance layout
+# independence, $subject substitution
+# ---------------------------------------------------------------------------
+
+
+def _contact(owner="Alice", name="Acme Co"):
+    return contacts_service.create_contact(owner, "personal", {"name": name}, owner)
+
+
+def test_template_crud_and_reference_guard(users):
+    t = tmpl_svc.create_template(
+        {"label": "Client Overview", "subject_type": "contact", "blocks": []},
+        owner=tmpl_svc.GLOBAL_OWNER,
+    )
+    assert t["subject_type"] == "contact"
+    assert tmpl_svc.get_template_by_id(t["id"])["label"] == "Client Overview"
+
+    contact = _contact()
+    svc.create_dashboard("Alice", "personal", "Alice", "Spare")  # keep floor-of-one satisfied below
+    d = svc.create_dashboard("Alice", "personal", "Alice", "Acme", template_id=t["id"], subject_id=contact["id"])
+    assert tmpl_svc.template_reference_count(t["id"]) == 1
+    with pytest.raises(ValueError):
+        tmpl_svc.delete_template(t["id"])
+
+    svc.delete_dashboard("Alice", "personal", d["id"])
+    assert tmpl_svc.template_reference_count(t["id"]) == 0
+    assert tmpl_svc.delete_template(t["id"]) is True
+
+
+def test_create_from_template_requires_subject_when_declared(users):
+    t = tmpl_svc.create_template({"label": "Needs Subject", "subject_type": "asset"}, owner="Alice")
+    with pytest.raises(ValueError):
+        svc.create_dashboard("Alice", "personal", "Alice", "Missing Subject", template_id=t["id"])
+
+
+def test_create_from_template_seeds_blocks_with_stacked_layout(users):
+    t = tmpl_svc.create_template(
+        {
+            "label": "Two Blocks",
+            "blocks": [
+                {"type": "top3_tasks", "config": {}},
+                {"type": "due_today", "config": {}},
+            ],
+        },
+        owner="Alice",
+    )
+    d = svc.create_dashboard("Alice", "personal", "Alice", "From Template", template_id=t["id"])
+    assert d["template_id"] == t["id"]
+    assert [b["type"] for b in d["blocks"]] == ["top3_tasks", "due_today"]
+    # Second slot stacked below the first, not overlapping it.
+    assert d["blocks"][1]["layout"]["lg"]["y"] >= d["blocks"][0]["layout"]["lg"]["y"] + d["blocks"][0]["layout"]["lg"]["h"]
+
+
+def test_template_sync_adds_and_removes_blocks_on_read(users):
+    t = tmpl_svc.create_template({"label": "Evolving", "blocks": [{"type": "top3_tasks", "config": {}}]}, owner="Alice")
+    d = svc.create_dashboard("Alice", "personal", "Alice", "Instance", template_id=t["id"])
+    assert len(d["blocks"]) == 1
+
+    tmpl_svc.update_template(t["id"], {"blocks": [*t["blocks"], {"type": "due_today", "config": {}}]})
+    found = svc.find_dashboard("Alice", "member", False, "personal", d["id"])
+    assert [b["type"] for b in found["dashboard"]["blocks"]] == ["top3_tasks", "due_today"]
+
+    tmpl_svc.update_template(t["id"], {"blocks": [{"type": "due_today", "config": {}}]})
+    found = svc.find_dashboard("Alice", "member", False, "personal", d["id"])
+    assert [b["type"] for b in found["dashboard"]["blocks"]] == ["due_today"]
+
+
+def test_template_sync_preserves_per_instance_layout_customization(users):
+    t = tmpl_svc.create_template({"label": "Layout Test", "blocks": [{"type": "top3_tasks", "config": {}}]}, owner="Alice")
+    d = svc.create_dashboard("Alice", "personal", "Alice", "Instance", template_id=t["id"])
+    slot_id = d["blocks"][0]["id"]
+
+    custom_layout = {"lg": {"x": 6, "y": 3, "w": 9, "h": 6}, "sm": {"x": 0, "y": 0, "w": 12, "h": 6}}
+    svc.update_dashboard(
+        "Alice", "personal", d["id"],
+        {"blocks": [{"id": slot_id, "type": "top3_tasks", "config": {}, "layout": custom_layout}]},
+    )
+
+    # Template gains a second block -> sync must add it without disturbing slot 1's layout.
+    tmpl_svc.update_template(t["id"], {"blocks": [*t["blocks"], {"type": "due_today", "config": {}}]})
+    found = svc.find_dashboard("Alice", "member", False, "personal", d["id"])
+    blocks = found["dashboard"]["blocks"]
+    assert blocks[0]["layout"] == custom_layout
+    assert blocks[1]["type"] == "due_today"
+
+
+def test_templated_dashboard_patch_is_layout_only(users):
+    t = tmpl_svc.create_template({"label": "Locked Set", "blocks": [{"type": "top3_tasks", "config": {}}]}, owner="Alice")
+    d = svc.create_dashboard("Alice", "personal", "Alice", "Instance", template_id=t["id"])
+    slot_id = d["blocks"][0]["id"]
+
+    # Attempt to retype/reconfigure/add a block via the normal blocks PATCH —
+    # only the layout change should stick; type/config/set membership are
+    # template-controlled regardless of what the client sends.
+    tampered = svc.update_dashboard(
+        "Alice", "personal", d["id"],
+        {"blocks": [
+            {"id": slot_id, "type": "ai_usage_overview", "config": {"hacked": True},
+             "layout": {"lg": {"x": 1, "y": 1, "w": 8, "h": 4}, "sm": {"x": 0, "y": 0, "w": 12, "h": 9}}},
+            {"id": "not-a-real-slot", "type": "due_today", "config": {}, "layout": {}},
+        ]},
+    )
+    assert len(tampered["blocks"]) == 1
+    assert tampered["blocks"][0]["type"] == "top3_tasks"
+    assert tampered["blocks"][0]["config"] == {}
+    assert tampered["blocks"][0]["layout"]["lg"] == {"x": 1, "y": 1, "w": 8, "h": 4}
+
+
+def test_subject_substitution_renders_each_instances_own_contact(users):
+    t = tmpl_svc.create_template(
+        {"label": "Contact Overview", "subject_type": "contact",
+         "blocks": [{"type": "linked_deals", "config": {"contact_id": "$subject"}}]},
+        owner="Alice",
+    )
+    acme = _contact(name="Acme Co")
+    globex = _contact(name="Globex Inc")
+    d1 = svc.create_dashboard("Alice", "personal", "Alice", "Acme Dash", template_id=t["id"], subject_id=acme["id"])
+    d2 = svc.create_dashboard("Alice", "personal", "Alice", "Globex Dash", template_id=t["id"], subject_id=globex["id"])
+
+    r1 = render_block(d1, d1["blocks"][0], "Alice", "member", False, "personal", "edit")
+    r2 = render_block(d2, d2["blocks"][0], "Alice", "member", False, "personal", "edit")
+    assert r1.ok is True and r1.data["contact_name"] == "Acme Co"
+    assert r2.ok is True and r2.data["contact_name"] == "Globex Inc"
+
+
+def test_subject_substitution_locked_when_no_subject_set_yet(users):
+    t = tmpl_svc.create_template(
+        {"label": "No Subject Yet", "subject_type": "contact",
+         "blocks": [{"type": "linked_deals", "config": {"contact_id": "$subject"}}]},
+        owner="Alice",
+    )
+    contact = _contact()
+    d = svc.create_dashboard("Alice", "personal", "Alice", "Dash", template_id=t["id"], subject_id=contact["id"])
+    svc.set_subject("Alice", "personal", d["id"], None)
+    d = svc.get_dashboard("Alice", d["id"], "personal")
+    result = render_block(d, d["blocks"][0], "Alice", "member", False, "personal", "edit")
+    assert result.ok is False
+    assert result.locked_reason == "no_subject"
+
+
+def test_set_subject_then_detach_stops_future_sync(users):
+    t = tmpl_svc.create_template({"label": "Detachable", "blocks": [{"type": "top3_tasks", "config": {}}]}, owner="Alice")
+    d = svc.create_dashboard("Alice", "personal", "Alice", "Dash", template_id=t["id"])
+
+    detached = svc.detach_template("Alice", "personal", d["id"])
+    assert detached["template_id"] is None
+    assert len(detached["blocks"]) == 1  # kept as-is, now independent
+
+    # Template changes no longer propagate once detached.
+    tmpl_svc.update_template(t["id"], {"blocks": [*t["blocks"], {"type": "due_today", "config": {}}]})
+    found = svc.find_dashboard("Alice", "member", False, "personal", d["id"])
+    assert len(found["dashboard"]["blocks"]) == 1
