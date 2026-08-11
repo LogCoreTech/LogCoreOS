@@ -1,22 +1,223 @@
 import { useState, useRef, useEffect } from 'react'
 import HelpButton from '../components/HelpButton'
 import { useNavigate } from 'react-router-dom'
-import { chat as chatApi, suggestions as sugApi, brain as brainApi, aiUsage as aiUsageApi } from '../lib/api'
+import { chat as chatApi, suggestions as sugApi, brain as brainApi, aiUsage as aiUsageApi, dashboards as dashboardsApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
+import DashboardGrid from '../components/dashboard/DashboardGrid'
+import { BLOCK_REGISTRY } from '../components/dashboard/blockRegistry'
+
+const _DASHBOARD_PREVIEW_TOOLS = new Set(['add_dashboard_block', 'update_dashboard_block'])
+
+// Dependency-free markdown rendering (2026-08-10) — no npm registry access in
+// this environment, so this hand-rolls just the subset the agent's replies
+// actually use rather than pulling in a library. Real React elements only,
+// never dangerouslySetInnerHTML.
+const _INLINE_PATTERNS = [
+  { type: 'code', re: /`([^`]+)`/ },
+  { type: 'link', re: /\[([^\]]+)\]\(([^)\s]+)\)/ },
+  { type: 'bold', re: /\*\*([^*]+)\*\*/ },
+  { type: 'italic', re: /\*([^*]+)\*/ },
+]
+
+function renderInline(text, keyPrefix) {
+  const out = []
+  let remaining = text
+  let key = 0
+  while (remaining.length > 0) {
+    let best = null
+    for (const pattern of _INLINE_PATTERNS) {
+      const m = pattern.re.exec(remaining)
+      if (m && (!best || m.index < best.match.index)) best = { pattern, match: m }
+    }
+    if (!best) { out.push(remaining); break }
+    const { pattern, match } = best
+    if (match.index > 0) out.push(remaining.slice(0, match.index))
+    const k = `${keyPrefix}-${key++}`
+    if (pattern.type === 'code') {
+      out.push(<code key={k} className="px-1 py-0.5 rounded bg-charcoal-100 dark:bg-charcoal-800 text-[0.85em] font-mono">{match[1]}</code>)
+    } else if (pattern.type === 'link') {
+      const external = /^https?:\/\//i.test(match[2])
+      out.push(
+        <a key={k} href={match[2]} className="text-orange-500 hover:underline" {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
+          {match[1]}
+        </a>
+      )
+    } else if (pattern.type === 'bold') {
+      out.push(<strong key={k} className="font-semibold">{match[1]}</strong>)
+    } else {
+      out.push(<em key={k}>{match[1]}</em>)
+    }
+    remaining = remaining.slice(match.index + match[0].length)
+  }
+  return out
+}
+
+// Line-by-line block parser: headings, fenced code, bullet/numbered lists,
+// plain paragraphs. Deliberately not CommonMark-complete — covers what the
+// agent's own replies actually use.
+function Markdown({ text }) {
+  const lines = text.split('\n')
+  const blocks = []
+  let list = null // { ordered, items }
+
+  function flushList() {
+    if (!list) return
+    const Tag = list.ordered ? 'ol' : 'ul'
+    const cls = list.ordered ? 'list-decimal pl-5 space-y-0.5' : 'list-disc pl-5 space-y-0.5'
+    blocks.push(
+      <Tag key={`b${blocks.length}`} className={cls}>
+        {list.items.map((item, idx) => <li key={idx}>{renderInline(item, `b${blocks.length}-${idx}`)}</li>)}
+      </Tag>
+    )
+    list = null
+  }
+
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i]
+
+    if (line.trim().startsWith('```')) {
+      flushList()
+      const codeLines = []
+      i++
+      while (i < lines.length && !lines[i].trim().startsWith('```')) { codeLines.push(lines[i]); i++ }
+      i++
+      blocks.push(
+        <pre key={`b${blocks.length}`} className="bg-charcoal-100 dark:bg-charcoal-800 rounded-lg p-2.5 my-1 overflow-x-auto text-xs">
+          <code className="font-mono">{codeLines.join('\n')}</code>
+        </pre>
+      )
+      continue
+    }
+
+    const heading = /^(#{1,3})\s+(.*)$/.exec(line)
+    if (heading) {
+      flushList()
+      const level = heading[1].length
+      const HTag = level === 1 ? 'h3' : level === 2 ? 'h4' : 'h5'
+      const size = level === 1 ? 'text-base font-bold' : level === 2 ? 'text-sm font-bold' : 'text-sm font-semibold'
+      blocks.push(<HTag key={`b${blocks.length}`} className={`${size} mt-1.5 mb-0.5`}>{renderInline(heading[2], `b${blocks.length}`)}</HTag>)
+      i++
+      continue
+    }
+
+    const bullet = /^\s*[-*]\s+(.*)$/.exec(line)
+    if (bullet) {
+      if (!list || list.ordered) { flushList(); list = { ordered: false, items: [] } }
+      list.items.push(bullet[1])
+      i++
+      continue
+    }
+
+    const numbered = /^\s*\d+\.\s+(.*)$/.exec(line)
+    if (numbered) {
+      if (!list || !list.ordered) { flushList(); list = { ordered: true, items: [] } }
+      list.items.push(numbered[1])
+      i++
+      continue
+    }
+
+    flushList()
+    if (line.trim() === '') { i++; continue }
+    blocks.push(<p key={`b${blocks.length}`}>{renderInline(line, `b${blocks.length}`)}</p>)
+    i++
+  }
+  flushList()
+
+  return <div className="space-y-1">{blocks}</div>
+}
+
+// Rich preview for a pending Dashboard-tool approval (2026-08-09) — reuses the
+// real DashboardGrid/BlockRenderer rendering path in read-only mode instead of
+// ApprovalCard's plain tool/input bullet list, scoped to the two tools where
+// there's an existing dashboard to show. create_dashboard has no prior state
+// to preview against, so it falls back to ApprovalCard alone.
+function DashboardBlockPreview({ step }) {
+  const [rendered, setRendered] = useState(null)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    setRendered(null)
+    setFailed(false)
+    dashboardsApi.render(step.input.dashboard_id)
+      .then(r => { if (!cancelled) setRendered(r) })
+      .catch(() => { if (!cancelled) setFailed(true) })
+    return () => { cancelled = true }
+  }, [step.input.dashboard_id])
+
+  if (failed || !rendered) return null
+
+  function nextRow(blocks, bp) {
+    return blocks.reduce((max, b) => {
+      const l = b.layout?.[bp]
+      if (!l) return max
+      return Math.max(max, (Number(l.y) || 0) + (Number(l.h) || 0))
+    }, 0)
+  }
+
+  let previewBlocks
+  if (step.tool === 'add_dashboard_block') {
+    const meta = BLOCK_REGISTRY[step.input.type]
+    const w = meta?.defaultLayout?.w || 12
+    const h = meta?.defaultLayout?.h || 9
+    const pending = {
+      id: '__pending__',
+      type: step.input.type,
+      config: step.input.config || {},
+      ok: false,
+      locked_reason: 'pending_approval',
+      layout: {
+        lg: { x: 0, y: nextRow(rendered.blocks, 'lg'), w, h },
+        sm: { x: 0, y: nextRow(rendered.blocks, 'sm'), w: 12, h },
+      },
+    }
+    previewBlocks = [...rendered.blocks, pending]
+  } else if (step.tool === 'update_dashboard_block') {
+    if (!rendered.blocks.some(b => b.id === step.input.block_id)) return null
+    previewBlocks = rendered.blocks.map(b =>
+      b.id === step.input.block_id
+        ? { ...b, config: step.input.config || {}, ok: false, locked_reason: 'pending_approval' }
+        : b
+    )
+  } else {
+    return null
+  }
+
+  return (
+    <div className="chat-fade-in mt-3 border border-charcoal-300 dark:border-charcoal-600 rounded-xl p-3 bg-charcoal-50 dark:bg-charcoal-800/50">
+      <p className="text-xs font-semibold text-charcoal-500 dark:text-charcoal-400 mb-2 uppercase tracking-wide">👁 Preview</p>
+      {/* editing=true so BlockRenderer shows icon+label headers (view mode hides
+          them entirely); pointer-events-none makes the real drag/resize
+          wiring inert since this is a read-only preview, not an editor. */}
+      <div className="pointer-events-none">
+        <DashboardGrid
+          blocks={previewBlocks}
+          editing={true}
+          blocksLocked={true}
+          onRemoveBlock={() => {}}
+          onEditBlock={() => {}}
+          onBlockAction={() => {}}
+          onLayoutChange={() => {}}
+        />
+      </div>
+    </div>
+  )
+}
 
 function ProposalCard({ step, onConfirm, onCancel }) {
-  const { summary, actions } = step.output || {}
+  const { summary, actions } = step
   return (
-    <div className="mt-3 border border-orange-300 dark:border-orange-700 rounded-xl p-4 bg-orange-50 dark:bg-orange-950/30">
-      <p className="text-xs font-semibold text-orange-600 dark:text-orange-400 mb-1 uppercase tracking-wide">Proposed plan</p>
-      <p className="text-sm text-charcoal-800 dark:text-charcoal-100 mb-3">{summary}</p>
+    <div className="chat-fade-in mt-3 border border-orange-300 dark:border-orange-700 rounded-xl p-4 bg-orange-50 dark:bg-orange-950/30">
+      <p className="text-xs font-semibold text-orange-600 dark:text-orange-400 mb-1 uppercase tracking-wide">📋 Proposed plan</p>
+      <p className="text-sm text-charcoal-800 dark:text-charcoal-100 mb-3">{renderInline(summary, 'proposal-summary')}</p>
       {actions?.length > 0 && (
         <ul className="text-xs text-charcoal-600 dark:text-charcoal-300 space-y-1 mb-4">
           {actions.map((a, i) => (
             <li key={i} className="flex gap-2">
               <span className="text-orange-400 shrink-0">·</span>
-              <span>{a}</span>
+              <span>{renderInline(a, `proposal-action-${i}`)}</span>
             </li>
           ))}
         </ul>
@@ -31,8 +232,8 @@ function ProposalCard({ step, onConfirm, onCancel }) {
 
 function ApprovalCard({ steps, onApprove, onDeny }) {
   return (
-    <div className="mt-3 border border-orange-300 dark:border-orange-700 rounded-xl p-4 bg-orange-50 dark:bg-orange-950/30">
-      <p className="text-xs font-semibold text-orange-600 dark:text-orange-400 mb-2 uppercase tracking-wide">Waiting for your approval</p>
+    <div className="chat-fade-in mt-3 border border-orange-300 dark:border-orange-700 rounded-xl p-4 bg-orange-50 dark:bg-orange-950/30">
+      <p className="text-xs font-semibold text-orange-600 dark:text-orange-400 mb-2 uppercase tracking-wide">⚠ Waiting for your approval</p>
       <ul className="text-xs text-charcoal-600 dark:text-charcoal-300 space-y-1.5 mb-4">
         {steps.map((s, i) => (
           <li key={i} className="flex gap-2">
@@ -54,9 +255,65 @@ function ApprovalCard({ steps, onApprove, onDeny }) {
   )
 }
 
+function AskUserQuestionCard({ step, onSubmit }) {
+  const [selected, setSelected] = useState(step.multi_select ? [] : null)
+  const options = step.options || []
+
+  function toggle(label) {
+    if (step.multi_select) {
+      setSelected(prev => prev.includes(label) ? prev.filter(l => l !== label) : [...prev, label])
+    } else {
+      setSelected(label)
+    }
+  }
+
+  function submit() {
+    const answer = step.multi_select ? selected : (selected ? [selected] : [])
+    if (answer.length === 0) return
+    onSubmit(answer)
+  }
+
+  const hasSelection = step.multi_select ? selected.length > 0 : !!selected
+
+  return (
+    <div className="chat-fade-in mt-3 border border-blue-300 dark:border-blue-700 rounded-xl p-4 bg-blue-50 dark:bg-blue-950/30">
+      <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-1 uppercase tracking-wide">💬 {step.header || 'Question'}</p>
+      <p className="text-sm text-charcoal-800 dark:text-charcoal-100 mb-3">{step.question}</p>
+      <div className="space-y-1.5 mb-4">
+        {options.map((o, i) => {
+          const isChecked = step.multi_select ? selected.includes(o.label) : selected === o.label
+          return (
+            <label key={i} className="flex items-start gap-2 text-sm cursor-pointer">
+              <input
+                type={step.multi_select ? 'checkbox' : 'radio'}
+                name={`ask-user-question-${step.step}`}
+                checked={isChecked}
+                onChange={() => toggle(o.label)}
+                className="mt-0.5 shrink-0 accent-blue-500"
+              />
+              <span className="min-w-0">
+                <span className="font-semibold">{o.label}</span>
+                {o.description && <span className="text-charcoal-500 dark:text-charcoal-400"> — {o.description}</span>}
+              </span>
+            </label>
+          )
+        })}
+      </div>
+      <button
+        onClick={submit}
+        disabled={!hasSelection}
+        className="bg-blue-500 hover:bg-blue-600 text-white font-medium px-3 py-1.5 text-xs transition-colors disabled:opacity-50"
+        style={{ borderRadius: 'calc(var(--card-radius) * 0.6)' }}
+      >
+        Submit
+      </button>
+    </div>
+  )
+}
+
 function UsageConfirmCard({ onContinue, onCancel }) {
   return (
-    <div className="mt-3 border border-red-300 dark:border-red-700 rounded-xl p-4 bg-red-50 dark:bg-red-950/30">
+    <div className="chat-fade-in mt-3 border border-red-300 dark:border-red-700 rounded-xl p-4 bg-red-50 dark:bg-red-950/30">
       <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-2 uppercase tracking-wide">
         AI usage limit reached
       </p>
@@ -161,6 +418,7 @@ export default function Chat() {
   const [chatMode, setChatMode] = useState('approve')
   const [crossWorkspace, setCrossWorkspace] = useState(false)
   const [showModeDrawer, setShowModeDrawer] = useState(false)
+  const [showMemoryPopup, setShowMemoryPopup] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [savedChats, setSavedChats] = useState([])
   const [selectedChat, setSelectedChat] = useState(null) // { filename, content }
@@ -169,6 +427,7 @@ export default function Chat() {
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
   const modeRef = useRef(null)
+  const memoryRef = useRef(null)
 
   function refreshUsage() {
     aiUsageApi.me().then(setUsage).catch(() => {})
@@ -177,6 +436,15 @@ export default function Chat() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Auto-grow the composer textarea with content, capped so it can't swallow
+  // the whole screen; collapses back to one line once `input` is cleared.
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`
+  }, [input])
 
   useEffect(refreshUsage, [workspace])
 
@@ -207,6 +475,16 @@ export default function Chat() {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [showModeDrawer])
+
+  // Close memory popup when clicking outside
+  useEffect(() => {
+    if (!showMemoryPopup) return
+    function handler(e) {
+      if (memoryRef.current && !memoryRef.current.contains(e.target)) setShowMemoryPopup(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showMemoryPopup])
 
   // When workspace changes, reload saved chats list (if panel open) and clear cross-workspace toggle
   useEffect(() => {
@@ -265,11 +543,53 @@ export default function Chat() {
         content: res.response,
         steps: res.steps || [],
         mode: res.mode,
+        runId: res.run_id,
         triggerMsg: msg,
       }])
       refreshUsage()
     } catch (err) {
       setMessages([...updated, { role: 'assistant', content: `Error: ${err.message}`, steps: [] }])
+    } finally {
+      setLoading(false)
+      inputRef.current?.focus()
+    }
+  }
+
+  // Enter submits (matches the old single-line input's behavior); Shift+Enter
+  // inserts a real newline instead, now that this is a multi-line textarea.
+  function handleComposerKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      send(e)
+    }
+  }
+
+  // Approve/Decline a paused write, or answer a paused clarifying question:
+  // replays/answers the exact paused turn server-side instead of sending
+  // synthetic chat text for the model to re-guess from.
+  async function sendResume(runId, decision, answer) {
+    if (loading) return
+    setLoading(true)
+    try {
+      // The pending turn (the message carrying the pending_write/pending_question/
+      // pending_plan step) IS this same assistant turn, not a separate one —
+      // replace it in place rather than appending. Appending left two consecutive
+      // assistant messages, which breaks the strict user/assistant alternation
+      // ChatRequest.history requires: the very next send (resume or otherwise)
+      // failed 422 ("unexpected role 'assistant'") and every send after that did
+      // too, since the broken pair never leaves local state on its own.
+      const history = toApiHistory(messages.slice(1, -1))
+      const res = await chatApi.resume(runId, decision, history, crossWorkspace, answer)
+      setMessages(prev => [...prev.slice(0, -1), {
+        role: 'assistant',
+        content: res.response,
+        steps: res.steps || [],
+        mode: res.mode,
+        runId: res.run_id,
+      }])
+      refreshUsage()
+    } catch (err) {
+      setMessages(prev => [...prev.slice(0, -1), { role: 'assistant', content: `Error: ${err.message}`, steps: [] }])
     } finally {
       setLoading(false)
       inputRef.current?.focus()
@@ -390,7 +710,7 @@ export default function Chat() {
       {/* Messages */}
       <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pb-4">
         {messages.map((m, i) => (
-          <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+          <div key={i} className={`chat-fade-in flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             {m.role === 'assistant' && (
               <div className="w-7 h-7 rounded-full bg-orange-500 flex items-center justify-center text-white text-xs font-bold shrink-0 mr-2 mt-1">
                 L
@@ -407,11 +727,12 @@ export default function Chat() {
                     : 'card rounded-bl-sm text-charcoal-900 dark:text-gray-100'
                 }`}
               >
-                {m.content}
+                {m.role === 'assistant' ? <Markdown text={m.content} /> : m.content}
               </div>
               {m.role === 'assistant' && (() => {
-                const proposalStep = m.steps?.find(s => s.type === 'tool_call' && s.tool === 'propose_plan')
+                const proposalStep = m.steps?.find(s => s.type === 'pending_plan')
                 const pendingWrites = m.steps?.filter(s => s.type === 'pending_write') || []
+                const pendingQuestion = m.steps?.find(s => s.type === 'pending_question')
                 const isLastMsg = i === messages.length - 1
                 return (
                   <>
@@ -419,15 +740,27 @@ export default function Chat() {
                     {proposalStep && isLastMsg && !loading && (
                       <ProposalCard
                         step={proposalStep}
-                        onConfirm={() => send(null, 'Yes, go ahead.')}
-                        onCancel={() => send(null, "Cancel that, don't make any changes.")}
+                        onConfirm={() => sendResume(m.runId, 'approve')}
+                        onCancel={() => sendResume(m.runId, 'decline')}
                       />
                     )}
                     {pendingWrites.length > 0 && isLastMsg && !loading && (
-                      <ApprovalCard
-                        steps={pendingWrites}
-                        onApprove={() => send(null, 'Yes, go ahead.', 'auto')}
-                        onDeny={() => send(null, "No — don't make those changes.")}
+                      <>
+                        {(() => {
+                          const previewStep = pendingWrites.find(s => _DASHBOARD_PREVIEW_TOOLS.has(s.tool))
+                          return previewStep ? <DashboardBlockPreview step={previewStep} /> : null
+                        })()}
+                        <ApprovalCard
+                          steps={pendingWrites}
+                          onApprove={() => sendResume(m.runId, 'approve')}
+                          onDeny={() => sendResume(m.runId, 'decline')}
+                        />
+                      </>
+                    )}
+                    {pendingQuestion && isLastMsg && !loading && (
+                      <AskUserQuestionCard
+                        step={pendingQuestion}
+                        onSubmit={(answer) => sendResume(m.runId, undefined, answer)}
                       />
                     )}
                     {m.mode === 'usage_confirm_required' && isLastMsg && !loading && (
@@ -445,132 +778,186 @@ export default function Chat() {
           </div>
         ))}
         {loading && (
-          <div className="flex justify-start">
+          <div className="chat-fade-in flex justify-start">
             <div className="w-7 h-7 rounded-full bg-orange-500 flex items-center justify-center text-white text-xs font-bold shrink-0 mr-2 mt-1">L</div>
-            <div className="card px-4 py-3 rounded-bl-sm">
-              <div className="flex gap-1">
-                <div className="w-2 h-2 bg-charcoal-400 rounded-full animate-bounce" style={{animationDelay:'0ms'}} />
-                <div className="w-2 h-2 bg-charcoal-400 rounded-full animate-bounce" style={{animationDelay:'150ms'}} />
-                <div className="w-2 h-2 bg-charcoal-400 rounded-full animate-bounce" style={{animationDelay:'300ms'}} />
-              </div>
+            <div className="card px-4 py-2.5 rounded-bl-sm">
+              <span className="chat-thinking text-sm font-medium">Thinking…</span>
             </div>
           </div>
         )}
         <div ref={bottomRef} />
       </div>
 
-      {/* Memory shortcuts + mode selector */}
-      <div className="flex items-center gap-2 shrink-0 pt-2 pb-1">
-        {/* Mode drawer — fixed width so the row never reflows between modes */}
-        <div className="relative" ref={modeRef}>
-          <button
-            type="button"
-            onClick={() => setShowModeDrawer(o => !o)}
-            className="btn-ghost text-xs px-2 py-1 flex items-center justify-between gap-1 w-[112px]"
-            title="Switch chat mode"
-          >
-            <span>{chatMode === 'approve' ? '✓ Approve' : chatMode === 'plan' ? '📋 Plan' : chatMode === 'auto' ? '⚡ Auto' : '🔍 Research'}</span>
-            <span className="text-[10px] opacity-60">▾</span>
-          </button>
-          {showModeDrawer && (
-            <div className="absolute bottom-full mb-1 left-0 bg-white dark:bg-charcoal-900 border border-charcoal-200 dark:border-charcoal-700 rounded-xl shadow-lg z-50 overflow-hidden min-w-[150px]">
-              {[
-                { id: 'approve',  label: '✓ Approve',   title: 'AI asks before each change' },
-                { id: 'plan',     label: '📋 Plan',      title: 'AI proposes before acting' },
-                { id: 'auto',     label: '⚡ Auto',     title: 'AI executes without asking' },
-                { id: 'research', label: '🔍 Research',  title: 'Read-only analysis and web search' },
-              ].map(m => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => { setChatMode(m.id); setShowModeDrawer(false) }}
-                  title={m.title}
-                  className={`w-full text-left text-xs px-3 py-2 transition-colors ${
-                    chatMode === m.id
-                      ? 'bg-orange-500 text-white'
-                      : 'text-charcoal-600 dark:text-charcoal-300 hover:bg-charcoal-50 dark:hover:bg-charcoal-800'
-                  }`}
-                >
-                  {m.label}
-                </button>
-              ))}
+      {/* Composer — bordered toolbar (mode/usage/memory) + auto-growing input, boxed together */}
+      <div className="shrink-0 pt-2">
+        <div className="border border-charcoal-200 dark:border-charcoal-700 rounded-2xl bg-white dark:bg-charcoal-900 p-2 space-y-1.5">
+          {/* Toolbar strip */}
+          <div className="flex items-center gap-2">
+            {/* Mode drawer — fixed width so the row never reflows between modes */}
+            <div className="relative" ref={modeRef}>
+              <button
+                type="button"
+                onClick={() => setShowModeDrawer(o => !o)}
+                className="btn-ghost text-xs px-2 py-1 flex items-center justify-between gap-1 w-[112px]"
+                title="Switch chat mode"
+              >
+                <span>{chatMode === 'approve' ? '✓ Approve' : chatMode === 'plan' ? '📋 Plan' : chatMode === 'auto' ? '⚡ Auto' : '🔍 Research'}</span>
+                <span className="text-[10px] opacity-60">▾</span>
+              </button>
+              {showModeDrawer && (
+                <div className="absolute bottom-full mb-1 left-0 w-72 bg-white dark:bg-charcoal-900 border border-charcoal-200 dark:border-charcoal-700 rounded-xl shadow-lg z-50 overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-charcoal-100 dark:border-charcoal-800">
+                    <span className="text-xs font-semibold text-charcoal-500 dark:text-charcoal-400 uppercase tracking-wide">Mode</span>
+                    <button
+                      onClick={() => setShowModeDrawer(false)}
+                      className="text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200 text-sm leading-none"
+                      aria-label="Close"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="p-3 space-y-3">
+                    {[
+                      { id: 'approve',  label: '✓ Approve',   desc: 'AI asks before each change' },
+                      { id: 'plan',     label: '📋 Plan',      desc: 'AI proposes before acting' },
+                      { id: 'auto',     label: '⚡ Auto',     desc: 'AI executes without asking' },
+                      { id: 'research', label: '🔍 Research',  desc: 'Read-only analysis and web search' },
+                    ].map(m => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => { setChatMode(m.id); setShowModeDrawer(false) }}
+                        className="flex items-center justify-between w-full gap-3 text-left group"
+                      >
+                        <div className="min-w-0">
+                          <p className={`text-sm font-medium transition-colors ${chatMode === m.id ? 'text-orange-500' : 'group-hover:text-orange-500'}`}>
+                            {m.label}
+                          </p>
+                          <p className="text-xs text-charcoal-400 dark:text-charcoal-500">{m.desc}</p>
+                        </div>
+                        <span className={`shrink-0 text-orange-500 ${chatMode === m.id ? '' : 'invisible'}`}>✓</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+
+            {/* AI usage indicator — hidden when the admin hasn't set a cap for this user */}
+            {usage && usage.mode !== 'off' && usage.pct !== null && (
+              <span
+                className={`badge shrink-0 ${
+                  usage.pct >= 100
+                    ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                    : usage.pct >= 80
+                      ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'
+                      : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                }`}
+                title={`AI usage: ${usage.pct}% of your ${usage.period} limit`}
+              >
+                {usage.pct}%
+              </span>
+            )}
+
+            <div className="flex-1" />
+
+            {/* Memory pill — collapses workspace-scope + short/long-term links into one popup */}
+            <div className="relative" ref={memoryRef}>
+              <button
+                type="button"
+                onClick={() => setShowMemoryPopup(o => !o)}
+                title="Memory"
+                className={`text-xs px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors ${
+                  crossWorkspace ? 'bg-blue-500 text-white' : 'btn-ghost'
+                }`}
+              >
+                <span>🧠 Memory</span>
+                <span className="text-[10px] opacity-60">▾</span>
+              </button>
+              {showMemoryPopup && (
+                <div className="absolute bottom-full mb-1 right-0 w-72 bg-white dark:bg-charcoal-900 border border-charcoal-200 dark:border-charcoal-700 rounded-xl shadow-lg z-50 overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-charcoal-100 dark:border-charcoal-800">
+                    <span className="text-xs font-semibold text-charcoal-500 dark:text-charcoal-400 uppercase tracking-wide">Memory</span>
+                    <button
+                      onClick={() => setShowMemoryPopup(false)}
+                      className="text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200 text-sm leading-none"
+                      aria-label="Close"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="p-3 space-y-3">
+                    {hasBothWorkspaces && (
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">Both workspaces</p>
+                          <p className="text-xs text-charcoal-400 dark:text-charcoal-500">
+                            {crossWorkspace ? 'Chat sees Personal and Business Brain data' : `Limited to ${workspace === 'business' ? 'Business' : 'Personal'} only`}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={crossWorkspace}
+                          aria-label="Toggle both-workspaces scope"
+                          onClick={() => setCrossWorkspace(x => !x)}
+                          className={`relative w-9 h-5 rounded-full shrink-0 transition-colors ${crossWorkspace ? 'bg-blue-500' : 'bg-charcoal-300 dark:bg-charcoal-600'}`}
+                        >
+                          <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${crossWorkspace ? 'translate-x-4' : 'translate-x-0'}`} />
+                        </button>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => { setShowMemoryPopup(false); navigate('/brain?file=Short_Term_Memory.md', { state: { from: '/chat' } }) }}
+                      className="flex items-center justify-between w-full gap-3 text-left group"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium group-hover:text-orange-500 transition-colors">⏳ Short-term memory</p>
+                        <p className="text-xs text-charcoal-400 dark:text-charcoal-500">Recent context the AI keeps handy</p>
+                      </div>
+                      <span className="text-charcoal-300 dark:text-charcoal-600 shrink-0">→</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowMemoryPopup(false); navigate('/brain?file=Long_Term_Memory.md', { state: { from: '/chat' } }) }}
+                      className="flex items-center justify-between w-full gap-3 text-left group"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium group-hover:text-orange-500 transition-colors">📚 Long-term memory</p>
+                        <p className="text-xs text-charcoal-400 dark:text-charcoal-500">Durable facts and preferences</p>
+                      </div>
+                      <span className="text-charcoal-300 dark:text-charcoal-600 shrink-0">→</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Input row */}
+          <form onSubmit={send} className="flex gap-2 items-end">
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleComposerKeyDown}
+              placeholder="Ask about your priorities, tasks, goals…"
+              rows={1}
+              className="input flex-1 resize-none leading-normal"
+              style={{ maxHeight: 160, overflowY: 'auto' }}
+              disabled={loading}
+            />
+            <button
+              type="submit"
+              disabled={loading || !input.trim()}
+              className="btn-primary px-4 py-2 disabled:opacity-50 shrink-0"
+            >
+              →
+            </button>
+          </form>
         </div>
-
-        {/* AI usage indicator — hidden when the admin hasn't set a cap for this user */}
-        {usage && usage.mode !== 'off' && usage.pct !== null && (
-          <span
-            className={`badge shrink-0 ${
-              usage.pct >= 100
-                ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-                : usage.pct >= 80
-                  ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'
-                  : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-            }`}
-            title={`AI usage: ${usage.pct}% of your ${usage.period} limit`}
-          >
-            {usage.pct}%
-          </span>
-        )}
-
-        {/* Icon memory controls — fixed-size, tooltip on hover */}
-        {hasBothWorkspaces && (
-          <button
-            type="button"
-            onClick={() => setCrossWorkspace(x => !x)}
-            title={crossWorkspace
-              ? 'Brain scope: Both workspaces — click to limit to the current one'
-              : `Brain scope: ${workspace === 'business' ? 'Business' : 'Personal'} only — click to include both`}
-            aria-label="Toggle Brain scope"
-            className={`w-8 h-8 flex items-center justify-center rounded border transition-colors ${
-              crossWorkspace
-                ? 'bg-blue-500 border-blue-500 text-white'
-                : 'btn-ghost border-transparent'
-            }`}
-          >
-            🧠
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => navigate('/brain?file=Short_Term_Memory.md', { state: { from: '/chat' } })}
-          className="btn-ghost w-8 h-8 flex items-center justify-center"
-          title="Short-term memory"
-          aria-label="Short-term memory"
-        >
-          ⏳
-        </button>
-        <button
-          type="button"
-          onClick={() => navigate('/brain?file=Long_Term_Memory.md', { state: { from: '/chat' } })}
-          className="btn-ghost w-8 h-8 flex items-center justify-center"
-          title="Long-term memory"
-          aria-label="Long-term memory"
-        >
-          📚
-        </button>
       </div>
-
-      {/* Input */}
-      <form onSubmit={send} className="flex gap-2 shrink-0 pt-2 border-t border-charcoal-200 dark:border-charcoal-700">
-        <input
-          ref={inputRef}
-          type="text"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          placeholder="Ask about your priorities, tasks, goals…"
-          className="input flex-1"
-          disabled={loading}
-        />
-        <button
-          type="submit"
-          disabled={loading || !input.trim()}
-          className="btn-primary px-4 disabled:opacity-50"
-        >
-          →
-        </button>
-      </form>
 
       {/* Clears the fixed mobile footer nav so the input row is never hidden behind it */}
       <div className="h-20 md:hidden shrink-0" aria-hidden="true" />
@@ -633,7 +1020,7 @@ export default function Chat() {
                             : 'card rounded-bl-sm text-charcoal-800 dark:text-charcoal-100'
                         }`}
                       >
-                        {m.content}
+                        {m.role === 'assistant' ? <Markdown text={m.content} /> : m.content}
                       </div>
                     </div>
                   ))}

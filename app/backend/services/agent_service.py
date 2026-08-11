@@ -28,6 +28,7 @@ from services.file_service import (
 
 MAX_STEPS = 10
 _RUNS_CAP = 50
+_PENDING_CAP = 20
 _BRAIN_SKIP = {"Tasks"}
 
 # Tools available in research mode — read-only access only
@@ -62,12 +63,17 @@ _RESEARCH_TOOLS = {
     "list_household_members",
     "list_shared_tasks",
     "read_system_file",
+    "list_dashboards",
+    "get_dashboard",
+    "list_dashboard_templates",
+    "get_dashboard_block_catalog",
 }
 
 # Tools that never modify data — safe to run without per-write approval in
 # approve mode. Anything NOT listed here requires approval, so new tools are
-# write-gated by default.
-_READ_TOOLS = _RESEARCH_TOOLS | {"get_home_state"}
+# write-gated by default. ask_user_question has no side effects either — it
+# pauses via its own dedicated mechanism (see run_agent), never the write-gate.
+_READ_TOOLS = _RESEARCH_TOOLS | {"get_home_state", "ask_user_question"}
 
 # ---------------------------------------------------------------------------
 # Tool definitions (Anthropic input_schema format — translated for OpenAI by ai_provider)
@@ -602,6 +608,53 @@ _USER_TOOLS: list[dict] = [
         },
     },
     {
+        "name": "ask_user_question",
+        "description": (
+            "Ask the user a clarifying multiple-choice question when their request is ambiguous or "
+            "a real decision needs their input before you proceed — mirrors the ask-a-question tool "
+            "available in coding-agent sessions. Use this instead of guessing or silently picking a "
+            "default. Execution pauses in EVERY mode (including auto) until they answer."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": "The question to ask, ending in a question mark.",
+                },
+                "header": {
+                    "type": "string",
+                    "description": "A very short label for the question (max ~12 chars), e.g. 'Category' or 'Approach'.",
+                },
+                "options": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 4,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "label": {
+                                "type": "string",
+                                "description": "Short display text for this choice.",
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "What this option means or implies.",
+                            },
+                        },
+                        "required": ["label", "description"],
+                    },
+                    "description": "2-4 choices, mutually exclusive unless multi_select is true.",
+                },
+                "multi_select": {
+                    "type": "boolean",
+                    "description": "True if the user may pick more than one option.",
+                },
+            },
+            "required": ["question", "header", "options", "multi_select"],
+        },
+    },
+    {
         "name": "get_week_snapshot",
         "description": "Get a full overview of the current week — tasks due this week, overdue tasks, and tasks completed this week. Use at the start of any planning or review session.",
         "input_schema": {"type": "object", "properties": {}, "required": []},
@@ -1041,6 +1094,159 @@ _USER_TOOLS: list[dict] = [
                 "method": {"type": "string", "description": "check / transfer / cash / card"},
             },
             "required": ["book_id", "invoice_id"],
+        },
+    },
+    # -- Dashboards (2026-08-09) --------------------------------------------
+    {
+        "name": "list_dashboards",
+        "description": "List dashboards visible to the user (own + workspace pool + shared-to-them), each annotated with access level and, if applicable, its template.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "get_dashboard",
+        "description": "Get one dashboard's blocks (id/type/config only — layout/position is human/UI territory and is not exposed here).",
+        "input_schema": {
+            "type": "object",
+            "properties": {"dashboard_id": {"type": "string"}},
+            "required": ["dashboard_id"],
+        },
+    },
+    {
+        "name": "list_dashboard_templates",
+        "description": "List dashboard templates the user can build a new dashboard from (role-permitted global + their own personal + shared-and-accepted).",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "get_dashboard_block_catalog",
+        "description": "List every dashboard block type (label, category, admin_only) together with its config_fields — the exact keys/kinds needed to configure it for add_dashboard_block/update_dashboard_block. Call this before adding or editing a block if you don't already know its config shape.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "create_dashboard",
+        "description": "Create a new dashboard, blank or from a template. pool=true creates a shared household/team dashboard (admin only) instead of a personal one.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "icon": {"type": "string", "description": "Optional emoji"},
+                "template_id": {
+                    "type": "string",
+                    "description": "Optional — build from this template's block set",
+                },
+                "subject_id": {
+                    "type": "string",
+                    "description": "Required if the template has a subject_type — the contact or asset id this dashboard is about",
+                },
+                "pool": {
+                    "type": "boolean",
+                    "description": "true = shared household/team dashboard (admin only)",
+                },
+            },
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "add_dashboard_block",
+        "description": "Add a block to a dashboard. Requires contribute or edit access. Fails if the dashboard uses a template — its block set is template-controlled (edit the template instead, or use update_dashboard_template). Call get_dashboard_block_catalog first if you don't already know the block type's config shape. The new block is stacked at the bottom automatically — layout is never set here.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "dashboard_id": {"type": "string"},
+                "type": {
+                    "type": "string",
+                    "description": "A block type from get_dashboard_block_catalog",
+                },
+                "config": {
+                    "type": "object",
+                    "description": "Config keys per get_dashboard_block_catalog's config_fields for this type",
+                },
+            },
+            "required": ["dashboard_id", "type", "config"],
+        },
+    },
+    {
+        "name": "update_dashboard_block",
+        "description": "Replace one existing block's config (never its layout/position). Requires contribute or edit access. Fails if the dashboard uses a template.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "dashboard_id": {"type": "string"},
+                "block_id": {"type": "string"},
+                "config": {"type": "object"},
+            },
+            "required": ["dashboard_id", "block_id", "config"],
+        },
+    },
+    {
+        "name": "remove_dashboard_block",
+        "description": "Remove one block from a dashboard. Requires contribute or edit access. Fails if the dashboard uses a template.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "dashboard_id": {"type": "string"},
+                "block_id": {"type": "string"},
+            },
+            "required": ["dashboard_id", "block_id"],
+        },
+    },
+    {
+        "name": "create_dashboard_template",
+        "description": (
+            "Create a dashboard template — a reusable block set that every dashboard built from it stays "
+            "synced to (editing the template later updates all of them automatically). owner='me' creates "
+            "a personal template (any user); owner='global' creates an instance-wide template (admin only). "
+            "IMPORTANT: before creating a 'global' template, tell the user in your own words that this is an "
+            "instance-wide shared object — every dashboard built from it updates immediately, including ones "
+            "they can't see the contents of, and there's no automatic undo."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "label": {"type": "string"},
+                "icon": {"type": "string", "description": "Optional emoji"},
+                "subject_type": {
+                    "type": "string",
+                    "enum": ["contact", "asset"],
+                    "description": "Optional — if set, every dashboard from this template picks one contact/asset as its subject",
+                },
+                "blocks": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": 'List of {type, config} — call get_dashboard_block_catalog for valid types/config shapes. A contact/asset-kind field may use the literal string "$subject" instead of a concrete id if subject_type matches, resolved per-dashboard at render time.',
+                },
+                "owner": {"type": "string", "enum": ["me", "global"]},
+            },
+            "required": ["label", "owner"],
+        },
+    },
+    {
+        "name": "update_dashboard_template",
+        "description": (
+            "Update a dashboard template's label, icon, subject_type, or full block list. Personal templates: "
+            "owner only. Global templates: admin only. IMPORTANT: before updating a GLOBAL template, tell the "
+            "user in your own words that this changes an instance-wide shared object — every dashboard built "
+            "from it updates immediately, including ones they can't see the contents of, and there's no "
+            "automatic undo."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "template_id": {"type": "string"},
+                "label": {"type": "string"},
+                "icon": {"type": "string"},
+                "subject_type": {"type": "string", "enum": ["contact", "asset"]},
+                "blocks": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "Full replacement list of {type, config} blocks",
+                },
+                "restrict_roles": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Global templates only — feature roles allowed to use this template (empty = everyone)",
+                },
+            },
+            "required": ["template_id"],
         },
     },
 ]
@@ -1523,7 +1729,9 @@ def _execute_tool(
             case "update_profile":
                 from services import contacts_service
 
-                self_contact = contacts_service.get_self_contact(user["name"], create_if_missing=True)
+                self_contact = contacts_service.get_self_contact(
+                    user["name"], create_if_missing=True
+                )
                 try:
                     return contacts_service.update_contact(
                         user["name"], "personal", self_contact["id"], inputs.get("fields", {})
@@ -1625,11 +1833,12 @@ def _execute_tool(
                 return {"ok": True, "timezone": inputs["timezone"]}
 
             case "propose_plan":
-                return {
-                    "status": "proposed",
-                    "summary": inputs["summary"],
-                    "actions": inputs.get("actions", []),
-                }
+                # Only ever reached via the resume path once approved — run_agent
+                # itself intercepts the call to pause for confirmation before this
+                # executes (2026-08-09; was a bare echo relying entirely on the
+                # system prompt telling the model to wait, the same shape of gap
+                # the approve-mode replay bug had).
+                return {"status": "approved"}
 
             case "get_week_snapshot":
                 today = auth_service.today_for_user(user["name"])
@@ -2247,6 +2456,254 @@ def _execute_tool(
 
                 return _ha_trigger(inputs["entity_id"])
 
+            # -- Dashboards (2026-08-09) -----------------------------------
+            case "list_dashboards":
+                from services import dashboards_service
+
+                return dashboards_service.list_visible_dashboards(
+                    user["name"],
+                    user.get("feature_role") or "member",
+                    user.get("role") == "admin",
+                    workspace,
+                )
+
+            case "get_dashboard":
+                from services import dashboards_service
+
+                found = dashboards_service.find_dashboard(
+                    user["name"],
+                    user.get("feature_role") or "member",
+                    user.get("role") == "admin",
+                    workspace,
+                    inputs["dashboard_id"],
+                )
+                if found is None:
+                    return {
+                        "error": f"Dashboard {inputs['dashboard_id']!r} not found or not accessible"
+                    }
+                d = found["dashboard"]
+                return {
+                    "id": d["id"],
+                    "name": d["name"],
+                    "icon": d["icon"],
+                    "template_id": d.get("template_id"),
+                    "access": found["access"],
+                    "blocks": [
+                        {"id": b["id"], "type": b["type"], "config": b["config"]}
+                        for b in d["blocks"]
+                    ],
+                }
+
+            case "list_dashboard_templates":
+                from services import dashboard_templates_service
+
+                return dashboard_templates_service.visible_templates(
+                    user["name"], user.get("role") == "admin", user.get("feature_role") or "member"
+                )
+
+            case "get_dashboard_block_catalog":
+                from services.dashboard_blocks.agent_schemas import AGENT_CONFIG_SCHEMAS
+                from services.dashboard_blocks.registry import catalog
+
+                is_admin = user.get("role") == "admin"
+                return [
+                    {**c, "config_fields": AGENT_CONFIG_SCHEMAS.get(c["type"], [])}
+                    for c in catalog(is_admin)
+                ]
+
+            case "create_dashboard":
+                from services import dashboards_service
+
+                if inputs.get("pool") and user.get("role") != "admin":
+                    return {"error": "Admin access required to create a pool dashboard"}
+                store_user = (
+                    dashboards_service.pool_for(workspace) if inputs.get("pool") else user["name"]
+                )
+                d = dashboards_service.create_dashboard(
+                    store_user,
+                    workspace,
+                    user["name"],
+                    inputs["name"],
+                    inputs.get("icon") or "📊",
+                    template_id=inputs.get("template_id"),
+                    subject_id=inputs.get("subject_id"),
+                )
+                return {"id": d["id"], "name": d["name"], "icon": d["icon"]}
+
+            case "add_dashboard_block":
+                from services import dashboards_service
+                from services.dashboard_blocks.registry import REGISTRY
+
+                found = dashboards_service.find_dashboard(
+                    user["name"],
+                    user.get("feature_role") or "member",
+                    user.get("role") == "admin",
+                    workspace,
+                    inputs["dashboard_id"],
+                )
+                if found is None:
+                    return {
+                        "error": f"Dashboard {inputs['dashboard_id']!r} not found or not accessible"
+                    }
+                if found["access"] not in ("edit", "contribute"):
+                    return {"error": "Read-only access — you cannot add blocks to this dashboard"}
+                dashboard = found["dashboard"]
+                if dashboard.get("template_id"):
+                    return {
+                        "error": "This dashboard's block set comes from a template — use "
+                        "update_dashboard_template to change its blocks, or detach it from the "
+                        "template first."
+                    }
+                if inputs["type"] not in REGISTRY:
+                    return {
+                        "error": f"Unknown block type {inputs['type']!r} — call get_dashboard_block_catalog"
+                    }
+                new_block = {
+                    "id": str(uuid.uuid4()),
+                    "type": inputs["type"],
+                    "config": inputs.get("config") or {},
+                    "layout": dashboards_service.stacked_layout(dashboard["blocks"]),
+                }
+                updated = dashboards_service.update_dashboard(
+                    found["store"],
+                    found["store_workspace"],
+                    inputs["dashboard_id"],
+                    {"blocks": dashboard["blocks"] + [new_block]},
+                    by=user["name"],
+                )
+                return {
+                    "ok": True,
+                    "block_id": new_block["id"],
+                    "blocks": [
+                        {"id": b["id"], "type": b["type"], "config": b["config"]}
+                        for b in updated["blocks"]
+                    ],
+                }
+
+            case "update_dashboard_block":
+                from services import dashboards_service
+
+                found = dashboards_service.find_dashboard(
+                    user["name"],
+                    user.get("feature_role") or "member",
+                    user.get("role") == "admin",
+                    workspace,
+                    inputs["dashboard_id"],
+                )
+                if found is None:
+                    return {
+                        "error": f"Dashboard {inputs['dashboard_id']!r} not found or not accessible"
+                    }
+                if found["access"] not in ("edit", "contribute"):
+                    return {
+                        "error": "Read-only access — you cannot update blocks on this dashboard"
+                    }
+                dashboard = found["dashboard"]
+                if dashboard.get("template_id"):
+                    return {
+                        "error": "This dashboard's block set comes from a template — use "
+                        "update_dashboard_template to change its blocks."
+                    }
+                if not any(b["id"] == inputs["block_id"] for b in dashboard["blocks"]):
+                    return {"error": f"Block {inputs['block_id']!r} not found on this dashboard"}
+                new_blocks = [
+                    {**b, "config": inputs["config"]} if b["id"] == inputs["block_id"] else b
+                    for b in dashboard["blocks"]
+                ]
+                updated = dashboards_service.update_dashboard(
+                    found["store"],
+                    found["store_workspace"],
+                    inputs["dashboard_id"],
+                    {"blocks": new_blocks},
+                    by=user["name"],
+                )
+                return {
+                    "ok": True,
+                    "blocks": [
+                        {"id": b["id"], "type": b["type"], "config": b["config"]}
+                        for b in updated["blocks"]
+                    ],
+                }
+
+            case "remove_dashboard_block":
+                from services import dashboards_service
+
+                found = dashboards_service.find_dashboard(
+                    user["name"],
+                    user.get("feature_role") or "member",
+                    user.get("role") == "admin",
+                    workspace,
+                    inputs["dashboard_id"],
+                )
+                if found is None:
+                    return {
+                        "error": f"Dashboard {inputs['dashboard_id']!r} not found or not accessible"
+                    }
+                if found["access"] not in ("edit", "contribute"):
+                    return {
+                        "error": "Read-only access — you cannot remove blocks from this dashboard"
+                    }
+                dashboard = found["dashboard"]
+                if dashboard.get("template_id"):
+                    return {
+                        "error": "This dashboard's block set comes from a template — use "
+                        "update_dashboard_template to change its blocks."
+                    }
+                if not any(b["id"] == inputs["block_id"] for b in dashboard["blocks"]):
+                    return {"error": f"Block {inputs['block_id']!r} not found on this dashboard"}
+                new_blocks = [b for b in dashboard["blocks"] if b["id"] != inputs["block_id"]]
+                updated = dashboards_service.update_dashboard(
+                    found["store"],
+                    found["store_workspace"],
+                    inputs["dashboard_id"],
+                    {"blocks": new_blocks},
+                    by=user["name"],
+                )
+                return {
+                    "ok": True,
+                    "blocks": [
+                        {"id": b["id"], "type": b["type"], "config": b["config"]}
+                        for b in updated["blocks"]
+                    ],
+                }
+
+            case "create_dashboard_template":
+                from services import dashboard_templates_service
+
+                owner_param = inputs.get("owner", "me")
+                if owner_param == "global" and user.get("role") != "admin":
+                    return {"error": "Admin access required to create a global template"}
+                owner = (
+                    dashboard_templates_service.GLOBAL_OWNER
+                    if owner_param == "global"
+                    else user["name"]
+                )
+                return dashboard_templates_service.create_template(
+                    {
+                        "label": inputs.get("label"),
+                        "icon": inputs.get("icon"),
+                        "subject_type": inputs.get("subject_type"),
+                        "blocks": inputs.get("blocks") or [],
+                    },
+                    owner=owner,
+                )
+
+            case "update_dashboard_template":
+                from services import dashboard_templates_service
+
+                found = dashboard_templates_service._find_template(inputs["template_id"])
+                if found is None:
+                    return {"error": f"Template {inputs['template_id']!r} not found"}
+                owner, _tmpl = found
+                is_global = owner == dashboard_templates_service.GLOBAL_OWNER
+                if is_global and user.get("role") != "admin":
+                    return {"error": "Admin access required to update a global template"}
+                if not is_global and owner != user["name"]:
+                    return {"error": "You can only update your own personal templates"}
+                updates = {k: v for k, v in inputs.items() if k != "template_id"}
+                result = dashboard_templates_service.update_template(inputs["template_id"], updates)
+                return result or {"error": f"Template {inputs['template_id']!r} not found"}
+
             case _:
                 return {"error": f"Unknown tool: {name!r}"}
 
@@ -2269,17 +2726,75 @@ async def run_agent(
     mode: str = "plan",
     workspace: str = "personal",
     cross_workspace: bool = False,
+    resume: dict | None = None,
+    max_steps: int | None = None,
 ) -> dict:
-    """Run the agent loop and return a run record."""
-    run_id = str(uuid.uuid4())
+    """Run the agent loop and return a run record.
+
+    `resume` replays a previously-paused turn instead of starting fresh: `messages`
+    comes from the persisted pending-turn record (`goal`/`history` are ignored), the
+    paused tool call(s) are executed/answered/declined exactly as originally
+    proposed — never re-derived from the model's own prior text — and the loop then
+    continues normally so the model can react to the result. `resume["kind"]` is
+    `"write"` (execute via `_execute_tool`, or synthesize a declined result if
+    `resume["decision"] == "decline"`) or `"question"` (use `resume["answer"]` as
+    the tool result — the "tool" here is the human, nothing to execute).
+    """
+    run_id = (resume or {}).get("run_id") or str(uuid.uuid4())
     started_at = datetime.now(timezone.utc).isoformat()
-    steps: list[dict] = []
+    # Drop the pending_write/pending_question/pending_plan entry being resolved
+    # right now — it's what's *about* to be replayed/answered below, not still
+    # open. Leaving it in would leak a resolved pause into a later, genuinely
+    # completed response's steps: the frontend's pendingWrites/pendingQuestion
+    # detection doesn't cross-check `mode`, so it would render a phantom
+    # approval card with no real run_id behind it (the completed response
+    # never carries one) — clicking it sends `resume.run_id: undefined`, which
+    # JSON.stringify drops entirely, and the API 422s with "field required".
+    steps: list[dict] = [
+        s
+        for s in (resume or {}).get("steps", [])
+        if s.get("type") not in ("pending_write", "pending_question", "pending_plan")
+    ]
     tools_used = False
     final_answer = ""
     status = "completed"
     last_text = ""
+    step_limit = max_steps if max_steps is not None else MAX_STEPS
 
-    messages = list(history) + [{"role": "user", "content": goal}]
+    if resume:
+        messages = list(resume["messages"])
+        replay_results = []
+        for tc in resume["pending_tool_calls"]:
+            if resume.get("kind") == "question":
+                result: Any = {"answer": resume.get("answer")}
+            elif resume.get("decision") == "decline":
+                result = {"declined": True}
+            else:
+                result = _execute_tool(
+                    tc["name"],
+                    tc["input"],
+                    user,
+                    workspace=workspace,
+                    cross_workspace=cross_workspace,
+                )
+            steps.append(
+                {
+                    "type": "tool_call",
+                    "tool": tc["name"],
+                    "input": tc["input"],
+                    "output": result,
+                    "step": 0,
+                }
+            )
+            result_str = json.dumps(result) if not isinstance(result, str) else result
+            replay_results.append(
+                {"type": "tool_result", "tool_use_id": tc["id"], "content": result_str}
+            )
+        messages.append({"role": "user", "content": replay_results})
+        tools_used = True
+    else:
+        messages = list(history) + [{"role": "user", "content": goal}]
+
     all_tools = _get_tools(user)
     if mode in ("auto", "approve"):
         active_tools = [t for t in all_tools if t["name"] != "propose_plan"]
@@ -2288,7 +2803,7 @@ async def run_agent(
     else:  # plan
         active_tools = all_tools
 
-    for step_num in range(MAX_STEPS):
+    for step_num in range(step_limit):
         response = await agent_completion(
             system, messages, active_tools, user_name=user["name"], workspace=workspace
         )
@@ -2298,6 +2813,86 @@ async def run_agent(
             final_answer = response.text
             if response.stop_reason == "max_tokens":
                 status = "max_steps_reached"
+            break
+
+        # A clarifying question pauses in EVERY mode, checked before the
+        # approve-mode write-gate below — if the model asks a question alongside
+        # a write call in the same turn, the question always wins (nothing about
+        # answering a question is mode-dependent the way a write is).
+        ask_call = next((tc for tc in response.tool_calls if tc.name == "ask_user_question"), None)
+        if ask_call:
+            if response.text:
+                steps.append({"type": "thought", "content": response.text, "step": step_num})
+            steps.append(
+                {
+                    "type": "pending_question",
+                    "question": ask_call.input.get("question"),
+                    "header": ask_call.input.get("header"),
+                    "options": ask_call.input.get("options"),
+                    "multi_select": ask_call.input.get("multi_select", False),
+                    "step": step_num,
+                }
+            )
+            messages.append({"role": "assistant", "content": response.raw_content})
+            save_pending_turn(
+                user["name"],
+                {
+                    "run_id": run_id,
+                    "kind": "question",
+                    "mode": mode,
+                    "goal": goal,
+                    "messages": messages,
+                    "pending_tool_calls": [
+                        {"id": ask_call.id, "name": ask_call.name, "input": ask_call.input}
+                    ],
+                    "steps": steps,
+                    "workspace": workspace,
+                    "cross_workspace": cross_workspace,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+            status = "awaiting_answer"
+            final_answer = response.text or "I have a question before continuing."
+            break
+
+        # A proposed plan pauses the same way — propose_plan is only ever
+        # offered in plan mode (see active_tools above), and used to be a bare
+        # echo relying entirely on the system prompt telling the model to
+        # wait, the same shape of gap the approve-mode replay bug had.
+        plan_call = next((tc for tc in response.tool_calls if tc.name == "propose_plan"), None)
+        if plan_call:
+            if response.text:
+                steps.append({"type": "thought", "content": response.text, "step": step_num})
+            steps.append(
+                {
+                    "type": "pending_plan",
+                    "summary": plan_call.input.get("summary"),
+                    "actions": plan_call.input.get("actions", []),
+                    "step": step_num,
+                }
+            )
+            messages.append({"role": "assistant", "content": response.raw_content})
+            save_pending_turn(
+                user["name"],
+                {
+                    "run_id": run_id,
+                    "kind": "plan",
+                    "mode": mode,
+                    "goal": goal,
+                    "messages": messages,
+                    "pending_tool_calls": [
+                        {"id": plan_call.id, "name": plan_call.name, "input": plan_call.input}
+                    ],
+                    "steps": steps,
+                    "workspace": workspace,
+                    "cross_workspace": cross_workspace,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+            status = "awaiting_approval"
+            final_answer = (
+                response.text or "Here's my plan — let me know if you'd like me to proceed."
+            )
             break
 
         # Approve mode: pause before any write — nothing in this response is
@@ -2316,6 +2911,27 @@ async def run_agent(
                             "step": step_num,
                         }
                     )
+                # Persist exactly what was proposed so Approve replays this precise
+                # call instead of the model re-guessing from its own prior text
+                # (the original bug — see docs/MEMORY.md 2026-08-09 for the writeup).
+                messages.append({"role": "assistant", "content": response.raw_content})
+                save_pending_turn(
+                    user["name"],
+                    {
+                        "run_id": run_id,
+                        "kind": "write",
+                        "mode": mode,
+                        "goal": goal,
+                        "messages": messages,
+                        "pending_tool_calls": [
+                            {"id": tc.id, "name": tc.name, "input": tc.input} for tc in pending
+                        ],
+                        "steps": steps,
+                        "workspace": workspace,
+                        "cross_workspace": cross_workspace,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
                 status = "awaiting_approval"
                 final_answer = response.text or "I need your approval to make these changes."
                 break
@@ -2362,7 +2978,7 @@ async def run_agent(
 
     run = {
         "id": run_id,
-        "goal": goal,
+        "goal": (resume or {}).get("goal", goal),
         "status": status,
         "steps": steps,
         "final_answer": final_answer,
@@ -2382,4 +2998,35 @@ def _save_run(user_name: str, run: dict) -> None:
     data = read_json(path, default={"runs": []})
     data["runs"].insert(0, run)
     data["runs"] = data["runs"][:_RUNS_CAP]
+    write_json(path, data)
+
+
+def _pending_turns_path(user_name: str):
+    return user_path(user_name) / "agent" / "pending_turns.json"
+
+
+def save_pending_turn(user_name: str, pending: dict) -> None:
+    """Persist a paused turn (write approval or, later, a question) so a resume
+    request can replay/answer the exact thing that was proposed. Not prefixed
+    private since routers/chat.py calls this directly on the pause path."""
+    path = _pending_turns_path(user_name)
+    data = read_json(path, default={"pending": []})
+    # A run can only ever have one live pending turn — replace, don't accumulate.
+    data["pending"] = [p for p in data["pending"] if p["run_id"] != pending["run_id"]]
+    data["pending"].insert(0, pending)
+    data["pending"] = data["pending"][:_PENDING_CAP]
+    write_json(path, data)
+
+
+def load_pending_turn(user_name: str, run_id: str) -> dict | None:
+    data = read_json(_pending_turns_path(user_name), default={"pending": []})
+    return next((p for p in data["pending"] if p["run_id"] == run_id), None)
+
+
+def delete_pending_turn(user_name: str, run_id: str) -> None:
+    """Consume a pending turn so it can't be replayed twice (e.g. a double-submit
+    of the Approve click) — called once, right after a successful load."""
+    path = _pending_turns_path(user_name)
+    data = read_json(path, default={"pending": []})
+    data["pending"] = [p for p in data["pending"] if p["run_id"] != run_id]
     write_json(path, data)

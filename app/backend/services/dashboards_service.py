@@ -335,11 +335,12 @@ def create_dashboard(
 # ---------------------------------------------------------------------------
 
 
-def _stacked_layout(existing_blocks: list[dict]) -> dict:
-    """A fresh full-width slot stacked below everything already placed —
-    mirrors Dashboard.jsx::addBlock()'s y:Infinity auto-stack, computed here
-    since this runs at sync time on the backend, not at add-block time in the
-    browser."""
+def stacked_layout(existing_blocks: list[dict]) -> dict:
+    """A fresh full-width slot stacked below everything already placed — mirrors
+    Dashboard.jsx::addBlock()'s nextY() (fixed 2026-08-09 to compute this same
+    real integer instead of a y:Infinity sentinel). Not prefixed private since
+    agent_service.py's add_dashboard_block tool reuses it directly, so the
+    agent's own bottom-stack math can never independently drift from the UI's."""
 
     def bottom(bp: str) -> int:
         ys = [
@@ -355,7 +356,9 @@ def _stacked_layout(existing_blocks: list[dict]) -> dict:
     }
 
 
-def _sync_blocks_from_template(current_blocks: list[dict], template_blocks: list[dict]) -> list[dict]:
+def _sync_blocks_from_template(
+    current_blocks: list[dict], template_blocks: list[dict]
+) -> list[dict]:
     """Reconcile an instance's blocks against its template's current blocks,
     keyed by slot id. Type/config/existence are fully template-controlled; an
     EXISTING slot's own stored layout is left untouched — that's the entire
@@ -367,7 +370,9 @@ def _sync_blocks_from_template(current_blocks: list[dict], template_blocks: list
     for tb in template_blocks:
         slot_id = tb["id"]
         existing = existing_by_id.get(slot_id)
-        layout = existing["layout"] if existing and existing.get("layout") else _stacked_layout(synced)
+        layout = (
+            existing["layout"] if existing and existing.get("layout") else stacked_layout(synced)
+        )
         synced.append(
             {
                 "id": slot_id,
@@ -428,7 +433,9 @@ def set_subject(
     return dashboard
 
 
-def detach_template(store_user: str, workspace: str, dashboard_id: str, by: str = "") -> dict | None:
+def detach_template(
+    store_user: str, workspace: str, dashboard_id: str, by: str = ""
+) -> dict | None:
     """Escape hatch: freezes the dashboard's currently-synced blocks/layout in
     place as an ordinary freeform dashboard — no more template sync, and its
     blocks become independently addable/removable/editable again."""
@@ -550,8 +557,7 @@ def update_access(
         raise ValueError("'contributors' only applies to pool dashboards")
 
     prev_accepted: dict[str, list[str]] = {
-        s.get("target"): list(s.get("accepted") or [])
-        for s in (dashboard.get("shared_with") or [])
+        s.get("target"): list(s.get("accepted") or []) for s in (dashboard.get("shared_with") or [])
     }
     prev_targets = {s.get("target") for s in (dashboard.get("shared_with") or [])}
 
@@ -617,7 +623,11 @@ def _notify_share_targets(recipients: list[str], sharer: str, dashboard: dict) -
                 body=f"“{dashboard.get('name', 'a dashboard')}” — accept to add it to your dashboards.",
                 source="dashboards",
                 delivery="in_app",
-                action={"type": "dashboard_share", "owner": sharer, "dashboard_id": dashboard["id"]},
+                action={
+                    "type": "dashboard_share",
+                    "owner": sharer,
+                    "dashboard_id": dashboard["id"],
+                },
             )
         except Exception:
             pass
@@ -641,7 +651,9 @@ def _respond_shares(shares: list[dict], viewer: str, accept: bool) -> tuple[list
     return out, changed
 
 
-def respond_to_share(viewer: str, owner: str, workspace: str, dashboard_id: str, accept: bool) -> bool:
+def respond_to_share(
+    viewer: str, owner: str, workspace: str, dashboard_id: str, accept: bool
+) -> bool:
     store = _load(owner, workspace)
     dashboard = _by_id(store["dashboards"]).get(dashboard_id)
     if dashboard is None:
@@ -664,7 +676,9 @@ def leave_share(viewer: str, owner: str, workspace: str, dashboard_id: str) -> b
 # ---------------------------------------------------------------------------
 
 
-def delete_dashboard(viewer: str, workspace: str, dashboard_id: str, is_admin: bool = False) -> None:
+def delete_dashboard(
+    viewer: str, workspace: str, dashboard_id: str, is_admin: bool = False
+) -> None:
     """Raises ValueError('not_found') or ValueError('floor_of_one')."""
     store = _load(viewer, workspace)
     if not any(d["id"] == dashboard_id for d in store["dashboards"]):

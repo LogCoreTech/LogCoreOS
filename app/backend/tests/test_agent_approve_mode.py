@@ -1,5 +1,6 @@
 """Tests for approve mode — writes pause for user approval, reads run freely."""
 
+import json
 import sys
 from pathlib import Path
 
@@ -155,3 +156,360 @@ def test_new_tools_are_write_gated_by_default():
         "list_asset_templates",
     ):
         assert name not in write_names
+
+
+# ---------------------------------------------------------------------------
+# Generic pause/resume mechanism (2026-08-09) — the approve-mode replay fix.
+# Before this, Approve re-sent free text ("Yes, go ahead.") and the model
+# re-derived what to do from its own prior turn; these tests prove the
+# persisted call is *replayed*, not re-derived.
+# ---------------------------------------------------------------------------
+
+
+def test_pending_turn_store_roundtrip_and_delete(admin):
+    pending = {
+        "run_id": "test-run-1",
+        "kind": "write",
+        "mode": "approve",
+        "goal": "add a task",
+        "messages": [],
+        "pending_tool_calls": [{"id": "t1", "name": "add_task", "input": {"title": "X"}}],
+        "steps": [],
+        "workspace": "personal",
+        "cross_workspace": False,
+        "created_at": "2026-01-01T00:00:00+00:00",
+    }
+    agent_service.save_pending_turn(admin["name"], pending)
+    loaded = agent_service.load_pending_turn(admin["name"], "test-run-1")
+    assert loaded is not None
+    assert loaded["pending_tool_calls"][0]["input"]["title"] == "X"
+
+    agent_service.delete_pending_turn(admin["name"], "test-run-1")
+    assert agent_service.load_pending_turn(admin["name"], "test-run-1") is None
+
+
+@pytest.mark.asyncio
+async def test_approve_pause_persists_replayable_pending_turn(admin, monkeypatch):
+    monkeypatch.setattr(
+        agent_service,
+        "agent_completion",
+        _fake_completion(
+            [
+                _tool_response(
+                    "add_task", {"title": "Buy milk", "category": "Home"}, "Adding that now."
+                )
+            ]
+        ),
+    )
+    run = await agent_service.run_agent(admin, "add a task to buy milk", [], "sys", mode="approve")
+    assert run["status"] == "awaiting_approval"
+
+    pending = agent_service.load_pending_turn(admin["name"], run["id"])
+    assert pending is not None
+    assert pending["kind"] == "write"
+    assert pending["pending_tool_calls"] == [
+        {"id": "t1", "name": "add_task", "input": {"title": "Buy milk", "category": "Home"}}
+    ]
+    # The assistant's tool-use turn must be in the frozen messages snapshot —
+    # this is what the original bug never appended, making replay impossible.
+    assert pending["messages"][-1]["role"] == "assistant"
+
+
+@pytest.mark.asyncio
+async def test_resume_replays_exact_original_action_not_a_reguess(admin, monkeypatch):
+    monkeypatch.setattr(
+        agent_service,
+        "agent_completion",
+        _fake_completion(
+            [_tool_response("add_task", {"title": "Buy milk", "category": "Home"}, "Adding milk.")]
+        ),
+    )
+    run = await agent_service.run_agent(admin, "add a task to buy milk", [], "sys", mode="approve")
+    pending = agent_service.load_pending_turn(admin["name"], run["id"])
+
+    # If the model were asked again (the old, buggy behavior), it would now react
+    # to a completely different queued response — proving a bug would show up as
+    # the WRONG task getting created.
+    monkeypatch.setattr(
+        agent_service,
+        "agent_completion",
+        _fake_completion([_text_response("Done — added Buy bread.")]),
+    )
+    resumed = await agent_service.run_agent(
+        admin, "", [], "sys", mode="approve", resume={**pending, "decision": "approve"}
+    )
+
+    assert resumed["status"] == "agent"
+    tasks = task_service.list_tasks(admin["name"])
+    assert len(tasks) == 1
+    assert tasks[0]["title"] == "Buy milk"  # the ORIGINAL proposal, never "Buy bread"
+
+
+@pytest.mark.asyncio
+async def test_resume_decline_produces_structured_result_not_free_text(admin, monkeypatch):
+    monkeypatch.setattr(
+        agent_service,
+        "agent_completion",
+        _fake_completion([_tool_response("add_task", {"title": "Buy milk", "category": "Home"})]),
+    )
+    run = await agent_service.run_agent(admin, "add a task to buy milk", [], "sys", mode="approve")
+    pending = agent_service.load_pending_turn(admin["name"], run["id"])
+
+    monkeypatch.setattr(
+        agent_service,
+        "agent_completion",
+        _fake_completion([_text_response("Okay, I won't make that change.")]),
+    )
+    resumed = await agent_service.run_agent(
+        admin, "", [], "sys", mode="approve", resume={**pending, "decision": "decline"}
+    )
+
+    assert task_service.list_tasks(admin["name"]) == []
+    tool_step = next(s for s in resumed["steps"] if s["type"] == "tool_call")
+    assert tool_step["output"] == {"declined": True}
+
+
+@pytest.mark.asyncio
+async def test_resume_completion_drops_the_resolved_pending_step(admin, monkeypatch):
+    """Bug found live in production, 2026-08-10: a resolved pending_write left
+    over in `steps` made a genuinely-completed run look like it was still
+    awaiting approval — the frontend rendered a phantom ApprovalCard with no
+    real run_id behind it (a completed response never carries one), and
+    clicking it 422'd with "field required" on the missing run_id."""
+    monkeypatch.setattr(
+        agent_service,
+        "agent_completion",
+        _fake_completion([_tool_response("add_task", {"title": "Buy milk", "category": "Home"})]),
+    )
+    run = await agent_service.run_agent(admin, "add a task to buy milk", [], "sys", mode="approve")
+    pending = agent_service.load_pending_turn(admin["name"], run["id"])
+
+    # The model has nothing further to do once the write actually lands.
+    monkeypatch.setattr(
+        agent_service,
+        "agent_completion",
+        _fake_completion([_text_response("Done — added Buy milk.")]),
+    )
+    resumed = await agent_service.run_agent(
+        admin, "", [], "sys", mode="approve", resume={**pending, "decision": "approve"}
+    )
+
+    assert resumed["status"] == "agent"  # not "awaiting_approval"
+    assert not any(s["type"] == "pending_write" for s in resumed["steps"])
+    # The replay itself must still show up as a real, resolved tool_call.
+    assert any(s["type"] == "tool_call" and s["tool"] == "add_task" for s in resumed["steps"])
+
+
+@pytest.mark.asyncio
+async def test_resume_chain_of_two_writes_leaves_no_stale_pending_step(admin, monkeypatch):
+    """A genuine second write (not a stale leftover) still pauses correctly,
+    and once *that* one resolves too, nothing pending is left over either."""
+    monkeypatch.setattr(
+        agent_service,
+        "agent_completion",
+        _fake_completion([_tool_response("add_task", {"title": "Buy milk", "category": "Home"})]),
+    )
+    run = await agent_service.run_agent(admin, "add two tasks", [], "sys", mode="approve")
+    pending1 = agent_service.load_pending_turn(admin["name"], run["id"])
+
+    # Resuming write #1, the model immediately asks to do a second write.
+    monkeypatch.setattr(
+        agent_service,
+        "agent_completion",
+        _fake_completion([_tool_response("add_task", {"title": "Buy bread", "category": "Home"})]),
+    )
+    resumed1 = await agent_service.run_agent(
+        admin, "", [], "sys", mode="approve", resume={**pending1, "decision": "approve"}
+    )
+    assert resumed1["status"] == "awaiting_approval"  # a REAL second pause
+    assert resumed1["id"] == run["id"]  # same run_id carried through the chain
+
+    pending2 = agent_service.load_pending_turn(admin["name"], resumed1["id"])
+    assert pending2["pending_tool_calls"][0]["input"]["title"] == "Buy bread"
+    # The first (already-resolved) pending_write must not have leaked forward.
+    assert not any(s["type"] == "pending_write" for s in resumed1["steps"][:-1])
+
+    monkeypatch.setattr(
+        agent_service, "agent_completion", _fake_completion([_text_response("Done!")])
+    )
+    resumed2 = await agent_service.run_agent(
+        admin, "", [], "sys", mode="approve", resume={**pending2, "decision": "approve"}
+    )
+
+    assert resumed2["status"] == "agent"
+    assert not any(s["type"] == "pending_write" for s in resumed2["steps"])
+    tasks = task_service.list_tasks(admin["name"])
+    assert {t["title"] for t in tasks} == {"Buy milk", "Buy bread"}
+
+
+# ---------------------------------------------------------------------------
+# ask_user_question (2026-08-09) — built on the same pause/resume mechanism.
+# ---------------------------------------------------------------------------
+
+_CATEGORY_QUESTION = {
+    "question": "Which category should this go under?",
+    "header": "Category",
+    "options": [
+        {"label": "Home", "description": "Household chores and errands"},
+        {"label": "Work", "description": "Job-related tasks"},
+    ],
+    "multi_select": False,
+}
+
+
+@pytest.mark.asyncio
+async def test_ask_user_question_pauses_and_executes_nothing(admin, monkeypatch):
+    monkeypatch.setattr(
+        agent_service,
+        "agent_completion",
+        _fake_completion(
+            [
+                _tool_response(
+                    "ask_user_question", _CATEGORY_QUESTION, "Let me check something first."
+                )
+            ]
+        ),
+    )
+    run = await agent_service.run_agent(admin, "add a task", [], "sys", mode="approve")
+
+    assert run["status"] == "awaiting_answer"
+    q = next(s for s in run["steps"] if s["type"] == "pending_question")
+    assert q["question"] == _CATEGORY_QUESTION["question"]
+    assert len(q["options"]) == 2
+    assert task_service.list_tasks(admin["name"]) == []
+
+
+@pytest.mark.asyncio
+async def test_ask_user_question_pauses_even_in_auto_mode(admin, monkeypatch):
+    """Auto mode otherwise executes writes freely, but a question isn't a write
+    and always needs a real human answer, regardless of granted autonomy."""
+    monkeypatch.setattr(
+        agent_service,
+        "agent_completion",
+        _fake_completion([_tool_response("ask_user_question", _CATEGORY_QUESTION)]),
+    )
+    run = await agent_service.run_agent(admin, "set up a reminder", [], "sys", mode="auto")
+    assert run["status"] == "awaiting_answer"
+
+
+@pytest.mark.asyncio
+async def test_resume_answer_reaches_model_as_exact_tool_result(admin, monkeypatch):
+    monkeypatch.setattr(
+        agent_service,
+        "agent_completion",
+        _fake_completion([_tool_response("ask_user_question", _CATEGORY_QUESTION)]),
+    )
+    run = await agent_service.run_agent(admin, "add a task", [], "sys", mode="approve")
+    pending = agent_service.load_pending_turn(admin["name"], run["id"])
+    assert pending["kind"] == "question"
+
+    captured = {}
+
+    async def fake_reaction(system, messages, tools, **kwargs):
+        last_user_msg = messages[-1]
+        captured["tool_result_content"] = last_user_msg["content"][0]["content"]
+        return _text_response("Got it — Home it is.")
+
+    monkeypatch.setattr(agent_service, "agent_completion", fake_reaction)
+
+    resumed = await agent_service.run_agent(
+        admin, "", [], "sys", mode="approve", resume={**pending, "answer": ["Home"]}
+    )
+
+    assert resumed["status"] == "agent"
+    assert json.loads(captured["tool_result_content"]) == {"answer": ["Home"]}
+
+
+# ---------------------------------------------------------------------------
+# propose_plan migrated onto the pause/resume mechanism (2026-08-09) — used to
+# be a bare echo relying entirely on the system prompt to make the model wait.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_propose_plan_pauses_and_persists_pending_turn(admin, monkeypatch):
+    monkeypatch.setattr(
+        agent_service,
+        "agent_completion",
+        _fake_completion(
+            [
+                _tool_response(
+                    "propose_plan",
+                    {
+                        "summary": "Create 3 tasks for your week",
+                        "actions": ["Task A", "Task B", "Task C"],
+                    },
+                    "Here's my plan.",
+                )
+            ]
+        ),
+    )
+    run = await agent_service.run_agent(admin, "plan my week", [], "sys", mode="plan")
+
+    assert run["status"] == "awaiting_approval"
+    p = next(s for s in run["steps"] if s["type"] == "pending_plan")
+    assert p["summary"] == "Create 3 tasks for your week"
+    assert p["actions"] == ["Task A", "Task B", "Task C"]
+
+    pending = agent_service.load_pending_turn(admin["name"], run["id"])
+    assert pending["kind"] == "plan"
+    assert pending["pending_tool_calls"][0]["name"] == "propose_plan"
+
+
+@pytest.mark.asyncio
+async def test_propose_plan_resume_approve_continues_from_persisted_plan(admin, monkeypatch):
+    monkeypatch.setattr(
+        agent_service,
+        "agent_completion",
+        _fake_completion(
+            [
+                _tool_response(
+                    "propose_plan", {"summary": "Add a task", "actions": ["Add: Buy milk"]}
+                )
+            ]
+        ),
+    )
+    run = await agent_service.run_agent(admin, "plan my week", [], "sys", mode="plan")
+    pending = agent_service.load_pending_turn(admin["name"], run["id"])
+
+    monkeypatch.setattr(
+        agent_service,
+        "agent_completion",
+        _fake_completion(
+            [
+                _tool_response("add_task", {"title": "Buy milk", "category": "Home"}),
+                _text_response("Done!"),
+            ]
+        ),
+    )
+    resumed = await agent_service.run_agent(
+        admin, "", [], "sys", mode="plan", resume={**pending, "decision": "approve"}
+    )
+
+    assert resumed["status"] == "agent"
+    tasks = task_service.list_tasks(admin["name"])
+    assert len(tasks) == 1 and tasks[0]["title"] == "Buy milk"
+
+
+@pytest.mark.asyncio
+async def test_propose_plan_resume_decline_produces_structured_result(admin, monkeypatch):
+    monkeypatch.setattr(
+        agent_service,
+        "agent_completion",
+        _fake_completion(
+            [_tool_response("propose_plan", {"summary": "Add a task", "actions": ["x"]})]
+        ),
+    )
+    run = await agent_service.run_agent(admin, "plan my week", [], "sys", mode="plan")
+    pending = agent_service.load_pending_turn(admin["name"], run["id"])
+
+    monkeypatch.setattr(
+        agent_service, "agent_completion", _fake_completion([_text_response("Okay, revising.")])
+    )
+    resumed = await agent_service.run_agent(
+        admin, "", [], "sys", mode="plan", resume={**pending, "decision": "decline"}
+    )
+
+    tool_step = next(s for s in resumed["steps"] if s["type"] == "tool_call")
+    assert tool_step["output"] == {"declined": True}
+    assert task_service.list_tasks(admin["name"]) == []
