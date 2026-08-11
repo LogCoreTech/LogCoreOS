@@ -133,6 +133,9 @@ export const priorities = {
 
 export const chat = {
   send:       (message, history, mode = 'approve', crossWorkspace = false, acceptOverage = false) => post('/chat', { message, history, mode, cross_workspace: crossWorkspace, accept_overage: acceptOverage }),
+  // Replays/answers a paused turn (approve/decline a pending write, or answer a
+  // question) instead of sending a new message — see docs/MEMORY.md 2026-08-09.
+  resume:     (runId, decision, history, crossWorkspace = false, answer = null) => post('/chat', { history, cross_workspace: crossWorkspace, resume: { run_id: runId, decision, answer } }),
   saveMemory: (history, target = 'short') => post('/chat/save-memory',  { history, target }),
   saveChat:   (history, name = '', filename = '') => post('/chat/save', { history, name, filename }),
   listSaved:  ()                          => get('/chat/saved'),

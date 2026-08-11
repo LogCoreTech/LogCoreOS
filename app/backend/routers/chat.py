@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from config import settings
 from routers.auth import get_current_user, get_workspace, require_module
-from services import ai_usage_service
+from services import agent_service, ai_usage_service
 from services.agent_service import run_agent
 from services.ai_provider import chat_completion, is_ai_configured
 from services.auth_service import today_for_user
@@ -51,7 +51,9 @@ def _build_context(user_name: str, workspace: str = "personal") -> str:
 
     self_contact = contacts_service.get_self_contact(user_name, create_if_missing=True)
     if self_contact:
-        parts.append(f"# User Profile\n\n{_safe(contacts_service.format_profile_text(self_contact))}")
+        parts.append(
+            f"# User Profile\n\n{_safe(contacts_service.format_profile_text(self_contact))}"
+        )
 
     # Life priorities for the ACTIVE workspace (personal profile order in personal;
     # business profile order in business) plus the relevant shared-pool order. The
@@ -98,14 +100,28 @@ class HistoryMessage(BaseModel):
     content: str = Field(..., max_length=30_000)
 
 
+class ResumeAction(BaseModel):
+    run_id: str = Field(..., max_length=64)
+    decision: Literal["approve", "decline"] | None = None
+    answer: list[str] | None = Field(default=None, max_length=10)
+
+
 class ChatRequest(BaseModel):
-    message: str = Field(..., min_length=1, max_length=5000)
+    # Empty when resuming a paused turn — see validate_message_or_resume below.
+    message: str = Field("", max_length=5000)
     history: list[HistoryMessage] = Field(default=[], max_length=50)
     # "approve" is the default: reads run freely, each write pauses for user approval
     mode: Literal["approve", "plan", "auto", "research"] = "approve"
     cross_workspace: bool = False
     # Set true to proceed past a soft AI-usage-cap confirmation (see ai_usage_service).
     accept_overage: bool = False
+    resume: ResumeAction | None = None
+
+    @model_validator(mode="after")
+    def validate_message_or_resume(self):
+        if not self.message.strip() and not self.resume:
+            raise ValueError("Either message or resume must be provided")
+        return self
 
     @model_validator(mode="after")
     def validate_history_alternates(self):
@@ -153,6 +169,22 @@ async def chat(
     if usage["status"] == "soft_confirm" and req.accept_overage:
         ai_usage_service.accept_overage(current_user["name"])
 
+    resume_payload = None
+    effective_mode = req.mode
+    if req.resume:
+        pending = agent_service.load_pending_turn(current_user["name"], req.resume.run_id)
+        if not pending:
+            return {
+                "response": "That request is no longer available to approve — please ask again.",
+                "steps": [],
+                "mode": "expired",
+            }
+        # Consume it now so a double-submit (e.g. a repeated click) can't replay
+        # the same write twice.
+        agent_service.delete_pending_turn(current_user["name"], req.resume.run_id)
+        effective_mode = pending["mode"]
+        resume_payload = {**pending, "decision": req.resume.decision, "answer": req.resume.answer}
+
     from datetime import datetime
     from zoneinfo import ZoneInfo
 
@@ -164,20 +196,20 @@ async def chat(
     today_str = now_local.strftime("%A, %B %d, %Y (%Y-%m-%d)")
 
     mode_block = ""
-    if req.mode == "approve":
+    if effective_mode == "approve":
         mode_block = (
             "Any change you attempt (create/update/delete) is paused and shown to the user "
             "for approval before it is applied — call tools normally and keep any lead-in text "
             "short. If the user declines, do not retry the change; ask what they want instead.\n\n"
         )
-    elif req.mode == "plan":
+    elif effective_mode == "plan":
         mode_block = (
             "IMPORTANT — before creating, updating, or deleting anything, always call propose_plan "
             "with a plain-English summary and list of specific actions. Do not call any other write "
             "tools in the same turn as propose_plan — wait for the user to confirm first. "
             "Read-only tools (list_tasks, get_profile, search_brain, etc.) do not need propose_plan.\n\n"
         )
-    elif req.mode == "research":
+    elif effective_mode == "research":
         mode_block = (
             "You are in RESEARCH MODE. Your role is to gather, analyze, and synthesize information "
             "from the user's personal Brain data and the web. You have READ-ONLY access — do NOT "
@@ -204,7 +236,7 @@ async def chat(
             "- 'Organize tasks by project/category' → call list_tasks, group by category and summarize — read-only, no propose_plan needed\n"
             "- 'Summarize my progress' → call get_task_history with since_date + list_journal_entries — read-only, no propose_plan needed\n\n"
         )
-        if req.mode != "research"
+        if effective_mode != "research"
         else ""
     )
 
@@ -245,17 +277,25 @@ async def chat(
         req.message,
         history,
         system_prompt,
-        mode=req.mode,
-        workspace=workspace,
-        cross_workspace=req.cross_workspace,
+        mode=effective_mode,
+        # A replayed action must run in the exact workspace it was proposed for,
+        # not wherever the caller happens to be now.
+        workspace=resume_payload["workspace"] if resume_payload else workspace,
+        cross_workspace=(
+            resume_payload["cross_workspace"] if resume_payload else req.cross_workspace
+        ),
+        resume=resume_payload,
     )
     ai_usage_service.record_message(current_user["name"], workspace)
 
-    return {
+    response_payload = {
         "response": result["final_answer"],
         "steps": result["steps"],
         "mode": result["status"],
     }
+    if result["status"] in ("awaiting_approval", "awaiting_answer"):
+        response_payload["run_id"] = result["id"]
+    return response_payload
 
 
 class SaveMemoryRequest(BaseModel):

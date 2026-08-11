@@ -458,7 +458,7 @@ here that never matched the actual route.)
 ## Chat
 
 ### `POST /chat`
-Send a message to the AI. Returns a streaming response with step trace.
+Send a message to the AI, or resume a paused turn. Returns a streaming response with step trace.
 
 **Body**
 ```json
@@ -470,12 +470,15 @@ Send a message to the AI. Returns a streaming response with step trace.
   ],
   "mode": "auto",
   "cross_workspace": false,
-  "accept_overage": false
+  "accept_overage": false,
+  "resume": null
 }
 ```
 
-- `mode`: `"approve"` (default) | `"plan"` | `"auto"` | `"research"`. Approve mode runs reads freely but pauses before any write: the response has `mode: "awaiting_approval"` and `steps` containing `pending_write` entries (`{ type, tool, input, step }`); nothing is executed until the user approves (the frontend re-sends as a one-turn `auto` request). Plan mode proposes a whole plan before executing. Research mode adds Tavily web search, read-only.
-- `cross_workspace`: when `true` and the user has both workspaces, the AI searches both personal and business Brain paths (results prefixed `personal/` or `business/`). Only available to dual-workspace users.
+- `mode`: `"approve"` (default) | `"plan"` | `"auto"` | `"research"`. Approve mode runs reads freely but pauses before any write: the response has `mode: "awaiting_approval"` and `steps` containing `pending_write` entries (`{ type, tool, input, step }`), plus a `run_id`. Plan mode proposes a whole plan before executing (`pending_plan` step, `{ type, summary, actions, step }`). A clarifying question pauses in every mode (`pending_question` step, `{ type, question, header, options, multi_select, step }`, response `mode: "awaiting_answer"`). Research mode adds Tavily web search, read-only.
+- `message`: optional — omit when sending `resume` instead (exactly one of the two is required).
+- `resume`: `{ run_id, decision?, answer? }` — replays/answers a paused turn instead of sending a new message (2026-08-09). `decision`: `"approve"` (write: replays the *exact* originally-proposed tool call, never re-derived; plan: continues the loop) or `"decline"` (write/plan: the model receives a structured `{"declined": true}` result). `answer`: `string[]`, required when resuming a `pending_question` — becomes the tool result directly. A resumed run_id is consumed immediately server-side, so replaying it twice (e.g. a double-submitted click) is a no-op the second time (`{ "mode": "expired", ... }`).
+- `cross_workspace`: when `true` and the user has both workspaces, the AI searches both personal and business Brain paths (results prefixed `personal/` or `business/`). Only available to dual-workspace users. Ignored when resuming — the *original* turn's workspace is used, so a replayed action can't drift to wherever the caller happens to be now.
 - `accept_overage`: only relevant when the caller is soft-capped (see **AI Usage** below) and already over their limit — set `true` to proceed anyway. When usage is hard-blocked the response is `{ "response": "...", "steps": [], "mode": "usage_blocked" }` and nothing runs; when soft-blocked and `accept_overage` is not yet `true`, the response is `{ "mode": "usage_confirm_required", ... }` and the frontend re-sends with `accept_overage: true` to continue. Accepting holds for the rest of that user's current cap period.
 
 Rate limited: 20 messages per minute per IP.

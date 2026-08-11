@@ -20,6 +20,18 @@ function greeting() {
   return h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening'
 }
 
+// Bottom-stacked row for a newly added block at this breakpoint. Was
+// `y: Infinity` — JSON.stringify silently turns Infinity into null, so the
+// server stored a literal null instead of a real row number. A concrete
+// integer is required here since this value goes straight over the wire.
+function nextY(blocks, breakpoint) {
+  return blocks.reduce((max, b) => {
+    const l = b.layout?.[breakpoint]
+    if (!l) return max
+    return Math.max(max, (Number(l.y) || 0) + (Number(l.h) || 0))
+  }, 0)
+}
+
 export default function Dashboard() {
   const { user, updateUserField } = useAuth()
   const { workspace } = useWorkspace()
@@ -50,10 +62,10 @@ export default function Dashboard() {
     return res
   }, [])
 
-  const loadCurrent = useCallback(async (id) => {
+  const loadCurrent = useCallback(async (id, { resetEditing = true } = {}) => {
     const rendered = await dashboardsApi.render(id)
     setCurrent(rendered)
-    setEditing(false)
+    if (resetEditing) setEditing(false)
     setPendingLayouts(null)
   }, [])
 
@@ -117,7 +129,10 @@ export default function Dashboard() {
     const newBlock = {
       type,
       config,
-      layout: { lg: { x: 0, y: Infinity, w, h }, sm: { x: 0, y: Infinity, w: MOBILE_COLS, h } },
+      layout: {
+        lg: { x: 0, y: nextY(current.blocks, 'lg'), w, h },
+        sm: { x: 0, y: nextY(current.blocks, 'sm'), w: MOBILE_COLS, h },
+      },
     }
     const nextBlocks = [...current.blocks, newBlock]
     await saveBlocks(nextBlocks)
@@ -155,7 +170,10 @@ export default function Dashboard() {
       await dashboardsApi.update(current.id, {
         blocks: blocks.map(b => ({ id: b.id, type: b.type, config: b.config, layout: b.layout })),
       })
-      await loadCurrent(current.id)
+      // Adding/editing/removing a block is a mid-edit action, not a dashboard
+      // switch — staying in Edit mode afterward is the whole point of "Save
+      // Layout" and repeated "+ Add Block" clicks existing side by side.
+      await loadCurrent(current.id, { resetEditing: false })
     } catch (e) {
       setError(e.message || 'Failed to save')
     } finally {
@@ -263,7 +281,7 @@ export default function Dashboard() {
             blocksLocked={!!current.template_id}
             onRemoveBlock={removeBlock}
             onEditBlock={openBlockConfigEditor}
-            onBlockAction={() => loadCurrent(current.id)}
+            onBlockAction={() => loadCurrent(current.id, { resetEditing: false })}
             onLayoutChange={onLayoutChange}
           />
         </>
@@ -287,7 +305,7 @@ export default function Dashboard() {
           isPool={current._relation === 'pool'}
           isOwner={isOwner}
           onClose={() => setShowAccess(false)}
-          onSaved={() => loadCurrent(current.id)}
+          onSaved={() => loadCurrent(current.id, { resetEditing: false })}
         />
       )}
 
@@ -296,7 +314,7 @@ export default function Dashboard() {
           dashboard={current}
           isOwner={isOwner}
           onClose={() => setShowSettings(false)}
-          onSaved={async () => { await loadCurrent(current.id); setShowSettings(false) }}
+          onSaved={async () => { await loadCurrent(current.id, { resetEditing: false }); setShowSettings(false) }}
           onShare={() => { setShowSettings(false); setShowAccess(true) }}
           onSetDefault={async () => { await setAsDefault(); setShowSettings(false) }}
           onDelete={() => { setShowSettings(false); deleteDashboard() }}

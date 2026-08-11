@@ -218,3 +218,41 @@ html.compact .btn-ghost   { @apply px-2 py-1.5 text-sm; }
   outline: 2px solid rgb(var(--accent-500) / 0.6);
   outline-offset: 2px;
 }
+
+/* AI Chat composer polish (2026-08-10): a subtle rise-and-fade for new
+   messages/cards, and a shimmer-text "thinking" state that reads as active
+   work rather than a generic bouncing-dots spinner. */
+@keyframes chat-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.chat-fade-in {
+  animation: chat-fade-in 0.25s ease-out;
+}
+
+@keyframes chat-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.chat-thinking {
+  background-image: linear-gradient(90deg,
+    rgb(var(--accent-500) / 0.5) 0%,
+    rgb(var(--accent-500) / 1) 50%,
+    rgb(var(--accent-500) / 0.5) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: chat-shimmer 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-fade-in { animation: none; }
+  .chat-thinking {
+    animation: none;
+    background-image: none;
+    -webkit-background-clip: initial;
+    background-clip: initial;
+    color: rgb(var(--accent-500));
+  }
+}
