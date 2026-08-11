@@ -6,7 +6,12 @@ from datetime import date
 
 from services import events_service
 from services.dashboard_blocks._tasks import _scoped_target
-from services.dashboard_blocks.registry import BlockRenderCtx, BlockRenderResult, BlockSpec, register
+from services.dashboard_blocks.registry import (
+    BlockRenderCtx,
+    BlockRenderResult,
+    BlockSpec,
+    register,
+)
 
 
 def resolve_upcoming_events(ctx: BlockRenderCtx) -> BlockRenderResult:
@@ -14,7 +19,9 @@ def resolve_upcoming_events(ctx: BlockRenderCtx) -> BlockRenderResult:
     if target is None:
         return BlockRenderResult(ok=False, locked_reason="no_access")
     today = date.today().isoformat()
-    events = [e for e in events_service.list_events(target, ctx.workspace) if e.get("date", "") >= today]
+    events = [
+        e for e in events_service.list_events(target, ctx.workspace) if e.get("date", "") >= today
+    ]
     events.sort(key=lambda e: e.get("date", ""))
     return BlockRenderResult(ok=True, data={"events": events[:5]})
 

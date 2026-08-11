@@ -3,7 +3,12 @@ as-is; no new backend aggregation."""
 
 from services import ha_service
 from services.dashboard_blocks._tasks import _scoped_target
-from services.dashboard_blocks.registry import BlockRenderCtx, BlockRenderResult, BlockSpec, register
+from services.dashboard_blocks.registry import (
+    BlockRenderCtx,
+    BlockRenderResult,
+    BlockSpec,
+    register,
+)
 
 
 def resolve_home_favourites(ctx: BlockRenderCtx) -> BlockRenderResult:

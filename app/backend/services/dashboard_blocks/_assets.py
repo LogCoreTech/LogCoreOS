@@ -3,7 +3,12 @@
 
 from services import assets_service, task_service
 from services.dashboard_blocks._tasks import _scoped_target
-from services.dashboard_blocks.registry import BlockRenderCtx, BlockRenderResult, BlockSpec, register
+from services.dashboard_blocks.registry import (
+    BlockRenderCtx,
+    BlockRenderResult,
+    BlockSpec,
+    register,
+)
 
 
 def _find(ctx: BlockRenderCtx, asset_id: str):
@@ -47,7 +52,9 @@ def resolve_linked_contact(ctx: BlockRenderCtx) -> BlockRenderResult:
         return BlockRenderResult(ok=False, locked_reason="no_access")
     asset = found["asset"]
     template = assets_service.resolve_template(asset)
-    contact_keys = [f["key"] for f in (template or {}).get("fields", []) if f.get("type") == "contact"]
+    contact_keys = [
+        f["key"] for f in (template or {}).get("fields", []) if f.get("type") == "contact"
+    ]
     contact_ids = [asset["fields"][k] for k in contact_keys if asset.get("fields", {}).get(k)]
     return BlockRenderResult(ok=True, data={"contact_ids": contact_ids})
 

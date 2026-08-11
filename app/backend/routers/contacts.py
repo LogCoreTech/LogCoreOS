@@ -82,15 +82,40 @@ def _effective_ws(contact: dict, workspace: str) -> str:
 # employer/industry/education/years_experience/skills now live inside
 # career_history entries, not as flat fields — see contacts_service.py.
 _PROFILE_BASIC_FIELDS = [
-    "pronouns", "city", "state", "country", "occupation", "gender", "marital_status", "pets",
-    "life_mission", "core_values", "key_constraints",
+    "pronouns",
+    "city",
+    "state",
+    "country",
+    "occupation",
+    "gender",
+    "marital_status",
+    "pets",
+    "life_mission",
+    "core_values",
+    "key_constraints",
 ]
 _PROFILE_PRIVATE_FIELDS = [
-    "wake_weekday", "wake_weekend", "bedtime", "work_start", "work_end",
-    "height_cm", "height_unit", "weight_kg", "weight_unit", "blood_type",
-    "conditions", "medications", "diet", "exercise",
-    "income_range", "budget_style", "communication_style", "tone",
-    "response_language", "topics_to_emphasize", "topics_to_avoid",
+    "wake_weekday",
+    "wake_weekend",
+    "bedtime",
+    "work_start",
+    "work_end",
+    "height_cm",
+    "height_unit",
+    "weight_kg",
+    "weight_unit",
+    "blood_type",
+    "conditions",
+    "medications",
+    "diet",
+    "exercise",
+    "income_range",
+    "budget_style",
+    "communication_style",
+    "tone",
+    "response_language",
+    "topics_to_emphasize",
+    "topics_to_avoid",
 ]
 
 
@@ -196,7 +221,6 @@ class ContactUpdate(BaseModel):
     response_language: str | None = None
     topics_to_emphasize: str | None = None
     topics_to_avoid: str | None = None
-
 
 
 class InteractionCreate(BaseModel):
@@ -562,7 +586,9 @@ def archive_contact(
     store_user, contact, access = _find_or_404(current_user, workspace, contact_id)
     _require_edit(access)
     try:
-        contacts_service.set_archived(store_user, _effective_ws(contact, workspace), contact_id, True)
+        contacts_service.set_archived(
+            store_user, _effective_ws(contact, workspace), contact_id, True
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"ok": True}
@@ -677,7 +703,9 @@ def list_interactions(
     _rl: None = Depends(_read_limit),
 ):
     store_user, contact, _access = _find_or_404(current_user, workspace, contact_id)
-    return contacts_service.list_interactions(store_user, _effective_ws(contact, workspace), contact_id)
+    return contacts_service.list_interactions(
+        store_user, _effective_ws(contact, workspace), contact_id
+    )
 
 
 @router.post("/{contact_id}/interactions")
@@ -714,7 +742,10 @@ def update_interaction(
     store_user, contact, access = _find_or_404(current_user, workspace, contact_id)
     _require_contribute(access)
     updated = contacts_service.update_interaction(
-        store_user, _effective_ws(contact, workspace), interaction_id, req.model_dump(exclude_unset=True)
+        store_user,
+        _effective_ws(contact, workspace),
+        interaction_id,
+        req.model_dump(exclude_unset=True),
     )
     if not updated:
         raise HTTPException(status_code=404, detail="Interaction not found")
@@ -788,7 +819,10 @@ def update_deal(
     _require_contribute(access)
     try:
         updated = contacts_service.update_deal(
-            store_user, _effective_ws(contact, workspace), deal_id, req.model_dump(exclude_unset=True)
+            store_user,
+            _effective_ws(contact, workspace),
+            deal_id,
+            req.model_dump(exclude_unset=True),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -885,7 +919,9 @@ def unlink_deal_asset(
 ):
     store_user, contact, access = _find_or_404(current_user, workspace, contact_id)
     _require_contribute(access)
-    updated = contacts_service.unlink_asset(store_user, _effective_ws(contact, workspace), deal_id, asset_id)
+    updated = contacts_service.unlink_asset(
+        store_user, _effective_ws(contact, workspace), deal_id, asset_id
+    )
     if updated is None:
         raise HTTPException(status_code=404, detail="Deal not found")
     return updated
@@ -955,7 +991,9 @@ def contact_finance(
     # expenses from the deal's linked assets — all viewer-scoped.
     deals_out: list[dict] = []
     try:
-        for deal in contacts_service.list_deals(store_user, _effective_ws(contact, workspace), contact_id):
+        for deal in contacts_service.list_deals(
+            store_user, _effective_ws(contact, workspace), contact_id
+        ):
             d_invs = finance_invoice_service.list_invoices_for_deal(
                 viewer, viewer_role, is_admin, workspace, deal["id"]
             )

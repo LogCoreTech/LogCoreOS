@@ -62,7 +62,9 @@ def test_phones_wrap_legacy_plain_strings(brain):
 def test_phones_support_country_code_and_extension(brain):
     c = _contact(name="Intl")
     updated = crm.update_contact(
-        "Owner", "personal", c["id"],
+        "Owner",
+        "personal",
+        c["id"],
         {"phones": [{"country_code": "44", "number": "2079460958", "extension": "12"}]},
     )
     assert updated["phones"] == [{"country_code": "44", "number": "2079460958", "extension": "12"}]
@@ -429,12 +431,16 @@ def test_priority_order_workspace_keyed_validation(brain):
     )
     assert updated["priority_order"] == {"personal": ["Health", "Family"], "business": ["Revenue"]}
     with pytest.raises(ValueError):
-        crm.update_contact("Owner", "personal", self_c["id"], {"priority_order": ["not", "a", "dict"]})
+        crm.update_contact(
+            "Owner", "personal", self_c["id"], {"priority_order": ["not", "a", "dict"]}
+        )
 
 
 def test_affiliated_contact_ids_never_settable_via_update_contact(brain):
     c = _contact()
-    updated = crm.update_contact("Owner", "personal", c["id"], {"affiliated_contact_ids": ["x", "y"]})
+    updated = crm.update_contact(
+        "Owner", "personal", c["id"], {"affiliated_contact_ids": ["x", "y"]}
+    )
     assert updated["affiliated_contact_ids"] == []
 
 
@@ -451,7 +457,9 @@ def test_link_and_unlink_affiliation_is_symmetric(brain):
     assert partner["id"] in a["affiliated_contact_ids"]
     assert self_c["id"] in b["affiliated_contact_ids"]
 
-    a2, b2 = crm.unlink_affiliation("Owner", "member", False, "personal", self_c["id"], partner["id"])
+    a2, b2 = crm.unlink_affiliation(
+        "Owner", "member", False, "personal", self_c["id"], partner["id"]
+    )
     assert partner["id"] not in a2["affiliated_contact_ids"]
     assert self_c["id"] not in b2["affiliated_contact_ids"]
 
@@ -509,7 +517,10 @@ def test_self_contact_sharing_capped_below_edit(brain):
     # read and contribute are still fine — nobody but the owner can ever edit,
     # but sharing basic info / allowing interactions+deals still works.
     rec, _ = crm.update_access(
-        "Owner", "personal", self_c["id"], shared_with=[{"target": "Worker", "access": "contribute"}]
+        "Owner",
+        "personal",
+        self_c["id"],
+        shared_with=[{"target": "Worker", "access": "contribute"}],
     )
     assert rec["shared_with"][0]["access"] == "contribute"
 
@@ -525,7 +536,9 @@ def test_gender_validation(brain):
 def test_height_weight_validation(brain):
     c = _contact(name="H")
     updated = crm.update_contact(
-        "Owner", "personal", c["id"],
+        "Owner",
+        "personal",
+        c["id"],
         {"height_cm": 180, "height_unit": "cm", "weight_kg": 75, "weight_unit": "kg"},
     )
     assert updated["height_cm"] == 180 and updated["weight_kg"] == 75
@@ -554,21 +567,34 @@ def test_time_field_validation(brain):
 def test_career_history_add_and_archive_flow(brain):
     c = _contact(name="Career")
     updated = crm.update_contact(
-        "Owner", "personal", c["id"],
-        {"career_history": [{
-            "title": "Junior Dev", "education": "Bachelor's Degree",
-            "years_experience": "1-2", "start_date": "2020-01", "archived": False,
-        }]},
+        "Owner",
+        "personal",
+        c["id"],
+        {
+            "career_history": [
+                {
+                    "title": "Junior Dev",
+                    "education": "Bachelor's Degree",
+                    "years_experience": "1-2",
+                    "start_date": "2020-01",
+                    "archived": False,
+                }
+            ]
+        },
     )
     assert len(updated["career_history"]) == 1
     entry_id = updated["career_history"][0]["id"]
     # Archive it and add a new current role.
     updated2 = crm.update_contact(
-        "Owner", "personal", c["id"],
-        {"career_history": [
-            {**updated["career_history"][0], "end_date": "2022-06", "archived": True},
-            {"title": "Senior Dev", "start_date": "2022-06", "archived": False},
-        ]},
+        "Owner",
+        "personal",
+        c["id"],
+        {
+            "career_history": [
+                {**updated["career_history"][0], "end_date": "2022-06", "archived": True},
+                {"title": "Senior Dev", "start_date": "2022-06", "archived": False},
+            ]
+        },
     )
     assert len(updated2["career_history"]) == 2
     assert updated2["career_history"][0]["id"] == entry_id
@@ -580,7 +606,9 @@ def test_career_history_rejects_unknown_education(brain):
     c = _contact(name="Career2")
     with pytest.raises(ValueError):
         crm.update_contact(
-            "Owner", "personal", c["id"],
+            "Owner",
+            "personal",
+            c["id"],
             {"career_history": [{"title": "X", "education": "Made Up Degree"}]},
         )
 

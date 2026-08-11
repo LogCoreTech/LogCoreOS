@@ -9,7 +9,12 @@ all); Contacts have no per-instance template to pick display fields from.
 """
 
 from services.assets_service import asset_links_contact, attach_templates, list_visible
-from services.dashboard_blocks.registry import BlockRenderCtx, BlockRenderResult, BlockSpec, register
+from services.dashboard_blocks.registry import (
+    BlockRenderCtx,
+    BlockRenderResult,
+    BlockSpec,
+    register,
+)
 
 
 def _field_label(template: dict | None, key: str) -> str:
@@ -39,10 +44,11 @@ def resolve_collection(ctx: BlockRenderCtx) -> BlockRenderResult:
     candidates = attach_templates(
         list_visible(ctx.viewer, ctx.workspace, is_admin=ctx.is_admin, viewer_role=ctx.viewer_role)
     )
-    template = next((a.get("_template") for a in candidates if a.get("template_id") == template_id), None)
+    template = next(
+        (a.get("_template") for a in candidates if a.get("template_id") == template_id), None
+    )
     assets = [
-        a for a in candidates
-        if a.get("template_id") == template_id and not a.get("archived")
+        a for a in candidates if a.get("template_id") == template_id and not a.get("archived")
     ]
     if link_contact_id:
         assets = [a for a in assets if asset_links_contact(a, a.get("_template"), link_contact_id)]
@@ -63,7 +69,9 @@ def resolve_collection(ctx: BlockRenderCtx) -> BlockRenderResult:
             "count": len(rows),
             "view": ctx.config.get("view", "list"),
             "template_label": (template or {}).get("label"),
-            "display_fields": [{"key": k, "label": _field_label(template, k)} for k in display_fields],
+            "display_fields": [
+                {"key": k, "label": _field_label(template, k)} for k in display_fields
+            ],
             "status_field": status_field,
             "status_options": status_options,
         },

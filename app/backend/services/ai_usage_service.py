@@ -23,7 +23,12 @@ from services.file_service import read_json, write_json
 
 _usage_lock = threading.Lock()
 
-_DEFAULT_DEFAULTS = {"period": "monthly", "message_limit": None, "token_limit": None, "warn_pct": 80}
+_DEFAULT_DEFAULTS = {
+    "period": "monthly",
+    "message_limit": None,
+    "token_limit": None,
+    "warn_pct": 80,
+}
 
 
 def _path() -> Path:
@@ -85,13 +90,21 @@ def _period_range(today: date, period: str) -> tuple[date, date]:
         start = today - timedelta(days=today.weekday())  # Monday
         return start, start + timedelta(days=6)
     start = today.replace(day=1)
-    next_month = start.replace(year=start.year + 1, month=1) if start.month == 12 else start.replace(month=start.month + 1)
+    next_month = (
+        start.replace(year=start.year + 1, month=1)
+        if start.month == 12
+        else start.replace(month=start.month + 1)
+    )
     return start, next_month - timedelta(days=1)
 
 
 def _month_range(month: str) -> tuple[date, date]:
     start = date.fromisoformat(f"{month}-01")
-    next_month = start.replace(year=start.year + 1, month=1) if start.month == 12 else start.replace(month=start.month + 1)
+    next_month = (
+        start.replace(year=start.year + 1, month=1)
+        if start.month == 12
+        else start.replace(month=start.month + 1)
+    )
     return start, next_month - timedelta(days=1)
 
 

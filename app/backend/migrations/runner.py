@@ -245,14 +245,16 @@ def m009_migrate_profiles_to_self_contacts(brain: Path) -> None:
                 education = career_fields.get("education", "")
                 if education not in contacts_service.EDUCATION_LEVELS:
                     education = ""  # legacy free text didn't match the new fixed list
-                updates["career_history"] = [{
-                    "title": personal.get("occupation") or "",
-                    "industry": career_fields.get("industry", ""),
-                    "education": education,
-                    "years_experience": career_fields.get("years_experience", ""),
-                    "skills": career_fields.get("skills", ""),
-                    "archived": False,
-                }]
+                updates["career_history"] = [
+                    {
+                        "title": personal.get("occupation") or "",
+                        "industry": career_fields.get("industry", ""),
+                        "education": education,
+                        "years_experience": career_fields.get("years_experience", ""),
+                        "skills": career_fields.get("skills", ""),
+                        "archived": False,
+                    }
+                ]
 
             priority_order: dict = {}
             if personal.get("priority_order"):

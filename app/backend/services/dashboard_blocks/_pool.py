@@ -4,7 +4,12 @@ reads are open to any member with the module enabled — no per-viewer gate to
 enforce here, unlike personal-scope blocks."""
 
 from services import task_service
-from services.dashboard_blocks.registry import BlockRenderCtx, BlockRenderResult, BlockSpec, register
+from services.dashboard_blocks.registry import (
+    BlockRenderCtx,
+    BlockRenderResult,
+    BlockSpec,
+    register,
+)
 
 _POOL_USER = {"personal": "_household", "business": "_team"}
 
