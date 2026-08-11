@@ -168,17 +168,19 @@
       "id": "chat",
       "icon": "💬",
       "title": "AI Chat",
-      "blurb": "Talk to your LogCore AI. It can read your Brain (tasks, notes, journal, priorities, and more) and, with your approval, make changes for you.",
+      "blurb": "Talk to your LogCore AI. It can read your Brain (tasks, notes, journal, priorities, and more) and, with your approval, make changes for you — including building your Dashboards.",
       "howto": [
-        "Type what you need — \"plan my week\", \"summarize my month\", \"add three tasks for the move\", or \"how do I use Finance?\"",
-        "Approve mode (the default): the AI reads freely but pauses for your OK before any change.",
+        "Type what you need — \"plan my week\", \"summarize my month\", \"add three tasks for the move\", \"build me a dashboard for my house search\", or \"how do I use Finance?\"",
+        "Approve mode (the default): the AI reads freely but pauses for your OK before any change — approving replays exactly what was shown, never something re-guessed.",
+        "If something's ambiguous, the AI can ask you a quick multiple-choice question right in the chat instead of guessing — pick an option (or a few) to continue.",
         "Switch modes with the selector — Plan proposes a plan first, Auto acts directly, Research adds web search (read-only).",
         "Use the 🧠 / ⏳ / 📚 buttons to save what matters to the AI's long-term or short-term memory.",
         "Chats auto-save; reopen a past chat to continue it."
       ],
       "tips": [
         "Stuck on any feature? Just ask — the AI reads this Help guide and will explain it and link you to the right section.",
-        "In Approve mode, nothing is changed until you click Approve, so it's safe to let it try things."
+        "In Approve mode, nothing is changed until you click Approve, so it's safe to let it try things.",
+        "Ask it to add or change a Dashboard block and you'll see a live preview of your actual dashboard with the change applied, right in the chat, before you approve."
       ],
       "modules": ["chat"]
     },
@@ -460,6 +462,19 @@
     "note": "Found a bug, want a feature, or have a complaint? Email us and we'll take a look. For bug reports, include what you did, what you expected, and what happened (a screenshot helps a lot)."
   },
   "whats_new": [
+    {
+      "version": "0.5.0",
+      "date": "2026-08-10",
+      "highlights": [
+        "Custom Dashboards — build unlimited, freeform dashboards from 30+ live data blocks across every module, with reusable templates, real record pickers, and full drag/resize on both desktop and mobile.",
+        "Profile is now your own Contact — one unified, photo-enabled profile shared across personal and business, with a real resume-style Work & Career section and better pickers for height/weight/blood type.",
+        "AI usage counter + caps — see instance-wide and per-user AI usage, with configurable daily/weekly/monthly limits and a live indicator right in Chat.",
+        "The AI can now build and edit your Dashboards directly from chat, ask a clarifying question when something's ambiguous, and reliably do exactly what an approved change showed — no more re-guessing after you click Approve.",
+        "AI Chat has a sleeker look — real formatting in replies, an auto-growing message box, and a consolidated toolbar with a single Memory pill.",
+        "Settings and Admin merged into one drill-down menu, and deleting a user with shared items now opens a review page instead of a blind confirm.",
+        "Dozens of mobile layout fixes across Tasks, Chat, Journal, Calendar, Household, and more, plus Notes archiving."
+      ]
+    },
     {
       "version": "0.4.4",
       "date": "2026-07-30",
