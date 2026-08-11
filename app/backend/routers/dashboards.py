@@ -7,7 +7,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from routers.auth import get_workspace, require_module
-from services import assets_service, contacts_service, dashboard_index, dashboard_templates_service, dashboards_service
+from services import (
+    assets_service,
+    contacts_service,
+    dashboard_index,
+    dashboard_templates_service,
+    dashboards_service,
+)
 from services.dashboard_blocks.registry import catalog
 from services.dashboard_blocks.render import render_dashboard
 from services.rate_limiter import rate_limit
@@ -122,18 +128,25 @@ def _resolve_subject(current_user: dict, workspace: str, dashboard: dict) -> dic
                 return None
             _store_user, contact, _access = found
             return {
-                "type": "contact", "id": subject_id, "name": contact.get("name") or "",
-                "contact_type": contact.get("type"), "gender": contact.get("gender"),
+                "type": "contact",
+                "id": subject_id,
+                "name": contact.get("name") or "",
+                "contact_type": contact.get("type"),
+                "gender": contact.get("gender"),
                 "photo_ext": contact.get("photo_ext"),
             }
         if subject_type == "asset":
-            found = assets_service.find_asset(viewer, workspace, subject_id, is_admin, viewer_role=role)
+            found = assets_service.find_asset(
+                viewer, workspace, subject_id, is_admin, viewer_role=role
+            )
             if found is None:
                 return None
             asset = found["asset"]
             template = assets_service.resolve_template(asset)
             return {
-                "type": "asset", "id": subject_id, "name": asset.get("name") or "",
+                "type": "asset",
+                "id": subject_id,
+                "name": asset.get("name") or "",
                 "icon": (template or {}).get("icon"),
             }
     except Exception:
@@ -152,7 +165,9 @@ def _find(current_user: dict, workspace: str, dashboard_id: str, need: str = "re
     if found is None:
         raise HTTPException(status_code=404, detail="Dashboard not found")
     if _ACCESS_ORDER.get(found["access"], -1) < _ACCESS_ORDER[need]:
-        raise HTTPException(status_code=403, detail="You don't have access to change this dashboard.")
+        raise HTTPException(
+            status_code=403, detail="You don't have access to change this dashboard."
+        )
     return found
 
 
@@ -189,8 +204,13 @@ def create_dashboard(
         store_user = viewer
     try:
         dashboard = dashboards_service.create_dashboard(
-            store_user, workspace, viewer, body.name, body.icon,
-            template_id=body.template_id, subject_id=body.subject_id,
+            store_user,
+            workspace,
+            viewer,
+            body.name,
+            body.icon,
+            template_id=body.template_id,
+            subject_id=body.subject_id,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -261,7 +281,9 @@ def update_template(
 ):
     _require_template_manage(tid, current_user)
     try:
-        result = dashboard_templates_service.update_template(tid, req.model_dump(exclude_unset=True))
+        result = dashboard_templates_service.update_template(
+            tid, req.model_dump(exclude_unset=True)
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     if result is None:
@@ -393,7 +415,9 @@ def get_render(
     viewer = current_user["name"]
     role = current_user.get("feature_role", "member")
     is_admin = current_user.get("role") == "admin"
-    blocks = render_dashboard(found["dashboard"], viewer, role, is_admin, workspace, found["access"])
+    blocks = render_dashboard(
+        found["dashboard"], viewer, role, is_admin, workspace, found["access"]
+    )
     template_id = found["dashboard"].get("template_id")
     template = dashboard_templates_service.get_template_by_id(template_id) if template_id else None
     return {
@@ -449,9 +473,15 @@ def update_access(
             found["store"],
             workspace,
             dashboard_id,
-            shared_with=[s.model_dump() for s in body.shared_with] if body.shared_with is not None else None,
+            shared_with=(
+                [s.model_dump() for s in body.shared_with] if body.shared_with is not None else None
+            ),
             hidden_from=body.hidden_from,
-            contributors=[c.model_dump() for c in body.contributors] if body.contributors is not None else None,
+            contributors=(
+                [c.model_dump() for c in body.contributors]
+                if body.contributors is not None
+                else None
+            ),
             by=current_user["name"],
         )
     except ValueError as e:
@@ -472,7 +502,11 @@ def set_subject(
     found = _find(current_user, workspace, dashboard_id, need="contribute")
     try:
         dashboard = dashboards_service.set_subject(
-            found["store"], found["store_workspace"], dashboard_id, body.subject_id, by=current_user["name"]
+            found["store"],
+            found["store_workspace"],
+            dashboard_id,
+            body.subject_id,
+            by=current_user["name"],
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -526,10 +560,15 @@ def delete_dashboard(
 ):
     found = _find(current_user, workspace, dashboard_id, need="edit")
     if found["relation"] not in ("own", "pool"):
-        raise HTTPException(status_code=403, detail="Only the owner or a pool admin can delete this dashboard.")
+        raise HTTPException(
+            status_code=403, detail="Only the owner or a pool admin can delete this dashboard."
+        )
     try:
         dashboards_service.delete_dashboard(
-            found["store"], found["store_workspace"], dashboard_id, current_user.get("role") == "admin"
+            found["store"],
+            found["store_workspace"],
+            dashboard_id,
+            current_user.get("role") == "admin",
         )
     except ValueError as e:
         if str(e) == "floor_of_one":

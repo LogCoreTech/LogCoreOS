@@ -22,7 +22,9 @@ class BlockRenderCtx:
 class BlockRenderResult:
     ok: bool
     data: dict | None = None
-    locked_reason: str | None = None  # "no_access" | "admin_only" | "not_found" | "owner_lost_access"
+    locked_reason: str | None = (
+        None  # "no_access" | "admin_only" | "not_found" | "owner_lost_access"
+    )
 
 
 @dataclass

@@ -7,7 +7,12 @@ a UI glitch.
 """
 
 from services import auth_service
-from services.dashboard_blocks.registry import REGISTRY, BlockRenderCtx, BlockRenderResult, _load_all_resolvers
+from services.dashboard_blocks.registry import (
+    REGISTRY,
+    BlockRenderCtx,
+    BlockRenderResult,
+    _load_all_resolvers,
+)
 
 _load_all_resolvers()
 
@@ -100,13 +105,20 @@ def render_block(
 
 
 def render_dashboard(
-    dashboard: dict, viewer: str, viewer_role: str, is_admin: bool, workspace: str, dash_access: str | None
+    dashboard: dict,
+    viewer: str,
+    viewer_role: str,
+    is_admin: bool,
+    workspace: str,
+    dash_access: str | None,
 ) -> list[dict]:
     """Resolves dash_access is passed in ONCE by the caller (routers/dashboards.py
     already called find_dashboard) — never re-resolved per block."""
     out = []
     for block in dashboard.get("blocks") or []:
-        result = render_block(dashboard, block, viewer, viewer_role, is_admin, workspace, dash_access)
+        result = render_block(
+            dashboard, block, viewer, viewer_role, is_admin, workspace, dash_access
+        )
         out.append(
             {
                 "id": block["id"],

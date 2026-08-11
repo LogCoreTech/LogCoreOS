@@ -418,7 +418,8 @@ def update_me(
         for ws_key in dd:
             if ws_key not in _VALID_SHORTCUT_WORKSPACES:
                 raise HTTPException(
-                    status_code=400, detail=f"Invalid workspace key in default_dashboard_id: {ws_key!r}"
+                    status_code=400,
+                    detail=f"Invalid workspace key in default_dashboard_id: {ws_key!r}",
                 )
     if not updates:
         return {"ok": True}

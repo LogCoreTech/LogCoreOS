@@ -13,10 +13,23 @@ share_underlying_data toggle, with nothing new to keep in sync. See the
 against a unified write endpoint.
 """
 
-from services import assets_service, contacts_service, dashboards_service, events_service, finance_service
-from services import n8n_service, notes_service, task_service
+from services import (
+    assets_service,
+    contacts_service,
+    dashboards_service,
+    events_service,
+    finance_service,
+    n8n_service,
+    notes_service,
+    task_service,
+)
 from services.dashboard_blocks._tasks import _scoped_target
-from services.dashboard_blocks.registry import BlockRenderCtx, BlockRenderResult, BlockSpec, register
+from services.dashboard_blocks.registry import (
+    BlockRenderCtx,
+    BlockRenderResult,
+    BlockSpec,
+    register,
+)
 
 
 def _resolve_record_title(ctx: BlockRenderCtx, module: str, record_id: str) -> str | None:
@@ -49,7 +62,9 @@ def _resolve_record_title(ctx: BlockRenderCtx, module: str, record_id: str) -> s
             )
             return record_id.rsplit("/", 1)[-1] if found else None
         if module == "finance":
-            found = finance_service.find_book(ctx.viewer, ctx.viewer_role, ctx.is_admin, ctx.workspace, record_id)
+            found = finance_service.find_book(
+                ctx.viewer, ctx.viewer_role, ctx.is_admin, ctx.workspace, record_id
+            )
             return found[1].get("name") if found else None
         if module == "automations":
             target = _scoped_target(ctx)
@@ -110,7 +125,9 @@ def resolve_status_button(ctx: BlockRenderCtx) -> BlockRenderResult:
         contact_id = ctx.config.get("contact_id")
         if not contact_id:
             return BlockRenderResult(ok=False, locked_reason="not_found")
-        found = contacts_service.find_contact(ctx.viewer, ctx.viewer_role, ctx.is_admin, ctx.workspace, contact_id)
+        found = contacts_service.find_contact(
+            ctx.viewer, ctx.viewer_role, ctx.is_admin, ctx.workspace, contact_id
+        )
         if found is None:
             return BlockRenderResult(ok=False, locked_reason="no_access")
         _store_user, contact, _access = found

@@ -4,7 +4,12 @@ automation_inbox_service.load_store — not a new aggregation subsystem)."""
 
 from services import automation_inbox_service, n8n_service
 from services.dashboard_blocks._tasks import _scoped_target
-from services.dashboard_blocks.registry import BlockRenderCtx, BlockRenderResult, BlockSpec, register
+from services.dashboard_blocks.registry import (
+    BlockRenderCtx,
+    BlockRenderResult,
+    BlockSpec,
+    register,
+)
 
 
 def resolve_workflow_status(ctx: BlockRenderCtx) -> BlockRenderResult:

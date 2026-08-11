@@ -43,16 +43,40 @@ DEFAULT_STAGES = ["Lead", "Contacted", "Proposal", "Negotiation", "Won", "Lost"]
 # _strip_private() below — this is a general Contacts-module rule, not a
 # self-contact-specific check, so it costs nothing on ordinary contacts.
 _BASIC_SHORT_FIELDS = {
-    "pronouns", "city", "state", "country", "occupation", "gender", "marital_status", "pets",
+    "pronouns",
+    "city",
+    "state",
+    "country",
+    "occupation",
+    "gender",
+    "marital_status",
+    "pets",
 }
 _BASIC_LONG_FIELDS = {"life_mission", "core_values", "key_constraints"}
 _PRIVATE_SHORT_FIELDS = {
-    "wake_weekday", "wake_weekend", "bedtime", "work_start", "work_end",
-    "height_cm", "height_unit", "weight_kg", "weight_unit", "blood_type",
-    "income_range", "budget_style", "communication_style", "tone", "response_language",
+    "wake_weekday",
+    "wake_weekend",
+    "bedtime",
+    "work_start",
+    "work_end",
+    "height_cm",
+    "height_unit",
+    "weight_kg",
+    "weight_unit",
+    "blood_type",
+    "income_range",
+    "budget_style",
+    "communication_style",
+    "tone",
+    "response_language",
 }
 _PRIVATE_LONG_FIELDS = {
-    "conditions", "medications", "diet", "exercise", "topics_to_emphasize", "topics_to_avoid",
+    "conditions",
+    "medications",
+    "diet",
+    "exercise",
+    "topics_to_emphasize",
+    "topics_to_avoid",
 }
 _PRIVATE_FIELDS = _PRIVATE_SHORT_FIELDS | _PRIVATE_LONG_FIELDS
 _PROFILE_WORKSPACES = ("personal", "business")
@@ -64,8 +88,17 @@ _PROFILE_WORKSPACES = ("personal", "business")
 # specially-validated field can't silently fall through to plain-string
 # handling — that exact bug (height_cm treated as a string) happened once.
 _PLAIN_STRING_SHORT_FIELDS = (_BASIC_SHORT_FIELDS | _PRIVATE_SHORT_FIELDS) - {
-    "gender", "height_unit", "weight_unit", "blood_type", "height_cm", "weight_kg",
-    "wake_weekday", "wake_weekend", "bedtime", "work_start", "work_end",
+    "gender",
+    "height_unit",
+    "weight_unit",
+    "blood_type",
+    "height_cm",
+    "weight_kg",
+    "wake_weekday",
+    "wake_weekend",
+    "bedtime",
+    "work_start",
+    "work_end",
 }
 
 GENDERS = {"male", "female"}
@@ -73,8 +106,15 @@ HEIGHT_UNITS = {"ftin", "cm"}
 WEIGHT_UNITS = {"lbs", "kg"}
 BLOOD_TYPES = {"A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "Unknown"}
 EDUCATION_LEVELS = [
-    "Junior High", "High School", "Some College", "Trade/Vocational School",
-    "Associate's Degree", "Bachelor's Degree", "Master's Degree", "Doctorate", "Other",
+    "Junior High",
+    "High School",
+    "Some College",
+    "Trade/Vocational School",
+    "Associate's Degree",
+    "Bachelor's Degree",
+    "Master's Degree",
+    "Doctorate",
+    "Other",
 ]
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -175,7 +215,10 @@ def create_self_contact(
         contact = c
         break
     if occupation:
-        contact = update_contact(user_name, "personal", contact["id"], {"occupation": occupation}) or contact
+        contact = (
+            update_contact(user_name, "personal", contact["id"], {"occupation": occupation})
+            or contact
+        )
     return contact
 
 
@@ -740,11 +783,15 @@ def delete_contact(store_user: str, workspace: str, contact_id: str) -> bool:
     if target is None:
         return False
     if target.get("self_of"):
-        raise ValueError("A user's own contact can't be deleted directly — delete the account instead")
+        raise ValueError(
+            "A user's own contact can't be deleted directly — delete the account instead"
+        )
     if target.get("photo_ext"):
         from services.file_service import contact_photo_path
 
-        contact_photo_path(store_user, workspace, contact_id, target["photo_ext"]).unlink(missing_ok=True)
+        contact_photo_path(store_user, workspace, contact_id, target["photo_ext"]).unlink(
+            missing_ok=True
+        )
     remaining = [c for c in contacts if c["id"] != contact_id]
     _save_contacts(store_user, workspace, remaining)
     # Cascade delete this contact's interactions + deals in the same store.
@@ -1356,7 +1403,9 @@ def format_profile_text(contact: dict) -> str:
     basics = []
     if contact.get("occupation"):
         basics.append(f"**Occupation:** {contact['occupation']}")
-    loc = ", ".join(x for x in [contact.get("city"), contact.get("state"), contact.get("country")] if x)
+    loc = ", ".join(
+        x for x in [contact.get("city"), contact.get("state"), contact.get("country")] if x
+    )
     if loc:
         basics.append(f"**Location:** {loc}")
     if contact.get("pronouns"):
@@ -1377,7 +1426,9 @@ def format_profile_text(contact: dict) -> str:
         if contact.get(k)
     ]
     if contact.get("work_start") or contact.get("work_end"):
-        routine.append(("Work hours", f"{contact.get('work_start', '')}–{contact.get('work_end', '')}"))
+        routine.append(
+            ("Work hours", f"{contact.get('work_start', '')}–{contact.get('work_end', '')}")
+        )
     if routine:
         lines.append("## Daily Routine")
         lines.extend(f"- {lbl}: {v}" for lbl, v in routine)
@@ -1410,7 +1461,11 @@ def format_profile_text(contact: dict) -> str:
         for c in careers:
             when = f" ({c['start_date']}–present)" if c.get("start_date") else ""
             lines.append(f"- **Current:** {c.get('title', '')}{when}")
-            for k, lbl in [("industry", "Industry"), ("education", "Education"), ("skills", "Skills")]:
+            for k, lbl in [
+                ("industry", "Industry"),
+                ("education", "Education"),
+                ("skills", "Skills"),
+            ]:
                 if c.get(k):
                     lines.append(f"  - {lbl}: {c[k]}")
         for c in past_careers:
@@ -1422,7 +1477,9 @@ def format_profile_text(contact: dict) -> str:
     if contact.get("marital_status"):
         family_lines.append(f"- Marital status: {contact['marital_status']}")
     if contact.get("affiliated_contact_ids"):
-        family_lines.append(f"- Affiliated contacts: {len(contact['affiliated_contact_ids'])} linked")
+        family_lines.append(
+            f"- Affiliated contacts: {len(contact['affiliated_contact_ids'])} linked"
+        )
     if contact.get("pets"):
         family_lines.append(f"- Pets: {contact['pets']}")
     if family_lines:

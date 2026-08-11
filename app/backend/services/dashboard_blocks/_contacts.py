@@ -2,14 +2,21 @@
 Reuses contacts_service.find_contact — the SAME gate the Contacts router uses."""
 
 from services import assets_service, contacts_service
-from services.dashboard_blocks.registry import BlockRenderCtx, BlockRenderResult, BlockSpec, register
+from services.dashboard_blocks.registry import (
+    BlockRenderCtx,
+    BlockRenderResult,
+    BlockSpec,
+    register,
+)
 
 
 def resolve_linked_deals(ctx: BlockRenderCtx) -> BlockRenderResult:
     contact_id = ctx.config.get("contact_id")
     if not contact_id:
         return BlockRenderResult(ok=False, locked_reason="not_found")
-    found = contacts_service.find_contact(ctx.viewer, ctx.viewer_role, ctx.is_admin, ctx.workspace, contact_id)
+    found = contacts_service.find_contact(
+        ctx.viewer, ctx.viewer_role, ctx.is_admin, ctx.workspace, contact_id
+    )
     if found is None:
         return BlockRenderResult(ok=False, locked_reason="no_access")
     store_user, contact, _access = found
@@ -21,11 +28,15 @@ def resolve_custom_fields(ctx: BlockRenderCtx) -> BlockRenderResult:
     contact_id = ctx.config.get("contact_id")
     asset_id = ctx.config.get("asset_id")
     if contact_id:
-        found = contacts_service.find_contact(ctx.viewer, ctx.viewer_role, ctx.is_admin, ctx.workspace, contact_id)
+        found = contacts_service.find_contact(
+            ctx.viewer, ctx.viewer_role, ctx.is_admin, ctx.workspace, contact_id
+        )
         if found is None:
             return BlockRenderResult(ok=False, locked_reason="no_access")
         _store_user, contact, _access = found
-        return BlockRenderResult(ok=True, data={"fields": contact.get("custom", {}), "name": contact.get("name")})
+        return BlockRenderResult(
+            ok=True, data={"fields": contact.get("custom", {}), "name": contact.get("name")}
+        )
     if asset_id:
         found = assets_service.find_asset(
             ctx.viewer, ctx.workspace, asset_id, ctx.is_admin, viewer_role=ctx.viewer_role
@@ -36,7 +47,11 @@ def resolve_custom_fields(ctx: BlockRenderCtx) -> BlockRenderResult:
         template = assets_service.resolve_template(asset)
         return BlockRenderResult(
             ok=True,
-            data={"fields": asset.get("fields", {}), "template": template, "name": asset.get("name")},
+            data={
+                "fields": asset.get("fields", {}),
+                "template": template,
+                "name": asset.get("name"),
+            },
         )
     return BlockRenderResult(ok=False, locked_reason="not_found")
 
@@ -46,7 +61,9 @@ def resolve_linked_assets(ctx: BlockRenderCtx) -> BlockRenderResult:
     contact_id = ctx.config.get("contact_id")
     if not contact_id:
         return BlockRenderResult(ok=False, locked_reason="not_found")
-    found = contacts_service.find_contact(ctx.viewer, ctx.viewer_role, ctx.is_admin, ctx.workspace, contact_id)
+    found = contacts_service.find_contact(
+        ctx.viewer, ctx.viewer_role, ctx.is_admin, ctx.workspace, contact_id
+    )
     if found is None:
         return BlockRenderResult(ok=False, locked_reason="no_access")
     assets = assets_service.list_assets_for_contact(

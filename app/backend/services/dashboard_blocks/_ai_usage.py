@@ -8,7 +8,12 @@ dashboard)."""
 
 from services import ai_usage_service
 from services.dashboard_blocks._tasks import _scoped_target
-from services.dashboard_blocks.registry import BlockRenderCtx, BlockRenderResult, BlockSpec, register
+from services.dashboard_blocks.registry import (
+    BlockRenderCtx,
+    BlockRenderResult,
+    BlockSpec,
+    register,
+)
 from services.file_service import read_json, user_path
 
 

@@ -34,7 +34,11 @@ _LABEL_MAX = 80
 
 
 def _template_store_path(owner: str):
-    return global_dashboard_templates_path() if owner == GLOBAL_OWNER else dashboard_templates_path(owner)
+    return (
+        global_dashboard_templates_path()
+        if owner == GLOBAL_OWNER
+        else dashboard_templates_path(owner)
+    )
 
 
 def _load_template_store(owner: str) -> dict:
@@ -281,8 +285,7 @@ def share_template(owner: str, tid: str, shared_with: list[dict], by: str) -> di
         return None
 
     prev_accepted = {
-        s.get("target"): list(s.get("accepted") or [])
-        for s in (tmpl.get("shared_with") or [])
+        s.get("target"): list(s.get("accepted") or []) for s in (tmpl.get("shared_with") or [])
     }
     prev_targets = {s.get("target") for s in (tmpl.get("shared_with") or [])}
     valid_targets = {"team", "household"} | set(_load_features_roles())

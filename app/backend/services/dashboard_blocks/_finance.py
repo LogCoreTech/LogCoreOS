@@ -4,7 +4,12 @@ list_transactions_for_asset, the SAME access gate the Finance router itself
 uses — a viewer who can't see a book independently gets locked here too."""
 
 from services import finance_reports, finance_service
-from services.dashboard_blocks.registry import BlockRenderCtx, BlockRenderResult, BlockSpec, register
+from services.dashboard_blocks.registry import (
+    BlockRenderCtx,
+    BlockRenderResult,
+    BlockSpec,
+    register,
+)
 
 
 def resolve_finance_activity(ctx: BlockRenderCtx) -> BlockRenderResult:
@@ -22,11 +27,15 @@ def resolve_finance_activity(ctx: BlockRenderCtx) -> BlockRenderResult:
         return BlockRenderResult(ok=True, data={"transactions": txs[:10]})
 
     if book_id:
-        found = finance_service.find_book(ctx.viewer, ctx.viewer_role, ctx.is_admin, ctx.workspace, book_id)
+        found = finance_service.find_book(
+            ctx.viewer, ctx.viewer_role, ctx.is_admin, ctx.workspace, book_id
+        )
         if found is None:
             return BlockRenderResult(ok=False, locked_reason="no_access")
         store_user, book, access = found
-        txs, _total = finance_service.list_transactions(store_user, ctx.workspace, book_id, limit=10)
+        txs, _total = finance_service.list_transactions(
+            store_user, ctx.workspace, book_id, limit=10
+        )
         return BlockRenderResult(ok=True, data={"transactions": txs, "book_name": book.get("name")})
 
     if contact_id:
@@ -39,7 +48,9 @@ def resolve_finance_activity(ctx: BlockRenderCtx) -> BlockRenderResult:
                 ctx.viewer, ctx.viewer_role, ctx.is_admin, ctx.workspace
             ):
                 store_user = finance_service.store_for_annotated(book, ctx.viewer, ctx.workspace)
-                txs, _total = finance_service.list_transactions(store_user, ctx.workspace, book["id"], limit=200)
+                txs, _total = finance_service.list_transactions(
+                    store_user, ctx.workspace, book["id"], limit=200
+                )
                 results.extend(t for t in txs if t.get("payee_contact_id") == contact_id)
         except Exception:
             return BlockRenderResult(ok=False, locked_reason="no_access")
@@ -53,7 +64,9 @@ def resolve_finance_book_report(ctx: BlockRenderCtx) -> BlockRenderResult:
     book_id = ctx.config.get("book_id")
     if not book_id:
         return BlockRenderResult(ok=False, locked_reason="not_found")
-    found = finance_service.find_book(ctx.viewer, ctx.viewer_role, ctx.is_admin, ctx.workspace, book_id)
+    found = finance_service.find_book(
+        ctx.viewer, ctx.viewer_role, ctx.is_admin, ctx.workspace, book_id
+    )
     if found is None:
         return BlockRenderResult(ok=False, locked_reason="no_access")
     store_user, book, access = found
@@ -70,7 +83,11 @@ register(
         label="Finance Activity",
         category="record_linked",
         resolver=resolve_finance_activity,
-        record_ref_fields={"asset_id": "assets", "contact_id": "contacts", "book_id": "finance_books"},
+        record_ref_fields={
+            "asset_id": "assets",
+            "contact_id": "contacts",
+            "book_id": "finance_books",
+        },
     )
 )
 register(

@@ -13,10 +13,17 @@ account + Brain folder. See docs/AGENTS.md "Admin — User Deletion".
 
 import logging
 
-from services import assets_index, assets_service, auth_service
-from services import contacts_index, contacts_service
-from services import finance_index, finance_service
-from services import notes_index, notes_service
+from services import (
+    assets_index,
+    assets_service,
+    auth_service,
+    contacts_index,
+    contacts_service,
+    finance_index,
+    finance_service,
+    notes_index,
+    notes_service,
+)
 
 logger = logging.getLogger("logcore.user_deletion")
 

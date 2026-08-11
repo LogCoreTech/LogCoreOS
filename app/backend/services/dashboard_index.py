@@ -199,7 +199,7 @@ def sharers_for(viewer: str, workspace: str) -> list[str]:
 def references_for(
     module: str, record_id: str, viewer: str, viewer_role: str, is_admin: bool, workspace: str
 ) -> list[dict]:
-    """"Referenced by N dashboards" — filtered through find_dashboard() again so
+    """ "Referenced by N dashboards" — filtered through find_dashboard() again so
     a viewer never learns a dashboard exists/its name unless they can see it."""
     from services.dashboards_service import find_dashboard
 

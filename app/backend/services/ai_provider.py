@@ -147,7 +147,9 @@ def _dispatch_agent(
 # ---------------------------------------------------------------------------
 
 
-def _anthropic(system: str, messages: list[dict], max_tokens: int, cfg: dict) -> tuple[str, int, int]:
+def _anthropic(
+    system: str, messages: list[dict], max_tokens: int, cfg: dict
+) -> tuple[str, int, int]:
     import anthropic
 
     key = cfg.get("ai_api_key") or cfg.get("anthropic_api_key")

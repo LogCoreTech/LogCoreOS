@@ -1,7 +1,12 @@
 """Tasks/Goals blocks — pure reuse of priority_service/task_service."""
 
 from services import priority_service, task_service
-from services.dashboard_blocks.registry import BlockRenderCtx, BlockRenderResult, BlockSpec, register
+from services.dashboard_blocks.registry import (
+    BlockRenderCtx,
+    BlockRenderResult,
+    BlockSpec,
+    register,
+)
 
 
 def _scoped_target(ctx: BlockRenderCtx) -> str | None:
@@ -31,7 +36,9 @@ def resolve_due_today(ctx: BlockRenderCtx) -> BlockRenderResult:
     due = [
         t
         for t in all_tasks
-        if t.get("status") == "pending" and t.get("due_date") == today_str and t.get("type") != "goal"
+        if t.get("status") == "pending"
+        and t.get("due_date") == today_str
+        and t.get("type") != "goal"
     ]
     return BlockRenderResult(ok=True, data={"tasks": due})
 

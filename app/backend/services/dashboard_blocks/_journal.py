@@ -3,7 +3,12 @@ resolves via the owner/viewer scope mechanic, same as Tasks."""
 
 from services import journal_service
 from services.dashboard_blocks._tasks import _scoped_target
-from services.dashboard_blocks.registry import BlockRenderCtx, BlockRenderResult, BlockSpec, register
+from services.dashboard_blocks.registry import (
+    BlockRenderCtx,
+    BlockRenderResult,
+    BlockSpec,
+    register,
+)
 
 
 def resolve_journal_entry(ctx: BlockRenderCtx) -> BlockRenderResult:
