@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from services import ai_usage_service as svc
-from services.auth_service import create_user
+from services.auth_service import create_user, today_for_user
 
 USER = "TestUser"
 
@@ -55,7 +55,11 @@ def test_record_tokens_accumulates_personal_and_business(brain):
     svc.record_tokens(USER, "business", 10, 5)
 
     data = svc._load()
-    today = date.today().isoformat()
+    # USER isn't registered here, so it has no stored timezone and the service
+    # buckets by UTC (today_for_user's fallback) — must match that basis, not
+    # bare date.today() (local), or this flakes for a few hours every day
+    # whenever UTC has already rolled to the next date and local hasn't.
+    today = today_for_user(USER).isoformat()
     day = data["users"][USER]["days"][today]
     assert day["personal"] == {"messages": 0, "input_tokens": 100, "output_tokens": 50}
     assert day["business"] == {"messages": 0, "input_tokens": 10, "output_tokens": 5}
@@ -70,7 +74,8 @@ def test_record_tokens_zero_is_a_noop(brain):
 def test_record_message_only_bumps_messages(brain):
     svc.record_message(USER, "personal")
     data = svc._load()
-    today = date.today().isoformat()
+    # Same basis as test_record_tokens_accumulates_personal_and_business above.
+    today = today_for_user(USER).isoformat()
     day = data["users"][USER]["days"][today]
     assert day["personal"]["messages"] == 1
     assert day["personal"]["input_tokens"] == 0
