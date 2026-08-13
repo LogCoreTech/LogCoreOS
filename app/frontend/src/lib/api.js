@@ -22,10 +22,10 @@ function sessionStillValid() {
   return _sessionCheck
 }
 
-async function request(method, path, body) {
+async function request(method, path, body, extraHeaders) {
   const res = await fetch(`${BASE}${path}`, {
     method,
-    headers: headers(),
+    headers: headers(extraHeaders),
     credentials: 'include',  // httpOnly cookie sent automatically by browser
     body: body ? JSON.stringify(body) : undefined,
   })
@@ -271,6 +271,10 @@ export const assets = {
 
 export const finance = {
   listBooks:    (includeArchived = false) => get(`/finance/books${includeArchived ? '?include_archived=true' : ''}`),
+  // Admin pool pages (Household/Team) need the pool's own books regardless of
+  // the viewing admin's own personal/business workspace toggle — household
+  // pool books always live in "personal", team's always in "business".
+  listBooksForWorkspace: (workspace) => request('GET', '/finance/books', undefined, { 'X-Workspace': workspace }),
   createBook:   (data)                    => post('/finance/books', data),
   getBook:      (id)                      => get(`/finance/books/${id}`),
   updateBook:   (id, data)                => patch(`/finance/books/${id}`, data),
@@ -365,6 +369,14 @@ export const finance = {
   sfReveal:      (userId)  => post('/finance/simplefin/reveal', { user_id: userId }),
   sfDisconnect:  (userId)  => del(`/finance/simplefin/${userId}`),
   sfSync:        (userId)  => post('/finance/simplefin/sync', { user_id: userId }),
+  // Pool-owned SimpleFIN connection (joint/family account, not tied to any one member)
+  sfPoolStatus:      (pool)               => get(`/finance/simplefin/pool/${pool}/status`),
+  sfPoolAccounts:    (pool)               => get(`/finance/simplefin/pool/${pool}/accounts`),
+  sfPoolSetMapping:  (pool, entries)      => request('PUT', `/finance/simplefin/pool/${pool}/mapping`, { entries }),
+  sfPoolClaim:       (pool, setupToken)   => post(`/finance/simplefin/pool/${pool}/claim`, { setup_token: setupToken }),
+  sfPoolReveal:      (pool)               => post(`/finance/simplefin/pool/${pool}/reveal`, {}),
+  sfPoolDisconnect:  (pool)               => del(`/finance/simplefin/pool/${pool}`),
+  sfPoolSync:        (pool)               => post(`/finance/simplefin/pool/${pool}/sync`, {}),
   // Payee → category rules + CSV import
   rules:      (bookId)         => get(`/finance/books/${bookId}/rules`),
   removeRule: (bookId, ruleId) => del(`/finance/books/${bookId}/rules/${ruleId}`),

@@ -15,6 +15,13 @@ router = APIRouter()
 
 _export_limit = rate_limit(2, 3600)  # 2 exports per hour — zip is CPU-intensive
 
+# Operational/credential files that live inside a user's folder but aren't part
+# of their portable Brain data — excluded from the export the same way. Most
+# notably simplefin.json: the SimpleFIN bank-access URL is deliberately
+# admin-only-reveal (see finance_banking.py), and self-export must not become
+# a side channel around that.
+_EXCLUDED_FILENAMES = {"push_subscription.json", "simplefin.json"}
+
 
 @router.get("/export")
 def export_brain(
@@ -26,7 +33,7 @@ def export_brain(
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         if folder.exists():
             for f in folder.rglob("*"):
-                if f.is_file() and f.name != "push_subscription.json":
+                if f.is_file() and f.name not in _EXCLUDED_FILENAMES:
                     zf.write(f, f.relative_to(folder))
     buf.seek(0)
     safe_name = current_user["name"].replace(" ", "_")

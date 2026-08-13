@@ -444,12 +444,19 @@ def _record_error(
 
 
 def sync_all_users() -> dict:
-    """Scheduler entry point — sync every user that has a connection."""
+    """Scheduler entry point — sync every user *and pool* that has a connection.
+
+    _household/_team are real per-pool folders like any other user's, so a
+    joint/family bank account connected directly to the pool (independent of
+    any one member's own connection) rides the same sync loop.
+    """
     from services import auth_service
 
+    names = [u["name"] for u in auth_service.list_users()]
+    names += [finance_service.POOL_HOUSEHOLD, finance_service.POOL_TEAM]
+
     totals = {"users": 0, "created": 0, "errors": 0}
-    for user in auth_service.list_users():
-        name = user["name"]
+    for name in names:
         if not simplefin_path(name).exists():
             continue
         totals["users"] += 1
