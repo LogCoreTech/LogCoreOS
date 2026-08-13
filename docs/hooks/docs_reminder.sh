@@ -62,7 +62,7 @@ if [ "$LAST_STOP" -gt 0 ]; then
 fi
 
 # --- Build targeted checklist ---
-CHECKLIST="1. docs/TASKS.md — mark completed tasks done; add new tasks surfaced this turn.
+CHECKLIST="1. docs/TASKS.md — when a task is completed, remove it (detail belongs in CHANGELOG.md/the day's Daily Note, not here); add new tasks surfaced this turn.
 2. docs/MEMORY.md — update if design decisions or stable facts changed.
 3. docs/Daily Notes/${TODAY}.md — update or create with what was worked on and decisions made.
 4. CHANGELOG.md — add an entry if this turn shipped a user-visible feature, fix, or breaking change.
