@@ -54,7 +54,7 @@ Location: `docs/Daily Notes/YYYY-MM-DD.md`
 
 After every turn where real work was done, check each item:
 
-1. `docs/TASKS.md` — mark completed tasks done; add new tasks surfaced this turn
+1. `docs/TASKS.md` — when a task is completed, remove it (detail belongs in `CHANGELOG.md`/the day's Daily Note, not here); add new tasks surfaced this turn
 2. `docs/MEMORY.md` — update if design decisions or stable facts changed
 3. `docs/Daily Notes/YYYY-MM-DD.md` — update if real work was done; create if missing
 4. `CHANGELOG.md` — add an entry if a user-visible feature, fix, or breaking change shipped
