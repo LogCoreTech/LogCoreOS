@@ -54,11 +54,24 @@ class UserRef(BaseModel):
     user_id: str
 
 
+class PoolClaimRequest(BaseModel):
+    setup_token: str = Field(..., min_length=8, max_length=4000)
+
+
 def _resolve_user(user_id: str) -> dict:
     target = auth_service.get_user_by_id(user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     return target
+
+
+_POOL_USERS = {"household": finance_service.POOL_HOUSEHOLD, "team": finance_service.POOL_TEAM}
+
+
+def _pool_user(pool: str) -> str:
+    if pool not in _POOL_USERS:
+        raise HTTPException(status_code=400, detail="pool must be 'household' or 'team'")
+    return _POOL_USERS[pool]
 
 
 # ---------------------------------------------------------------------------
@@ -224,6 +237,107 @@ def sync_now(
     if not simplefin_path(target["name"]).exists():
         raise HTTPException(status_code=404, detail="No connection for that user")
     result = simplefin_service.sync_user(target["name"])
+    if result.get("error"):
+        raise HTTPException(status_code=502, detail=result["error"])
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Pool connection lifecycle — a bank connection owned by the household/team
+# pool itself (a joint/family account), independent of any one member's own
+# SimpleFIN connection. simplefin_service is already generic on user_name and
+# _household/_team are real per-pool folders like any other user's, so every
+# handler here just resolves pool -> that pseudo-user name and reuses the
+# exact same service functions the per-user endpoints above call. Mapping
+# targets always use store="household"/"team" (never "self"), which already
+# resolves to the pool's own books regardless of which name owns the
+# connection — no service-layer changes needed for any of this.
+# ---------------------------------------------------------------------------
+
+
+@router.get("/simplefin/pool/{pool}/status")
+def pool_status(
+    pool: str,
+    current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_read_limit),
+):
+    return simplefin_service.connection_status(_pool_user(pool))
+
+
+@router.get("/simplefin/pool/{pool}/accounts")
+def pool_bank_accounts(
+    pool: str,
+    current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_read_limit),
+):
+    try:
+        return simplefin_service.list_bank_accounts(_pool_user(pool))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.put("/simplefin/pool/{pool}/mapping")
+def pool_set_mapping(
+    pool: str,
+    req: MappingRequest,
+    current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_write_limit),
+):
+    try:
+        return simplefin_service.set_mapping(
+            _pool_user(pool), [e.model_dump() for e in req.entries], is_admin=True
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/simplefin/pool/{pool}/claim")
+def pool_claim(
+    pool: str,
+    req: PoolClaimRequest,
+    current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_claim_limit),
+):
+    try:
+        return simplefin_service.claim_and_save(_pool_user(pool), req.setup_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/simplefin/pool/{pool}/reveal")
+def pool_reveal(
+    pool: str,
+    current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_reveal_limit),
+):
+    """Admin-only + tightly rate limited, mirrors the per-user reveal endpoint."""
+    conn = simplefin_service.get_connection(_pool_user(pool))
+    if not conn:
+        raise HTTPException(status_code=404, detail="No connection for that pool")
+    return {"access_url": conn["access_url"]}
+
+
+@router.delete("/simplefin/pool/{pool}")
+def pool_disconnect(
+    pool: str,
+    current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_write_limit),
+):
+    if not simplefin_service.disconnect(_pool_user(pool)):
+        raise HTTPException(status_code=404, detail="No connection for that pool")
+    return {"ok": True}
+
+
+@router.post("/simplefin/pool/{pool}/sync")
+def pool_sync_now(
+    pool: str,
+    current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_sync_limit),
+):
+    user_name = _pool_user(pool)
+    if not simplefin_path(user_name).exists():
+        raise HTTPException(status_code=404, detail="No connection for that pool")
+    result = simplefin_service.sync_user(user_name)
     if result.get("error"):
         raise HTTPException(status_code=502, detail=result["error"])
     return result

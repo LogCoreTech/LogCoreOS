@@ -8,11 +8,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Household and Team can now connect a joint/family bank account directly to the pool** — Settings → Admin Settings → Household/Team → Bank Connections → "Connect a joint family account". This is a real SimpleFIN connection owned by the pool itself, not tied to any one member's own connection, for accounts that genuinely aren't one person's. Admin-only to set up (no request/approve handshake needed), with the same connect/reveal/sync/disconnect controls and account-mapping UI members already get for their own connections — feeding straight into this pool's own books. Included in the regular background sync alongside every member's own connection.
+
 ### Fixed
 
 - **A newly created custom feature role (Settings → Admin Settings → Users & Roles → Role Definitions) could fail to save further changes or assign to a user right after creation.** Role names are stored lowercased and trimmed (e.g. "Cleaner" is stored as "cleaner"), but editing, deleting, or assigning the role using the as-typed casing shortly after creating it was rejected as "not found." Role lookups are now case/whitespace-normalized everywhere a role name is used, and the Role Definitions page uses the server's saved name instead of its own local copy.
 - **Tasks and Goals due today could show a red "OVERDUE" badge hours before they were actually due** — as early as 7 PM local time (6 PM in winter), not midnight. The badge compared each task's due date against a "today" computed from the browser's UTC clock instead of local time, so it silently rolled over to tomorrow's date partway through the evening for anyone west of UTC. Now uses the same locally-computed date the rest of the page already used correctly.
 - **`GET /finance/networth` no longer blends balances from books in different currencies into one meaningless total.** A user with both a USD book and a EUR book previously got a single summed number with no currency attached; the response now reports a total per currency (`totals_by_currency`) instead. Not currently surfaced in any UI (no Dashboard block reads this endpoint yet), so this only affects direct API/automation callers today.
+
+### Security
+
+- **Brain export no longer bundles the SimpleFIN bank-access URL.** `GET /user/export` zips a user's entire Brain folder, and a connected bank's read-only access URL lives inside it at `Finance/simplefin.json` — meaning a self-export let a user pull their own bank credential out through a side door, bypassing the admin-only-reveal design (normally rate-limited and only ever output by a dedicated admin endpoint). Excluded the same way `push_subscription.json` already was.
 
 ---
 

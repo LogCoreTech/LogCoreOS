@@ -158,7 +158,7 @@ LogCoreOS/
 │           │   └── Setup.jsx      → first-time setup wizard (Personal/Business profile, priorities, timezone)
 │           └── components/
 │               ├── Layout.jsx     → root shell: sidebar nav, user menu, theme toggle, module access guard
-│               ├── settings/      → shared Settings/Admin building blocks: MenuRow.jsx (icon+label+subtitle+chevron row), SettingsPageHeader.jsx ("← Back" + title), PriorityList.jsx (shared by admin/Team.jsx + admin/Household.jsx), PoolBankConnections.jsx (read-only per-pool SimpleFIN summary + "coming soon" direct-connect placeholder — independent instance per pool)
+│               ├── settings/      → shared Settings/Admin building blocks: MenuRow.jsx (icon+label+subtitle+chevron row), SettingsPageHeader.jsx ("← Back" + title), PriorityList.jsx (shared by admin/Team.jsx + admin/Household.jsx), PoolBankConnections.jsx (per-pool SimpleFIN: read-only summary of members' accounts mapped in, plus a real connect/reveal/sync/disconnect + mapping UI for a bank account owned by the pool itself — independent instance per pool)
 │               ├── TaskModal.jsx  → create/edit task form (title, category, type, recurrence, due date/time, assigned_to, linked asset)
 │               ├── AssetModal.jsx → asset modal: opens an existing asset in read-first view (AssetView), Edit flips to the editor (dynamic template fields, attachments, share/hide selectors, history, 3-choice archive, delete/convert); auto-flips create→edit
 │               ├── AssetView.jsx  → read-only asset overview: header, attachments, fields as label/value pairs, notes, child list (drill-in), linked tasks, sharing summary, history; ✎ Edit button (owner/editor only)

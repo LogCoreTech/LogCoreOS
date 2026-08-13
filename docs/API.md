@@ -903,11 +903,30 @@ Bank connections use SimpleFIN Bridge **read-only** tokens. Members never enter 
 | `GET` | `/finance/simplefin/accounts` | module users | live list of connected bank accounts (for the mapping UI) |
 | `PUT` | `/finance/simplefin/mapping` | module users | `{entries: [{simplefin_account_id, bank_name?, account_name?, target: {store: self\|household\|team, workspace, book_id, account_id}, enabled}]}` — pool targets **admin-only** |
 | `GET` | `/finance/simplefin/connections` | **admin** | per-user connection status, used to populate each user's own Bank Connection section |
-| `GET` | `/finance/simplefin/pool-summary?pool=household\|team` | **admin** | read-only, derived from every user's `account_map`: which members have accounts mapped into that pool's books (`[{user_id, name, mapped_accounts}]`). No pool-level connection exists yet — this is purely a summary of user-owned connections |
+| `GET` | `/finance/simplefin/pool-summary?pool=household\|team` | **admin** | read-only, derived from every user's `account_map`: which members have accounts mapped into that pool's books (`[{user_id, name, mapped_accounts}]`). Distinct from — and unaffected by — the pool's own connection below; a pool can receive money both ways at once |
 | `POST` | `/finance/simplefin/claim` | **admin** | `{user_id, setup_token}` → claims + stores the access URL for that user; notifies them (rate 5/hour) |
 | `POST` | `/finance/simplefin/reveal` | **admin** | `{user_id}` → the stored access URL (rate 3/hour — the only endpoint that outputs it) |
 | `DELETE` | `/finance/simplefin/{user_id}` | **admin** | disconnect (deletes the stored token; imported data stays) |
 | `POST` | `/finance/simplefin/sync` | **admin** | `{user_id}` → run a sync now; returns `{created, skipped, errors?}` |
+
+**Pool-owned connections** (added 2026-08-12): a joint/family bank account connected directly to the
+`_household`/`_team` pseudo-user itself, independent of any one member's own SimpleFIN connection —
+for accounts that genuinely aren't "one person's." Admin-only end to end (no request/claim handshake —
+an admin can connect it proactively at any time), and mapping targets are always that same pool's own
+books (`target.store` must equal `pool`). `_household`/`_team` are real per-pool folders like any other
+user's, so this reuses every function above unchanged — just resolves `pool` to that pseudo-user name
+first. Included in the same nightly/boot sync sweep as user connections.
+
+| Method | Path | Access | Notes |
+|--------|------|--------|-------|
+| `GET` | `/finance/simplefin/pool/{pool}/status` | **admin** | sanitized status for the pool's own connection (`pool`: `household`\|`team`) |
+| `GET` | `/finance/simplefin/pool/{pool}/accounts` | **admin** | live bank accounts on the pool's connection, for its mapping UI |
+| `PUT` | `/finance/simplefin/pool/{pool}/mapping` | **admin** | same entry shape as the member mapping endpoint above |
+| `POST` | `/finance/simplefin/pool/{pool}/claim` | **admin** | `{setup_token}` → claims + stores the access URL for the pool (rate 5/hour) |
+| `POST` | `/finance/simplefin/pool/{pool}/reveal` | **admin** | the stored access URL (rate 3/hour) |
+| `DELETE` | `/finance/simplefin/pool/{pool}` | **admin** | disconnect |
+| `POST` | `/finance/simplefin/pool/{pool}/sync` | **admin** | run a sync now |
+
 | `POST` | `/finance/books/{id}/import/csv` | edit | multipart `file` (≤5 MB) → `{headers, rows, total_rows}` preview |
 | `POST` | `/finance/books/{id}/import/csv/commit` | edit | multipart `file` + form fields `account_id, date_col, amount_col, payee_col?, notes_col?, date_format?, invert_amounts?` → `{created, skipped, errors?}`; dedup by `import_hash` |
 | `GET` | `/finance/books/{id}/rules` | edit | learned payee→category rules |
