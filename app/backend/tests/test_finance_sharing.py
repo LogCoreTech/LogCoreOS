@@ -269,13 +269,13 @@ def test_net_worth_skips_capped_books(brain, book, checking):
     _share(book["id"], [{"target": "Worker", "access": "contribute"}])
     fin.respond_share("Worker", "Owner", "personal", book["id"], accept=True)
     result = finance_reports.net_worth("Worker", "member", False, "personal")
-    assert result["books"] == [] and result["total_cents"] == 0
+    assert result["books"] == [] and result["totals_by_currency"] == {}
     # With see_balances the book counts
     _share(
         book["id"], [{"target": "Worker", "access": "contribute", "caps": {"see_balances": True}}]
     )
     result = finance_reports.net_worth("Worker", "member", False, "personal")
-    assert result["total_cents"] == 100_00
+    assert result["totals_by_currency"] == {"USD": 100_00}
 
 
 def test_contribute_created_by_filter(brain, book, checking):

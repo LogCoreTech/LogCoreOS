@@ -231,8 +231,22 @@ def test_net_worth_across_own_and_pool(brain, book, checking):
         {"name": "Joint", "type": "checking", "opening_balance_cents": 300_00},
     )
     result = finance_reports.net_worth("Alice", "member", False, "personal")
-    assert result["total_cents"] == 100_00 + 300_00
+    assert result["totals_by_currency"] == {"USD": 100_00 + 300_00}
     assert len(result["books"]) == 2
+
+
+def test_net_worth_groups_by_currency_instead_of_blending(brain, book, checking):
+    eur_book = svc.create_book(
+        "Alice", "personal", name="Europe trip", created_by="Alice", currency="EUR"
+    )
+    svc.add_account(
+        "Alice",
+        "personal",
+        eur_book["id"],
+        {"name": "Reisekonto", "type": "checking", "opening_balance_cents": 50_00},
+    )
+    result = finance_reports.net_worth("Alice", "member", False, "personal")
+    assert result["totals_by_currency"] == {"USD": 100_00, "EUR": 50_00}
 
 
 # ---------------------------------------------------------------------------

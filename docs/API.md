@@ -890,7 +890,7 @@ Router mounted at `/api/v1/finance`. Requires the `finance` module (disabled for
 | `PATCH`/`DELETE` | `/finance/books/{id}/transactions/{tid}` | edit | date edits across a year boundary move the record between year shards transparently |
 | `GET` | `/finance/assets/{asset_id}/transactions` | module users | transactions tagged with this asset across **every book the viewer can see** (contribute-capped viewers without `see_all_tx` get own entries only); each carries `book_id`/`book_name`; feeds the AssetView "Finance activity" section + deal rollups |
 | `GET` | `/finance/books/{id}/reports/monthly?month=YYYY-MM` | read | income/expense/net + per-category breakdown, computed on read |
-| `GET` | `/finance/networth` | module users | total + per-book totals across all visible books in the workspace |
+| `GET` | `/finance/networth` | module users | per-book totals + a total **grouped by currency** (`totals_by_currency: {"USD": ..., "EUR": ...}`) across all visible books in the workspace — never blended across currencies |
 
 ### Bank sync (SimpleFIN — admin-managed) + CSV import
 
@@ -1328,10 +1328,13 @@ Contacts (`linked_deals`, `custom_fields`, `linked_assets`), Assets (`documents`
 `live_aggregate` block takes a `scope: "owner"|"viewer"` config — `"owner"` only ever resolves when
 the viewer IS the owner (directly, or via the `share_underlying_data` exception's Pass 2).
 
-**Not yet built** (deliberately deferred, not cut from scope — see `docs/TASKS.md`): dashboard
-templates, the "Referenced by" UI hooks on non-Assets/Contacts view surfaces, Module Engagement and
-External Data block types, and Net Worth/Spending/Completion trend blocks (need new aggregation
-endpoints that don't exist yet).
+**Not yet built** (deliberately deferred, not cut from scope — see `docs/TASKS.md`): the "Referenced
+by" UI hooks on non-Assets/Contacts view surfaces, Module Engagement and External Data block types, and
+Spending/Completion trend blocks (need new aggregation endpoints that don't exist yet). Dashboard
+Templates shipped 2026-08-09/10 (see `dashboard_templates_service.py`, `docs/MEMORY.md`) — stale here
+until 2026-08-12. A Net Worth aggregation endpoint (`GET /finance/networth`) also already exists, but
+has no Dashboard block wired to it yet — it currently has no frontend consumer at all (found while
+fixing its currency-blending bug, 2026-08-12).
 
 `PATCH /auth/me` also accepts `default_dashboard_id: {personal, business}` (same workspace-keyed
 shape as `shortcuts`) — which dashboard opens when the Dashboard nav link is clicked.
