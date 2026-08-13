@@ -8,7 +8,6 @@ Keep this up to date. When a task is completed, **remove it** rather than checki
 
 ## Now — active build work
 
-- [ ] **BUG: Finance net worth sums balances across books without currency conversion (found 2026-07-25)** — `finance_reports.net_worth()` (`services/finance_reports.py:192`) does `total += summary["total_cents"]` across every visible book regardless of each book's own `currency` field; a user with a USD book and a EUR book gets a meaningless mixed-currency total on the Dashboard net-worth widget and API response. Not confirmed against live data — low urgency while the userbase is US-focused. Fix options: group/report per-currency instead of one blended total, or add an FX-conversion step at read time (see the matching Idea Backlog item under Finance module for the fuller multi-currency-reporting version of this)
 - [ ] **Land lead search & qualify workflow** — n8n pulling land listings (multiple sources with a fallback from day one) and AI-qualifying against configurable criteria; stub file in `automations_stubs/`; posts to the Automation Inbox (`POST /automations/inbox/items`, `GET /inbox/seen` to skip known listings)
 - [ ] **Deploy first managed-hosting beta instance** — server provisioned + SSH-verified 2026-07-17 (tenant + server details in the private Business repo, never here). Remaining: confirm Hetzner backups toggle + firewall (22 only) → Cloudflare Tunnel hostname + token → install Docker + clone repo + `launch.sh` → dedicated Anthropic API key (per-tenant cost attribution) + spend alert → admin-created tenant account (registration stays closed; no demo reset/banner) → cookie_secure + trust_proxy_headers via Admin → Hosting → verify backup.sh cron; track monthly all-in cost; no Infisical (plain docker/.env — revisit at 3+ instances)
 - [ ] **Per-instance cost visibility for managed hosting** — dedicated API key per instance (Anthropic console breakdown) + monthly all-in cost log in the Business repo. Naturally follows the beta deploy above rather than preceding it
@@ -302,7 +301,7 @@ Generated across a systematic search→generate→compare→document pass over t
 
 ### Finance module
 
-- Multi-currency-aware Finance reporting (FX conversion) — the durable fix behind the currency-aggregation bug tracked under Now.
+- Multi-currency-aware Finance reporting (real FX conversion into one blended total) — `net_worth()` groups by currency instead of blending as of 2026-08-12 (correct, but a EUR book and a USD book still show as two separate numbers rather than one converted total); this is the fuller version of that fix, if a single blended figure is ever wanted.
 - Split transactions across multiple categories.
 - Bulk transaction recategorize/edit — bank sync and CSV import routinely land dozens of uncategorized transactions at once with no bulk tool.
 - Savings goals tied to an account balance, distinct from task-type Goals.

@@ -167,10 +167,17 @@ def tax_summary_csv(store_user: str, workspace: str, book: dict, year: int) -> s
 
 def net_worth(viewer: str, viewer_role: str, is_admin: bool, workspace: str) -> dict:
     """Total across all visible books' active accounts (caps-aware in the
-    sharing phase — books whose access level hides balances get skipped)."""
+    sharing phase — books whose access level hides balances get skipped).
+
+    Grouped per-currency rather than blended into one number — summing raw
+    cents across books with different `currency` fields (e.g. a USD book and
+    a EUR book) without a conversion step would produce a meaningless total.
+    A real FX-conversion version is a separate, larger backlog item; this is
+    the correctness fix for what "total" can honestly mean without one.
+    """
     books = finance_service.list_visible_books(viewer, viewer_role, is_admin, workspace)
     entries = []
-    total = 0
+    totals_by_currency: dict[str, int] = {}
     for book in books:
         # Contribute access without the see_balances cap never leaks totals
         if book.get("_access") == "contribute" and not (book.get("_caps") or {}).get(
@@ -179,15 +186,16 @@ def net_worth(viewer: str, viewer_role: str, is_admin: bool, workspace: str) -> 
             continue
         store_user = finance_service.store_for_annotated(book, viewer, workspace)
         summary = finance_service.book_summary(store_user, workspace, book)
+        currency = book.get("currency", "USD")
         entries.append(
             {
                 "book_id": book["id"],
                 "name": book["name"],
                 "icon": book.get("icon", "💰"),
-                "currency": book.get("currency", "USD"),
+                "currency": currency,
                 "total_cents": summary["total_cents"],
                 "_owner": book.get("_owner"),
             }
         )
-        total += summary["total_cents"]
-    return {"total_cents": total, "books": entries}
+        totals_by_currency[currency] = totals_by_currency.get(currency, 0) + summary["total_cents"]
+    return {"totals_by_currency": totals_by_currency, "books": entries}
