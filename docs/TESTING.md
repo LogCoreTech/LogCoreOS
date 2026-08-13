@@ -56,12 +56,13 @@ Exception: external HTTP calls (AI provider, n8n, HA, Tavily) should be mocked w
 
 ---
 
-## Current Coverage (527 tests, 27 files)
+## Current Coverage (611 tests, 32 files)
 
-Core-service coverage below (the module suites — finance, contacts, assets, help, etc. — make up the remainder of the 27 files):
+Core-service coverage below (the module suites — finance, contacts, assets, help, etc. — make up the remainder of the files):
 
 | File | Tests | What's covered |
 |------|-------|----------------|
+| `test_features.py` | 15 | Role CRUD + name normalization (`features_service.py` + `routers/features.py`), `get_effective_disabled()` (role map, workspace-keyed dict, unknown-role fallback), assign-role-to-user round trip. Imports router functions directly, not just the service — see the file's own docstring for why |
 | `test_file_service.py` | 25 | Atomic reads/writes, path resolution, `user_path`, `ws_path` |
 | `test_notes_service.py` | 21 | Notes CRUD, folder management, move operations |
 | `test_profile_service.py` | 5 | Pool (`_household`/`_team`) priority order only — real-user profile behavior moved to `test_contacts.py` (self-contact) after the Profile/Contacts merge |
@@ -83,7 +84,6 @@ The following services have no test file:
 - `ai_provider.py` — AI abstraction layer (requires live API or mocked client)
 - `agent_service.py` — multi-tool agent orchestration (complex, requires mocked AI)
 - `hosting_service.py` — reads `brain/hosting.json` at request time
-- `features_service.py` — `get_effective_disabled()` logic (workspace-keyed dict handling)
 - `n8n_service.py` — n8n REST API client (requires mocked httpx)
 - `ha_service.py` — Home Assistant client (requires mocked httpx)
 - `notification_service.py` — ntfy delivery
@@ -91,7 +91,7 @@ The following services have no test file:
 - `infisical_loader.py` — secret pull on startup
 - `web_search_service.py` — Tavily search
 
-`features_service.get_effective_disabled()` is the highest-priority gap — it handles the workspace-keyed `disabled_modules` format + backward compat with flat lists, and a bug there silently breaks module access for all users.
+`features_service.py` (`get_effective_disabled()` + role CRUD) was the previous highest-priority gap here — a bug there silently breaks module access for all users. Covered as of 2026-08-12 by `test_features.py`, prompted by a real bug found in the same area (see `docs/Daily Notes/2026-08-12.md`).
 
 ---
 

@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **A newly created custom feature role (Settings → Admin Settings → Users & Roles → Role Definitions) could fail to save further changes or assign to a user right after creation.** Role names are stored lowercased and trimmed (e.g. "Cleaner" is stored as "cleaner"), but editing, deleting, or assigning the role using the as-typed casing shortly after creating it was rejected as "not found." Role lookups are now case/whitespace-normalized everywhere a role name is used, and the Role Definitions page uses the server's saved name instead of its own local copy.
+
+---
+
 ## [0.5.0] — 2026-08-10
 
 ### Changed

@@ -73,6 +73,7 @@ def create_role(req: CreateRoleRequest, _: dict = Depends(require_admin)):
 
 @router.patch("/admin/features/roles/{role_name}")
 def update_role(role_name: str, req: RoleModulesRequest, _: dict = Depends(require_admin)):
+    role_name = role_name.strip().lower()
     data = features_service.load_features()
     roles = data.get("roles", {})
     if role_name not in roles:
@@ -86,6 +87,7 @@ def update_role(role_name: str, req: RoleModulesRequest, _: dict = Depends(requi
 
 @router.delete("/admin/features/roles/{role_name}")
 def delete_role(role_name: str, _: dict = Depends(require_admin)):
+    role_name = role_name.strip().lower()
     if role_name in _PROTECTED_ROLES:
         raise HTTPException(
             status_code=400,
@@ -110,12 +112,13 @@ def set_user_feature_role(
     if user_id == current_user["id"]:
         raise HTTPException(status_code=400, detail="Admins cannot change their own feature role.")
 
+    feature_role = req.feature_role.strip().lower()
     data = features_service.load_features()
     roles = data.get("roles", {})
-    if req.feature_role not in roles and req.feature_role != "member":
-        raise HTTPException(status_code=400, detail=f"Role '{req.feature_role}' does not exist.")
+    if feature_role not in roles and feature_role != "member":
+        raise HTTPException(status_code=400, detail=f"Role '{feature_role}' does not exist.")
 
-    user = update_user(user_id, {"feature_role": req.feature_role})
+    user = update_user(user_id, {"feature_role": feature_role})
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
-    return {"ok": True, "feature_role": req.feature_role}
+    return {"ok": True, "feature_role": feature_role}
