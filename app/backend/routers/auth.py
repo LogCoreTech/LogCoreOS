@@ -897,8 +897,9 @@ def admin_create_user(req: CreateUserRequest, current_user: dict = Depends(requi
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     updates: dict = {}
-    if req.feature_role and req.feature_role != "guest":
-        updates["feature_role"] = req.feature_role
+    feature_role = (req.feature_role or "").strip().lower()
+    if feature_role and feature_role != "guest":
+        updates["feature_role"] = feature_role
     valid_ws = [w for w in req.workspaces if w in ("personal", "business")]
     if valid_ws:
         updates["workspaces"] = valid_ws

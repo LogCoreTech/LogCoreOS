@@ -79,13 +79,17 @@ export default function RoleDefinitions() {
     try {
       const modMap = {}
       ALL_MODULES.forEach(m => { modMap[m.id] = newRoleMods[m.id] !== false })
-      await featuresApi.createRole(trimmed, modMap)
-      setRoleMods(prev => ({ ...prev, [trimmed]: modMap }))
-      setRoles(prev => [...prev, trimmed])
+      const result = await featuresApi.createRole(trimmed, modMap)
+      // Use the server's canonical name/modules (it strips+lowercases the name) rather
+      // than our own local `trimmed` — otherwise this role's local-state key can end up
+      // differently cased than what's actually persisted, and every subsequent edit/delete
+      // on it 404s until the page is refreshed.
+      setRoleMods(prev => ({ ...prev, [result.name]: result.modules }))
+      setRoles(prev => [...prev, result.name])
       setNewRoleName('')
       setNewRoleMods({})
       setShowCreate(false)
-      flash(true, `Role "${trimmed}" created.`)
+      flash(true, `Role "${result.name}" created.`)
     } catch (err) {
       flash(false, err.message || 'Failed to create role')
     } finally {
