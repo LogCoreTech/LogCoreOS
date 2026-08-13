@@ -186,6 +186,7 @@ export default function Tasks() {
                     key={task.id}
                     task={task}
                     catColor={catColor(task.category)}
+                    today={_todayStr}
                     onDone={() => toggleDone(task)}
                     onEdit={() => { setEditTask(task); setShowModal(true) }}
                   />
@@ -202,6 +203,7 @@ export default function Tasks() {
                     key={task.id}
                     task={task}
                     catColor={catColor(task.category)}
+                    today={_todayStr}
                     onDone={() => toggleDone(task)}
                     onEdit={() => { setEditTask(task); setShowModal(true) }}
                   />
@@ -279,8 +281,7 @@ export default function Tasks() {
   )
 }
 
-function TaskCard({ task, catColor, onDone, onEdit }) {
-  const today = new Date().toISOString().split('T')[0]
+function TaskCard({ task, catColor, today, onDone, onEdit }) {
   const overdue = task.due_date && task.due_date < today && task.status === 'pending'
 
   return (

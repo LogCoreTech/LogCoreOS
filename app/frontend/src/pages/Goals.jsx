@@ -50,6 +50,7 @@ export default function Goals() {
   // Overdue goals (due in the past) fall inside every window; undated goals
   // (legacy — new goals require a date) only surface under "All".
   const fmt = dt => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+  const todayStr = fmt(new Date())
   function periodEnd(tf) {
     const d = new Date()
     if (tf === 'day') return fmt(d)
@@ -183,6 +184,7 @@ export default function Goals() {
                     key={goal.id}
                     goal={goal}
                     color={catColor(goal.category)}
+                    today={todayStr}
                     onDone={() => toggleDone(goal)}
                     onEdit={() => { setEditTask(goal); setShowModal(true) }}
                     onDelete={() => setConfirmDeleteId(goal.id)}
@@ -200,6 +202,7 @@ export default function Goals() {
                     key={goal.id}
                     goal={goal}
                     color={catColor(goal.category)}
+                    today={todayStr}
                     onDone={() => toggleDone(goal)}
                     onEdit={() => { setEditTask(goal); setShowModal(true) }}
                     onDelete={() => setConfirmDeleteId(goal.id)}
@@ -244,8 +247,7 @@ export default function Goals() {
   )
 }
 
-function GoalCard({ goal, color, onDone, onEdit, onDelete }) {
-  const today = new Date().toISOString().split('T')[0]
+function GoalCard({ goal, color, today, onDone, onEdit, onDelete }) {
   const overdue = goal.due_date && goal.due_date < today && goal.status === 'pending'
   const done = goal.status === 'done'
 

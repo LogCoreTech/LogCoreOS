@@ -11,6 +11,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - **A newly created custom feature role (Settings → Admin Settings → Users & Roles → Role Definitions) could fail to save further changes or assign to a user right after creation.** Role names are stored lowercased and trimmed (e.g. "Cleaner" is stored as "cleaner"), but editing, deleting, or assigning the role using the as-typed casing shortly after creating it was rejected as "not found." Role lookups are now case/whitespace-normalized everywhere a role name is used, and the Role Definitions page uses the server's saved name instead of its own local copy.
+- **Tasks and Goals due today could show a red "OVERDUE" badge hours before they were actually due** — as early as 7 PM local time (6 PM in winter), not midnight. The badge compared each task's due date against a "today" computed from the browser's UTC clock instead of local time, so it silently rolled over to tomorrow's date partway through the evening for anyone west of UTC. Now uses the same locally-computed date the rest of the page already used correctly.
 
 ---
 
