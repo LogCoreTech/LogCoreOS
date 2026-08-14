@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { finance as financeApi } from '../../lib/api'
-import { fmtMoney, toCents, centsToInput } from './money'
+import { fmtMoney, toCents } from './money'
 
 const ACCOUNT_TYPES = ['checking', 'savings', 'credit', 'cash', 'other']
 const CAP_LABELS = [
@@ -434,7 +434,7 @@ export default function BookSettings({ book, onClose, onChanged, onDeletedBook }
             ))}
             {taxCats.length === 0 && (
               <span className="text-xs text-charcoal-400 dark:text-charcoal-500">
-                No tax buckets yet — e.g. "Schedule C: Supplies", "Travel".
+                No tax buckets yet — e.g. &quot;Schedule C: Supplies&quot;, &quot;Travel&quot;.
               </span>
             )}
           </div>
@@ -458,7 +458,7 @@ export default function BookSettings({ book, onClose, onChanged, onDeletedBook }
               onChange={e => setInvoicePrefix(e.target.value)} maxLength={10} />
           </div>
           <p className="text-[11px] text-charcoal-400 dark:text-charcoal-500 mt-1">
-            Buckets appear in the transaction editor when "Deductible" is checked. The prefix numbers new invoices ({invoicePrefix || 'INV'}-{new Date().getFullYear()}-0001). Saved with the Save button.
+            Buckets appear in the transaction editor when &quot;Deductible&quot; is checked. The prefix numbers new invoices ({invoicePrefix || 'INV'}-{new Date().getFullYear()}-0001). Saved with the Save button.
           </p>
         </div>
 

@@ -176,7 +176,7 @@ export default function TemplateManager({ templates, user, onClose, onChanged })
                 </div>
               </div>
               {own.length === 0 ? (
-                <p className="text-xs text-charcoal-400 py-2">None yet. A template is a reusable object structure (e.g. a "Parcel" with acreage, price, status).</p>
+                <p className="text-xs text-charcoal-400 py-2">None yet. A template is a reusable object structure (e.g. a &quot;Parcel&quot; with acreage, price, status).</p>
               ) : own.map(t => (
                 <Row key={t.id} t={t} actions={
                   <>

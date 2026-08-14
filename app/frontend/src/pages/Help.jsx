@@ -57,6 +57,9 @@ export default function Help() {
 
   const sectionIsMine = (s) => !s.modules?.length || s.modules.some(m => myModules.has(m))
 
+  // sectionIsMine isn't in deps on purpose: it's a new function reference
+  // every render but is purely derived from myModules (already tracked below)
+  // — adding it would defeat this memo, recomputing on every render instead.
   const sections = useMemo(() => {
     const all = content?.sections || []
     return all.filter(s => {
@@ -64,6 +67,7 @@ export default function Help() {
       if (onlyMine && !sectionIsMine(s)) return false
       return matches(s, query)
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, isAdmin, onlyMine, query, myModules])
 
   const faq = useMemo(() => {
@@ -175,7 +179,7 @@ export default function Help() {
       {/* What's New */}
       {!query && whatsNew.length > 0 && (
         <div id="whats-new" className="card p-5 scroll-mt-20">
-          <h2 className="font-semibold text-lg">✨ What's New</h2>
+          <h2 className="font-semibold text-lg">✨ What&apos;s New</h2>
           <div className="mt-3 space-y-4">
             {whatsNew.map(entry => (
               <div key={entry.version}>

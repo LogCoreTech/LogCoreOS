@@ -327,7 +327,7 @@ function UpdateSection() {
           {!status.daemon_active && (
             <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 text-xs text-yellow-800 dark:text-yellow-300 space-y-1">
               <p className="font-medium">Update daemon not running</p>
-              <p>Updates can't be applied without it. Start it on the host:</p>
+              <p>Updates can&apos;t be applied without it. Start it on the host:</p>
               <code className="block bg-yellow-100 dark:bg-yellow-900/40 px-2 py-1 rounded mt-1">bash launch.sh</code>
               <p className="text-yellow-600 dark:text-yellow-400">launch.sh installs the update cron automatically on every run.</p>
             </div>

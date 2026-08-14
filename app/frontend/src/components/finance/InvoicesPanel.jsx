@@ -48,7 +48,6 @@ export default function InvoicesPanel({ book, canEdit, assets, prefill, onPrefil
   }
 
   const clientName = Object.fromEntries(clients.map(c => [c.id, c.name]))
-  const behind = ar.filter(e => e.overdue_cents > 0)
 
   return (
     <div className="space-y-4">
@@ -56,7 +55,7 @@ export default function InvoicesPanel({ book, canEdit, assets, prefill, onPrefil
       {ar.length > 0 && (
         <div className="card p-5">
           <h2 className="font-semibold text-sm uppercase tracking-wide text-charcoal-500 dark:text-charcoal-400 mb-3">
-            Clients — who's paid, who's behind
+            Clients — who&apos;s paid, who&apos;s behind
           </h2>
           <div className="space-y-2">
             {ar.map(e => (
@@ -236,7 +235,7 @@ function InvoiceModal({ book, invoice, clients, canEdit, prefill, onPrefillConsu
       })
       .catch(() => {})
     return () => { alive = false }
-  }, [invoice?.deal_id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [invoice?.deal_id])
 
   // Pick or quick-create a CRM contact, then find-or-create the matching book
   // client so invoices + AR keep working while Contacts is the entry point.
@@ -493,7 +492,7 @@ function InvoiceModal({ book, invoice, clients, canEdit, prefill, onPrefillConsu
                   placeholder={centsToInput(invoice.balance_cents)}
                   value={payAmount} onChange={e => setPayAmount(e.target.value)} title="Payment amount (blank = full balance)" />
                 <select className="input flex-1" value={payAccount} onChange={e => setPayAccount(e.target.value)}>
-                  <option value="">Don't log a transaction</option>
+                  <option value="">Don&apos;t log a transaction</option>
                   {accounts.map(a => <option key={a.id} value={a.id}>Log income → {a.name}</option>)}
                 </select>
                 <button onClick={recordPayment} disabled={busy} className="btn-primary shrink-0 text-sm">

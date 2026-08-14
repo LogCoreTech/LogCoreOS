@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import HelpButton from '../components/HelpButton'
 import GettingStarted from '../components/GettingStarted'
 import DashboardGrid, { MOBILE_COLS } from '../components/dashboard/DashboardGrid'
@@ -36,7 +36,6 @@ export default function Dashboard() {
   const { user, updateUserField } = useAuth()
   const { workspace } = useWorkspace()
   const [searchParams, setSearchParams] = useSearchParams()
-  const navigate = useNavigate()
 
   const [items, setItems] = useState([])
   const [current, setCurrent] = useState(null) // rendered dashboard from GET /render
@@ -254,7 +253,7 @@ export default function Dashboard() {
         </div>
       ) : !current ? (
         <div className="card p-8 text-center">
-          <p className="text-charcoal-500 dark:text-charcoal-400 mb-3">You don't have any dashboards yet.</p>
+          <p className="text-charcoal-500 dark:text-charcoal-400 mb-3">You don&apos;t have any dashboards yet.</p>
           <button className="btn-primary" onClick={() => setShowCreateModal(true)}>+ Create your first dashboard</button>
         </div>
       ) : (

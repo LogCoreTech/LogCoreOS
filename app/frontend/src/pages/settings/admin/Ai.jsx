@@ -337,7 +337,7 @@ function AiUsageSection() {
     }).catch(() => {})
   }
 
-  useEffect(loadUsage, [month]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(loadUsage, [month])
 
   useEffect(() => {
     aiUsageApi.getDefaults().then(d => setDefaults({
@@ -420,7 +420,7 @@ function AiUsageSection() {
         <h3 className="font-semibold">Defaults</h3>
         <p className="text-xs text-charcoal-500 dark:text-charcoal-400">
           Applied to any user whose own mode is set to soft or hard but who has no limit of their own.
-          A user's mode always defaults to <span className="font-medium">off</span> (unlimited) until set below.
+          A user&apos;s mode always defaults to <span className="font-medium">off</span> (unlimited) until set below.
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <div>

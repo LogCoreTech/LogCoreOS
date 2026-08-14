@@ -26,6 +26,10 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // Mount-only: pick an initial category once. Deliberately not re-run on
+  // form.category/propCategories changes — both are written by this same
+  // effect (via setForm/setCategories), so tracking them would risk
+  // re-fetching priorities.get() on every unrelated re-render.
   useEffect(() => {
     if (!propCategories?.length) {
       prioritiesApi.get().then(p => {
@@ -37,6 +41,7 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
     } else if (!form.category && propCategories.length) {
       setForm(f => ({ ...f, category: propCategories[0] }))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function set(field, value) {

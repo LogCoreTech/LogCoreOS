@@ -187,21 +187,33 @@ export default function Layout() {
   const userWorkspaces = user?.workspaces || ['personal']
   const hasMultipleWorkspaces = userWorkspaces.length > 1
 
-  // Auto-switch to first allowed workspace if current one isn't in the user's list
+  // Auto-switch to first allowed workspace if current one isn't in the user's list.
+  // Deps use a joined string, not the raw array, so this only re-runs when the
+  // actual workspace *values* change, not on every render (userWorkspaces is a
+  // new array reference each render). switchWorkspace isn't memoized in
+  // workspace.jsx, so including it directly would defeat that and re-run this
+  // on every WorkspaceProvider render instead.
+  const userWorkspacesKey = userWorkspaces.join(',')
   useEffect(() => {
     if (userWorkspaces.length > 0 && !userWorkspaces.includes(workspace)) {
       switchWorkspace(userWorkspaces[0])
     }
-  }, [userWorkspaces.join(','), workspace])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userWorkspacesKey, workspace])
 
   // Re-fetch /me whenever workspace changes so disabled_modules reflects the new workspace.
   // Also redirect to dashboard if the current page is restricted to the other workspace.
+  // Deliberately [workspace]-only: `user` is excluded because this effect calls
+  // refreshUser(), which updates `user` — including it would loop; `location.pathname`
+  // is excluded because this redirect check should only run on a workspace switch,
+  // not on every navigation.
   useEffect(() => {
     if (user) refreshUser()
     const currentModule = ALL_MODULES.find(m => m.to && (m.to === '/' ? location.pathname === '/' : location.pathname.startsWith(m.to)))
     if (currentModule?.workspace && currentModule.workspace !== workspace) {
       navigate('/')
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace])
 
   function toggleSidebar() {

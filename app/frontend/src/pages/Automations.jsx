@@ -224,9 +224,13 @@ function LogsModal({ workflow, onClose }) {
     }
   }
 
+  // Restart the log-polling cycle only when the viewed workflow changes;
+  // fetchLogs is redefined every render and isn't memoized, so including it
+  // would tear down and restart the poll timer on every render instead.
   useEffect(() => {
     fetchLogs()
     return () => clearTimeout(timerRef.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workflow.id])
 
   return (
@@ -543,7 +547,7 @@ export default function Automations() {
     searchParams.delete('view')
     searchParams.delete('inbox')
     setSearchParams(searchParams, { replace: true })
-  }, [searchParams])
+  }, [searchParams, setSearchParams])
 
   async function handleItemStatus(itemId, status) {
     try {

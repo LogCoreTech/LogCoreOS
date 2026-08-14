@@ -62,7 +62,7 @@ export default function Calendar() {
     if (found) { setEditEvent(found); setShowEventModal(true) }
     searchParams.delete('event')
     setSearchParams(searchParams, { replace: true })
-  }, [loading, events, searchParams])
+  }, [loading, events, searchParams, setSearchParams])
 
   const poolEventApi = {
     add:    body       => poolApi.addSharedEvent(body),
@@ -89,6 +89,9 @@ export default function Calendar() {
     setLoading(false)
   }
 
+  // Reload when the user or workspace changes only; `load` is redefined every
+  // render and isn't memoized, so including it would refetch on every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load() }, [user?.name, workspace])
 
   function prev() {
