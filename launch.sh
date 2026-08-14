@@ -71,6 +71,23 @@ log_info()  { echo "    $1"; }
 log_warn()  { echo "    WARNING: $1"; }
 die()       { echo "    ERROR: $1"; exit 1; }
 
+# Vite 8 (frontend build tool) requires Node ^20.19.0 || >=22.12.0 — a bare
+# `command -v node` check doesn't catch an existing-but-too-old install, which
+# would otherwise fail confusingly deep inside `npm run build` instead of here.
+node_version_ok() {
+  local ver major minor
+  ver="$(node --version 2>/dev/null | sed 's/^v//')"
+  major="${ver%%.*}"
+  minor="$(echo "$ver" | cut -d. -f2)"
+  [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ ]] || return 1
+  if [[ "$major" -eq 20 && "$minor" -ge 19 ]]; then
+    return 0
+  elif [[ "$major" -gt 22 || ( "$major" -eq 22 && "$minor" -ge 12 ) ]]; then
+    return 0
+  fi
+  return 1
+}
+
 # ── Docker group ──────────────────────────────────────────────────────────────
 
 ensure_docker_group() {
@@ -253,6 +270,16 @@ check_prerequisites() {
       die "Node.js is not installed (required to build the frontend).
     Install Node.js 20+ from: https://nodejs.org/en/download/
     Or via nvm:               https://github.com/nvm-sh/nvm
+
+    If app/frontend/dist/ already exists you can skip the build:
+      bash launch.sh --skip-build"
+    fi
+    if ! node_version_ok; then
+      die "Node.js $(node --version) is too old — the frontend build tool (Vite 8) requires
+    Node 20.19+ or 22.12+.
+    Upgrade Node.js:  https://nodejs.org/en/download/
+    Or via nvm:       https://github.com/nvm-sh/nvm
+    Or re-run with --install-deps to auto-install a current Node 20.x via NodeSource.
 
     If app/frontend/dist/ already exists you can skip the build:
       bash launch.sh --skip-build"

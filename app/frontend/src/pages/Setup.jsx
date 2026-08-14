@@ -48,7 +48,7 @@ export default function Setup() {
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
           <img src="/icon-192.png" alt="LogCore" className="h-16 w-16 mx-auto" />
-          <p className="text-charcoal-500 dark:text-charcoal-400 text-sm mt-2">Let's set up your Brain</p>
+          <p className="text-charcoal-500 dark:text-charcoal-400 text-sm mt-2">Let&apos;s set up your Brain</p>
         </div>
 
         <div className="card p-6">

@@ -86,7 +86,11 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
   const knownKeys = new Set((template?.fields || []).map(f => f.key))
   const orphanedKeys = Object.keys(form.fields).filter(k => !knownKeys.has(k))
 
-  // Prefill defaults when the template changes on a NEW asset
+  // Prefill defaults when the template changes on a NEW asset. Deliberately
+  // scoped to form.template only: `editing` is a one-time bail-out (adding it
+  // as a dep would re-run this on every create<->edit mode flip and clobber
+  // already-entered form data), and template?.fields is derived from
+  // form.template via templatesById, not independent state.
   useEffect(() => {
     if (editing) return
     const defaults = {}
@@ -94,6 +98,7 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
       if (f.default !== undefined) defaults[f.key] = f.default
     }
     setForm(f => ({ ...f, fields: defaults }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.template])
 
   useEffect(() => {

@@ -166,7 +166,7 @@ export function AttachmentThumb({ assetId, file, canEdit, onDelete }) {
         .catch(() => {})
     }
     return () => { if (objectUrl) URL.revokeObjectURL(objectUrl) }
-  }, [assetId, file.id])
+  }, [assetId, file.id, isImage])
 
   async function open() {
     try {

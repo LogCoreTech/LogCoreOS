@@ -463,7 +463,6 @@ export default function Chat() {
       setMessages(prev => [prev[0], ...injected, ...prev.slice(1)])
       unread.forEach(n => sugApi.markRead(n.id).catch(() => {}))
     }).catch(() => {})
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Close mode drawer when clicking outside
@@ -486,13 +485,17 @@ export default function Chat() {
     return () => document.removeEventListener('mousedown', handler)
   }, [showMemoryPopup])
 
-  // When workspace changes, reload saved chats list (if panel open) and clear cross-workspace toggle
+  // When workspace changes, reload saved chats list (if panel open) and clear
+  // cross-workspace toggle. Deliberately workspace-only: showHistory is read
+  // as a gate, not a trigger — opening/closing the history panel on its own
+  // shouldn't clear crossWorkspace/continuedFromFile or refetch the list.
   useEffect(() => {
     setCrossWorkspace(false)
     setContinuedFromFile(null)
     if (showHistory) {
       chatApi.listSaved().then(list => setSavedChats(list || [])).catch(() => setSavedChats([]))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace])
 
   // Auto-save after each AI response. Injected proactive notifications are
@@ -522,6 +525,10 @@ export default function Chat() {
       } catch { /* silent — auto-save failures don't interrupt the user */ }
     }, 1500)
     return () => clearTimeout(t)
+    // continuedFromFile is deliberately excluded: this effect is what sets it
+    // (via setContinuedFromFile above), so tracking it would restart the
+    // debounce timer immediately after every auto-save completes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, loading])
 
   async function send(e, overrideMsg, modeOverride, acceptOverage) {
@@ -681,8 +688,6 @@ export default function Chat() {
       return dt.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
     } catch { return filename }
   }
-
-  const hasConversation = messages.length > 1
 
   return (
     <div className="max-w-2xl mx-auto w-full flex flex-col flex-1 min-h-0">

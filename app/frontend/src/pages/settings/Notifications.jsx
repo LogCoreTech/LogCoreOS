@@ -155,7 +155,7 @@ export default function Notifications() {
           <HelpButton section="notifications" className="ml-1 align-middle" />
         </h2>
         <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-3">
-          Install the <strong>ntfy</strong> app on your phone and subscribe to your personal channel to receive morning digests and alerts. By default ntfy runs self-hosted on your server's local network only — for notifications away from home, use Web Push below, or ask an admin to give ntfy a public address (see the <Link to="/help#notifications" className="text-orange-500 hover:underline">Notifications guide</Link> for setup steps). Your channel ID is the only thing protecting it, so treat it like a password: don't share it, and rotate it if you ever suspect it's leaked.
+          Install the <strong>ntfy</strong> app on your phone and subscribe to your personal channel to receive morning digests and alerts. By default ntfy runs self-hosted on your server&apos;s local network only — for notifications away from home, use Web Push below, or ask an admin to give ntfy a public address (see the <Link to="/help#notifications" className="text-orange-500 hover:underline">Notifications guide</Link> for setup steps). Your channel ID is the only thing protecting it, so treat it like a password: don&apos;t share it, and rotate it if you ever suspect it&apos;s leaked.
         </p>
         {ntfyChannel ? (
           <div>
@@ -175,7 +175,7 @@ export default function Notifications() {
               {channelRotatedAt
                 ? `Last rotated ${new Date(channelRotatedAt).toLocaleDateString()}`
                 : 'Never rotated since account creation'}
-              {' — '}we'll remind you here once it's over 30 days old.
+              {' — '}we&apos;ll remind you here once it&apos;s over 30 days old.
             </p>
             <div className="flex items-center gap-2 mt-2">
               <button

@@ -80,8 +80,11 @@ export default function UserDetail() {
     setBankRow((Array.isArray(sfRows) ? sfRows : []).find(r => r.user_id === userId) || null)
   }
 
+  // Reload when the viewed user changes only; `load` is redefined every
+  // render and isn't memoized, so including it would refetch on every render.
   useEffect(() => {
     load().finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId])
 
   async function saveRole() {

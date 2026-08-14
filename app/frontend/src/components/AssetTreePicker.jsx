@@ -45,18 +45,18 @@ function PickRow({ node, depth, childrenMap, expanded, onToggle, onPick, disable
 
 export default function AssetTreePicker({ candidates, onPick, disabledId = null, topLabel = '⬆ Top level', topDisabled = false }) {
   const [expanded, setExpanded] = useState(new Set())
-  const list = Array.isArray(candidates) ? candidates : []
 
   const childrenMap = useMemo(() => {
+    const l = Array.isArray(candidates) ? candidates : []
     const map = {}
-    const ids = new Set(list.map(a => a.id))
-    for (const a of list) {
+    const ids = new Set(l.map(a => a.id))
+    for (const a of l) {
       const parent = a.parent_id && ids.has(a.parent_id) ? a.parent_id : '_root'
       ;(map[parent] = map[parent] || []).push(a)
     }
     for (const key of Object.keys(map)) map[key].sort((x, y) => (x.name || '').localeCompare(y.name || ''))
     return map
-  }, [list])
+  }, [candidates])
 
   function toggle(id) {
     setExpanded(prev => {

@@ -305,7 +305,7 @@ function OverviewView({ book, canEdit, onAddTx, onAddAccount }) {
           </p>
         ) : !book.balances ? (
           <p className="text-sm text-charcoal-500 dark:text-charcoal-400">
-            Balances aren't visible with your access — you can still submit entries.
+            Balances aren&apos;t visible with your access — you can still submit entries.
           </p>
         ) : (
           <div className="space-y-2">
@@ -377,7 +377,7 @@ function OverviewView({ book, canEdit, onAddTx, onAddAccount }) {
           </div>
           {!projection ? (
             <p className="text-sm text-charcoal-500 dark:text-charcoal-400">
-              Projection = today's balance + recurring bills/income + planned items up to that date.
+              Projection = today&apos;s balance + recurring bills/income + planned items up to that date.
             </p>
           ) : (
             <>

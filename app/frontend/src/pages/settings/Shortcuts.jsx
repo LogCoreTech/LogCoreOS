@@ -20,9 +20,12 @@ export default function Shortcuts() {
   const [businessDragIdx, setBusinessDragIdx] = useState(null)
   const [saved, setSaved] = useState(false)
 
+  // Keyed on user?.shortcuts specifically, not the whole user object, so this
+  // doesn't re-run on every unrelated profile field update.
   useEffect(() => {
     setPersonalShortcutIds(cleanShortcuts('personal', user))
     setBusinessShortcutIds(cleanShortcuts('business', user))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.shortcuts])
 
   function toggleShortcut(ws, id) {

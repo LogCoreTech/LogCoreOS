@@ -99,7 +99,7 @@ function AssetRow({ asset, depth, childrenMap, expanded, onToggle, onOpen, onAdd
 
 // Move an asset to a new parent via a tree/list picker (same owner only —
 // changing ownership is the admin Convert action, not a move).
-function MovePicker({ asset, allAssets, templatesByKey, onClose, onMoved }) {
+function MovePicker({ asset, allAssets, onClose, onMoved }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -152,7 +152,6 @@ function MovePicker({ asset, allAssets, templatesByKey, onClose, onMoved }) {
 export default function Assets() {
   const { user } = useAuth()
   const { workspace } = useWorkspace()
-  const isAdmin = user?.role === 'admin'
 
   const [templates, setTemplates] = useState([])
   const [items, setItems] = useState([])
@@ -176,7 +175,7 @@ export default function Assets() {
     if (found) setModal({ asset: found })
     searchParams.delete('asset')
     setSearchParams(searchParams, { replace: true })
-  }, [loaded, items, searchParams])
+  }, [loaded, items, searchParams, setSearchParams])
 
   async function load() {
     setError('')
@@ -194,6 +193,9 @@ export default function Assets() {
     }
   }
 
+  // Reload on workspace/filter change only; `load` is redefined every render
+  // and isn't memoized, so including it would refetch on every render instead.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load() }, [workspace, showArchived])
 
   const templatesByKey = useMemo(
@@ -303,8 +305,8 @@ export default function Assets() {
         <div className="card p-8 text-center space-y-2">
           <p className="text-sm font-medium">No templates yet</p>
           <p className="text-xs text-charcoal-400 max-w-sm mx-auto">
-            Assets are built from templates — premade structures like "Land Parcel" or
-            "Vehicle" with the right fields ready to fill in.
+            Assets are built from templates — premade structures like &quot;Land Parcel&quot; or
+            &quot;Vehicle&quot; with the right fields ready to fill in.
           </p>
           <button onClick={() => setShowTemplates(true)} className="btn-primary text-xs px-4 py-2 mt-2">
             Create your first template

@@ -34,7 +34,7 @@ export default function Tasks() {
     if (found) { setEditTask(found); setShowModal(true) }
     searchParams.delete('task')
     setSearchParams(searchParams, { replace: true })
-  }, [loading, taskList, searchParams])
+  }, [loading, taskList, searchParams, setSearchParams])
 
   async function load() {
     setLoading(true)
@@ -56,6 +56,9 @@ export default function Tasks() {
     setLoading(false)
   }
 
+  // Reload when the user or workspace changes only; `load` is redefined every
+  // render and isn't memoized, so including it would refetch on every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load() }, [user?.name, workspace])
 
   async function toggleDone(task) {
@@ -218,7 +221,7 @@ export default function Tasks() {
       {showReorder && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-end md:items-center justify-center p-4">
           <div className="card p-5 w-full max-w-sm">
-            <h3 className="font-semibold mb-1">Reorder Today's Priorities</h3>
+            <h3 className="font-semibold mb-1">Reorder Today&apos;s Priorities</h3>
             <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-4">
               Use the arrows or drag to change order for today only. Resets tomorrow.
             </p>

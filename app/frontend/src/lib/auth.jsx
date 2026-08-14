@@ -100,7 +100,11 @@ export function AuthProvider({ children }) {
     })
   }
 
-  // Auto-sync timezone to the device's detected zone if the user has opted in
+  // Auto-sync timezone to the device's detected zone if the user has opted in.
+  // Deliberately keyed on user?.name (identity), not the full `user` object:
+  // this effect calls setUser() itself, and the full object also changes on
+  // every unrelated profile field update (theme, accent color, ...) — neither
+  // should re-trigger this check.
   useEffect(() => {
     if (!user) return
     if (localStorage.getItem('lc_auto_tz') !== 'true') return
@@ -114,13 +118,17 @@ export function AuthProvider({ children }) {
         })
         .catch(() => {})
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.name])
 
-  // Poll /me every 30 seconds so admin permission changes take effect live
+  // Poll /me every 30 seconds so admin permission changes take effect live.
+  // Keyed on user?.name so the interval is only torn down/recreated when the
+  // logged-in identity changes, not on every unrelated `user` field update.
   useEffect(() => {
     if (!user) return
     const id = setInterval(() => refreshUser(), 30_000)
     return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.name])
 
   // Don't render children until the initial session check completes (avoids flash)

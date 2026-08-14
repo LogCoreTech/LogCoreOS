@@ -116,7 +116,7 @@ function TreeNode({ node, depth, selectedPath, openFolders, onSelectNote, onTogg
 
 // ── Context menu ──────────────────────────────────────────────────────────────
 
-function ContextMenu({ node, folders, onClose, onRename, onMove, onDelete, onShare, onLeave, onArchive }) {
+function ContextMenu({ node, onClose, onRename, onMove, onDelete, onShare, onLeave, onArchive }) {
   // Own items (no _owner) are always manageable. Pool items (household/team)
   // are collectively visible, not a personal share — "Leave" makes no sense
   // there; instead an admin (or a by-name edit-level contributor) can manage
@@ -261,6 +261,11 @@ export default function Notes() {
     } finally {
       setLoading(false)
     }
+    // `workspace` isn't referenced in this callback's own body (the active
+    // workspace flows through api.js's request header instead) — it's kept
+    // as a dependency deliberately, purely so `load` gets a new reference
+    // (and the effect below re-runs) when the workspace switches.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace, showArchived])
 
   useEffect(() => { load() }, [load])
@@ -404,15 +409,6 @@ export default function Notes() {
       return next
     })
     setSelectedPath(prev => prev === path ? null : path)
-  }
-
-  function handleAction(type, node) {
-    if (type === 'folderMenu') openContextMenu(node)
-    if (type === 'noteMenu') openContextMenu(node)
-  }
-
-  function openContextMenu(node) {
-    setContextMenu({ node })
   }
 
   // ── New note ────────────────────────────────────────────────────────────────

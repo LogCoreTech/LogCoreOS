@@ -27,7 +27,7 @@ export default function WhatsNewBanner() {
         to="/help#whats-new"
         className="flex-1 min-w-0 truncate text-orange-700 dark:text-orange-300 hover:underline"
       >
-        LogCore updated to v{info.version} — see what's new
+        LogCore updated to v{info.version} — see what&apos;s new
       </Link>
       <button
         onClick={dismiss}
