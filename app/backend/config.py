@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     # real key. Never set this on a networked/production instance.
     allow_insecure_secret_key: bool = False
 
+    # Escape hatch for local development ONLY. When False (default) the app refuses
+    # to start with wildcard CORS (ALLOWED_ORIGINS="*"), because every real deployment
+    # binds the port non-loopback (the Docker image always runs `uvicorn --host 0.0.0.0`)
+    # and a wildcard origin lets any website read authenticated responses via a
+    # victim's browser. Set to true to run locally with the "*" default unset.
+    # Never set this on a networked/production instance.
+    allow_insecure_cors: bool = False
+
     # Set to False only for local HTTP development; always True in production
     cookie_secure: bool = True
 

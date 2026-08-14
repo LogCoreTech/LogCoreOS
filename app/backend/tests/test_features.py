@@ -23,6 +23,7 @@ from routers.features import (
     delete_role,
     set_user_feature_role,
     update_role,
+    users_with_role,
 )
 from services import auth_service, features_service
 
@@ -168,3 +169,28 @@ def test_admin_create_user_normalizes_feature_role(brain):
     created = admin_create_user(req, admin)
 
     assert auth_service.get_user_by_id(created["id"])["feature_role"] == "cleaner"
+
+
+def test_users_with_role_lists_assignees(brain):
+    admin = _admin(brain)
+    bob = _member(brain)
+    create_role(CreateRoleRequest(name="cleaner", modules={}), admin)
+    set_user_feature_role(bob["id"], FeatureRoleRequest(feature_role="cleaner"), admin)
+
+    assert users_with_role("cleaner", admin) == {"users": ["Bob"]}
+
+
+def test_users_with_role_empty_when_unassigned(brain):
+    admin = _admin(brain)
+    create_role(CreateRoleRequest(name="cleaner", modules={}), admin)
+
+    assert users_with_role("cleaner", admin) == {"users": []}
+
+
+def test_users_with_role_normalizes_case(brain):
+    admin = _admin(brain)
+    bob = _member(brain)
+    create_role(CreateRoleRequest(name="cleaner", modules={}), admin)
+    set_user_feature_role(bob["id"], FeatureRoleRequest(feature_role="cleaner"), admin)
+
+    assert users_with_role("Cleaner", admin) == {"users": ["Bob"]}

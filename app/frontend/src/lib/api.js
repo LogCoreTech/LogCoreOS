@@ -496,6 +496,7 @@ export const features = {
   createRole:  (name, modules)        => post('/auth/admin/features/roles', { name, modules }),
   updateRole:  (name, modules)        => patch(`/auth/admin/features/roles/${name}`, { modules }),
   deleteRole:  (name)                 => del(`/auth/admin/features/roles/${name}`),
+  roleUsers:   (name)                 => get(`/auth/admin/features/roles/${name}/users`),
   setUserRole: (userId, feature_role) => patch(`/auth/admin/features/users/${userId}/role`, { feature_role }),
 }
 

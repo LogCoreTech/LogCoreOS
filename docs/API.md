@@ -1208,26 +1208,43 @@ Clear the file-stored Infisical token. Only file-sourced tokens can be cleared v
 
 These endpoints are mounted under `/api/v1/auth`. Admin only.
 
-### `GET /auth/admin/features`
-Get all feature roles and their default disabled modules.
+Role names are stored strip+lowercased (`"Cleaner"` → `"cleaner"`) and every endpoint below
+normalizes its own `role_name` input the same way before doing a lookup, so a differently-cased or
+padded name still resolves correctly (fixed 2026-08-12 — see `docs/MEMORY.md`).
 
-**Response** `{ "roles": { "cleaner": { "disabled_modules": ["chat", "brain", ...] }, ... } }`
+### `GET /auth/admin/features`
+Get all feature roles and, for each, whether every module is enabled (`true`) or disabled (`false`) —
+not just a disabled-list.
+
+**Response** `{ "profile": "personal", "roles": { "member": { "dashboard": true, ... }, "cleaner": { "dashboard": true, "finance": false, ... } } }`
 
 ### `POST /auth/admin/features/roles`
-Create a new custom feature role.
+Create a new custom feature role. `"member"`/`"guest"`/`"admin"` are reserved names. Modules omitted
+from `modules` default to enabled (`true`).
 
-**Body** `{ "name": "cleaner", "disabled_modules": ["chat", "brain", "notes"] }`
+**Body** `{ "name": "cleaner", "modules": { "finance": false, "contacts": false } }`
+
+**Response** `{ "name": "cleaner", "modules": { "dashboard": true, ..., "finance": false, "contacts": false } }` — the full per-module map as stored, including defaulted-`true` keys.
 
 ### `PATCH /auth/admin/features/roles/{role_name}`
-Update a feature role's disabled module list.
+Replace a feature role's full per-module map (not a partial patch — omitted modules reset to `true`).
 
-**Body** `{ "disabled_modules": ["chat"] }`
+**Body** `{ "modules": { "chat": false } }`
+
+### `GET /auth/admin/features/roles/{role_name}/users`
+Which users currently have this role assigned — meant to back a real delete-confirmation UI instead of
+a generic warning (added 2026-08-12).
+
+**Response** `{ "users": ["Bob Worker"] }`
 
 ### `DELETE /auth/admin/features/roles/{role_name}`
-Delete a custom feature role.
+Delete a custom feature role. `"member"`/`"guest"` cannot be deleted. Any user currently assigned this
+role falls back to `"member"` — check the endpoint above first if you want to warn about that.
 
 ### `PATCH /auth/admin/features/users/{user_id}/role`
-Assign a feature role to a user.
+Assign a feature role to a user. `feature_role` must be `"member"` or an existing custom role name
+(`"guest"` is also always valid as the default, even before any role exists). Admins cannot change their
+own feature role this way (400).
 
 **Body** `{ "feature_role": "cleaner" }`
 

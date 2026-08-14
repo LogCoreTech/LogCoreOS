@@ -6,20 +6,22 @@ import re
 import tempfile
 import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from config import settings
 
-# In-process lock per file path — safe for single-worker uvicorn
-_path_locks: dict[str, threading.Lock] = {}
+# In-process lock per file path — safe for single-worker uvicorn. Reentrant
+# so update_json() can hold it across a read-modify-write cycle and still
+# call the plain write_json() below (which also locks) without deadlocking.
+_path_locks: dict[str, threading.RLock] = {}
 _path_locks_mutex = threading.Lock()
 
 
-def _get_lock(path: Path) -> threading.Lock:
+def _get_lock(path: Path) -> threading.RLock:
     key = str(path)
     with _path_locks_mutex:
         if key not in _path_locks:
-            _path_locks[key] = threading.Lock()
+            _path_locks[key] = threading.RLock()
         return _path_locks[key]
 
 
@@ -191,6 +193,22 @@ def write_json(path: Path, data: Any) -> None:
             except OSError:
                 pass
             raise
+
+
+def update_json(path: Path, mutate: Callable[[Any], Any], default: Any = None) -> Any:
+    """Atomic read-modify-write: holds one lock across the full read+mutate+write
+    cycle, so two concurrent callers touching the same path can never silently
+    lose one side's change (which plain read_json()+write_json() can, since
+    write_json()'s lock only covers the write itself, not the read that
+    preceded it). `mutate(data)` receives the current value (read_json's
+    result, or `default`) and returns the new value to persist; that same
+    value is returned to the caller so it doesn't need a separate re-read."""
+    lock = _get_lock(path)
+    with lock:
+        data = read_json(path, default=default)
+        new_data = mutate(data)
+        write_json(path, new_data)
+        return new_data
 
 
 def read_markdown(path: Path) -> str:

@@ -110,11 +110,28 @@ def _warm_share_index() -> None:
 
 def _startup_checks() -> None:
     if settings.allowed_origins.strip() == "*":
-        logger.warning(
-            "CORS is set to allow all origins ('*'). "
-            "This is only safe for development or LAN use. "
-            "Set ALLOWED_ORIGINS to your domain in production."
-        )
+        if settings.allow_insecure_cors:
+            logger.critical(
+                "\n"
+                "╔══════════════════════════════════════════════════════╗\n"
+                "║  SECURITY WARNING: CORS allows all origins ('*').     ║\n"
+                "║  Running only because ALLOW_INSECURE_CORS=true.       ║\n"
+                "║  NEVER expose this instance to a network in this      ║\n"
+                "║  state — any website can read authenticated           ║\n"
+                "║  responses via a visiting user's browser.             ║\n"
+                "╚══════════════════════════════════════════════════════╝"
+            )
+        else:
+            # Fail closed: every real deployment binds non-loopback (the Docker
+            # image always runs with --host 0.0.0.0), so a wildcard origin here
+            # is never just a theoretical risk. Mirrors the SECRET_KEY check
+            # below — refuse to start rather than run silently insecure.
+            logger.critical(
+                "ALLOWED_ORIGINS is '*' (allow all origins) — refusing to start. "
+                "Set ALLOWED_ORIGINS to your domain in docker/.env, or set "
+                "ALLOW_INSECURE_CORS=true for local development only."
+            )
+            sys.exit(1)
 
     if not settings.cookie_secure:
         logger.warning(
