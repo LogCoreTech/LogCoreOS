@@ -68,15 +68,10 @@ def _clear_auth_cookie(response: Response) -> None:
     response.delete_cookie(key=_COOKIE, path="/", samesite="lax")
 
 
-def get_workspace(x_workspace: str = Header(default="personal")) -> str:
-    """Read the X-Workspace header and return a validated workspace name."""
-    return x_workspace if x_workspace in ("personal", "business") else "personal"
-
-
 def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(bearer_optional),
-    workspace: str = Depends(get_workspace),
+    x_workspace: str = Header(default="personal"),
 ) -> dict:
     # Accept httpOnly cookie first, then fall back to Authorization header
     token = request.cookies.get(_COOKIE)
@@ -95,6 +90,7 @@ def get_current_user(
     # Attach jti and exp so logout can revoke with persistence
     user["_jti"] = payload.get("jti")
     user["_exp"] = payload.get("exp")
+    workspace = x_workspace if x_workspace in ("personal", "business") else "personal"
     enabled_ws = auth_service.enabled_workspaces()
     # Lazy migration: admins get every instance-enabled workspace (persisted so
     # access is restored automatically if a hidden workspace is re-enabled).
@@ -110,7 +106,9 @@ def get_current_user(
     if not effective_ws:
         effective_ws = [enabled_ws[0]]
     user["workspaces"] = effective_ws
-    # Coerce a disabled/invalid active workspace to an enabled one before use.
+    # Coerce a disabled/invalid OR not-entitled active workspace to an enabled
+    # one before use — the X-Workspace header is caller-supplied and must
+    # never be trusted past what this user's own `workspaces` actually grants.
     if workspace not in effective_ws:
         workspace = effective_ws[0]
     # Compute effective disabled modules for the current workspace
@@ -121,6 +119,13 @@ def get_current_user(
     )
     user["_workspace"] = workspace
     return user
+
+
+def get_workspace(current_user: dict = Depends(get_current_user)) -> str:
+    """The current request's workspace, already validated in get_current_user()
+    against this user's own `workspaces` entitlement — every router depends on
+    this (never the raw header) so that entitlement check applies everywhere."""
+    return current_user["_workspace"]
 
 
 def require_admin(current_user: dict = Depends(get_current_user)) -> dict:

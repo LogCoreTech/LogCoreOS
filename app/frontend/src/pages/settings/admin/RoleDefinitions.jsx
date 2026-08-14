@@ -57,7 +57,15 @@ export default function RoleDefinitions() {
   }
 
   async function deleteRole(name) {
-    if (!window.confirm(`Delete role "${name}"? Users with this role will fall back to "member".`)) return
+    let warning = `Delete role "${name}"? Users with this role will fall back to "member".`
+    try {
+      const { users } = await featuresApi.roleUsers(name)
+      if (users?.length) {
+        const names = users.length <= 5 ? users.join(', ') : `${users.slice(0, 5).join(', ')}, +${users.length - 5} more`
+        warning = `Delete role "${name}"? ${users.length} user${users.length === 1 ? '' : 's'} currently ${users.length === 1 ? 'has' : 'have'} it — ${names} — and will fall back to "member" (typically more permissive).`
+      }
+    } catch { /* fall back to the generic warning above */ }
+    if (!window.confirm(warning)) return
     setDeleting(name)
     try {
       await featuresApi.deleteRole(name)

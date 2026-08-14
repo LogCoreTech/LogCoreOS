@@ -2,6 +2,8 @@
 
 import json
 import sys
+import threading
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -15,6 +17,7 @@ from services.file_service import (
     read_json,
     resolve_user_md_path,
     tasks_path,
+    update_json,
     user_path,
     write_json,
 )
@@ -189,3 +192,73 @@ def test_parse_priority_order_missing_section_returns_empty(brain):
     user_dir.mkdir(parents=True)
     (user_dir / "Profile.md").write_text("# Profile\n\nNo priorities here.\n")
     assert parse_priority_order(USER) == []
+
+
+# ---------------------------------------------------------------------------
+# update_json — atomic read-modify-write
+# ---------------------------------------------------------------------------
+
+
+def test_update_json_applies_mutation_and_returns_it(brain):
+    path = brain / "USERS" / USER / "counter.json"
+    result = update_json(path, lambda d: {**d, "n": d.get("n", 0) + 1}, default={"n": 0})
+    assert result == {"n": 1}
+    assert read_json(path) == {"n": 1}
+
+
+def test_update_json_serializes_concurrent_writers_no_lost_update(brain):
+    """The actual bug: plain read_json()+write_json() lets a second writer's
+    read land before the first writer's write, silently losing one increment.
+    update_json() must hold its lock across the whole cycle so N concurrent
+    incrementers always produce exactly N."""
+    path = brain / "USERS" / USER / "counter.json"
+    write_json(path, {"n": 0})
+
+    def slow_increment(d):
+        # Force a thread-switch window between read and write — this is
+        # exactly the window the old read_json()+write_json() pattern left
+        # unlocked, and the one update_json() must close.
+        current = d.get("n", 0)
+        time.sleep(0.01)
+        return {"n": current + 1}
+
+    threads = [threading.Thread(target=update_json, args=(path, slow_increment)) for _ in range(20)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert read_json(path)["n"] == 20
+
+
+def test_update_json_never_interleaves_two_writers(brain):
+    """Directly proves mutual exclusion: writer B's mutate function must not
+    even *start* until writer A's full read-modify-write cycle (including
+    the write) has finished."""
+    path = brain / "USERS" / USER / "order.json"
+    write_json(path, {})
+    events: list[str] = []
+    release_a = threading.Event()
+
+    def mutate_a(d):
+        events.append("a_start")
+        release_a.wait(timeout=2)
+        events.append("a_end")
+        return d
+
+    def mutate_b(d):
+        events.append("b_start")
+        return d
+
+    t_a = threading.Thread(target=update_json, args=(path, mutate_a))
+    t_a.start()
+    time.sleep(0.05)  # let A acquire the lock and start waiting
+    t_b = threading.Thread(target=update_json, args=(path, mutate_b))
+    t_b.start()
+    time.sleep(0.05)  # B should be blocked on the lock, not running yet
+    assert events == ["a_start"]
+
+    release_a.set()
+    t_a.join()
+    t_b.join()
+    assert events == ["a_start", "a_end", "b_start"]

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, field_validator
 
 from routers.auth import require_admin
-from services import features_service
+from services import auth_service, features_service
 from services.auth_service import get_user_by_id, update_user
 from services.features_service import ALL_MODULE_IDS
 
@@ -83,6 +83,17 @@ def update_role(role_name: str, req: RoleModulesRequest, _: dict = Depends(requi
     data["roles"] = roles
     features_service.save_features(data)
     return {"name": role_name, "modules": full_map}
+
+
+@router.get("/admin/features/roles/{role_name}/users")
+def users_with_role(role_name: str, _: dict = Depends(require_admin)):
+    """Who's currently assigned this role — so the delete confirmation can
+    show real names instead of a generic warning. Deleting falls everyone
+    listed here back to 'member', which is typically *more* permissive."""
+    role_name = role_name.strip().lower()
+    data = auth_service._load_auth()
+    users = [u["name"] for u in data.get("users", []) if u.get("feature_role") == role_name]
+    return {"users": users}
 
 
 @router.delete("/admin/features/roles/{role_name}")
