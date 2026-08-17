@@ -5,9 +5,13 @@ import { tasks as tasksApi, priorities as prioritiesApi, shared as sharedApi, te
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
 import TaskModal from '../components/TaskModal'
-import { catColor } from '../lib/constants'
+import { catColor, scoreTask } from '../lib/constants'
 
-const PRIORITY_ORDER = ['High', 'Medium', 'Low']
+const SORT_MODES = [
+  { id: 'priority', label: 'Priority' },
+  { id: 'date', label: 'Date/Time' },
+  { id: 'alpha', label: 'A–Z' },
+]
 
 export default function Tasks() {
   const { user } = useAuth()
@@ -16,6 +20,7 @@ export default function Tasks() {
   const [assignedPoolTasks, setAssignedPoolTasks] = useState([])
   const [priorityOrder, setPriorityOrder] = useState([])
   const [filter, setFilter] = useState('pending')
+  const [sortMode, setSortMode] = useState(() => localStorage.getItem('lc_tasks_sort') || 'priority')
   const [editTask, setEditTask] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [showReorder, setShowReorder] = useState(false)
@@ -101,6 +106,11 @@ export default function Tasks() {
     setTempOrder(next)
   }
 
+  function changeSortMode(mode) {
+    setSortMode(mode)
+    localStorage.setItem('lc_tasks_sort', mode)
+  }
+
   const _today = new Date()
   const _todayStr = `${_today.getFullYear()}-${String(_today.getMonth() + 1).padStart(2, '0')}-${String(_today.getDate()).padStart(2, '0')}`
 
@@ -118,19 +128,26 @@ export default function Tasks() {
     filter === 'overdue' ? (t.status === 'pending' && t.due_date && t.due_date < _todayStr) : true
   )
 
-  const _priIdx = p => { const i = PRIORITY_ORDER.indexOf(p); return i === -1 ? 999 : i }
-
-  // Group by priority order, then by priority within group
-  const grouped = priorityOrder.map(cat => ({
-    cat,
-    tasks: filtered
-      .filter(t => t.category === cat)
-      .sort((a, b) => _priIdx(a.priority) - _priIdx(b.priority))
-  })).filter(g => g.tasks.length > 0)
-
-  // Uncategorized (categories not in priority order)
-  const knownCats = new Set(priorityOrder)
-  const uncategorized = filtered.filter(t => !knownCats.has(t.category))
+  // One flat list, no category grouping — sort mode picks the ordering.
+  // 'priority' mirrors the backend's own score_task() formula (ported to JS
+  // in lib/constants.js) so a high-priority Family task outranks a
+  // medium-priority Religion task regardless of category, exactly like
+  // GET /tasks/scored already does for pending/own tasks — applied here to
+  // every task shown (including assigned pool tasks and any filter tab).
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortMode === 'date') {
+      const ad = a.due_date ? `${a.due_date} ${a.due_time || '00:00'}` : null
+      const bd = b.due_date ? `${b.due_date} ${b.due_time || '00:00'}` : null
+      if (ad && bd) return ad < bd ? -1 : ad > bd ? 1 : 0
+      if (ad) return -1
+      if (bd) return 1
+      return 0
+    }
+    if (sortMode === 'alpha') {
+      return (a.title || '').localeCompare(b.title || '')
+    }
+    return scoreTask(b, priorityOrder, _todayStr) - scoreTask(a, priorityOrder, _todayStr)
+  })
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-5 overflow-x-hidden">
@@ -167,54 +184,48 @@ export default function Tasks() {
         ))}
       </div>
 
+      {/* Sort mode */}
+      <div className="flex items-center gap-2 text-xs text-charcoal-500 dark:text-charcoal-400">
+        <span className="shrink-0">Sort by</span>
+        <div className="flex gap-1 bg-charcoal-100 dark:bg-charcoal-800 rounded-lg p-1 flex-1">
+          {SORT_MODES.map(m => (
+            <button
+              key={m.id}
+              onClick={() => changeSortMode(m.id)}
+              className={`flex-1 py-1 rounded-md text-xs font-medium transition-colors ${
+                sortMode === m.id
+                  ? 'bg-white dark:bg-charcoal-600 text-charcoal-900 dark:text-gray-100 shadow-sm'
+                  : 'text-charcoal-500 dark:text-charcoal-400'
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {loading ? (
         <div className="space-y-3">
           {[1,2,3].map(i => <div key={i} className="h-16 card animate-pulse" />)}
         </div>
-      ) : grouped.length === 0 && uncategorized.length === 0 ? (
+      ) : sorted.length === 0 ? (
         <div className="card p-8 text-center text-charcoal-500 dark:text-charcoal-400">
           <p className="text-4xl mb-2">✓</p>
           <p>No tasks here.</p>
         </div>
       ) : (
-        <>
-          {grouped.map(({ cat, tasks }) => (
-            <div key={cat}>
-              <h2 className="text-xs font-semibold uppercase tracking-widest text-charcoal-500 dark:text-charcoal-400 mb-2">
-                {cat}
-              </h2>
-              <div className="space-y-2">
-                {tasks.map(task => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    catColor={catColor(task.category)}
-                    today={_todayStr}
-                    onDone={() => toggleDone(task)}
-                    onEdit={() => { setEditTask(task); setShowModal(true) }}
-                  />
-                ))}
-              </div>
-            </div>
+        <div className="space-y-2">
+          {sorted.map(task => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              catColor={catColor(task.category)}
+              today={_todayStr}
+              onDone={() => toggleDone(task)}
+              onEdit={() => { setEditTask(task); setShowModal(true) }}
+            />
           ))}
-          {uncategorized.length > 0 && (
-            <div>
-              <h2 className="text-xs font-semibold uppercase tracking-widest text-charcoal-500 mb-2">Other</h2>
-              <div className="space-y-2">
-                {uncategorized.map(task => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    catColor={catColor(task.category)}
-                    today={_todayStr}
-                    onDone={() => toggleDone(task)}
-                    onEdit={() => { setEditTask(task); setShowModal(true) }}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-        </>
+        </div>
       )}
 
       {/* Reorder Today modal */}

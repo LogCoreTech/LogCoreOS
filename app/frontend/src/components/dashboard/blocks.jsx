@@ -5,6 +5,7 @@ import { ALL_MODULES, catColor } from '../../lib/constants'
 import { deepLinkUrl } from '../../lib/deepLinks'
 import { assets as assetsApi, contacts as contactsApi, tasks as tasksApi } from '../../lib/api'
 import { AttachmentThumb } from '../assetDisplay'
+import { ACTION_MODULE_BY_KIND } from './actionKinds'
 
 function priorityDot(p) {
   return p === 'High' ? 'bg-red-500' : p === 'Medium' ? 'bg-yellow-500' : 'bg-charcoal-400'
@@ -14,17 +15,94 @@ function Empty({ text }) {
   return <p className="text-sm text-charcoal-400 dark:text-charcoal-500">{text}</p>
 }
 
-function TaskRow({ task }) {
+// Runs a curated status preset (blockRegistry.js's ACTION_PRESETS_BY_KIND)
+// against one record — the same underlying calls StatusButtonBlock.run()
+// already makes, just parameterized by whichever row's id a click came from
+// instead of one fixed config'd id.
+async function runStatusAction(recordKind, preset, recordId) {
+  if (recordKind === 'task') {
+    const status = preset === 'mark_done' ? 'done' : preset === 'mark_skipped' ? 'skipped' : 'pending'
+    await tasksApi.update(recordId, { status })
+  } else if (recordKind === 'asset') {
+    if (preset === 'unarchive') await assetsApi.unarchive(recordId)
+    else await assetsApi.archive(recordId)
+  }
+}
+
+function ActionButton({ action, recordKind, recordId, onDone }) {
+  const [state, setState] = useState('idle') // idle | busy | error
+
+  if (action.kind === 'nav') {
+    const module = ACTION_MODULE_BY_KIND[recordKind]
+    if (!module) return null
+    return (
+      <Link
+        to={deepLinkUrl(module, recordId)}
+        onClick={e => e.stopPropagation()}
+        className="badge hover:bg-orange-100 dark:hover:bg-orange-900/30 shrink-0"
+        title={action.label || 'Open'}
+      >
+        {action.label || '→ Open'}
+      </Link>
+    )
+  }
+
+  async function run(e) {
+    e.preventDefault()
+    e.stopPropagation()
+    setState('busy')
+    try {
+      await runStatusAction(recordKind, action.preset, recordId)
+      setState('idle')
+      onDone?.()
+    } catch {
+      setState('error')
+      setTimeout(() => setState('idle'), 3000)
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={run}
+      disabled={state === 'busy'}
+      className={`badge shrink-0 ${state === 'error' ? 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-300' : 'hover:bg-orange-100 dark:hover:bg-orange-900/30'}`}
+      title={action.label || action.preset}
+    >
+      {state === 'busy' ? '…' : state === 'error' ? '⚠' : (action.label || action.preset)}
+    </button>
+  )
+}
+
+// A block's own user-configured action buttons (block.config.actions), for
+// one record — either a specific row (list-shaped blocks call this once per
+// row, passing that row's own id) or the block's single subject (detail-
+// shaped blocks call this once). See actionKinds.js for why nav/status never
+// need to ask "which module" or "which record type" — both are implied by
+// recordKind, which the block itself already knows.
+export function BlockActionButtons({ actions, recordKind, recordId, onDone }) {
+  if (!actions?.length || !recordId || !recordKind) return null
+  return (
+    <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+      {actions.map((a, i) => (
+        <ActionButton key={i} action={a} recordKind={recordKind} recordId={recordId} onDone={onDone} />
+      ))}
+    </div>
+  )
+}
+
+function TaskRow({ task, actions, onAction }) {
   return (
     <div className="flex items-center gap-2 min-w-0">
       <span className={`badge shrink-0 ${catColor(task.category)}`}>{task.category}</span>
       <span className="text-sm truncate flex-1">{task.title}</span>
       {task.streak_count > 0 && <span className="text-xs text-orange-500 shrink-0">🔥{task.streak_count}</span>}
+      <BlockActionButtons actions={actions} recordKind="task" recordId={task.id} onDone={onAction} />
     </div>
   )
 }
 
-export function Top3TasksBlock({ data }) {
+export function Top3TasksBlock({ data, actions, onAction }) {
   const tasks = data?.tasks || []
   if (!tasks.length) return <Empty text="No pending tasks." />
   return (
@@ -32,20 +110,20 @@ export function Top3TasksBlock({ data }) {
       {tasks.map((t, i) => (
         <li key={t.id} className="flex items-center gap-2">
           <span className="text-orange-500 font-bold text-sm w-4 shrink-0">{i + 1}</span>
-          <TaskRow task={t} />
+          <TaskRow task={t} actions={actions} onAction={onAction} />
         </li>
       ))}
     </ol>
   )
 }
 
-export function DueTodayBlock({ data }) {
+export function DueTodayBlock({ data, actions, onAction }) {
   const tasks = data?.tasks || []
   if (!tasks.length) return <Empty text="Nothing due today." />
-  return <div className="space-y-2">{tasks.map(t => <TaskRow key={t.id} task={t} />)}</div>
+  return <div className="space-y-2">{tasks.map(t => <TaskRow key={t.id} task={t} actions={actions} onAction={onAction} />)}</div>
 }
 
-export function StreaksBlock({ data }) {
+export function StreaksBlock({ data, actions, onAction }) {
   const tasks = data?.tasks || []
   if (!tasks.length) return <Empty text="No active streaks." />
   return (
@@ -54,22 +132,23 @@ export function StreaksBlock({ data }) {
         <div key={t.id} className="flex items-center justify-between text-sm">
           <span className="truncate">{t.title}</span>
           <span className="text-orange-500 font-semibold shrink-0 ml-2">{t.streak_count} days</span>
+          <BlockActionButtons actions={actions} recordKind="task" recordId={t.id} onDone={onAction} />
         </div>
       ))}
     </div>
   )
 }
 
-export function GoalsProgressBlock({ data }) {
+export function GoalsProgressBlock({ data, actions, onAction }) {
   const goals = data?.goals || []
   if (!goals.length) return <Empty text="No goals yet." />
-  return <div className="space-y-2">{goals.map(g => <TaskRow key={g.id} task={g} />)}</div>
+  return <div className="space-y-2">{goals.map(g => <TaskRow key={g.id} task={g} actions={actions} onAction={onAction} />)}</div>
 }
 
-export function SingleTaskBlock({ data }) {
+export function SingleTaskBlock({ data, actions, onAction }) {
   const task = data?.task
   if (!task) return <Empty text="Task not found." />
-  return <TaskRow task={task} />
+  return <TaskRow task={task} actions={actions} onAction={onAction} />
 }
 
 export function HomeFavouritesBlock({ data }) {
@@ -103,29 +182,33 @@ export function PoolTasksBlock({ data }) {
   )
 }
 
-export function UpcomingEventsBlock({ data }) {
+export function UpcomingEventsBlock({ data, actions, onAction }) {
   const events = data?.events || []
   if (!events.length) return <Empty text="No upcoming events." />
   return (
     <div className="space-y-2">
       {events.map(e => (
-        <div key={e.id} className="flex items-center justify-between text-sm">
-          <span className="truncate">{e.title}</span>
-          <span className="text-xs text-charcoal-400 shrink-0 ml-2">{e.date}</span>
+        <div key={e.id} className="flex items-center justify-between text-sm gap-2">
+          <span className="truncate flex-1">{e.title}</span>
+          <span className="text-xs text-charcoal-400 shrink-0">{e.date}</span>
+          <BlockActionButtons actions={actions} recordKind="event" recordId={e.id} onDone={onAction} />
         </div>
       ))}
     </div>
   )
 }
 
-export function SingleEventBlock({ data }) {
+export function SingleEventBlock({ data, actions, onAction }) {
   const e = data?.event
   if (!e) return <Empty text="Event not found." />
   return (
-    <div>
-      <p className="text-sm font-medium">{e.title}</p>
-      <p className="text-xs text-charcoal-400">{e.date}</p>
-      {e.notes && <p className="text-xs text-charcoal-500 mt-1">{e.notes}</p>}
+    <div className="flex items-start justify-between gap-2">
+      <div className="min-w-0">
+        <p className="text-sm font-medium truncate">{e.title}</p>
+        <p className="text-xs text-charcoal-400">{e.date}</p>
+        {e.notes && <p className="text-xs text-charcoal-500 mt-1">{e.notes}</p>}
+      </div>
+      <BlockActionButtons actions={actions} recordKind="event" recordId={e.id} onDone={onAction} />
     </div>
   )
 }
@@ -191,7 +274,7 @@ export function CustomFieldsBlock({ data }) {
   )
 }
 
-export function LinkedAssetsBlock({ data }) {
+export function LinkedAssetsBlock({ data, actions, onAction }) {
   const assets = data?.assets || []
   if (!assets.length) return <Empty text="No linked assets." />
   return (
@@ -199,7 +282,8 @@ export function LinkedAssetsBlock({ data }) {
       {assets.map(a => (
         <div key={a.id} className="flex items-center gap-2 text-sm">
           <span className="shrink-0">{a.icon}</span>
-          <span className="truncate">{a.name}</span>
+          <span className="truncate flex-1">{a.name}</span>
+          <BlockActionButtons actions={actions} recordKind="asset" recordId={a.id} onDone={onAction} />
         </div>
       ))}
     </div>
@@ -218,10 +302,10 @@ export function DocumentsBlock({ data }) {
   )
 }
 
-export function LinkedTasksBlock({ data }) {
+export function LinkedTasksBlock({ data, actions, onAction }) {
   const tasks = data?.tasks || []
   if (!tasks.length) return <Empty text="No linked tasks." />
-  return <div className="space-y-2">{tasks.map(t => <TaskRow key={t.id} task={t} />)}</div>
+  return <div className="space-y-2">{tasks.map(t => <TaskRow key={t.id} task={t} actions={actions} onAction={onAction} />)}</div>
 }
 
 export function LinkedContactBlock({ data }) {
@@ -233,6 +317,25 @@ export function LinkedContactBlock({ data }) {
         <Link key={id} to={`/contacts?contact=${id}`} className="text-sm text-orange-500 hover:underline block">
           View contact →
         </Link>
+      ))}
+    </div>
+  )
+}
+
+// New block type (2026-08-15) — the dashboard had no general "list of
+// contacts" block before this; linked_deals/linked_assets are scoped to one
+// contact/asset's own related records, not a standalone contacts list.
+export function ContactsListBlock({ data, actions, onAction }) {
+  const contacts = data?.contacts || []
+  if (!contacts.length) return <Empty text="No contacts." />
+  return (
+    <div className="space-y-1.5">
+      {contacts.map(c => (
+        <div key={c.id} className="flex items-center gap-2 text-sm">
+          <span className="shrink-0">{c.type === 'company' ? '🏢' : '🧑'}</span>
+          <span className="truncate flex-1">{c.name}</span>
+          <BlockActionButtons actions={actions} recordKind="contact" recordId={c.id} onDone={onAction} />
+        </div>
       ))}
     </div>
   )
@@ -302,7 +405,7 @@ function CollectionStatusControl({ row, statusField, statusOptions, onAction }) 
   )
 }
 
-export function CollectionBlock({ data, onAction }) {
+export function CollectionBlock({ data, actions, onAction }) {
   const rows = data?.rows || []
   const view = data?.view || 'list'
   const displayFields = data?.display_fields || []
@@ -344,8 +447,9 @@ export function CollectionBlock({ data, onAction }) {
                     {displayFields.length > 0 && (
                       <p className="text-xs text-charcoal-400 truncate">{fieldSummary(row, displayFields)}</p>
                     )}
-                    <div className="mt-1.5">
+                    <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
                       <CollectionStatusControl row={row} statusField={statusField} statusOptions={statusOptions} onAction={onAction} />
+                      <BlockActionButtons actions={actions} recordKind="asset" recordId={row.id} onDone={onAction} />
                     </div>
                   </div>
                 ))}
@@ -370,15 +474,21 @@ export function CollectionBlock({ data, onAction }) {
           {statusField && (
             <CollectionStatusControl row={row} statusField={statusField} statusOptions={statusOptions} onAction={onAction} />
           )}
+          <BlockActionButtons actions={actions} recordKind="asset" recordId={row.id} onDone={onAction} />
         </div>
       ))}
     </div>
   )
 }
 
-export function NoteEmbedBlock({ data }) {
+export function NoteEmbedBlock({ data, actions, onAction }) {
   if (!data?.preview) return <Empty text="Note is empty." />
-  return <p className="text-sm whitespace-pre-wrap line-clamp-6">{data.preview}</p>
+  return (
+    <div className="flex flex-col gap-2 h-full">
+      <p className="text-sm whitespace-pre-wrap line-clamp-6 flex-1">{data.preview}</p>
+      <BlockActionButtons actions={actions} recordKind="note" recordId={data.path} onDone={onAction} />
+    </div>
+  )
 }
 
 export function JournalEntryBlock({ data }) {

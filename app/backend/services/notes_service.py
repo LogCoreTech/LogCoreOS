@@ -19,6 +19,15 @@ _MAX_CONTENT_BYTES = 512_000
 POOL_HOUSEHOLD = "_household"
 POOL_TEAM = "_team"
 ACCESS_LEVELS = {"read", "contribute", "edit"}
+ACCESS_ORDER = {"read": 0, "contribute": 1, "edit": 2}
+
+
+def meets(access: str | None, need: str) -> bool:
+    """True if `access` (read|contribute|edit, or None for no access) is at
+    least as strong as `need`. The single ordinal comparison every caller that
+    gates a note operation by access level should use, rather than each
+    re-deriving its own copy of the read < contribute < edit ordering."""
+    return ACCESS_ORDER.get(access, -1) >= ACCESS_ORDER[need]
 
 
 def is_pool(store_user: str) -> bool:
@@ -443,10 +452,31 @@ def list_visible_notes(
     return results
 
 
-def find_note_store(viewer: str, role: str, is_admin: bool, workspace: str, path: str):
+def find_note_store(
+    viewer: str, role: str, is_admin: bool, workspace: str, path: str, owner: str | None = None
+):
     """Locate the store + access for a note/folder path the viewer can reach.
-    Returns (store_user, access) or None. Checks own, pool, then sharers."""
+    Returns (store_user, access) or None. Checks own, pool, then sharers, in
+    that order — first match wins. If the same relative path exists in more
+    than one store the viewer can reach, that order picks the winner, which
+    may not be the one actually meant. Pass `owner` (a note's `_owner` field,
+    as already returned by list_visible_notes/list_notes) to resolve directly
+    against that one store instead, when the caller already knows it."""
     _validate_path(path)  # reject traversal before touching the filesystem
+    if owner is not None:
+        store_user = store_for_owner(owner, viewer)
+        exists = (
+            _note_path(store_user, path, workspace).exists()
+            or _folder_path(store_user, path, workspace).exists()
+        )
+        if not exists:
+            return None
+        access = (
+            "edit"
+            if store_user == viewer
+            else resolve_access(viewer, role, is_admin, store_user, workspace, path)
+        )
+        return (store_user, access) if access else None
     if (
         _note_path(viewer, path, workspace).exists()
         or _folder_path(viewer, path, workspace).exists()

@@ -35,6 +35,8 @@ LOG_FILE="$BRAIN_SYS/update.log"
 HEALTH_URL="http://localhost:8000/api/v1/health"
 HEALTH_TIMEOUT=120
 WATCH_INTERVAL=60
+ENV_FILE="$DOCKER_DIR/.env"
+BRAIN_HOSTING="$REPO_ROOT/brain/hosting.json"
 
 mkdir -p "$BRAIN_SYS"
 
@@ -45,6 +47,36 @@ if [[ -f "$DOCKER_DIR/.env" ]]; then
     source "$DOCKER_DIR/.env" 2>/dev/null || true
     set +a
 fi
+
+# ── Insecure-CORS migration (mirrors launch.sh's migrate_insecure_cors) ───────
+# Without this, an instance still on the pre-2026-08-12 ALLOWED_ORIGINS="*"
+# default doesn't actually get "updated" here — compose_up()'s new container
+# fails _startup_checks(), wait_healthy() times out, and do_update() rolls back
+# to the previous commit. That rollback IS the existing safety net (the app
+# never goes down), but it also means the instance silently re-installs the
+# same old version forever and never reaches the hardened release. Auto-fix
+# from brain/hosting.json's domain_url (same source launch.sh trusts) before
+# attempting the update, so a real update actually lands instead of stalling.
+migrate_insecure_cors() {
+    [[ -f "$ENV_FILE" ]] || return 0
+    grep -qE '^ALLOWED_ORIGINS=\*[[:space:]]*$' "$ENV_FILE" 2>/dev/null || return 0
+
+    local domain=""
+    if [[ -f "$BRAIN_HOSTING" ]] && command -v python3 &>/dev/null; then
+        domain="$(python3 -c "import json; d=json.load(open('$BRAIN_HOSTING')); print(d.get('domain_url',''))" 2>/dev/null || true)"
+    fi
+
+    if [[ -n "$domain" ]]; then
+        sed -i "s|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=${domain}|" "$ENV_FILE"
+        export ALLOWED_ORIGINS="$domain"
+        log "ALLOWED_ORIGINS was '*' — migrated to '$domain' from brain/hosting.json before updating."
+    else
+        log "WARNING: ALLOWED_ORIGINS is '*' and no brain/hosting.json domain_url is on file."
+        log "  The incoming update will fail its health check and roll back (this is safe, but"
+        log "  the instance will stay stuck on the current version). Set ALLOWED_ORIGINS in"
+        log "  docker/.env manually, or configure Admin -> Hosting, then retry the update."
+    fi
+}
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -246,6 +278,8 @@ do_update() {
     trap 'rm -f "$RUNNING_FLAG"' EXIT
 
     log "=== LogCore OS update starting ==="
+
+    migrate_insecure_cors
 
     # 1. Backup Brain before touching anything
     if [[ -f "$DOCKER_DIR/backup.sh" ]]; then

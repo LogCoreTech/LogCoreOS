@@ -127,6 +127,13 @@ def finance_books_path(user_name: str, workspace: str = "personal") -> Path:
     return ws_path(user_name, workspace) / "Finance" / "books.json"
 
 
+def finance_prefs_path(user_name: str, workspace: str = "personal") -> Path:
+    """Per-user, per-workspace UI preferences (currently just last-opened book)
+    — deliberately separate from books.json so a preference write can never
+    collide with a books-registry read-modify-write."""
+    return ws_path(user_name, workspace) / "Finance" / "prefs.json"
+
+
 def finance_book_dir(user_name: str, book_id: str, workspace: str = "personal") -> Path:
     return ws_path(user_name, workspace) / "Finance" / "books" / book_id
 

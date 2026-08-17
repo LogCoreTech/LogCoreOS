@@ -361,6 +361,36 @@ sync_tunnel_token() {
   fi
 }
 
+# ── Insecure-CORS migration ───────────────────────────────────────────────────
+# 2026-08-12 added a startup check that refuses to boot on ALLOWED_ORIGINS="*"
+# (main.py::_startup_checks). generate_env() only ever writes ALLOWED_ORIGINS
+# for a brand-new docker/.env, so every instance that existed before that date
+# still has the old "*" default and would silently go down — health check
+# times out, no rollback, app just stays unreachable — the next time this
+# script restarts it (2026-08-15 incident). Auto-migrate from the domain
+# already on file in brain/hosting.json (same source sync_tunnel_token() above
+# already trusts) when one exists; otherwise warn with the actual cause instead
+# of letting wait_for_health's generic timeout message be the only signal.
+migrate_insecure_cors() {
+  [[ -f "$ENV_FILE" ]] || return 0
+  [[ "$(env_get ALLOWED_ORIGINS)" == "*" ]] || return 0
+
+  local domain=""
+  if [[ -f "$BRAIN_HOSTING" ]] && command -v python3 &>/dev/null; then
+    domain="$(python3 -c "import json; d=json.load(open('$BRAIN_HOSTING')); print(d.get('domain_url',''))" 2>/dev/null || true)"
+  fi
+
+  if [[ -n "$domain" ]]; then
+    env_set ALLOWED_ORIGINS "$domain"
+    log_warn "ALLOWED_ORIGINS was '*' (refuses to start as of 2026-08-12) — migrated to '$domain' from brain/hosting.json."
+  else
+    log_warn "ALLOWED_ORIGINS is '*' — the app WILL REFUSE TO START (main.py::_startup_checks, added 2026-08-12)."
+    log_warn "  Set ALLOWED_ORIGINS in docker/.env to your real origin (e.g. https://yourdomain.com),"
+    log_warn "  or configure Admin -> Hosting first so this script can migrate it automatically next run,"
+    log_warn "  or set ALLOW_INSECURE_CORS=true for local/LAN-only development."
+  fi
+}
+
 # ── Brain ownership ───────────────────────────────────────────────────────────
 
 fix_brain_ownership() {
@@ -606,6 +636,7 @@ main() {
   fi
 
   sync_tunnel_token
+  migrate_insecure_cors
 
   # --tunnel-token flag wins over brain/hosting.json
   if [[ -n "$FLAG_TUNNEL_TOKEN" ]]; then

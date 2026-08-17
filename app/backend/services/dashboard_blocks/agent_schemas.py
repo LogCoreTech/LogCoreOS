@@ -20,10 +20,24 @@ id for a `task`-kind field) — this module describes what each field MEANS,
 it does not render anything.
 """
 
+_TASK_SORT_MODE_FIELD = {
+    "key": "sort_mode",
+    "label": "Sort order",
+    "kind": "select",
+    "optional": True,
+    "options": [
+        {"value": "priority", "label": "Priority"},
+        {"value": "date", "label": "Date/Time"},
+        {"value": "alpha", "label": "A–Z"},
+    ],
+}
+
 AGENT_CONFIG_SCHEMAS: dict[str, list[dict]] = {
     "single_task": [
         {"key": "task_id", "label": "Task id (look it up via list_tasks)", "kind": "task"}
     ],
+    "top3_tasks": [_TASK_SORT_MODE_FIELD],
+    "due_today": [_TASK_SORT_MODE_FIELD],
     "finance_activity": [
         {"key": "asset_id", "label": "Asset id", "kind": "asset", "optional": True},
         {"key": "contact_id", "label": "Contact id", "kind": "contact", "optional": True},

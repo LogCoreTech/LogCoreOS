@@ -47,3 +47,34 @@ export function getShortcutsForUser(user, workspace = 'personal') {
   }
   return [...DEFAULT_SHORTCUTS]
 }
+
+const PRIORITY_WEIGHTS = { High: 3, Medium: 2, Low: 1 }
+
+// 1:1 port of priority_service.py's score_task() — category_weight (position
+// in the user's own category-priority order) × priority_weight + urgency_bonus.
+// Ported here (rather than relying solely on the backend's own GET
+// /tasks/scored, which is pending/non-goal/own-tasks only) so Tasks.jsx can
+// score every task it shows — including household/team assigned tasks and
+// done/overdue ones — uniformly. Keep in sync with the Python original if the
+// weights ever change; docs/PROJECT.md documents the same formula.
+export function scoreTask(task, categoryOrder, todayStr) {
+  const total = categoryOrder.length
+  const catIdx = categoryOrder.indexOf(task.category || '')
+  const catWeight = catIdx === -1 ? 0 : total - catIdx
+
+  const priWeight = PRIORITY_WEIGHTS[task.priority] ?? 1
+
+  let urgency = 0
+  if (task.due_date) {
+    if (task.due_date < todayStr) urgency = 10
+    else if (task.due_date === todayStr) urgency = 5
+    else {
+      const weekOut = new Date(todayStr)
+      weekOut.setDate(weekOut.getDate() + 7)
+      const weekOutStr = `${weekOut.getFullYear()}-${String(weekOut.getMonth() + 1).padStart(2, '0')}-${String(weekOut.getDate()).padStart(2, '0')}`
+      if (task.due_date <= weekOutStr) urgency = 2
+    }
+  }
+
+  return catWeight * priWeight + urgency
+}

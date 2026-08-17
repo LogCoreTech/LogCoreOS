@@ -2,7 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- interactive-widget=resizes-content: makes the on-screen keyboard resize
+         actual page layout (affecting 100dvh) instead of just panning the
+         visual viewport — the app's scroll architecture already assumes
+         resizes work this way everywhere else (see docs/MEMORY.md, the
+         keyboard-desync gotcha). Without this, WebKit's pan-only default can
+         leave touch coordinates mapped to a stale offset after the keyboard
+         closes in standalone PWA mode. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#f97316" />
     <meta name="description" content="LogCore OS — Your values-driven family life operating system" />
     <meta name="apple-mobile-web-app-capable" content="yes" />

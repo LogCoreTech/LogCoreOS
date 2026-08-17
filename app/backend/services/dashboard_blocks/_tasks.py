@@ -7,6 +7,7 @@ from services.dashboard_blocks.registry import (
     BlockSpec,
     register,
 )
+from services.profile_service import get_priority_order
 
 
 def _scoped_target(ctx: BlockRenderCtx) -> str | None:
@@ -21,7 +22,8 @@ def resolve_top3(ctx: BlockRenderCtx) -> BlockRenderResult:
     target = _scoped_target(ctx)
     if target is None:
         return BlockRenderResult(ok=False, locked_reason="no_access")
-    tasks = priority_service.get_top3(target, ctx.workspace)
+    sort_mode = ctx.config.get("sort_mode", "priority")
+    tasks = priority_service.get_top3(target, ctx.workspace, sort_mode=sort_mode)
     return BlockRenderResult(ok=True, data={"tasks": tasks})
 
 
@@ -40,6 +42,9 @@ def resolve_due_today(ctx: BlockRenderCtx) -> BlockRenderResult:
         and t.get("due_date") == today_str
         and t.get("type") != "goal"
     ]
+    sort_mode = ctx.config.get("sort_mode", "priority")
+    order = get_priority_order(target, ctx.workspace)
+    due = priority_service.sort_tasks(due, order, today_str, sort_mode)
     return BlockRenderResult(ok=True, data={"tasks": due})
 
 

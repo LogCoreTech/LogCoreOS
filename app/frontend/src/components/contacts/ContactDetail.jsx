@@ -3,18 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { contacts as contactsApi, assets as assetsApi, finance as financeApi } from '../../lib/api'
 import { useWorkspace } from '../../lib/workspace'
 import ContactAvatar from './ContactAvatar'
+import { formatPhone } from './phone'
 
 const money = cents => `$${((cents || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const toCents = v => Math.round(parseFloat(v || '0') * 100) || 0
-
-function formatPhone(p) {
-  if (!p) return ''
-  const d = p.number || ''
-  const formatted = d.length === 10 ? `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}` : d
-  let out = `(+${p.country_code || '1'}) ${formatted}`
-  if (p.extension) out += ` ext. ${p.extension}`
-  return out
-}
 
 function formatHeight(cm, unit) {
   if (!cm) return ''
@@ -180,12 +172,12 @@ export default function ContactDetail({ contact, fields, pipeline, user, onClose
               <p>🌎 {[contact.city, contact.state, contact.country].filter(Boolean).join(', ')}</p>
             )}
             {contact.pronouns && <p className="text-charcoal-500">{contact.pronouns}</p>}
-            {fields.map(f => contact.custom?.[f.key] != null && contact.custom[f.key] !== '' && (
+            {fields.filter(f => (f.applies_to || ['person', 'company']).includes(contact.type)).map(f => contact.custom?.[f.key] != null && contact.custom[f.key] !== '' && (
               <p key={f.key}><span className="text-charcoal-500">{f.label}:</span> {String(contact.custom[f.key])}</p>
             ))}
           </div>
 
-          {(currentCareer || pastCareer.length > 0) && (
+          {contact.type !== 'company' && (currentCareer || pastCareer.length > 0) && (
             <div>
               <div className="text-[11px] uppercase tracking-wide text-charcoal-400 mb-1">Career</div>
               {currentCareer && (
@@ -213,14 +205,43 @@ export default function ContactDetail({ contact, fields, pipeline, user, onClose
             </div>
           )}
 
-          {(contact.marital_status || contact.pets || affiliated.length > 0) && (
+          {contact.type === 'company' && (contact.locations || []).length > 0 && (
             <div>
-              <div className="text-[11px] uppercase tracking-wide text-charcoal-400 mb-1">Family</div>
-              <div className="text-sm space-y-1">
-                {contact.marital_status && <p>{contact.marital_status}</p>}
-                {contact.pets && <p>🐾 {contact.pets}</p>}
+              <div className="text-[11px] uppercase tracking-wide text-charcoal-400 mb-1">Locations</div>
+              <div className="text-sm space-y-0.5">
+                {contact.locations.map(l => (
+                  <p key={l.id}>📍 {l.label && <span className="font-medium">{l.label}:</span>} {l.address}</p>
+                ))}
               </div>
-              {affiliated.length > 0 && (
+            </div>
+          )}
+
+          {contact.type === 'company' && (contact.hours || []).some(h => !h.closed) && (
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-charcoal-400 mb-1">Hours</div>
+              <dl className="text-sm grid grid-cols-2 gap-x-4 gap-y-0.5">
+                {contact.hours.map(h => (
+                  <div key={h.day} className="flex justify-between gap-2">
+                    <dt className="text-charcoal-500 capitalize">{h.day}</dt>
+                    <dd>{h.closed ? 'Closed' : `${h.open || '?'}–${h.close || '?'}`}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
+
+          {(contact.type === 'company' || contact.marital_status || contact.pets || affiliated.length > 0) && (
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-charcoal-400 mb-1">
+                {contact.type === 'company' ? 'Affiliated People' : 'Family'}
+              </div>
+              {contact.type !== 'company' && (
+                <div className="text-sm space-y-1">
+                  {contact.marital_status && <p>{contact.marital_status}</p>}
+                  {contact.pets && <p>🐾 {contact.pets}</p>}
+                </div>
+              )}
+              {affiliated.length > 0 ? (
                 <div className="flex gap-1 flex-wrap mt-1">
                   {affiliated.map(a => (
                     <button key={a.id} onClick={() => navigate(`/contacts?contact=${a.id}`)}
@@ -229,6 +250,8 @@ export default function ContactDetail({ contact, fields, pipeline, user, onClose
                     </button>
                   ))}
                 </div>
+              ) : contact.type === 'company' && (
+                <p className="text-xs text-charcoal-400">No one linked yet.</p>
               )}
             </div>
           )}

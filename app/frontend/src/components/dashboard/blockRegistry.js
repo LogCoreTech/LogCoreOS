@@ -1,5 +1,5 @@
 import {
-  AiUsageMeBlock, AiUsageOverviewBlock, CollectionBlock, CustomFieldsBlock, DocumentsBlock, DueTodayBlock,
+  AiUsageMeBlock, AiUsageOverviewBlock, CollectionBlock, ContactsListBlock, CustomFieldsBlock, DocumentsBlock, DueTodayBlock,
   FinanceActivityBlock, FinanceBookReportBlock, GoalsProgressBlock, HeadingDividerBlock,
   HomeFavouritesBlock, InboxSummaryBlock, JournalEntryBlock, LinkButtonBlock, LinkedAssetsBlock,
   LinkedContactBlock, LinkedDealsBlock, LinkedTasksBlock, MyAssetsSummaryBlock, NavButtonBlock,
@@ -21,15 +21,20 @@ import {
 // today's bordered card for single-record content. Owner feedback: every
 // block looked like the same box regardless of what was inside it.
 export const BLOCK_REGISTRY = {
-  top3_tasks: { Component: Top3TasksBlock, icon: '🎯', label: 'Top 3 Tasks', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
-  due_today: { Component: DueTodayBlock, icon: '📅', label: 'Due Today', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
-  streaks: { Component: StreaksBlock, icon: '🔥', label: 'Active Streaks', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
-  goals_progress: { Component: GoalsProgressBlock, icon: '🏆', label: 'Goals Progress', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
-  single_task: { Component: SingleTaskBlock, icon: '✅', label: 'Single Task', defaultLayout: { w: 9, h: 6 } },
+  top3_tasks: { Component: Top3TasksBlock, icon: '🎯', label: 'Top 3 Tasks', defaultLayout: { w: 12, h: 9 }, shape: 'list', recordKind: 'task' },
+  due_today: { Component: DueTodayBlock, icon: '📅', label: 'Due Today', defaultLayout: { w: 12, h: 9 }, shape: 'list', recordKind: 'task' },
+  streaks: { Component: StreaksBlock, icon: '🔥', label: 'Active Streaks', defaultLayout: { w: 12, h: 9 }, shape: 'list', recordKind: 'task' },
+  goals_progress: { Component: GoalsProgressBlock, icon: '🏆', label: 'Goals Progress', defaultLayout: { w: 12, h: 9 }, shape: 'list', recordKind: 'task' },
+  single_task: { Component: SingleTaskBlock, icon: '✅', label: 'Single Task', defaultLayout: { w: 9, h: 6 }, recordKind: 'task' },
   home_favourites: { Component: HomeFavouritesBlock, icon: '💡', label: 'Smart Home Favourites', defaultLayout: { w: 18, h: 9 } },
+  // No recordKind: pool tasks live in the household/team pool store, routed
+  // through sharedApi/teamApi (never tasksApi) depending on t._source — and
+  // Tasks.jsx's own ?task= deep-link lookup only searches the viewer's own
+  // task list, not assigned pool tasks. Wiring actions here would either
+  // write to the wrong store or silently no-op on nav — worse than omitting.
   pool_tasks: { Component: PoolTasksBlock, icon: '🧑‍🤝‍🧑', label: 'Household/Team Tasks', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
-  upcoming_events: { Component: UpcomingEventsBlock, icon: '📆', label: 'Upcoming Events', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
-  single_event: { Component: SingleEventBlock, icon: '📌', label: 'Single Event', defaultLayout: { w: 9, h: 6 } },
+  upcoming_events: { Component: UpcomingEventsBlock, icon: '📆', label: 'Upcoming Events', defaultLayout: { w: 12, h: 9 }, shape: 'list', recordKind: 'event' },
+  single_event: { Component: SingleEventBlock, icon: '📌', label: 'Single Event', defaultLayout: { w: 9, h: 6 }, recordKind: 'event' },
   finance_activity: { Component: FinanceActivityBlock, icon: '💰', label: 'Finance Activity', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
   finance_book_report: { Component: FinanceBookReportBlock, icon: '📊', label: 'Finance Book Report', defaultLayout: { w: 9, h: 9 } },
   // Labels below spell out the data's actual source (a linked Contact or
@@ -39,9 +44,9 @@ export const BLOCK_REGISTRY = {
   // truncate long labels.
   linked_deals: { Component: LinkedDealsBlock, icon: '🤝', label: "Contact's Deals", defaultLayout: { w: 12, h: 9 }, shape: 'list' },
   custom_fields: { Component: CustomFieldsBlock, icon: '🗂️', label: 'Custom Fields (Contact/Asset)', defaultLayout: { w: 9, h: 9 } },
-  linked_assets: { Component: LinkedAssetsBlock, icon: '🔗', label: "Contact's Linked Assets", defaultLayout: { w: 9, h: 9 }, shape: 'list' },
+  linked_assets: { Component: LinkedAssetsBlock, icon: '🔗', label: "Contact's Linked Assets", defaultLayout: { w: 9, h: 9 }, shape: 'list', recordKind: 'asset' },
   documents: { Component: DocumentsBlock, icon: '📎', label: 'Asset Documents/Files', defaultLayout: { w: 9, h: 9 } },
-  linked_tasks: { Component: LinkedTasksBlock, icon: '✅', label: "Asset's Linked Tasks", defaultLayout: { w: 12, h: 9 }, shape: 'list' },
+  linked_tasks: { Component: LinkedTasksBlock, icon: '✅', label: "Asset's Linked Tasks", defaultLayout: { w: 12, h: 9 }, shape: 'list', recordKind: 'task' },
   linked_contact: { Component: LinkedContactBlock, icon: '👤', label: "Asset's Linked Contact", defaultLayout: { w: 9, h: 6 } },
   my_assets_summary: { Component: MyAssetsSummaryBlock, icon: '🗃️', label: 'My Assets Summary', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
   // The generic block: pick a template, optionally link it to this
@@ -49,8 +54,9 @@ export const BLOCK_REGISTRY = {
   // pick which fields to show and which select field is the status — no
   // new code needed for a new use case, just configuration. See
   // dashboard_blocks/_collections.py for the resolver.
-  collection: { Component: CollectionBlock, icon: '📋', label: 'Collection (List/Board)', defaultLayout: { w: 18, h: 12 } },
-  note_embed: { Component: NoteEmbedBlock, icon: '📝', label: 'Note Embed', defaultLayout: { w: 12, h: 9 } },
+  collection: { Component: CollectionBlock, icon: '📋', label: 'Collection (List/Board)', defaultLayout: { w: 18, h: 12 }, recordKind: 'asset' },
+  contacts_list: { Component: ContactsListBlock, icon: '👥', label: 'Contacts List', defaultLayout: { w: 12, h: 9 }, shape: 'list', recordKind: 'contact' },
+  note_embed: { Component: NoteEmbedBlock, icon: '📝', label: 'Note Embed', defaultLayout: { w: 12, h: 9 }, recordKind: 'note' },
   journal_entry: { Component: JournalEntryBlock, icon: '📔', label: 'Journal Entry', defaultLayout: { w: 12, h: 9 } },
   workflow_status: { Component: WorkflowStatusBlock, icon: '⚙️', label: 'Automation Workflow Status', defaultLayout: { w: 9, h: 6 } },
   inbox_summary: { Component: InboxSummaryBlock, icon: '📥', label: 'Automation Inbox Summary', defaultLayout: { w: 9, h: 6 }, shape: 'list' },
@@ -74,8 +80,22 @@ export const BLOCK_REGISTRY = {
 // search/tree picker for anything that references another module's records
 // (never a raw id/path typed by hand). Shared with BlockRenderer.jsx so it can
 // tell whether a block type has anything worth an "edit config" affordance for.
+const TASK_SORT_MODE_FIELD = {
+  key: 'sort_mode',
+  label: 'Sort by',
+  kind: 'select',
+  optional: true,
+  options: [
+    { value: 'priority', label: 'Priority' },
+    { value: 'date', label: 'Date/Time' },
+    { value: 'alpha', label: 'A–Z' },
+  ],
+}
+
 export const CONFIG_FIELD_SCHEMAS = {
   single_task: [{ key: 'task_id', label: 'Task', kind: 'task' }],
+  top3_tasks: [TASK_SORT_MODE_FIELD],
+  due_today: [TASK_SORT_MODE_FIELD],
   finance_activity: [
     { key: 'asset_id', label: 'Asset', kind: 'asset', optional: true },
     { key: 'contact_id', label: 'Contact', kind: 'contact', optional: true },
@@ -186,5 +206,16 @@ export const CONFIG_FIELD_SCHEMAS = {
 }
 
 export function isConfigurable(type) {
-  return (CONFIG_FIELD_SCHEMAS[type]?.length ?? 0) > 0
+  return (CONFIG_FIELD_SCHEMAS[type]?.length ?? 0) > 0 || !!BLOCK_REGISTRY[type]?.recordKind
 }
+
+// Block-embedded action buttons (2026-08-15) — a user-built repeater of small
+// buttons on any block whose rows/subject are a real, addressable record
+// (declared per block type above as `recordKind`; blocks showing aggregated
+// stats instead of individual records — my_assets_summary, inbox_summary,
+// ai_usage_overview, recent_ai_actions, finance_activity, linked_deals — have
+// no recordKind and so never offer this, since there's no single meaningful
+// "open this row" destination for an aggregate or no per-row page exists).
+// See actionKinds.js for the module/preset maps (kept in their own file since
+// blocks.jsx, which also needs them, can't import this file back).
+export { ACTION_MODULE_BY_KIND, ACTION_PRESETS_BY_KIND } from './actionKinds'

@@ -5,6 +5,7 @@ import { finance as financeApi, assets as assetsApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
 import TransactionModal from '../components/finance/TransactionModal'
+import TransferEditModal from '../components/finance/TransferEditModal'
 import BookSettings from '../components/finance/BookSettings'
 import SimpleFinPanel from '../components/finance/SimpleFinPanel'
 import BudgetsPanel from '../components/finance/BudgetsPanel'
@@ -25,6 +26,7 @@ export default function Finance() {
   const [showSettings, setShowSettings] = useState(false)
   const [showBank, setShowBank] = useState(false)
   const [txModal, setTxModal] = useState(null) // null | {tx: null|obj}
+  const [transferModal, setTransferModal] = useState(null) // null | {tx: obj}
   const [showArchived, setShowArchived] = useState(false)
   const [assetList, setAssetList] = useState([]) // for the tx linked-asset picker; [] if assets module off
   const [invoicePrefill, setInvoicePrefill] = useState(null) // {contactId, amountCents, title, dealId} from a deal
@@ -57,7 +59,19 @@ export default function Finance() {
       const arr = Array.isArray(list) ? list : []
       setBooks(arr)
       if (!keepActive || !arr.some(b => b.id === activeId)) {
-        setActiveId(arr.find(b => !b.archived)?.id || arr[0]?.id || null)
+        let next = arr.find(b => !b.archived)?.id || arr[0]?.id || null
+        // Only consult the server-remembered last book absent an explicit
+        // ?book= deep link — that link (already captured into activeId at
+        // mount, handled above) always wins.
+        if (!searchParams.get('book')) {
+          try {
+            const prefs = await financeApi.getPrefs()
+            if (prefs?.last_book_id && arr.some(b => b.id === prefs.last_book_id)) {
+              next = prefs.last_book_id
+            }
+          } catch { /* ignore — keep the default fallback */ }
+        }
+        setActiveId(next)
       }
     } catch {
       setBooks([])
@@ -92,6 +106,7 @@ export default function Finance() {
   function selectBook(id) {
     setActiveId(id)
     setView('overview')
+    financeApi.setLastBook(id).catch(() => { /* non-fatal — just a UX nicety */ })
   }
 
   async function unarchiveBook() {
@@ -191,6 +206,7 @@ export default function Finance() {
               contribute={isContribute ? { caps, userName: user?.name } : null}
               onAdd={() => setTxModal({ tx: null })}
               onEdit={tx => setTxModal({ tx })}
+              onEditTransfer={tx => setTransferModal({ tx })}
             />
           )}
           {view === 'budgets' && <BudgetsPanel key={active.id} book={active} canEdit={canEdit} />}
@@ -214,7 +230,7 @@ export default function Finance() {
           workspace={workspace}
           isAdmin={isAdmin}
           onClose={() => setShowNewBook(false)}
-          onCreated={book => { setShowNewBook(false); setActiveId(book.id); load() }}
+          onCreated={book => { setShowNewBook(false); selectBook(book.id); load() }}
         />
       )}
       {showBank && (
@@ -238,11 +254,25 @@ export default function Finance() {
           key={txModal.tx?.id || 'new'}
           book={active}
           tx={txModal.tx}
-          allowedKinds={canEdit ? ['expense', 'income'] : (caps.add || [])}
+          allowedKinds={canEdit ? ['expense', 'income', 'transfer'] : (caps.add || [])}
           assets={assetList}
+          allBooks={books}
+          userWorkspaces={user?.workspaces}
+          workspace={workspace}
           onClose={() => setTxModal(null)}
           onSaved={() => { setTxModal(null); load() }}
           onDeleted={() => { setTxModal(null); load() }}
+        />
+      )}
+      {transferModal && active && (
+        <TransferEditModal
+          key={transferModal.tx.id}
+          book={active}
+          workspace={workspace}
+          tx={transferModal.tx}
+          onClose={() => setTransferModal(null)}
+          onSaved={() => { setTransferModal(null); load() }}
+          onDeleted={() => { setTransferModal(null); load() }}
         />
       )}
 
@@ -413,7 +443,7 @@ function OverviewView({ book, canEdit, onAddTx, onAddAccount }) {
   )
 }
 
-function TransactionsView({ book, canEdit, canAdd, contribute, onAdd, onEdit }) {
+function TransactionsView({ book, canEdit, canAdd, contribute, onAdd, onEdit, onEditTransfer }) {
   const rowEditable = tx =>
     canEdit ||
     (contribute && contribute.caps?.edit_own && tx.created_by === contribute.userName)
@@ -482,25 +512,32 @@ function TransactionsView({ book, canEdit, canAdd, contribute, onAdd, onEdit }) 
         </div>
       ) : (
         <div className="card divide-y divide-charcoal-100 dark:divide-charcoal-700/60">
-          {items.map(tx => (
-            <button
-              key={tx.id}
-              onClick={() => rowEditable(tx) && onEdit(tx)}
-              disabled={!rowEditable(tx)}
-              className="w-full flex items-center gap-3 px-4 py-2.5 text-left disabled:cursor-default hover:bg-charcoal-50 dark:hover:bg-charcoal-800/60 transition-colors"
-            >
-              <div className="flex-1 min-w-0">
-                <p className="text-sm truncate">{tx.payee || tx.notes || (tx.amount_cents > 0 ? 'Income' : 'Expense')}</p>
-                <p className="text-xs text-charcoal-500 dark:text-charcoal-400">
-                  {tx.date} · {accountName[tx.account_id] || 'Unknown account'}
-                  {tx.category ? ` · ${tx.category}` : ''}
-                </p>
-              </div>
-              <span className={`font-medium text-sm shrink-0 ${tx.amount_cents > 0 ? 'text-green-600 dark:text-green-400' : ''}`}>
-                {fmtMoney(tx.amount_cents, book.currency)}
-              </span>
-            </button>
-          ))}
+          {items.map(tx => {
+            const isTransfer = !!tx.transfer_pair_id
+            return (
+              <button
+                key={tx.id}
+                onClick={() => rowEditable(tx) && (isTransfer ? onEditTransfer(tx) : onEdit(tx))}
+                disabled={!rowEditable(tx)}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-left disabled:cursor-default hover:bg-charcoal-50 dark:hover:bg-charcoal-800/60 transition-colors"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm truncate">
+                    {isTransfer
+                      ? `⇄ ${tx.amount_cents < 0 ? `To ${tx.transfer_peer_book_name}` : `From ${tx.transfer_peer_book_name}`}`
+                      : (tx.payee || tx.notes || (tx.amount_cents > 0 ? 'Income' : 'Expense'))}
+                  </p>
+                  <p className="text-xs text-charcoal-500 dark:text-charcoal-400">
+                    {tx.date} · {accountName[tx.account_id] || 'Unknown account'}
+                    {isTransfer ? ` · ${tx.transfer_peer_account_name}` : (tx.category ? ` · ${tx.category}` : '')}
+                  </p>
+                </div>
+                <span className={`font-medium text-sm shrink-0 ${isTransfer ? 'text-charcoal-500 dark:text-charcoal-400' : tx.amount_cents > 0 ? 'text-green-600 dark:text-green-400' : ''}`}>
+                  {fmtMoney(tx.amount_cents, book.currency)}
+                </span>
+              </button>
+            )
+          })}
         </div>
       )}
 

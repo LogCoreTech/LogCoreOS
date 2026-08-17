@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { dashboards as dashboardsApi } from '../../lib/api'
 import { BLOCK_REGISTRY, CONFIG_FIELD_SCHEMAS } from './blockRegistry'
+import { ACTION_PRESETS_BY_KIND } from './actionKinds'
 import ContactPicker from '../contacts/ContactPicker'
 import AssetPickerField from '../AssetPickerField'
 import TaskPicker from '../TaskPicker'
@@ -148,6 +149,69 @@ function renderField(f, config, setConfig, templateMode = false, subjectType = n
   }
 }
 
+// A user-built repeater of block-embedded action buttons (config.actions —
+// see actionKinds.js). Deliberately not a fully free-form composer: each
+// block's recordKind (blockRegistry.js) already fixes what an "Open" button
+// means (the record's own page) and which status presets make sense, so the
+// picker only ever asks for the parts that actually vary — which preset, and
+// an optional label override — mirroring LocationsEditor's plain add/remove/
+// edit repeater shape (ContactModal.jsx) rather than TemplateManager's fuller
+// per-field composer, since there's no free-typed "key" here to define.
+function ActionsEditor({ config, setConfig, recordKind }) {
+  const actions = config.actions || []
+  const presets = ACTION_PRESETS_BY_KIND[recordKind] || []
+
+  function update(i, patch) {
+    setConfig({ ...config, actions: actions.map((a, j) => (j === i ? { ...a, ...patch } : a)) })
+  }
+  function remove(i) {
+    setConfig({ ...config, actions: actions.filter((_, j) => j !== i) })
+  }
+  function add(kind) {
+    const base = kind === 'status' ? { kind, preset: presets[0]?.value } : { kind: 'nav' }
+    setConfig({ ...config, actions: [...actions, base] })
+  }
+
+  return (
+    <div>
+      <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Buttons on this block</label>
+      <div className="space-y-2 mt-1">
+        {actions.map((a, i) => (
+          <div key={i} className="flex items-center gap-1.5 border border-charcoal-200 dark:border-charcoal-700 rounded-lg p-2">
+            <select
+              value={a.kind}
+              onChange={e => update(i, e.target.value === 'status' ? { kind: 'status', preset: presets[0]?.value } : { kind: 'nav', preset: undefined })}
+              className="input !py-1 !w-24 text-xs shrink-0"
+            >
+              <option value="nav">Open</option>
+              {presets.length > 0 && <option value="status">Status</option>}
+            </select>
+            {a.kind === 'status' && (
+              <select value={a.preset || ''} onChange={e => update(i, { preset: e.target.value })} className="input !py-1 !w-32 text-xs shrink-0">
+                {presets.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+            )}
+            <input
+              type="text"
+              value={a.label || ''}
+              onChange={e => update(i, { label: e.target.value })}
+              placeholder="Button label (optional)"
+              className="input !py-1 flex-1 text-xs min-w-0"
+            />
+            <button type="button" onClick={() => remove(i)} className="text-red-400 hover:text-red-500 px-0.5 shrink-0">✕</button>
+          </div>
+        ))}
+        <div className="flex gap-2">
+          <button type="button" onClick={() => add('nav')} className="btn-ghost text-xs px-2 py-1">＋ Open button</button>
+          {presets.length > 0 && (
+            <button type="button" onClick={() => add('status')} className="btn-ghost text-xs px-2 py-1">＋ Status button</button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /**
  * Add-a-block picker, dual-purpose: pass `editingBlock` ({type, config}) to
  * reopen an existing block's config for editing instead of picking a new
@@ -240,7 +304,10 @@ export default function BlockPicker({ editingBlock = null, onAdd, onSave, onClos
           <div className="space-y-3">
             <p className="text-sm font-medium">{BLOCK_REGISTRY[selected].icon} {BLOCK_REGISTRY[selected].label}</p>
             {fields.map(f => <div key={f.key}>{renderField(f, config, setConfig, templateMode, subjectType)}</div>)}
-            {fields.length === 0 && (
+            {BLOCK_REGISTRY[selected].recordKind && (
+              <ActionsEditor config={config} setConfig={setConfig} recordKind={BLOCK_REGISTRY[selected].recordKind} />
+            )}
+            {fields.length === 0 && !BLOCK_REGISTRY[selected].recordKind && (
               <p className="text-xs text-charcoal-400">No configuration needed — shows your own data.</p>
             )}
             <div className="flex justify-end gap-2 pt-2">

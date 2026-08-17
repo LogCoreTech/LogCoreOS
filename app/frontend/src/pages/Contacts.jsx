@@ -7,6 +7,7 @@ import { useWorkspace } from '../lib/workspace'
 import ContactDetail from '../components/contacts/ContactDetail'
 import ContactModal from '../components/contacts/ContactModal'
 import ContactAvatar from '../components/contacts/ContactAvatar'
+import { formatPhone } from '../components/contacts/phone'
 
 const TYPE_FILTERS = [
   { id: 'all', label: 'All' },
@@ -70,7 +71,26 @@ export default function Contacts() {
   // (never shown pinned to anyone else) — see contacts_service.list_visible_contacts.
   const mine = items.find(c => c.self_of === user?.name)
   const rest = items.filter(c => c !== mine)
-  const filtered = [mine, ...rest].filter(Boolean).filter(matches)
+  const mineMatch = mine && matches(mine) ? mine : null
+
+  // Everyone else, alphabetical by name, grouped into first-letter buckets
+  // with a sticky header per letter + a jump strip — makes a long list
+  // actually navigable instead of just insertion order.
+  const restSorted = rest.filter(matches).sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+  const letterGroups = []
+  for (const c of restSorted) {
+    const first = (c.name || '').trim()[0] || ''
+    const letter = /[a-z]/i.test(first) ? first.toUpperCase() : '#'
+    const last = letterGroups[letterGroups.length - 1]
+    if (last && last.letter === letter) last.contacts.push(c)
+    else letterGroups.push({ letter, contacts: [c] })
+  }
+  const ALPHABET = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '#']
+  const availableLetters = new Set(letterGroups.map(g => g.letter))
+
+  function jumpToLetter(letter) {
+    document.getElementById(`contact-letter-${letter}`)?.scrollIntoView({ block: 'start' })
+  }
 
   function openContact(c) {
     // Your own profile has a lot more data and lives at its own full page —
@@ -135,33 +155,47 @@ export default function Contacts() {
 
       {loading ? (
         <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-16 card animate-pulse" />)}</div>
-      ) : filtered.length === 0 ? (
+      ) : !mineMatch && letterGroups.length === 0 ? (
         <div className="card p-8 text-center text-charcoal-500">
           <p className="text-4xl mb-2">👥</p>
           <p>{items.length === 0 ? 'No contacts yet.' : 'No matches.'}</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {filtered.map(c => (
-            <button key={c.id} onClick={() => openContact(c)}
-              className={`w-full text-left card p-3 flex items-center gap-3 hover:border-orange-500/40 ${c.archived ? 'opacity-50' : ''}`}>
-              <ContactAvatar contact={c} size="w-9 h-9" textSize="text-xl" />
-              <div className="flex-1 min-w-0">
-                <p className="font-medium truncate flex items-center gap-1.5">
-                  {c.name}
-                  {c.self_of === user?.name && (
-                    <span className="badge bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 font-semibold text-[10px] shrink-0">ME</span>
-                  )}
-                </p>
-                <p className="text-xs text-charcoal-500 truncate">
-                  {(c.emails || [])[0] || (c.phones || [])[0]?.number || (c.tags || []).join(', ') || '—'}
-                </p>
+        <div className="flex gap-2">
+          <div className="flex-1 min-w-0 space-y-2">
+            {mineMatch && <ContactRow contact={mineMatch} user={user} onOpen={openContact} />}
+            {letterGroups.map(g => (
+              <div key={g.letter} id={`contact-letter-${g.letter}`}>
+                <h2 className="sticky top-0 z-10 -mx-1 px-1 py-1 bg-charcoal-50/95 dark:bg-charcoal-900/95 backdrop-blur-sm text-xs font-semibold uppercase tracking-widest text-charcoal-500 dark:text-charcoal-400">
+                  {g.letter}
+                </h2>
+                <div className="space-y-2 mt-1">
+                  {g.contacts.map(c => <ContactRow key={c.id} contact={c} user={user} onOpen={openContact} />)}
+                </div>
               </div>
-              {c._owner && <span className="badge bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 shrink-0">{c._owner}</span>}
-            </button>
-          ))}
-          {/* Clears the fixed mobile footer nav so the last row is never hidden behind it */}
-          <div className="h-20 md:hidden" aria-hidden="true" />
+            ))}
+            {/* Clears the fixed mobile footer nav so the last row is never hidden behind it */}
+            <div className="h-20 md:hidden" aria-hidden="true" />
+          </div>
+
+          {/* A-Z jump strip */}
+          <div className="hidden sm:flex flex-col items-center gap-0.5 shrink-0 py-1 sticky top-8 self-start">
+            {ALPHABET.map(letter => (
+              <button
+                key={letter}
+                type="button"
+                onClick={() => jumpToLetter(letter)}
+                disabled={!availableLetters.has(letter)}
+                className={`text-[10px] leading-none w-4 text-center rounded transition-colors ${
+                  availableLetters.has(letter)
+                    ? 'text-charcoal-500 dark:text-charcoal-400 hover:text-orange-500 dark:hover:text-orange-400 cursor-pointer'
+                    : 'text-charcoal-300 dark:text-charcoal-700 cursor-default'
+                }`}
+              >
+                {letter}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -185,5 +219,26 @@ export default function Contacts() {
         />
       )}
     </div>
+  )
+}
+
+function ContactRow({ contact: c, user, onOpen }) {
+  return (
+    <button onClick={() => onOpen(c)}
+      className={`w-full text-left card p-3 flex items-center gap-3 hover:border-orange-500/40 ${c.archived ? 'opacity-50' : ''}`}>
+      <ContactAvatar contact={c} size="w-9 h-9" textSize="text-xl" />
+      <div className="flex-1 min-w-0">
+        <p className="font-medium truncate flex items-center gap-1.5">
+          {c.name}
+          {c.self_of === user?.name && (
+            <span className="badge bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 font-semibold text-[10px] shrink-0">ME</span>
+          )}
+        </p>
+        <p className="text-xs text-charcoal-500 truncate">
+          {(c.emails || [])[0] || ((c.phones || [])[0] && formatPhone(c.phones[0])) || (c.tags || []).join(', ') || '—'}
+        </p>
+      </div>
+      {c._owner && <span className="badge bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 shrink-0">{c._owner}</span>}
+    </button>
   )
 }

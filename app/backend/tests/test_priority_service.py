@@ -9,7 +9,7 @@ import pytest
 
 from services import auth_service
 from services.file_service import tasks_path, user_path, write_json
-from services.priority_service import get_all_scored, get_top3, score_task
+from services.priority_service import get_all_scored, get_top3, score_task, sort_tasks
 
 ORDER = ["God", "Family", "Job", "Personal Growth", "Hobbies"]
 
@@ -154,3 +154,56 @@ def test_get_all_scored_only_pending(priority_brain):
     )
     scored = get_all_scored(PRIORITY_USER)
     assert all(t.get("status", "pending") == "pending" for t in scored)
+
+
+# ---------------------------------------------------------------------------
+# sort_tasks / get_top3(sort_mode=) — dashboard Tasks block sort config
+# ---------------------------------------------------------------------------
+
+
+def test_sort_tasks_date_mode_orders_by_due_date_ascending_no_date_last():
+    tasks = [
+        {"title": "no date"},
+        {"title": "later", "due_date": "2026-09-01"},
+        {"title": "sooner", "due_date": "2026-08-01"},
+    ]
+    result = sort_tasks(tasks, ORDER, "2026-08-15", sort_mode="date")
+    assert [t["title"] for t in result] == ["sooner", "later", "no date"]
+
+
+def test_sort_tasks_date_mode_breaks_ties_with_due_time():
+    tasks = [
+        {"title": "afternoon", "due_date": "2026-08-15", "due_time": "14:00"},
+        {"title": "morning", "due_date": "2026-08-15", "due_time": "08:00"},
+    ]
+    result = sort_tasks(tasks, ORDER, "2026-08-15", sort_mode="date")
+    assert [t["title"] for t in result] == ["morning", "afternoon"]
+
+
+def test_sort_tasks_alpha_mode_orders_case_insensitively():
+    tasks = [{"title": "banana"}, {"title": "Apple"}, {"title": "cherry"}]
+    result = sort_tasks(tasks, ORDER, "2026-08-15", sort_mode="alpha")
+    assert [t["title"] for t in result] == ["Apple", "banana", "cherry"]
+
+
+def test_sort_tasks_priority_mode_matches_score_task_descending():
+    tasks = [
+        {"title": "Low", "category": "Hobbies", "priority": "Low"},
+        {"title": "High", "category": "God", "priority": "High"},
+    ]
+    result = sort_tasks(tasks, ORDER, "2026-08-15", sort_mode="priority")
+    assert [t["title"] for t in result] == ["High", "Low"]
+
+
+def test_get_top3_respects_sort_mode(priority_brain):
+    # Zebra outranks Apple on priority score (top category + High priority),
+    # but Apple sorts first alphabetically — the two modes must disagree.
+    _seed_tasks(
+        priority_brain,
+        [
+            {"title": "Zebra", "category": "God", "priority": "High"},
+            {"title": "Apple", "category": "Hobbies", "priority": "Low"},
+        ],
+    )
+    assert [t["title"] for t in get_top3(PRIORITY_USER, sort_mode="alpha")] == ["Apple", "Zebra"]
+    assert [t["title"] for t in get_top3(PRIORITY_USER, sort_mode="priority")] == ["Zebra", "Apple"]

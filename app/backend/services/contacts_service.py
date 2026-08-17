@@ -243,13 +243,38 @@ def set_custom_fields(fields: list) -> list[dict]:
         if not key or not label or key in seen:
             continue
         seen.add(key)
-        entry = {"key": key, "label": label, "type": ftype}
+        entry = {
+            "key": key,
+            "label": label,
+            "type": ftype,
+            "applies_to": _validate_applies_to(f.get("applies_to")),
+        }
         if ftype == "select":
             opts = [str(o).strip()[:60] for o in (f.get("options") or []) if str(o).strip()]
             entry["options"] = opts
         out.append(entry)
     write_json(contact_fields_path(), {"fields": out})
     return out
+
+
+def _validate_applies_to(value) -> list[str]:
+    """Which contact type(s) a custom field shows for. Defaults to both —
+    legacy definitions (written before this key existed) and anything
+    malformed all fall back to showing everywhere, never nowhere."""
+    if isinstance(value, list):
+        cleaned = [v for v in value if v in CONTACT_TYPES]
+        if cleaned:
+            return sorted(set(cleaned))
+    return sorted(CONTACT_TYPES)
+
+
+def fields_for_type(contact_type: str) -> list[dict]:
+    """Custom field definitions visible for a given contact type — the
+    display-time filter ContactModal/ContactDetail apply, mirroring how
+    section visibility is already gated by contact.type elsewhere."""
+    return [
+        f for f in get_custom_fields() if contact_type in (f.get("applies_to") or CONTACT_TYPES)
+    ]
 
 
 def _validate_custom(custom) -> dict:
@@ -382,6 +407,50 @@ def _validate_career_history(values) -> list[dict]:
     return out
 
 
+_WEEK_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+
+
+def _validate_locations(values) -> list[dict]:
+    """Company-type contacts only, in practice (not type-enforced at this
+    layer, same as every other field) — a flat repeatable list, unlike
+    career_history's one-current-role convention: every location is
+    simultaneously active, so there's no archived/current distinction here."""
+    out = []
+    for v in values or []:
+        if not isinstance(v, dict):
+            continue
+        label = (v.get("label") or "").strip()[:80]
+        address = (v.get("address") or "").strip()[:500]
+        if not label and not address:
+            continue
+        out.append({"id": str(v.get("id") or uuid.uuid4()), "label": label, "address": address})
+        if len(out) >= 20:
+            break
+    return out
+
+
+def _validate_hours(values) -> list[dict]:
+    """Always exactly 7 entries, Mon-Sun in order — a weekly template, not a
+    real calendar (no exceptions/holidays). Missing days default to closed;
+    unrecognized days and anything past the first match per day are dropped."""
+    by_day = {}
+    for v in values or []:
+        if not isinstance(v, dict):
+            continue
+        day = (v.get("day") or "").strip().lower()
+        if day not in _WEEK_DAYS or day in by_day:
+            continue
+        by_day[day] = {
+            "day": day,
+            "open": (v.get("open") or "").strip()[:5],
+            "close": (v.get("close") or "").strip()[:5],
+            "closed": bool(v.get("closed")),
+        }
+    return [
+        by_day.get(day, {"day": day, "open": "", "close": "", "closed": True}) for day in _WEEK_DAYS
+    ]
+
+
 def _validate_contact(data: dict, partial: bool = False) -> dict:
     out: dict = {}
     if "type" in data or not partial:
@@ -446,6 +515,10 @@ def _validate_contact(data: dict, partial: bool = False) -> dict:
         out["weight_kg"] = _validate_number(wk, "weight_kg", 0, 500)
     if "career_history" in data:
         out["career_history"] = _validate_career_history(data.get("career_history"))
+    if "locations" in data:
+        out["locations"] = _validate_locations(data.get("locations"))
+    if "hours" in data:
+        out["hours"] = _validate_hours(data.get("hours"))
     for key in ("wake_weekday", "wake_weekend", "bedtime", "work_start", "work_end"):
         if key in data:
             val = (data.get(key) or "").strip()[:5]
@@ -687,6 +760,8 @@ def create_contact(store_user: str, workspace: str, data: dict, created_by: str)
         "hidden_from": [],
         "affiliated_contact_ids": [],
         "career_history": [],
+        "locations": [],
+        "hours": [],
         "photo_ext": None,
         "archived": False,
         "created_by": created_by,
@@ -716,6 +791,8 @@ def update_contact(
     for i, c in enumerate(contacts):
         if c["id"] != contact_id:
             continue
+        if c.get("self_of") and fields.get("type") == "company":
+            raise ValueError("A user's own contact must stay a person")
         fields["updated_at"] = _now()
         contacts[i] = {**c, **fields}
         _save_contacts(store_user, workspace, contacts)

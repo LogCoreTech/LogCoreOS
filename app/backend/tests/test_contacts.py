@@ -115,6 +115,123 @@ def test_custom_fields_validation(brain):
     assert "unknown" not in c["custom"]  # unknown key dropped
 
 
+# --- Custom field person/company scoping (2026-08-15) -----------------------
+
+
+def test_set_custom_fields_defaults_applies_to_both(brain):
+    crm.set_custom_fields([{"key": "notes2", "label": "Notes 2", "type": "text"}])
+    field = crm.get_custom_fields()[0]
+    assert field["applies_to"] == ["company", "person"]
+
+
+def test_set_custom_fields_respects_explicit_applies_to(brain):
+    crm.set_custom_fields([{"key": "hq", "label": "HQ", "type": "text", "applies_to": ["company"]}])
+    field = crm.get_custom_fields()[0]
+    assert field["applies_to"] == ["company"]
+
+
+def test_set_custom_fields_rejects_unknown_applies_to_values(brain):
+    crm.set_custom_fields(
+        [{"key": "x", "label": "X", "type": "text", "applies_to": ["bogus", "also-bogus"]}]
+    )
+    field = crm.get_custom_fields()[0]
+    assert field["applies_to"] == ["company", "person"]  # invalid input falls back to both
+
+
+def test_fields_for_type_filters_by_scope(brain):
+    crm.set_custom_fields(
+        [
+            {"key": "hq", "label": "HQ", "type": "text", "applies_to": ["company"]},
+            {"key": "hobby", "label": "Hobby", "type": "text", "applies_to": ["person"]},
+            {
+                "key": "notes2",
+                "label": "Notes 2",
+                "type": "text",
+                "applies_to": ["person", "company"],
+            },
+        ]
+    )
+    person_keys = {f["key"] for f in crm.fields_for_type("person")}
+    company_keys = {f["key"] for f in crm.fields_for_type("company")}
+    assert person_keys == {"hobby", "notes2"}
+    assert company_keys == {"hq", "notes2"}
+
+
+def test_fields_for_type_treats_missing_applies_to_as_both(brain):
+    # Simulates a definition written before applies_to existed.
+    from services.file_service import contact_fields_path, write_json
+
+    write_json(
+        contact_fields_path(), {"fields": [{"key": "legacy", "label": "Legacy", "type": "text"}]}
+    )
+    assert "legacy" in {f["key"] for f in crm.fields_for_type("person")}
+    assert "legacy" in {f["key"] for f in crm.fields_for_type("company")}
+
+
+# --- Company vs. person fields (2026-08-14) ---------------------------------
+
+
+def test_locations_and_hours_validation(brain):
+    c = _contact(
+        name="Acme Hardware",
+        type="company",
+        locations=[
+            {"label": "Main St", "address": "123 Main St"},
+            {"label": "", "address": ""},  # dropped — both blank
+            {"label": "Warehouse", "address": "9 Industrial Way"},
+        ],
+        hours=[
+            {"day": "mon", "open": "09:00", "close": "17:00"},
+            {"day": "sat", "closed": True},
+            {"day": "bogus", "open": "09:00", "close": "17:00"},  # dropped
+        ],
+    )
+    assert len(c["locations"]) == 2
+    assert c["locations"][0]["label"] == "Main St"
+    assert {loc["id"] for loc in c["locations"]}  # ids assigned
+
+    assert len(c["hours"]) == 7  # always all 7 days, in order
+    assert [h["day"] for h in c["hours"]] == ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    mon = next(h for h in c["hours"] if h["day"] == "mon")
+    assert mon == {"day": "mon", "open": "09:00", "close": "17:00", "closed": False}
+    tue = next(h for h in c["hours"] if h["day"] == "tue")  # not provided -> defaults closed
+    assert tue == {"day": "tue", "open": "", "close": "", "closed": True}
+    sat = next(h for h in c["hours"] if h["day"] == "sat")
+    assert sat["closed"] is True
+
+
+def test_locations_cap_at_twenty(brain):
+    many = [{"label": f"Branch {i}", "address": "x"} for i in range(30)]
+    c = _contact(name="Big Chain", type="company", locations=many)
+    assert len(c["locations"]) == 20
+
+
+def test_person_fields_still_work_unaffected_by_company_fields(brain):
+    c = _contact(
+        name="Jane", type="person", gender="female", career_history=[{"title": "Engineer"}]
+    )
+    assert c["gender"] == "female"
+    assert c["career_history"][0]["title"] == "Engineer"
+    assert c["locations"] == []  # present, empty — same "always there" schema convention
+    assert c["hours"] == []
+
+
+def test_self_contact_cannot_be_switched_to_company(brain):
+    self_c = crm.create_self_contact("Owner")
+    assert self_c["type"] == "person"
+    with pytest.raises(ValueError, match="must stay a person"):
+        crm.update_contact("Owner", "personal", self_c["id"], {"type": "company"})
+    # Re-sending the same value (a no-op from the UI's own toggle) is fine.
+    unchanged = crm.update_contact("Owner", "personal", self_c["id"], {"type": "person"})
+    assert unchanged["type"] == "person"
+
+
+def test_ordinary_contact_can_still_change_type(brain):
+    c = _contact(name="Ambiguous", type="person")
+    updated = crm.update_contact("Owner", "personal", c["id"], {"type": "company"})
+    assert updated["type"] == "company"
+
+
 # --- Pipeline + deals ------------------------------------------------------
 
 

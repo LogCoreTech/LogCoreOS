@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { assets as assetsApi, contacts as contactsApi } from '../lib/api'
 import ContactPicker from './contacts/ContactPicker'
 
@@ -154,8 +155,67 @@ export function CapsSelector({ caps, onChange, templateFields }) {
   )
 }
 
+// Full-screen image viewer. A deliberate, scoped exception to this app's
+// general "forms/menus never close on backdrop click" convention (see
+// Notes.jsx's context menu for the other one) — a lightbox is a transient
+// viewer, not a form, so backdrop-click and Escape both close it.
+//
+// Rendered via a portal straight onto document.body (2026-08-15 fix): both
+// call sites for AttachmentThumb — AssetView inside AssetModal's own
+// .modal-card, and a dashboard block's .card wrapper — have backdrop-blur-sm
+// (backdrop-filter) on an ancestor. backdrop-filter (like transform/filter/
+// perspective) creates a new containing block for position:fixed
+// descendants, so a plain nested `fixed inset-0` resolved against that
+// ancestor's box instead of the real viewport — the lightbox appeared
+// trapped inside the small card it opened from instead of covering the
+// screen. A portal escapes the DOM tree (and every ancestor's CSS) entirely,
+// so this can't recur regardless of which container ends up embedding
+// AttachmentThumb in the future.
+function ImageLightbox({ url, filename, onClose }) {
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return createPortal(
+    // Deliberately NOT .modal-overlay: that class is items-end on mobile (a
+    // bottom sheet, right for forms) and items-center only from md: up. A
+    // photo viewer should always be centered regardless of viewport size —
+    // reusing it left a square/non-tall image sitting in the bottom half of
+    // the screen on mobile instead of centered (reported 2026-08-15).
+    <div
+      className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center"
+      style={{
+        padding: '1rem',
+        paddingTop: 'max(1rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(1rem, env(safe-area-inset-bottom))',
+      }}
+      onClick={onClose}
+    >
+      <img
+        src={url}
+        alt={filename}
+        className="max-w-full max-h-full object-contain rounded-lg"
+        onClick={e => e.stopPropagation()}
+      />
+      <button
+        type="button"
+        onClick={onClose}
+        title="Close"
+        className="fixed right-4 w-9 h-9 rounded-full bg-black/60 text-white text-lg flex items-center justify-center"
+        style={{ top: 'max(1rem, env(safe-area-inset-top))' }}
+      >
+        ✕
+      </button>
+    </div>,
+    document.body
+  )
+}
+
 export function AttachmentThumb({ assetId, file, canEdit, onDelete }) {
   const [url, setUrl] = useState(null)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
   const isImage = file.mime.startsWith('image/')
 
   useEffect(() => {
@@ -169,6 +229,14 @@ export function AttachmentThumb({ assetId, file, canEdit, onDelete }) {
   }, [assetId, file.id, isImage])
 
   async function open() {
+    // Images already have their blob URL loaded for the thumbnail — reuse it
+    // in an in-app lightbox instead of a new tab. Everything else (PDFs, etc.)
+    // keeps the existing new-tab behavior; the browser's own viewer handles
+    // those fine and a lightbox built for images isn't the right tool.
+    if (isImage && url) {
+      setLightboxOpen(true)
+      return
+    }
     try {
       const blob = await assetsApi.fileBlob(assetId, file.id)
       const u = URL.createObjectURL(blob)
@@ -198,6 +266,9 @@ export function AttachmentThumb({ assetId, file, canEdit, onDelete }) {
         >
           ✕
         </button>
+      )}
+      {lightboxOpen && (
+        <ImageLightbox url={url} filename={file.filename} onClose={() => setLightboxOpen(false)} />
       )}
     </div>
   )

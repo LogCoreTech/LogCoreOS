@@ -125,7 +125,7 @@ def budget_status(store_user: str, workspace: str, book: dict, month: str) -> li
     )
     spent_by_cat: dict[str, int] = {}
     for t in items:
-        if t["amount_cents"] < 0:
+        if t["amount_cents"] < 0 and not t.get("transfer_pair_id"):
             cat = t.get("category") or ""
             spent_by_cat[cat] = spent_by_cat.get(cat, 0) - t["amount_cents"]
     out = []

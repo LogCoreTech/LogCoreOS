@@ -244,6 +244,72 @@ function CareerHistoryEditor({ career, onChange }) {
   )
 }
 
+// Company locations — a plain repeatable list (label + address), unlike
+// CareerHistoryEditor's one-current-role convention: every location is
+// simultaneously active, so this mirrors PhoneEditor's shape instead.
+function LocationsEditor({ locations, onChange }) {
+  function update(i, patch) {
+    onChange(locations.map((l, idx) => (idx === i ? { ...l, ...patch } : l)))
+  }
+  function remove(i) {
+    onChange(locations.filter((_, idx) => idx !== i))
+  }
+  function add() {
+    onChange([...locations, { label: '', address: '' }])
+  }
+  return (
+    <div className="space-y-2">
+      {locations.map((l, i) => (
+        <div key={i} className="flex gap-2 items-center">
+          <input className="input !w-28 shrink-0" placeholder="Label (e.g. Main St)"
+            value={l.label || ''} onChange={e => update(i, { label: e.target.value })} />
+          <input className="input flex-1 min-w-0" placeholder="Address"
+            value={l.address || ''} onChange={e => update(i, { address: e.target.value })} />
+          <button type="button" onClick={() => remove(i)} className="text-charcoal-400 hover:text-red-500 text-sm px-1 shrink-0">✕</button>
+        </div>
+      ))}
+      <button type="button" onClick={add} className="text-sm text-orange-500 hover:text-orange-600 font-medium">+ Add location</button>
+    </div>
+  )
+}
+
+const WEEK_DAYS = [
+  { id: 'mon', label: 'Mon' }, { id: 'tue', label: 'Tue' }, { id: 'wed', label: 'Wed' },
+  { id: 'thu', label: 'Thu' }, { id: 'fri', label: 'Fri' }, { id: 'sat', label: 'Sat' }, { id: 'sun', label: 'Sun' },
+]
+
+// Company hours — always exactly 7 rows (Mon-Sun), a weekly template rather
+// than a real calendar. `hours` is always pre-seeded to all 7 days by the
+// caller, so this never needs add/remove — just per-day edit-in-place.
+function HoursEditor({ hours, onChange }) {
+  function update(day, patch) {
+    onChange(hours.map(h => (h.day === day ? { ...h, ...patch } : h)))
+  }
+  return (
+    <div className="space-y-1.5">
+      {WEEK_DAYS.map(({ id, label }) => {
+        const h = hours.find(x => x.day === id) || { day: id, open: '', close: '', closed: true }
+        return (
+          <div key={id} className="flex gap-2 items-center">
+            <span className="text-xs text-charcoal-500 dark:text-charcoal-400 w-8 shrink-0">{label}</span>
+            <label className="flex items-center gap-1 text-xs shrink-0 w-16">
+              <input type="checkbox" checked={!h.closed} onChange={e => update(id, { closed: !e.target.checked })} />
+              Open
+            </label>
+            {!h.closed && (
+              <div className="flex gap-1 items-center flex-1 min-w-0">
+                <input type="time" className="input min-w-0" value={h.open || ''} onChange={e => update(id, { open: e.target.value })} />
+                <span className="text-charcoal-400 text-xs shrink-0">–</span>
+                <input type="time" className="input min-w-0" value={h.close || ''} onChange={e => update(id, { close: e.target.value })} />
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // Life/business priorities editor — mirrors the drag/up-down reorder UI that
 // used to live on the standalone Profile page, retargeted to write into
 // form.priority_order[workspace] (the one workspace-keyed field on Contact).
@@ -302,6 +368,17 @@ function PrioritiesEditor({ order, workspace, onChange }) {
   )
 }
 
+const WEEK_DAY_IDS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+
+// Always exactly 7 rows, Mon-Sun in order — a brand-new contact has no
+// `hours` yet, so seed the full week (closed by default) client-side too,
+// matching what the backend's own validator would normalize an empty/partial
+// list into anyway.
+function seedHours(existing) {
+  const byDay = Object.fromEntries((existing || []).map(h => [h.day, h]))
+  return WEEK_DAY_IDS.map(day => byDay[day] || { day, open: '', close: '', closed: true })
+}
+
 export default function ContactModal({ contact, fields, user, onClose, onSaved, fullPage = false }) {
   const { workspace } = useWorkspace()
   const editing = !!contact?.id
@@ -350,6 +427,8 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
   })
   const [phones, setPhones] = useState(contact?.phones?.length ? contact.phones : [])
   const [careerHistory, setCareerHistory] = useState(contact?.career_history || [])
+  const [locations, setLocations] = useState(contact?.locations || [])
+  const [hours, setHours] = useState(() => seedHours(contact?.hours))
   const [photoExt, setPhotoExt] = useState(contact?.photo_ext || null)
   const contactId = contact?.id || null
   const [priorityOrder, setPriorityOrder] = useState({ ...(contact?.priority_order || {}) })
@@ -426,6 +505,7 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
       marital_status: form.marital_status, pets: form.pets,
       life_mission: form.life_mission, core_values: form.core_values, key_constraints: form.key_constraints,
       career_history: careerHistory,
+      locations, hours,
     }
     if (isSelf) {
       Object.assign(payload, {
@@ -468,15 +548,19 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
       <h3 className="font-semibold mb-4">{editing ? 'Edit contact' : 'New contact'}</h3>
       <form onSubmit={submit} className="space-y-3">
         <PhotoUploader contactId={contactId} photoExt={photoExt} onChanged={refreshPhoto} />
-        <div className="flex gap-1 bg-charcoal-100 dark:bg-charcoal-800 rounded-lg p-1">
-          {['person', 'company'].map(t => (
-            <button key={t} type="button" onClick={() => set('type', t)}
-              className={`flex-1 py-1 rounded-md text-xs font-medium capitalize transition-colors ${
-                form.type === t ? 'bg-white dark:bg-charcoal-600 shadow-sm' : 'text-charcoal-500'}`}>
-              {t === 'person' ? '🧑 Person' : '🏢 Company'}
-            </button>
-          ))}
-        </div>
+        {/* A user's own profile always stays a person — no toggle to switch it,
+            enforced server-side too (contacts_service.update_contact). */}
+        {!isSelf && (
+          <div className="flex gap-1 bg-charcoal-100 dark:bg-charcoal-800 rounded-lg p-1">
+            {['person', 'company'].map(t => (
+              <button key={t} type="button" onClick={() => set('type', t)}
+                className={`flex-1 py-1 rounded-md text-xs font-medium capitalize transition-colors ${
+                  form.type === t ? 'bg-white dark:bg-charcoal-600 shadow-sm' : 'text-charcoal-500'}`}>
+                {t === 'person' ? '🧑 Person' : '🏢 Company'}
+              </button>
+            ))}
+          </div>
+        )}
         <input className="input" placeholder="Name" value={form.name} onChange={e => set('name', e.target.value)} autoFocus maxLength={200} />
         <div>
           <input type="email" className="input" placeholder="Emails (comma-separated)" value={form.emails} onChange={e => set('emails', e.target.value)} />
@@ -491,7 +575,7 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
         <Field label="Birthday">
           <input type="date" className="input" value={form.birthday || ''} onChange={e => set('birthday', e.target.value)} />
         </Field>
-        {fields.map(f => (
+        {fields.filter(f => (f.applies_to || ['person', 'company']).includes(form.type)).map(f => (
           <label key={f.key} className="block text-xs text-charcoal-500">{f.label}
             {f.type === 'select' ? (
               <select className="input" value={form.custom[f.key] || ''} onChange={e => setCustom(f.key, e.target.value)}>
@@ -507,35 +591,54 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
           </label>
         ))}
 
-        <div className="border-t border-charcoal-100 dark:border-charcoal-800 pt-3 space-y-3">
-          <p className="text-[11px] uppercase tracking-wide text-charcoal-400">Personal</p>
-          <div className="grid grid-cols-2 gap-3">
-            <select className="input" value={form.gender} onChange={e => set('gender', e.target.value)}>
-              <option value="">Gender —</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-            </select>
-            <input className="input" placeholder="Pronouns" value={form.pronouns} onChange={e => set('pronouns', e.target.value)} />
-            <input className="input" placeholder="City" value={form.city} onChange={e => set('city', e.target.value)} />
-            <input className="input" placeholder="State/Province" value={form.state} onChange={e => set('state', e.target.value)} />
-            <input className="input" placeholder="Country" value={form.country} onChange={e => set('country', e.target.value)} />
-          </div>
-        </div>
+        {form.type === 'company' ? (
+          <>
+            <div className="border-t border-charcoal-100 dark:border-charcoal-800 pt-3 space-y-3">
+              <p className="text-[11px] uppercase tracking-wide text-charcoal-400">Locations</p>
+              <LocationsEditor locations={locations} onChange={setLocations} />
+            </div>
+            <div className="border-t border-charcoal-100 dark:border-charcoal-800 pt-3 space-y-3">
+              <p className="text-[11px] uppercase tracking-wide text-charcoal-400">Hours</p>
+              <HoursEditor hours={hours} onChange={setHours} />
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="border-t border-charcoal-100 dark:border-charcoal-800 pt-3 space-y-3">
+              <p className="text-[11px] uppercase tracking-wide text-charcoal-400">Personal</p>
+              <div className="grid grid-cols-2 gap-3">
+                <select className="input" value={form.gender} onChange={e => set('gender', e.target.value)}>
+                  <option value="">Gender —</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
+                <input className="input" placeholder="Pronouns" value={form.pronouns} onChange={e => set('pronouns', e.target.value)} />
+                <input className="input" placeholder="City" value={form.city} onChange={e => set('city', e.target.value)} />
+                <input className="input" placeholder="State/Province" value={form.state} onChange={e => set('state', e.target.value)} />
+                <input className="input" placeholder="Country" value={form.country} onChange={e => set('country', e.target.value)} />
+              </div>
+            </div>
+
+            <div className="border-t border-charcoal-100 dark:border-charcoal-800 pt-3 space-y-3">
+              <p className="text-[11px] uppercase tracking-wide text-charcoal-400">Career</p>
+              <CareerHistoryEditor career={careerHistory} onChange={setCareerHistory} />
+            </div>
+          </>
+        )}
 
         <div className="border-t border-charcoal-100 dark:border-charcoal-800 pt-3 space-y-3">
-          <p className="text-[11px] uppercase tracking-wide text-charcoal-400">Career</p>
-          <CareerHistoryEditor career={careerHistory} onChange={setCareerHistory} />
-        </div>
-
-        <div className="border-t border-charcoal-100 dark:border-charcoal-800 pt-3 space-y-3">
-          <p className="text-[11px] uppercase tracking-wide text-charcoal-400">Family</p>
-          <div className="grid grid-cols-2 gap-3">
-            <select className="input" value={form.marital_status} onChange={e => set('marital_status', e.target.value)}>
-              <option value="">Marital status —</option>
-              {['Single', 'Married', 'Divorced', 'Widowed', 'Partnered'].map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <input className="input" placeholder="Pets" value={form.pets} onChange={e => set('pets', e.target.value)} />
-          </div>
+          <p className="text-[11px] uppercase tracking-wide text-charcoal-400">
+            {form.type === 'company' ? 'Affiliated People' : 'Family'}
+          </p>
+          {form.type !== 'company' && (
+            <div className="grid grid-cols-2 gap-3">
+              <select className="input" value={form.marital_status} onChange={e => set('marital_status', e.target.value)}>
+                <option value="">Marital status —</option>
+                {['Single', 'Married', 'Divorced', 'Widowed', 'Partnered'].map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <input className="input" placeholder="Pets" value={form.pets} onChange={e => set('pets', e.target.value)} />
+            </div>
+          )}
           {editing ? (
             <AffiliationEditor
               contactId={contact.id}

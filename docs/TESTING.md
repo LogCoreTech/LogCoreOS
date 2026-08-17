@@ -56,7 +56,7 @@ Exception: external HTTP calls (AI provider, n8n, HA, Tavily) should be mocked w
 
 ---
 
-## Current Coverage (611 tests, 32 files)
+## Current Coverage (662 tests, 37 files)
 
 Core-service coverage below (the module suites — finance, contacts, assets, help, etc. — make up the remainder of the files):
 
@@ -65,6 +65,7 @@ Core-service coverage below (the module suites — finance, contacts, assets, he
 | `test_features.py` | 15 | Role CRUD + name normalization (`features_service.py` + `routers/features.py`), `get_effective_disabled()` (role map, workspace-keyed dict, unknown-role fallback), assign-role-to-user round trip. Imports router functions directly, not just the service — see the file's own docstring for why |
 | `test_file_service.py` | 25 | Atomic reads/writes, path resolution, `user_path`, `ws_path` |
 | `test_notes_service.py` | 21 | Notes CRUD, folder management, move operations |
+| `test_agent_notes_tools.py` | 8 | `agent_service.py`'s note tools only (not full agent orchestration — see Coverage Gaps): sharing-aware `list_notes`/`read_note`/`search_brain` visibility, `update_note`/`delete_note` access-level gating (contribute vs. edit), own-note CRUD unaffected |
 | `test_profile_service.py` | 5 | Pool (`_household`/`_team`) priority order only — real-user profile behavior moved to `test_contacts.py` (self-contact) after the Profile/Contacts merge |
 | `test_events_service.py` | 16 | Calendar event CRUD |
 | `test_priority_service.py` | 14 | Scoring formula, top3 logic, category weights, urgency bonus |
@@ -82,7 +83,7 @@ Core-service coverage below (the module suites — finance, contacts, assets, he
 The following services have no test file:
 
 - `ai_provider.py` — AI abstraction layer (requires live API or mocked client)
-- `agent_service.py` — multi-tool agent orchestration (complex, requires mocked AI)
+- `agent_service.py` — multi-tool agent orchestration itself (plan/auto/research mode logic, the actual LLM round-trip) is still untested (complex, requires mocked AI). Its note tools specifically are covered by `test_agent_notes_tools.py` as of 2026-08-14 (calls tool-handler code paths directly, no mocked AI needed since there's no LLM call in the resolve/access-check logic being tested) — same pattern would extend to the other tool families if this gap is revisited.
 - `hosting_service.py` — reads `brain/hosting.json` at request time
 - `n8n_service.py` — n8n REST API client (requires mocked httpx)
 - `ha_service.py` — Home Assistant client (requires mocked httpx)

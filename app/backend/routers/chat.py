@@ -25,6 +25,7 @@ _require_chat = require_module("chat")
 _chat_limit = rate_limit(20, 60)  # 20 messages per minute per IP
 _memory_limit = rate_limit(5, 60)  # 5 memory saves per minute per IP
 _save_limit = rate_limit(30, 60)  # 30 chat auto-saves per minute per IP
+_presence_limit = rate_limit(10, 60)  # Chat.jsx pings every ~20s while visible
 
 _MEMORY_MAX_BYTES = 100_000  # 100 KB cap per memory file
 
@@ -92,6 +93,28 @@ def _build_context(user_name: str, workspace: str = "personal") -> str:
     return "\n\n---\n\n".join(parts)
 
 
+def _write_chat_archive(
+    user_name: str, workspace: str, filename: str, title: str, history: list[dict]
+) -> None:
+    """Write (or overwrite) one chat archive file — the same markdown shape
+    POST /chat/save has always produced, now also called directly by the main
+    chat handler after every turn so a conversation is durably saved server-
+    side without depending on the frontend's own debounced auto-save timer
+    (which never fires if the user navigates away before it does)."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    now = datetime.now(ZoneInfo("UTC"))
+    date_label = now.strftime("%B %d, %Y at %I:%M %p")
+    lines = [f"# {title}\n", f"*{date_label}*\n"]
+    for msg in history:
+        label = "**You**" if msg["role"] == "user" else "**AI**"
+        lines.append(f"{label}: {msg['content']}\n")
+    chats_dir = ws_path(user_name, workspace) / "Chats"
+    chats_dir.mkdir(parents=True, exist_ok=True)
+    write_markdown(chats_dir / filename, "\n".join(lines))
+
+
 class HistoryMessage(BaseModel):
     # 30k cap: agent/research responses regularly exceed 5k chars; a lower cap here
     # makes auto-save 422 silently and blocks continuing chats that contain them.
@@ -116,6 +139,12 @@ class ChatRequest(BaseModel):
     # Set true to proceed past a soft AI-usage-cap confirmation (see ai_usage_service).
     accept_overage: bool = False
     resume: ResumeAction | None = None
+    # Stable per-conversation id, minted client-side (crypto.randomUUID()) the
+    # moment a genuinely new conversation starts — threads every turn of that
+    # conversation to the same chat_sessions.json entry regardless of how many
+    # separate POST /chat round trips it takes. Required: every real send from
+    # Chat.jsx always has one by the time it can send at all.
+    chat_id: str = Field(..., max_length=64)
 
     @model_validator(mode="after")
     def validate_message_or_resume(self):
@@ -133,7 +162,15 @@ class ChatRequest(BaseModel):
         for i, msg in enumerate(h):
             if msg.role != ("user" if i % 2 == 0 else "assistant"):
                 raise ValueError(f"History message {i} has unexpected role '{msg.role}'")
-        if h[-1].role != "assistant":
+        # A resume's history is correctly expected to end in the *user*
+        # message whose reply is still pending (that's what's being
+        # completed) — only a normal send's history must end in a finished
+        # assistant turn. Chat.jsx's toResumeHistory()/toApiHistory() send
+        # the right shape for each case; this just stops the resume shape
+        # from being rejected as if it were the send shape (found 2026-08-15
+        # — see docs/MEMORY.md for the full story, including the frontend
+        # half of this fix).
+        if not self.resume and h[-1].role != "assistant":
             raise ValueError("History must end with an assistant message")
         return self
 
@@ -185,8 +222,45 @@ async def chat(
         effective_mode = pending["mode"]
         resume_payload = {**pending, "decision": req.resume.decision, "answer": req.resume.answer}
 
+    # A resume continues whatever workspace the original paused turn was in —
+    # same reasoning as run_agent's own workspace= argument below — never the
+    # ambient header, which is just wherever the caller happens to be now.
+    effective_workspace = resume_payload["workspace"] if resume_payload else workspace
+
+    # Flip the session to "running" before the (potentially slow) agent call
+    # below, not after — this is the only way the sidebar can show a live
+    # "active" indicator for a conversation, including from a different tab
+    # or after switching away to a different chat in this same one. Resolve
+    # the archive filename/title now too (reused unchanged after the agent
+    # call finishes) rather than duplicating this lookup twice.
     from datetime import datetime
     from zoneinfo import ZoneInfo
+
+    history = [m.model_dump() for m in req.history]
+    existing_session = agent_service.get_session(
+        current_user["name"], effective_workspace, req.chat_id
+    )
+    if existing_session:
+        filename, title = existing_session["filename"], existing_session["title"]
+    else:
+        user_tz = current_user.get("timezone", "UTC")
+        try:
+            ts_local = datetime.now(ZoneInfo(user_tz))
+        except Exception:
+            ts_local = datetime.now(ZoneInfo("UTC"))
+        filename = f"{ts_local.strftime('%Y-%m-%d_%H-%M-%S')}.md"
+        first_user_content = next(
+            (m["content"] for m in history if m["role"] == "user"), req.message
+        )
+        title = first_user_content[:60] + ("…" if len(first_user_content) > 60 else "")
+    agent_service.upsert_session(
+        current_user["name"],
+        effective_workspace,
+        req.chat_id,
+        filename=filename,
+        title=title,
+        status="running",
+    )
 
     user_tz = current_user.get("timezone", "UTC")
     try:
@@ -271,27 +345,91 @@ async def chat(
         + _build_context(current_user["name"], workspace)
     )
 
-    history = [m.model_dump() for m in req.history]
-    result = await run_agent(
-        current_user,
-        req.message,
-        history,
-        system_prompt,
-        mode=effective_mode,
-        # A replayed action must run in the exact workspace it was proposed for,
-        # not wherever the caller happens to be now.
-        workspace=resume_payload["workspace"] if resume_payload else workspace,
-        cross_workspace=(
-            resume_payload["cross_workspace"] if resume_payload else req.cross_workspace
-        ),
-        resume=resume_payload,
-    )
+    try:
+        result = await run_agent(
+            current_user,
+            req.message,
+            history,
+            system_prompt,
+            mode=effective_mode,
+            workspace=effective_workspace,
+            cross_workspace=(
+                resume_payload["cross_workspace"] if resume_payload else req.cross_workspace
+            ),
+            resume=resume_payload,
+            chat_id=req.chat_id,
+        )
+    except Exception:
+        # Don't leave the session stuck showing "running" forever if the agent
+        # loop itself raises (e.g. a provider error) — same failure mode this
+        # request always had; only new here is the status needing a reset.
+        agent_service.upsert_session(
+            current_user["name"], effective_workspace, req.chat_id, status="idle"
+        )
+        raise
     ai_usage_service.record_message(current_user["name"], workspace)
+
+    # Persist + index server-side, unconditionally — not contingent on the
+    # frontend still being mounted when this returns. Nothing here cancels
+    # the request if the client navigates away mid-flight (no AbortController
+    # is ever wired up client-side, and Starlette doesn't auto-cancel a
+    # handler on client disconnect), so the turn was always going to finish;
+    # the gap this closes is that the result previously had nowhere to land
+    # once nobody was there to receive the HTTP response.
+    if resume_payload:
+        new_entries = [{"role": "assistant", "content": result["final_answer"]}]
+    else:
+        new_entries = [
+            {"role": "user", "content": req.message},
+            {"role": "assistant", "content": result["final_answer"]},
+        ]
+    full_history = history + new_entries
+    _write_chat_archive(current_user["name"], effective_workspace, filename, title, full_history)
+
+    session_status = (
+        result["status"] if result["status"] in ("awaiting_approval", "awaiting_answer") else "idle"
+    )
+    # If the requesting user is still actively looking at this exact
+    # conversation (Chat.jsx pings presence on mount/switch and on an
+    # interval while visible — see agent_service.is_chat_present), it isn't
+    # "unread" and doesn't need a notification either — owner ask,
+    # 2026-08-15: "ai chat only needs to send a notification... when the
+    # user is not on that module." They're watching it complete live either
+    # way; nothing is lost by not also badging/pushing/inboxing it.
+    user_present = agent_service.is_chat_present(current_user["name"], req.chat_id)
+    agent_service.upsert_session(
+        current_user["name"],
+        effective_workspace,
+        req.chat_id,
+        filename=filename,
+        title=title,
+        status=session_status,
+        updated_at=datetime.now(ZoneInfo("UTC")).isoformat(),
+        last_message_preview=(result["final_answer"] or "")[:200],
+        unread=not user_present,
+    )
+    if not user_present:
+        try:
+            from services.suggestions_service import notify_user
+
+            notif_title = (
+                "LogCore AI needs your input" if session_status != "idle" else "LogCore AI replied"
+            )
+            notify_user(
+                current_user["name"],
+                notif_title,
+                f"{title}: {(result['final_answer'] or '')[:150]}",
+                action={"type": "open_chat", "chat_id": req.chat_id},
+                url="/chat",
+            )
+        except Exception:
+            pass  # notification delivery must never break the chat response
 
     response_payload = {
         "response": result["final_answer"],
         "steps": result["steps"],
         "mode": result["status"],
+        "chat_id": req.chat_id,
     }
     if result["status"] in ("awaiting_approval", "awaiting_answer"):
         response_payload["run_id"] = result["id"]
@@ -438,6 +576,66 @@ def delete_saved_chat(
     if not target.exists():
         raise HTTPException(status_code=404, detail="Chat not found")
     target.unlink()
+    agent_service.delete_session_by_filename(current_user["name"], workspace, filename)
+    return {"ok": True}
+
+
+@router.get("/sessions")
+def list_sessions(
+    current_user: dict = Depends(_require_chat), workspace: str = Depends(get_workspace)
+):
+    """One entry per conversation — the sidebar's real source, in place of
+    /saved's plain filename listing: carries status (idle/awaiting_approval/
+    awaiting_answer/running) and unread, not just a title."""
+    return agent_service.load_sessions(current_user["name"], workspace)
+
+
+@router.post("/sessions/{chat_id}/read")
+def mark_session_read(
+    chat_id: str,
+    current_user: dict = Depends(_require_chat),
+    workspace: str = Depends(get_workspace),
+):
+    agent_service.mark_session_read(current_user["name"], workspace, chat_id)
+    return {"ok": True}
+
+
+@router.get("/pending/{chat_id}")
+def get_pending(chat_id: str, current_user: dict = Depends(_require_chat)):
+    """The live pending_write/pending_question/pending_plan card for one
+    conversation, if it currently has one (2026-08-15) — reopening a saved
+    chat previously reloaded the plain text fine but lost the interactive
+    approval/question/plan card entirely, since the .md archive has no
+    structured step data. Chat.jsx calls this when a session's own status
+    (from GET /chat/sessions) is awaiting_approval/awaiting_answer, and
+    re-attaches the result onto the last loaded message."""
+    pending = agent_service.get_pending_turn_by_chat_id(current_user["name"], chat_id)
+    if not pending:
+        return None
+    # pending["mode"] is the chat MODE (approve/plan/auto/research) — the
+    # frontend's message.mode field is the pause STATUS instead (matching
+    # what a live response's `mode: result["status"]` already carries), so
+    # it's derived from `kind` here rather than confusingly reusing "mode".
+    status = "awaiting_answer" if pending["kind"] == "question" else "awaiting_approval"
+    return {"run_id": pending["run_id"], "mode": status, "steps": pending["steps"]}
+
+
+class PresenceRequest(BaseModel):
+    chat_id: str = Field(..., max_length=64)
+
+
+@router.post("/presence")
+def ping_presence(
+    req: PresenceRequest,
+    current_user: dict = Depends(_require_chat),
+    _rl: None = Depends(_presence_limit),
+):
+    """Chat.jsx calls this on mount/switch and on an interval while the tab
+    is open and visible, showing this exact chat_id — lets the completion
+    handler above skip a redundant notification when the user is still
+    right there watching it finish (2026-08-15). See
+    agent_service.is_chat_present for the staleness window."""
+    agent_service.record_chat_presence(current_user["name"], req.chat_id)
     return {"ok": True}
 
 
