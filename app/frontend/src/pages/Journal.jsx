@@ -136,7 +136,9 @@ export default function Journal() {
               value={content}
               onChange={e => setContent(e.target.value)}
               placeholder={`Write your entry for ${displayDate}…`}
-              className="w-full h-full font-mono text-sm p-4 bg-transparent resize-none focus:outline-none leading-relaxed overscroll-contain"
+              // text-base (16px), not text-sm — see Notes.jsx's own textarea
+              // for why (iOS Safari's auto-zoom-under-16px behavior).
+              className="w-full h-full font-mono text-base p-4 bg-transparent resize-none focus:outline-none leading-relaxed overscroll-contain"
             />
           </div>
         )}

@@ -44,7 +44,18 @@ async function request(method, path, body, extraHeaders) {
     throw new Error('Request failed — please try again.')
   }
   if (res.status === 204) return null
-  const data = await res.json()
+  // A non-JSON body (a proxy's own error page, a bare-text 500 from
+  // somewhere outside this app's own JSON error handling) must not surface
+  // as an opaque JSON.parse failure — Safari in particular throws its own
+  // "The string did not match the expected pattern." for invalid JSON,
+  // which reads as a mystery error with zero indication anything server-side
+  // went wrong (found via a real push-notification bug, 2026-08-15).
+  let data
+  try {
+    data = await res.json()
+  } catch {
+    throw new Error(res.ok ? 'Unexpected response from server.' : `Request failed (${res.status}).`)
+  }
   if (!res.ok) {
     const detail = data.detail
     const msg = Array.isArray(detail)
@@ -132,14 +143,29 @@ export const priorities = {
 }
 
 export const chat = {
-  send:       (message, history, mode = 'approve', crossWorkspace = false, acceptOverage = false) => post('/chat', { message, history, mode, cross_workspace: crossWorkspace, accept_overage: acceptOverage }),
+  send:       (chatId, message, history, mode = 'approve', crossWorkspace = false, acceptOverage = false) => post('/chat', { chat_id: chatId, message, history, mode, cross_workspace: crossWorkspace, accept_overage: acceptOverage }),
   // Replays/answers a paused turn (approve/decline a pending write, or answer a
   // question) instead of sending a new message — see docs/MEMORY.md 2026-08-09.
-  resume:     (runId, decision, history, crossWorkspace = false, answer = null) => post('/chat', { history, cross_workspace: crossWorkspace, resume: { run_id: runId, decision, answer } }),
+  resume:     (chatId, runId, decision, history, crossWorkspace = false, answer = null) => post('/chat', { chat_id: chatId, history, cross_workspace: crossWorkspace, resume: { run_id: runId, decision, answer } }),
   saveMemory: (history, target = 'short') => post('/chat/save-memory',  { history, target }),
   saveChat:   (history, name = '', filename = '') => post('/chat/save', { history, name, filename }),
   listSaved:  ()                          => get('/chat/saved'),
   deleteSaved: (filename)                 => del(`/chat/saved/${encodeURIComponent(filename)}`),
+  // One entry per conversation (status + unread), backing the "Chats" list —
+  // see docs/MEMORY.md 2026-08-15 for why this replaced /saved as the
+  // sidebar's source.
+  sessions:    ()                         => get('/chat/sessions'),
+  markSessionRead: (chatId)               => post(`/chat/sessions/${encodeURIComponent(chatId)}/read`),
+  // The live pending_write/pending_question/pending_plan card for a
+  // conversation (run_id/mode/steps), if it currently has one — re-attached
+  // onto the last message when reopening a session whose own status is
+  // awaiting_approval/awaiting_answer, since the saved .md archive itself
+  // has no structured step data (2026-08-15).
+  pending:    (chatId)                    => get(`/chat/pending/${encodeURIComponent(chatId)}`),
+  // Tells the server "I'm still looking at this conversation" so a
+  // completion/approval notification isn't also sent while it's already
+  // visible live — see docs/MEMORY.md 2026-08-15.
+  presence:   (chatId)                    => post('/chat/presence', { chat_id: chatId }),
   runs:       ()                          => get('/chat/runs'),
   getRun:     (id)                        => get(`/chat/runs/${id}`),
 }
@@ -275,6 +301,8 @@ export const finance = {
   // the viewing admin's own personal/business workspace toggle — household
   // pool books always live in "personal", team's always in "business".
   listBooksForWorkspace: (workspace) => request('GET', '/finance/books', undefined, { 'X-Workspace': workspace }),
+  getPrefs:     ()                        => get('/finance/prefs'),
+  setLastBook:  (bookId)                  => put('/finance/prefs', { last_book_id: bookId }),
   createBook:   (data)                    => post('/finance/books', data),
   getBook:      (id)                      => get(`/finance/books/${id}`),
   updateBook:   (id, data)                => patch(`/finance/books/${id}`, data),
@@ -351,6 +379,13 @@ export const finance = {
   updatePlanned:     (bookId, id, data) => patch(`/finance/books/${bookId}/planned/${id}`, data),
   removePlanned:     (bookId, id)       => del(`/finance/books/${bookId}/planned/${id}`),
   projection:        (bookId, accountId, date) => get(`/finance/books/${bookId}/accounts/${accountId}/projection?date=${date}`),
+  // Transfers — a linked pair of transactions moving money between two
+  // accounts (same book or cross-book, same or cross-workspace). Doesn't
+  // depend on the ambient X-Workspace header — from_workspace/to_workspace
+  // are always sent explicitly since either side could be in either workspace.
+  createTransfer: (data)                       => post('/finance/transfers', data),
+  updateTransfer: (transferPairId, data)       => patch(`/finance/transfers/${transferPairId}`, data),
+  removeTransfer: (transferPairId, params)     => del(`/finance/transfers/${transferPairId}?${new URLSearchParams(params)}`),
   // Sharing (book audience + per-account overrides + handshake)
   updateBookAccess:    (bookId, data)            => request('PUT', `/finance/books/${bookId}/access`, data),
   updateAccountAccess: (bookId, accountId, data) => request('PUT', `/finance/books/${bookId}/accounts/${accountId}/access`, data),

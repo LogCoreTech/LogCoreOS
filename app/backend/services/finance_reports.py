@@ -33,6 +33,11 @@ def _month_transactions(store_user: str, workspace: str, book: dict, month: str)
 def monthly_report(store_user: str, workspace: str, book: dict, month: str) -> dict:
     """Income vs expenses + per-category breakdown for one calendar month."""
     transactions = _month_transactions(store_user, workspace, book, month)
+    # A Transfer leg moves money between two books/accounts, not into or out
+    # of the world — excluded from gross income/expense the same way it's
+    # excluded from every other report below, so a transfer never inflates
+    # either figure or shows up as a phantom category entry.
+    transactions = [t for t in transactions if not t.get("transfer_pair_id")]
 
     income = sum(t["amount_cents"] for t in transactions if t["amount_cents"] > 0)
     expenses = sum(t["amount_cents"] for t in transactions if t["amount_cents"] < 0)
@@ -99,6 +104,7 @@ def pnl(
         label = str(year)
 
     transactions = _range_transactions(store_user, workspace, book, date_from, date_to)
+    transactions = [t for t in transactions if not t.get("transfer_pair_id")]  # see monthly_report
     income_by_cat: dict[str, int] = {}
     expense_by_cat: dict[str, int] = {}
     for t in transactions:

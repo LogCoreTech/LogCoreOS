@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import HelpButton from '../components/HelpButton'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { chat as chatApi, suggestions as sugApi, brain as brainApi, aiUsage as aiUsageApi, dashboards as dashboardsApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
@@ -8,6 +8,25 @@ import DashboardGrid from '../components/dashboard/DashboardGrid'
 import { BLOCK_REGISTRY } from '../components/dashboard/blockRegistry'
 
 const _DASHBOARD_PREVIEW_TOOLS = new Set(['add_dashboard_block', 'update_dashboard_block'])
+
+// Client-only pointer to the chat_id last on screen — NOT a cache of the
+// conversation itself (that always loads fresh from the server via
+// GET /chat/sessions + the archive file). Lets a page reload reopen the same
+// conversation without keeping the Chat module "running" in the background.
+// "New Chat" mints a fresh id and writes it here too, but since no session
+// exists server-side until the first message is actually sent, a reload
+// right after clicking New Chat (with nothing sent yet) finds no matching
+// session below and correctly lands on a blank chat — matching the app's own
+// "New Chat then reopen should start fresh" rule for free, with no separate
+// "is this fresh" flag to keep in sync.
+//
+// Keyed per workspace (2026-08-15): a chat_id/session belongs to exactly one
+// workspace's own Chats/ folder, so personal and business each need their
+// own last-open pointer — switching workspaces should restore THAT
+// workspace's last conversation, not always land on a blank one.
+function lastChatKey(ws) {
+  return `lc_chat_last_id_${ws}`
+}
 
 // Dependency-free markdown rendering (2026-08-10) — no npm registry access in
 // this environment, so this hand-rolls just the subset the agent's replies
@@ -57,7 +76,11 @@ function renderInline(text, keyPrefix) {
 // plain paragraphs. Deliberately not CommonMark-complete — covers what the
 // agent's own replies actually use.
 function Markdown({ text }) {
-  const lines = text.split('\n')
+  // A message with no text (e.g. a turn that was pure tool-call, no prose)
+  // must render as empty, not crash the whole page — 2026-08-16, real
+  // crash: "undefined is not an object (evaluating 'e.split')" the first
+  // time a dashboard resize/move was requested.
+  const lines = (text || '').split('\n')
   const blocks = []
   let list = null // { ordered, items }
 
@@ -160,8 +183,10 @@ function DashboardBlockPreview({ step }) {
   let previewBlocks
   if (step.tool === 'add_dashboard_block') {
     const meta = BLOCK_REGISTRY[step.input.type]
-    const w = meta?.defaultLayout?.w || 12
-    const h = meta?.defaultLayout?.h || 9
+    // step.input.layout is the agent's own optional size override (2026-08-15)
+    // — preview it accurately rather than always showing the default size.
+    const w = step.input.layout?.w || meta?.defaultLayout?.w || 12
+    const h = step.input.layout?.h || meta?.defaultLayout?.h || 9
     const pending = {
       id: '__pending__',
       type: step.input.type,
@@ -176,11 +201,28 @@ function DashboardBlockPreview({ step }) {
     previewBlocks = [...rendered.blocks, pending]
   } else if (step.tool === 'update_dashboard_block') {
     if (!rendered.blocks.some(b => b.id === step.input.block_id)) return null
-    previewBlocks = rendered.blocks.map(b =>
-      b.id === step.input.block_id
-        ? { ...b, config: step.input.config || {}, ok: false, locked_reason: 'pending_approval' }
-        : b
-    )
+    previewBlocks = rendered.blocks.map(b => {
+      if (b.id !== step.input.block_id) return b
+      // step.input.layout is the agent's own optional position/size override
+      // (2026-08-15) — x/w only change on lg (mobile stays full-width at
+      // x=0), height changes on both, mirroring agent_service.py's own
+      // _apply_layout_override so the preview matches what will actually
+      // be saved.
+      const override = step.input.layout
+      const layout = override
+        ? {
+            lg: {
+              ...b.layout.lg,
+              ...(override.x != null ? { x: override.x } : {}),
+              ...(override.y != null ? { y: override.y } : {}),
+              ...(override.w ? { w: override.w } : {}),
+              ...(override.h ? { h: override.h } : {}),
+            },
+            sm: { ...b.layout.sm, ...(override.h ? { h: override.h } : {}) },
+          }
+        : b.layout
+      return { ...b, config: step.input.config || {}, layout, ok: false, locked_reason: 'pending_approval' }
+    })
   } else {
     return null
   }
@@ -335,6 +377,28 @@ function toApiHistory(msgs) {
   return h
 }
 
+// sendResume's own history — deliberately NOT toApiHistory. messages.slice(1,
+// -1) at the moment a turn is paused always ends with the *user* message
+// that triggered the still-pending assistant reply (a normal alternating
+// conversation always has a user turn directly before an assistant one) —
+// toApiHistory's trailing-pop assumes a dangling non-assistant entry is
+// leftover cruft to discard, so it silently dropped that real, current user
+// message every single time a turn was resumed. The server then archived
+// `history + [resumed reply]` with that user turn missing, leaving two
+// assistant entries adjacent in the saved .md file — invisible in the same
+// live session (local `messages` state itself stayed fine), but the next
+// time that archive was reloaded (a page remount, switching workspaces and
+// back, reopening from the Chats drawer — all now more frequent since the
+// 2026-08-15 background-multi-chat work), the corrupted pair loaded straight
+// into `messages`, and the very next real send 422'd with "History message N
+// has unexpected role 'assistant'" (found 2026-08-15, reported as "chat
+// breaks after accepting an approval card").
+function toResumeHistory(msgs) {
+  const h = msgs.filter(m => !m._proactive).map(m => ({ role: m.role, content: m.content }))
+  while (h.length && h[0].role !== 'user') h.shift()
+  return h
+}
+
 function StepTrace({ steps }) {
   const [expanded, setExpanded] = useState({})
 
@@ -400,34 +464,67 @@ function StepTrace({ steps }) {
   )
 }
 
+function greeting(user) {
+  return {
+    role: 'assistant',
+    content: `Hi, ${user?.name?.split(' ')[0] || 'there'}, what can I help you with today?`,
+    steps: [],
+  }
+}
+
 export default function Chat() {
   const { user } = useAuth()
   const { workspace } = useWorkspace()
   const hasBothWorkspaces = (user?.workspaces?.length ?? 0) > 1
   const navigate = useNavigate()
-  const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      content: `Hi, ${user?.name?.split(' ')[0] || 'there'}, what can I help you with today?`,
-      steps: [],
+  const [searchParams, setSearchParams] = useSearchParams()
+  // Stable per-conversation id (background execution + multi-conversation UI,
+  // 2026-08-15) — minted the moment a genuinely new conversation starts, sent
+  // with every /chat call for it, and used as the primary key for the "Chats"
+  // list (GET /chat/sessions) instead of a raw filename. A ref mirrors the
+  // state so async response handlers can tell, once a request finally
+  // resolves, whether the user is STILL looking at the conversation it
+  // belongs to (state closures capture the value at call time; the ref
+  // always reads live) — if not, the reply is simply not applied to
+  // `messages` here, since the server has already durably saved it and
+  // indexed it as unread; reopening that conversation later picks it up.
+  const [chatId, setChatId] = useState(() => {
+    try {
+      return localStorage.getItem(lastChatKey(workspace)) || crypto.randomUUID()
+    } catch {
+      return crypto.randomUUID()
     }
-  ])
+  })
+  const chatIdRef = useRef(chatId)
+  chatIdRef.current = chatId
+  const [messages, setMessages] = useState([greeting(user)])
   const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [continuedFromFile, setContinuedFromFile] = useState(null) // { filename, title }
+  // Which chat_ids currently have a request in flight — scoped per-
+  // conversation (not one global boolean) so switching to a different, idle
+  // conversation is never blocked by another one still generating.
+  const [loadingIds, setLoadingIds] = useState(() => new Set())
+  const loading = loadingIds.has(chatId)
   const [chatMode, setChatMode] = useState('approve')
   const [crossWorkspace, setCrossWorkspace] = useState(false)
   const [showModeDrawer, setShowModeDrawer] = useState(false)
   const [showMemoryPopup, setShowMemoryPopup] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
-  const [savedChats, setSavedChats] = useState([])
-  const [selectedChat, setSelectedChat] = useState(null) // { filename, content }
+  const [sessions, setSessions] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [usage, setUsage] = useState(null) // { mode, pct } — null until loaded
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
   const modeRef = useRef(null)
   const memoryRef = useRef(null)
+
+  function setLoadingFor(id, isLoading) {
+    setLoadingIds(prev => {
+      const next = new Set(prev)
+      if (isLoading) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
 
   function refreshUsage() {
     aiUsageApi.me().then(setUsage).catch(() => {})
@@ -447,6 +544,29 @@ export default function Chat() {
   }, [input])
 
   useEffect(refreshUsage, [workspace])
+
+  // Presence — pings the server so a completion/approval notification isn't
+  // also sent for this chat while it's already visible live (2026-08-15,
+  // owner ask: "only send a notification... when the user is not on that
+  // module"). Pings immediately on mount and whenever chatId changes
+  // (switching conversations, workspace switch, opening a session), then
+  // every 20s while the tab stays open and visible — deliberately no ping
+  // on backgrounding/leaving: presence just goes stale on its own (see
+  // agent_service.is_chat_present's 45s window), no explicit "I left" call
+  // needed. Pure server-side bookkeeping, no UI of its own — safe to add
+  // without touching layout.
+  useEffect(() => {
+    function ping() {
+      if (document.visibilityState === 'visible') chatApi.presence(chatId).catch(() => {})
+    }
+    ping()
+    const interval = setInterval(ping, 20000)
+    document.addEventListener('visibilitychange', ping)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', ping)
+    }
+  }, [chatId])
 
   // Inject unread chat-delivery notifications as AI messages on mount
   useEffect(() => {
@@ -485,80 +605,146 @@ export default function Chat() {
     return () => document.removeEventListener('mousedown', handler)
   }, [showMemoryPopup])
 
-  // When workspace changes, reload saved chats list (if panel open) and clear
-  // cross-workspace toggle. Deliberately workspace-only: showHistory is read
-  // as a gate, not a trigger — opening/closing the history panel on its own
-  // shouldn't clear crossWorkspace/continuedFromFile or refetch the list.
+  // Workspace switch reopens THAT workspace's own last conversation (falls
+  // back to a fresh blank one if it never had a session) — a chat_id/session
+  // belongs to exactly one workspace's own Chats/ folder (see agent_service
+  // .py's _sessions_path), so continuing to type into what's on screen would
+  // silently create a same-id session in the new workspace disconnected from
+  // what the user's actually looking at. Also clears crossWorkspace and
+  // refreshes the sessions list if the drawer's open. Deliberately
+  // workspace-only: showHistory is read as a gate, not a trigger — opening/
+  // closing the drawer on its own shouldn't reset the conversation.
+  //
+  // Guarded to skip its very first run: a `useEffect` with a dependency array
+  // still fires once after the initial render, not just on later changes —
+  // unguarded, this reset ran on every single mount and clobbered the
+  // restored chatId/messages below before they ever reached the screen
+  // (bug: Chat never reopened the last conversation, always looked "New").
+  const isFirstWorkspaceRun = useRef(true)
   useEffect(() => {
+    if (isFirstWorkspaceRun.current) {
+      isFirstWorkspaceRun.current = false
+      return
+    }
     setCrossWorkspace(false)
-    setContinuedFromFile(null)
+    // Previously always minted a fresh chat_id and blank greeting here — so
+    // switching workspace and switching back never reopened what was there,
+    // it always looked "New" (reported 2026-08-15). restoreForWorkspace does
+    // the same lookup the initial mount does, just for the workspace being
+    // switched TO.
+    restoreForWorkspace(workspace)
     if (showHistory) {
-      chatApi.listSaved().then(list => setSavedChats(list || [])).catch(() => setSavedChats([]))
+      chatApi.sessions().then(list => setSessions(list || [])).catch(() => setSessions([]))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace])
 
-  // Auto-save after each AI response. Injected proactive notifications are
-  // display-only: they stay out of archives, and a thread that contains nothing
-  // else must not be saved at all.
+  // Persist which chat_id is on screen so a reload — or switching back to
+  // this workspace later — reopens the same conversation. A plain pointer,
+  // not a cache of the conversation itself (see lastChatKey above).
   useEffect(() => {
-    if (loading) return
-    const history = messages
-      .slice(1)
-      .filter(m => !m._proactive)
-      .map(m => ({ role: m.role, content: m.content }))
-    if (history.length === 0) return
-    const t = setTimeout(async () => {
-      const firstUser = history.find(m => m.role === 'user')
-      const autoTitle = firstUser
-        ? firstUser.content.slice(0, 60) + (firstUser.content.length > 60 ? '…' : '')
-        : 'Chat'
-      try {
-        const res = await chatApi.saveChat(
-          history,
-          continuedFromFile?.title || autoTitle,
-          continuedFromFile?.filename || ''
-        )
-        if (!continuedFromFile) {
-          setContinuedFromFile({ filename: res.filename, title: res.title })
-        }
-      } catch { /* silent — auto-save failures don't interrupt the user */ }
-    }, 1500)
-    return () => clearTimeout(t)
-    // continuedFromFile is deliberately excluded: this effect is what sets it
-    // (via setContinuedFromFile above), so tracking it would restart the
-    // debounce timer immediately after every auto-save completes.
+    try {
+      localStorage.setItem(lastChatKey(workspace), chatId)
+    } catch {
+      /* ignore (private-browsing/storage-full) */
+    }
+  }, [chatId, workspace])
+
+  // Look up the real content for a workspace's restored chatId (mount, or a
+  // workspace switch). If it has no server-side session yet (a brand new/
+  // never-sent chat_id, including right after "New Chat"), there's nothing
+  // to load — land on a fresh blank chat for that workspace instead.
+  async function restoreForWorkspace(ws) {
+    let stored
+    try {
+      stored = localStorage.getItem(lastChatKey(ws))
+    } catch {
+      stored = null
+    }
+    if (!stored) {
+      setChatId(crypto.randomUUID())
+      setMessages([greeting(user)])
+      return
+    }
+    try {
+      const list = await chatApi.sessions()
+      const found = (list || []).find(s => s.chat_id === stored)
+      if (found) {
+        await openSession(found)
+        return
+      }
+    } catch {
+      /* fall through to a blank chat under the stored id below */
+    }
+    setChatId(stored)
+    setMessages([greeting(user)])
+  }
+
+  // On first mount only, restore the current workspace's last conversation.
+  // Skipped when a `?chat_id=` deep link is present; that effect below owns
+  // loading in that case.
+  useEffect(() => {
+    if (searchParams.get('chat_id')) return
+    restoreForWorkspace(workspace)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages, loading])
+  }, [])
+
+  // Deep link (?chat_id=<id>) — the notification bell's "View →" on a chat
+  // reply/approval-needed push lands here. Loads that conversation directly,
+  // same as clicking it in the drawer (openSession below) — no separate
+  // preview step, matching how every other module's own deep link works.
+  useEffect(() => {
+    const target = searchParams.get('chat_id')
+    if (!target) return
+    searchParams.delete('chat_id')
+    setSearchParams(searchParams, { replace: true })
+    chatApi.sessions().then(list => {
+      const found = (list || []).find(s => s.chat_id === target)
+      if (found) openSession(found)
+    }).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   async function send(e, overrideMsg, modeOverride, acceptOverage) {
     e?.preventDefault()
     const msg = overrideMsg ?? input.trim()
     if (!msg || loading) return
 
+    // Captured now, not read live later — if the user switches to a
+    // different conversation (or a brand new one) before this resolves, the
+    // response below must not land in whatever's currently on screen. The
+    // request itself is never cancelled by switching (no AbortController),
+    // and the server durably saves + indexes the result either way — this
+    // guard only decides whether THIS component still shows it live.
+    const sendingChatId = chatId
     const userMsg = { role: 'user', content: msg, steps: [] }
     const updated = [...messages, userMsg]
     setMessages(updated)
     if (!overrideMsg) setInput('')
-    setLoading(true)
+    setLoadingFor(sendingChatId, true)
 
     try {
       const history = toApiHistory(updated.slice(1, -1))
-      const res = await chatApi.send(msg, history, modeOverride || chatMode, crossWorkspace, acceptOverage)
-      setMessages([...updated, {
-        role: 'assistant',
-        content: res.response,
-        steps: res.steps || [],
-        mode: res.mode,
-        runId: res.run_id,
-        triggerMsg: msg,
-      }])
+      const res = await chatApi.send(sendingChatId, msg, history, modeOverride || chatMode, crossWorkspace, acceptOverage)
+      if (chatIdRef.current === sendingChatId) {
+        setMessages([...updated, {
+          role: 'assistant',
+          content: res.response,
+          steps: res.steps || [],
+          mode: res.mode,
+          runId: res.run_id,
+          triggerMsg: msg,
+        }])
+        chatApi.markSessionRead(sendingChatId).catch(() => {})
+      }
       refreshUsage()
     } catch (err) {
-      setMessages([...updated, { role: 'assistant', content: `Error: ${err.message}`, steps: [] }])
+      if (chatIdRef.current === sendingChatId) {
+        setMessages([...updated, { role: 'assistant', content: `Error: ${err.message}`, steps: [] }])
+      }
     } finally {
-      setLoading(false)
-      inputRef.current?.focus()
+      setLoadingFor(sendingChatId, false)
+      if (chatIdRef.current === sendingChatId) inputRef.current?.focus()
     }
   }
 
@@ -576,40 +762,44 @@ export default function Chat() {
   // synthetic chat text for the model to re-guess from.
   async function sendResume(runId, decision, answer) {
     if (loading) return
-    setLoading(true)
+    const sendingChatId = chatId
+    setLoadingFor(sendingChatId, true)
     try {
       // The pending turn (the message carrying the pending_write/pending_question/
       // pending_plan step) IS this same assistant turn, not a separate one —
       // replace it in place rather than appending. Appending left two consecutive
       // assistant messages, which breaks the strict user/assistant alternation
-      // ChatRequest.history requires: the very next send (resume or otherwise)
-      // failed 422 ("unexpected role 'assistant'") and every send after that did
-      // too, since the broken pair never leaves local state on its own.
-      const history = toApiHistory(messages.slice(1, -1))
-      const res = await chatApi.resume(runId, decision, history, crossWorkspace, answer)
-      setMessages(prev => [...prev.slice(0, -1), {
-        role: 'assistant',
-        content: res.response,
-        steps: res.steps || [],
-        mode: res.mode,
-        runId: res.run_id,
-      }])
+      // ChatRequest.history requires.
+      // Use toResumeHistory, NOT toApiHistory — see its own comment above.
+      // This array correctly ends in the user message whose reply is pending;
+      // toApiHistory's trailing-pop is built for send()'s different shape and
+      // would silently discard that message here.
+      const history = toResumeHistory(messages.slice(1, -1))
+      const res = await chatApi.resume(sendingChatId, runId, decision, history, crossWorkspace, answer)
+      if (chatIdRef.current === sendingChatId) {
+        setMessages(prev => [...prev.slice(0, -1), {
+          role: 'assistant',
+          content: res.response,
+          steps: res.steps || [],
+          mode: res.mode,
+          runId: res.run_id,
+        }])
+        chatApi.markSessionRead(sendingChatId).catch(() => {})
+      }
       refreshUsage()
     } catch (err) {
-      setMessages(prev => [...prev.slice(0, -1), { role: 'assistant', content: `Error: ${err.message}`, steps: [] }])
+      if (chatIdRef.current === sendingChatId) {
+        setMessages(prev => [...prev.slice(0, -1), { role: 'assistant', content: `Error: ${err.message}`, steps: [] }])
+      }
     } finally {
-      setLoading(false)
-      inputRef.current?.focus()
+      setLoadingFor(sendingChatId, false)
+      if (chatIdRef.current === sendingChatId) inputRef.current?.focus()
     }
   }
 
   function newChat() {
-    setMessages([{
-      role: 'assistant',
-      content: `Hi, ${user?.name?.split(' ')[0] || 'there'}, what can I help you with today?`,
-      steps: [],
-    }])
-    setContinuedFromFile(null)
+    setChatId(crypto.randomUUID())
+    setMessages([greeting(user)])
     setInput('')
   }
 
@@ -634,21 +824,62 @@ export default function Chat() {
     return parsed
   }
 
-  function continueChat(content, filename, title) {
-    const parsed = parseSavedChat(content)
-    if (parsed.length === 0) return
-    setMessages([messages[0], ...parsed])
-    setContinuedFromFile({ filename, title })
-    setShowHistory(false)
-    setSelectedChat(null)
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+  // Opens a conversation directly into the main pane — no intermediate
+  // preview/"Continue →" step (owner: keep the Chats button, but make it
+  // open on click instead of a preview page). Works both from a drawer row
+  // click and from the ?chat_id= deep link above.
+  async function openSession(session) {
+    setHistoryLoading(true)
+    try {
+      const file = await brainApi.getFile(`Chats/${session.filename}`)
+      let parsed = parseSavedChat(file.content)
+      // The archive itself only ever stores plain role/content turns, so a
+      // conversation left mid-approval/question/plan reloaded the assistant's
+      // prompt text fine but lost the actual interactive card — the user
+      // could see "I need your approval..." but had no button to act on it
+      // (reported 2026-08-15). If this session is still paused, re-fetch the
+      // live pending-turn record and re-attach steps/mode/runId onto the
+      // last (assistant) message, same shape a live pause response already
+      // carries in send()/sendResume() above.
+      if (
+        (session.status === 'awaiting_approval' || session.status === 'awaiting_answer') &&
+        parsed.length &&
+        parsed[parsed.length - 1].role === 'assistant'
+      ) {
+        try {
+          const pending = await chatApi.pending(session.chat_id)
+          if (pending) {
+            parsed = [
+              ...parsed.slice(0, -1),
+              { ...parsed[parsed.length - 1], steps: pending.steps || [], mode: pending.mode, runId: pending.run_id },
+            ]
+          }
+        } catch {
+          /* the plain text still loaded fine above — just no interactive card */
+        }
+      }
+      setChatId(session.chat_id)
+      setMessages(parsed.length ? [greeting(user), ...parsed] : [greeting(user)])
+      setShowHistory(false)
+      chatApi.markSessionRead(session.chat_id).catch(() => {})
+      setSessions(prev => prev.map(s => (s.chat_id === session.chat_id ? { ...s, unread: false } : s)))
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+    } catch {
+      alert('Failed to load that chat.')
+    } finally {
+      setHistoryLoading(false)
+    }
   }
 
-  async function deleteSavedChat(chat, e) {
+  async function deleteSession(session, e) {
     e.stopPropagation()
     try {
-      await chatApi.deleteSaved(chat.filename)
-      setSavedChats(prev => prev.filter(c => c.filename !== chat.filename))
+      await chatApi.deleteSaved(session.filename)
+      setSessions(prev => prev.filter(s => s.chat_id !== session.chat_id))
+      // Deleting the conversation currently on screen leaves nothing sensible
+      // to keep showing — start fresh rather than displaying orphaned messages
+      // a future send would try to (and fail to) re-save under a gone chat_id.
+      if (session.chat_id === chatId) newChat()
     } catch (err) {
       alert(err.message || 'Failed to delete chat')
     }
@@ -656,26 +887,15 @@ export default function Chat() {
 
   async function openHistory() {
     setShowHistory(true)
-    setSelectedChat(null)
     setHistoryLoading(true)
     try {
-      const list = await chatApi.listSaved()
-      setSavedChats(list || [])
-    } catch (err) {
-      setSavedChats([])
-      setSelectedChat({ filename: '', title: 'Error', content: err.message || 'Failed to load chat history.' })
+      const list = await chatApi.sessions()
+      setSessions(list || [])
+    } catch {
+      setSessions([])
     } finally {
       setHistoryLoading(false)
     }
-  }
-
-  async function openSavedChat(chat) {
-    setHistoryLoading(true)
-    try {
-      const file = await brainApi.getFile(chat.path)
-      setSelectedChat({ filename: chat.filename, title: chat.title, content: file.content })
-    } catch { setSelectedChat({ filename: chat.filename, title: chat.title, content: 'Failed to load chat.' }) }
-    finally { setHistoryLoading(false) }
   }
 
   function fmtFilename(filename) {
@@ -690,6 +910,7 @@ export default function Chat() {
   }
 
   return (
+    <>
     <div className="max-w-2xl mx-auto w-full flex flex-col flex-1 min-h-0">
       <div className="flex items-center justify-between mb-4 shrink-0">
         <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">AI Chat</h1><HelpButton section="chat" /></span>
@@ -712,8 +933,7 @@ export default function Chat() {
       </div>
 
 
-      {/* Messages */}
-      <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pb-4">
+      <div className="flex-1 min-h-0 space-y-4 pb-4 overflow-y-auto">
         {messages.map((m, i) => (
           <div key={i} className={`chat-fade-in flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             {m.role === 'assistant' && (
@@ -793,7 +1013,11 @@ export default function Chat() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Composer — bordered toolbar (mode/usage/memory) + auto-growing input, boxed together */}
+      {/* Composer — bordered toolbar (mode/usage/memory) + auto-growing input, boxed together.
+          Plain flow (not sticky/fixed — an earlier same-day sticky attempt
+          broke this and Notes both, reverted). No JS keyboard-avoidance code
+          at all (attempt 8) — relies entirely on Safari's native focus-scroll
+          plus index.html's interactive-widget=resizes-content. */}
       <div className="shrink-0 pt-2">
         <div className="border border-charcoal-200 dark:border-charcoal-700 rounded-2xl bg-white dark:bg-charcoal-900 p-2 space-y-1.5">
           {/* Toolbar strip */}
@@ -966,88 +1190,76 @@ export default function Chat() {
 
       {/* Clears the fixed mobile footer nav so the input row is never hidden behind it */}
       <div className="h-20 md:hidden shrink-0" aria-hidden="true" />
+    </div>
 
-      {/* Saved chats drawer */}
+      {/* Saved chats drawer — kept as a sibling of the page container above,
+          not a descendant: a `fixed inset-0` element nested inside a
+          transformed ancestor renders relative to that ancestor instead of
+          the true viewport (the same CSS trap found with the image lightbox
+          earlier this session — see docs/MEMORY.md). The page container has
+          no transform applied today, but keeping this structure costs
+          nothing and avoids re-introducing the trap if one ever is. */}
       {showHistory && (
         <div className="fixed inset-0 z-50 flex">
-          <div className="flex-1 bg-black/40" onClick={() => { setShowHistory(false); setSelectedChat(null) }} />
+          <div className="flex-1 bg-black/40" onClick={() => setShowHistory(false)} />
           <div className="w-80 md:w-96 h-full bg-white dark:bg-charcoal-900 border-l border-charcoal-200 dark:border-charcoal-700 flex flex-col shadow-xl">
 
             {/* Drawer header */}
             <div className="flex items-center justify-between px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] border-b border-charcoal-200 dark:border-charcoal-700 shrink-0">
-              {selectedChat ? (
-                <button
-                  onClick={() => setSelectedChat(null)}
-                  className="flex items-center gap-1 text-sm font-medium text-charcoal-500 hover:text-orange-500 transition-colors"
-                >
-                  ← Back
-                </button>
-              ) : (
-                <h3 className="text-sm font-semibold">Saved Chats</h3>
-              )}
+              <h3 className="text-sm font-semibold">Chats</h3>
               <button
-                onClick={() => { setShowHistory(false); setSelectedChat(null) }}
+                onClick={() => setShowHistory(false)}
                 className="text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200 text-lg leading-none"
               >
                 ✕
               </button>
             </div>
 
-            {/* Drawer body */}
+            {/* Drawer body — clicking a row opens it directly, no preview step */}
             <div className="flex-1 min-h-0 overflow-y-auto">
               {historyLoading ? (
                 <div className="flex items-center justify-center h-24">
                   <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
                 </div>
-              ) : selectedChat ? (
-                <div className="p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-charcoal-400 dark:text-charcoal-500 font-mono">{selectedChat.filename}</p>
-                    <button
-                      onClick={() => continueChat(selectedChat.content, selectedChat.filename, selectedChat.title)}
-                      className="btn-primary text-xs px-3 py-1.5"
-                    >
-                      Continue →
-                    </button>
-                  </div>
-                  {(() => {
-                    const titleLine = selectedChat.content.split('\n').find(l => l.startsWith('# '))
-                    return titleLine ? (
-                      <p className="text-sm font-semibold text-charcoal-700 dark:text-charcoal-200">{titleLine.slice(2)}</p>
-                    ) : null
-                  })()}
-                  {parseSavedChat(selectedChat.content).map((m, i) => (
-                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                      <div
-                        className={`text-sm px-3 py-2 rounded-2xl max-w-[85%] whitespace-pre-wrap ${
-                          m.role === 'user'
-                            ? 'bg-orange-500 text-white rounded-br-sm'
-                            : 'card rounded-bl-sm text-charcoal-800 dark:text-charcoal-100'
-                        }`}
-                      >
-                        {m.role === 'assistant' ? <Markdown text={m.content} /> : m.content}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : savedChats.length === 0 ? (
-                <p className="text-sm text-charcoal-400 dark:text-charcoal-500 text-center py-10">No saved chats yet.</p>
+              ) : sessions.length === 0 ? (
+                <p className="text-sm text-charcoal-400 dark:text-charcoal-500 text-center py-10">No chats yet.</p>
               ) : (
                 <div className="divide-y divide-charcoal-100 dark:divide-charcoal-800">
-                  {savedChats.map(chat => (
+                  {sessions.map(session => (
                     <div
-                      key={chat.filename}
+                      key={session.chat_id}
                       className="flex items-center gap-2 px-4 py-3 hover:bg-charcoal-50 dark:hover:bg-charcoal-800 transition-colors group"
                     >
                       <button
-                        onClick={() => openSavedChat(chat)}
-                        className="flex-1 text-left min-w-0"
+                        onClick={() => openSession(session)}
+                        className="flex-1 text-left min-w-0 flex items-center gap-2"
                       >
-                        <p className="text-sm font-medium text-charcoal-800 dark:text-charcoal-100 truncate">{chat.title || fmtFilename(chat.filename)}</p>
-                        <p className="text-xs text-charcoal-400 dark:text-charcoal-500 mt-0.5">{fmtFilename(chat.filename)}</p>
+                        {session.status === 'running' ? (
+                          <span
+                            className="w-2 h-2 rounded-full bg-orange-500 shrink-0 animate-pulse"
+                            title="Still working…"
+                          />
+                        ) : session.unread ? (
+                          <span
+                            className="w-2 h-2 rounded-full bg-orange-500 shrink-0"
+                            title={session.status === 'awaiting_approval' || session.status === 'awaiting_answer' ? 'Needs your input' : 'Unread'}
+                          />
+                        ) : (
+                          <span className="w-2 h-2 shrink-0" />
+                        )}
+                        <span className="min-w-0 flex-1">
+                          <p className={`text-sm truncate ${session.unread ? 'font-semibold text-charcoal-900 dark:text-white' : 'font-medium text-charcoal-800 dark:text-charcoal-100'}`}>
+                            {session.title || fmtFilename(session.filename)}
+                          </p>
+                          <p className="text-xs text-charcoal-400 dark:text-charcoal-500 mt-0.5 truncate">
+                            {session.status === 'awaiting_approval' || session.status === 'awaiting_answer'
+                              ? 'Needs your input'
+                              : session.last_message_preview || fmtFilename(session.filename)}
+                          </p>
+                        </span>
                       </button>
                       <button
-                        onClick={e => deleteSavedChat(chat, e)}
+                        onClick={e => deleteSession(session, e)}
                         className="shrink-0 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-charcoal-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
                         title="Delete chat"
                       >
@@ -1064,6 +1276,6 @@ export default function Chat() {
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }

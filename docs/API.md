@@ -353,7 +353,7 @@ List all tasks for the current user.
 Return the top 3 scored pending tasks.
 
 ### `GET /tasks/scored`
-Return all pending tasks sorted by score descending.
+Return all pending tasks sorted by score descending. Scoped to the caller's own pending, non-goal tasks — doesn't cover household/team assigned tasks or the All/Done/Overdue filter tabs, so the Tasks page's own "Sort by: Priority" mode instead ports the same formula to a client-side `scoreTask()` (`lib/constants.js`) that can rank whatever's currently on screen.
 
 ### `GET /tasks/history`
 Return completed tasks (most recent first).
@@ -471,7 +471,8 @@ Send a message to the AI, or resume a paused turn. Returns a streaming response 
   "mode": "auto",
   "cross_workspace": false,
   "accept_overage": false,
-  "resume": null
+  "resume": null,
+  "chat_id": "b3f1..."
 }
 ```
 
@@ -480,6 +481,7 @@ Send a message to the AI, or resume a paused turn. Returns a streaming response 
 - `resume`: `{ run_id, decision?, answer? }` — replays/answers a paused turn instead of sending a new message (2026-08-09). `decision`: `"approve"` (write: replays the *exact* originally-proposed tool call, never re-derived; plan: continues the loop) or `"decline"` (write/plan: the model receives a structured `{"declined": true}` result). `answer`: `string[]`, required when resuming a `pending_question` — becomes the tool result directly. A resumed run_id is consumed immediately server-side, so replaying it twice (e.g. a double-submitted click) is a no-op the second time (`{ "mode": "expired", ... }`).
 - `cross_workspace`: when `true` and the user has both workspaces, the AI searches both personal and business Brain paths (results prefixed `personal/` or `business/`). Only available to dual-workspace users. Ignored when resuming — the *original* turn's workspace is used, so a replayed action can't drift to wherever the caller happens to be now.
 - `accept_overage`: only relevant when the caller is soft-capped (see **AI Usage** below) and already over their limit — set `true` to proceed anyway. When usage is hard-blocked the response is `{ "response": "...", "steps": [], "mode": "usage_blocked" }` and nothing runs; when soft-blocked and `accept_overage` is not yet `true`, the response is `{ "mode": "usage_confirm_required", ... }` and the frontend re-sends with `accept_overage: true` to continue. Accepting holds for the rest of that user's current cap period.
+- `chat_id` (**required**, 2026-08-15): a stable per-conversation id, minted client-side (`crypto.randomUUID()`) the moment a genuinely new conversation starts. Every turn of that conversation — across however many separate `POST /chat` round trips it takes — carries the same `chat_id`, which is what threads the request to one `chat_sessions.json` entry (see **`GET /chat/sessions`** below). The response echoes it back as `{ "chat_id": "...", ... }`. Before the model call, the handler marks that session's `status` `"running"`; on an unhandled exception it's reset to `"idle"` rather than left stuck; on success `notify_user()` fires unconditionally, so a conversation left running in the background (the caller navigated away or closed the app) still produces a notification when it finishes.
 
 Rate limited: 20 messages per minute per IP.
 
@@ -499,7 +501,43 @@ List all saved chat `.md` files for the current user in the active workspace, ne
 **Response** — array of `{ "filename": "...", "title": "..." }` objects.
 
 ### `DELETE /chat/saved/{filename}`
-Delete a saved chat file.
+Delete a saved chat file. Also removes that conversation's `chat_sessions.json` entry (2026-08-15), so a deleted chat's row disappears from the Chats drawer immediately rather than lingering as a dangling filename reference.
+
+**Response** `{ "ok": true }`
+
+### `GET /chat/sessions` (2026-08-15)
+List this user's conversations in the active workspace — the real source for the Chats drawer, in place of `/saved`'s plain filename listing. Most-recently-touched first.
+
+**Response** — array of session objects:
+```json
+{
+  "chat_id": "b3f1...",
+  "title": "What should I focus on today?",
+  "filename": "2026-08-15_09-30-00.md",
+  "status": "idle",
+  "unread": false,
+  "updated_at": "2026-08-15T09:31:02Z",
+  "last_message_preview": "Here's what I'd prioritize today..."
+}
+```
+- `status`: `"idle"` | `"running"` | `"awaiting_approval"` | `"awaiting_answer"`.
+- `unread`: set `true` when a run finishes or pauses for a conversation that wasn't the one open in the requesting session at the time; cleared via `POST /chat/sessions/{chat_id}/read` or by opening that conversation.
+- Capped at 50 most-recent conversations per user per workspace.
+
+### `POST /chat/sessions/{chat_id}/read` (2026-08-15)
+Mark one conversation's `unread` flag `false` — called when the user opens it from the Chats drawer.
+
+**Response** `{ "ok": true }`
+
+### `GET /chat/pending/{chat_id}` (2026-08-15)
+The live `pending_write`/`pending_question`/`pending_plan` card for one conversation, if it currently has one. The saved `.md` archive only ever stores plain role/content turns — reopening a conversation left mid-approval previously reloaded the assistant's prompt text fine but lost the actual interactive card (and its `run_id`, needed to act on it) entirely. `Chat.jsx` calls this when a session's own `status` (from `GET /chat/sessions`) is `awaiting_approval`/`awaiting_answer`, and re-attaches the result onto the last loaded message.
+
+**Response** — `{ "run_id": "...", "mode": "awaiting_approval" | "awaiting_answer", "steps": [...] }` (the same `steps` shape a live pause response's `steps` field already carries), or `null` if this conversation has no live pending turn (already resolved, or never paused).
+
+### `POST /chat/presence` (2026-08-15)
+Tells the server "I'm still looking at this conversation" — `Chat.jsx` calls this on mount/whenever the open conversation changes, and every 20s while the tab is open and visible. `POST /chat`'s completion handler checks this before sending a completion/approval notification and before marking the session unread — both are skipped if the user is still there watching it live. Presence is a single most-recent value per user (not a history) and goes stale on its own after 45s of no pings — there's no explicit "I left" call.
+
+**Body** `{ "chat_id": "..." }`
 
 **Response** `{ "ok": true }`
 
@@ -625,6 +663,8 @@ Delete a folder and all its contents.
 Move or rename a file or folder.
 
 **Body** `{ "from": "old/path.md", "to": "new/path.md" }`
+
+**Agent tools**: `list_notes`/`read_note`/`search_brain` (read; `search_brain` also walks pool/shared notes, not just the caller's own) + `create_note`/`update_note`/`delete_note`/`move_note`/`create_note_folder` (approval-gated). All resolve through the same sharing-aware access check the HTTP API uses (`read` < `contribute` < `edit`) — the agent can see and use anything shared with the caller, not just their own notes, and returns a plain-language error rather than silently failing if the caller's access level is too low for the requested action. `read_note`/`update_note`/`delete_note`/`move_note` accept an optional `owner` hint (from a prior `list_notes`/`search_brain` result's `_owner` field) to disambiguate when the same relative path could exist in more than one store the caller can reach.
 
 ---
 
@@ -984,6 +1024,26 @@ Book audience follows the Assets model. Entry: `{target: <name>|team|household|r
 | `POST` | `/finance/books/{id}/leave` | share recipient | remove self from a book shared with you |
 | `GET` | `/finance/members` · `/finance/roles` | module users | names / role list for the share pickers |
 
+### Transfers
+
+Router `finance_transfers.py`, mounted at the same `/api/v1/finance` prefix. A Transfer is **not** a new stored entity — it's two ordinary transactions (one leg per book) linked by a shared `transfer_pair_id`, each carrying denormalized peer info (`transfer_peer_book_id`, `transfer_peer_book_name`, `transfer_peer_account_id`, `transfer_peer_account_name`, `transfer_peer_workspace`) so the frontend never needs a separate lookup to render or edit one. Both legs are excluded from `reports/monthly`, `reports/pnl`, and `budgets/status` sums. Category is always `""` (uncategorized). Unlike every other finance endpoint, the two legs' workspaces are **not** taken from the ambient `X-Workspace` header — each is passed explicitly in the body, since the two books can legitimately be in different workspaces.
+
+| Method | Path | Access | Notes |
+|--------|------|--------|-------|
+| `POST` | `/finance/transfers` | edit on **both** books | `{from_book_id, from_workspace, from_account_id, to_book_id, to_workspace, to_account_id, amount_cents, date, notes?}` — rejects mismatched currencies and a workspace the caller isn't entitled to; same book/account for both sides is rejected. Creates both legs; best-effort deletes the first leg if the second fails |
+| `PATCH` | `/finance/transfers/{transfer_pair_id}` | edit on both books | body carries both legs' `book_id`/`workspace` explicitly (the frontend always has these from the peer fields); updates amount/date/notes on both legs together — amount sign is flipped automatically for the "from" leg. Does not support moving a transfer to different books/accounts — delete and recreate instead |
+| `DELETE` | `/finance/transfers/{transfer_pair_id}?from_book_id=&from_workspace=&to_book_id=&to_workspace=` | edit on both books | removes both legs together |
+
+**Guard on the ordinary single-tx endpoints:** `PATCH`/`DELETE /finance/books/{id}/transactions/{tid}` now `409` if the target transaction has `transfer_pair_id` set — a transfer's legs can only be edited/deleted as a pair, through the endpoints above. `finance_planning_service.on_transactions_added()` (bill-matching/budget-alert sweep) is deliberately not invoked for transfer legs — `match_bill()`'s matching is category-blind and could otherwise false-match a transfer leg to an unrelated recurring bill.
+
+Note: "same book/account for both sides is rejected" above means only the exact same account is rejected — a transfer between two accounts **within the same book** (e.g. Checking → Savings) has always been supported; nothing changed here (2026-08-15).
+
+### Preferences
+
+| Method | Path | Access | Notes |
+|--------|------|--------|-------|
+| `GET`/`PUT` | `/finance/prefs` | module users | `{last_book_id: {personal: "...", business: "..."}}`, workspace-keyed (2026-08-15). `Finance.jsx` reads it on mount only when no `?book=` query param is present, and writes it whenever the user actively switches books (not on the initial default-book resolution, to avoid a stale-book ping-pong) |
+
 ---
 
 ## Contacts (CRM)
@@ -1005,6 +1065,10 @@ Router mounted at `/api/v1/contacts`. Requires the `contacts` module (both works
 
 **`career_history`** — a resume-style list, each entry `{id, title, company_id, industry, education, years_experience, skills, start_date, end_date, archived}`. `education` must be one of a fixed list (`EDUCATION_LEVELS` in `contacts_service.py`: Junior High, High School, Some College, Trade/Vocational School, Associate's/Bachelor's/Master's Degree, Doctorate, Other) — anything else 400s. `company_id` links to a company-type Contact. Not a separate resource: send the whole array on `PATCH`; the client marks the current entry `archived: true` + sets `end_date` and appends a fresh entry to "start a new role." Superseded the old flat `employer`/`industry`/`education`/`years_experience`/`skills` fields.
 
+**`type`** is `"person"` or `"company"` (`CONTACT_TYPES`). It's stored and validated the same for both, but the frontend (`ContactModal.jsx`/`ContactDetail.jsx`) shows different sections by type: person gets the basic/private personal fields above plus `career_history`; company gets `locations`/`hours` below instead, and its "Family" section is relabeled "Affiliated People" (the `affiliated_contact_ids` mechanism itself is identical for both). A self-contact (`self_of` set) is guarded server-side to stay `"person"` — a `PATCH` that tries to flip it to `"company"` is rejected.
+
+**`locations`** — a list of `{id, label, address}`, capped at 20; entries that are entirely blank are dropped on save. **`hours`** — always exactly 7 entries in day order (Mon–Sun), each `{day, open, close, closed}`; missing days default to closed. Both fields exist on every contact (empty list/default-closed week for a person) but are only shown in the UI for `type: "company"`.
+
 **`phones`** is a list of `{country_code, number, extension}` (digits-only; `number` ≤10 digits, `country_code` ≤3, `extension` ≤6) — a plain string is still accepted for backward compat (legacy data, CSV import, automation) and gets wrapped. **`emails`** now validates format (basic regex) — an invalid address 400s the whole request instead of silently saving.
 
 | Method | Path | Access | Notes |
@@ -1020,7 +1084,7 @@ Router mounted at `/api/v1/contacts`. Requires the `contacts` module (both works
 | `POST`/`DELETE` | `/contacts/{id}/deals/{did}/assets[/{aid}]` | contribute | link/unlink an existing Asset to the deal (`{asset_id}` body on POST, idempotent). The asset must resolve via `assets_service.find_asset` for the caller — read access on the asset is enough; the gated write is the deal mutation. On a Won deal, 🧾 deep-links `/finance?view=invoices&client_contact=&amount=&title=&deal_id=` → prefilled InvoiceModal (user picks the book and confirms; the created invoice stores `deal_id`) |
 | `GET` | `/contacts/deals/{deal_id}` | module users | deal lookup by id alone (for Finance surfaces holding only a deal_id) — access inherits from the parent contact; response carries `_access`/`_contact_id`/`_contact_name` |
 | `GET`/`PUT` | `/contacts/pipeline` | module users | `{stages:[...]}` per-store deal pipeline (default Lead→Contacted→Proposal→Negotiation→Won→Lost) |
-| `GET` | `/contacts/fields` · `PUT` (admin) | module users / admin | instance-level custom field definitions |
+| `GET` | `/contacts/fields` · `PUT` (admin) | module users / admin | instance-level custom field definitions; each carries `applies_to: ['person','company']` (default both, 2026-08-15) — `ContactModal.jsx`/`ContactDetail.jsx` filter their render loop by `contact.type` client-side. Authored via Settings → Admin Settings → Contact Fields (`ContactFields.jsx`), the first UI ever built for this endpoint — previously only `GET` had a frontend caller |
 | `GET` | `/contacts/{id}/finance` | module users | money references for this contact, **scoped to the viewer's finance access**: payee spend/receive totals, `invoices` list (via clients with this `contact_id`, book-labeled, see_balances-gated), `invoices_total_cents`/`outstanding_cents`, and per-deal Job P&L `deals: [{deal_id, title, invoiced_cents, collected_cents, expenses_cents, net_cents}]` (expenses from the deal's linked assets) |
 | `PUT` | `/contacts/{id}/access` | owner / pool admin | `{shared_with?, hidden_from?, contributors?}` — new targets notified (action `contacts_share`) |
 | `POST` | `/contacts/shares/respond` · `/contacts/{id}/leave` | recipient | accept/decline · leave a shared contact |
@@ -1054,7 +1118,7 @@ Register a push subscription.
 Remove the current push subscription.
 
 ### `POST /push/test`
-Send a test push notification to the current user.
+Send a test push notification to the current user. As of 2026-08-15 the failure cases are distinguishable instead of a collapsed generic error: `400` "No push subscription on file — enable push notifications in Settings first" when the caller has never subscribed, `502` "...push service rejected or failed the send" when a subscription exists but the actual send failed (e.g. `VAPID_SUBJECT` still the default placeholder, an expired subscription, or a network error to the push endpoint).
 
 ---
 
@@ -1354,7 +1418,7 @@ time, no stored "protected" flag.
 | `GET` | `/dashboards/roles` | module users | Feature-role names for the share-by-role picker |
 
 **Block catalog** (27 types across `live_aggregate` / `record_linked` / `freeform` categories) —
-Tasks/Goals (`top3_tasks`, `due_today`, `streaks`, `goals_progress`, `single_task`), Smart Home
+Tasks/Goals (`top3_tasks`, `due_today` — both take a `sort_mode: "priority"|"date"|"alpha"` config, default `priority`, 2026-08-15; `streaks`, `goals_progress`, `single_task`), Smart Home
 (`home_favourites`, personal only), Household/Team (`pool_tasks`), Calendar (`upcoming_events`,
 `single_event`), Finance (`finance_activity` — asset/contact/book variants, `finance_book_report`),
 Contacts (`linked_deals`, `custom_fields`, `linked_assets`), Assets (`documents`, `linked_tasks`,
@@ -1363,6 +1427,8 @@ Contacts (`linked_deals`, `custom_fields`, `linked_assets`), Assets (`documents`
 `recent_ai_actions`), Freeform (`text_block`, `link_button`, `heading_divider`). Every
 `live_aggregate` block takes a `scope: "owner"|"viewer"` config — `"owner"` only ever resolves when
 the viewer IS the owner (directly, or via the `share_underlying_data` exception's Pass 2).
+
+**Action buttons** (2026-08-15): any block whose type declares a `recordKind` in the frontend's `blockRegistry.js` (currently Notes, Assets/Collection, Contacts, and every other list-shaped block — task/asset/contact/event/note) can carry `actions: [{id, kind: 'nav'|'status', ...}]` in its own `config`, authored via a repeater in the block-config UI. No new endpoint: `actions` rides inside the existing `config` object already returned by `GET /dashboards/{id}/render`, and a click executes through the target module's own existing endpoint directly from the frontend (`tasksApi`/`assetsApi`/`contactsApi`, the same call `status_button`/`nav_button` already make) — never a dashboard-owned write path. A new `contacts_list` block type (Contacts, `live_aggregate`) was added alongside this as the first general "list of contacts" block.
 
 **Not yet built** (deliberately deferred, not cut from scope — see `docs/TASKS.md`): the "Referenced
 by" UI hooks on non-Assets/Contacts view surfaces, Module Engagement and External Data block types, and

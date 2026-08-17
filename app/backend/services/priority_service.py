@@ -42,15 +42,37 @@ def _pending_non_goal(tasks: list[dict]) -> list[dict]:
     return [t for t in tasks if t.get("status") == "pending" and t.get("type") != "goal"]
 
 
-def get_top3(user_name: str, workspace: str = "personal") -> list[dict[str, Any]]:
-    """Return top 3 scored pending tasks with score attached."""
+def sort_tasks(
+    tasks: list[dict], category_order: list[str], today_str: str, sort_mode: str = "priority"
+) -> list[dict]:
+    """Sort tasks by the given mode — mirrors pages/Tasks.jsx's client-side
+    sort (lib/constants.js's scoreTask() there is the JS mirror of score_task()
+    above; this is the equivalent for date/alpha, kept alongside it)."""
+    if sort_mode == "date":
+
+        def _date_key(t: dict) -> tuple[int, str]:
+            due = t.get("due_date")
+            if not due:
+                return (1, "")
+            return (0, f"{due} {t.get('due_time') or '00:00'}")
+
+        return sorted(tasks, key=_date_key)
+    if sort_mode == "alpha":
+        return sorted(tasks, key=lambda t: (t.get("title") or "").lower())
+    for t in tasks:
+        t["_score"] = score_task(t, category_order, today_str)
+    return sorted(tasks, key=lambda t: t["_score"], reverse=True)
+
+
+def get_top3(
+    user_name: str, workspace: str = "personal", sort_mode: str = "priority"
+) -> list[dict[str, Any]]:
+    """Return the top 3 pending tasks, ordered by sort_mode (priority/date/alpha)."""
     tasks_data = read_json(tasks_path(user_name, workspace), default={"tasks": []})
     order = get_priority_order(user_name, workspace)
     today_str = today_for_user(user_name).isoformat()
     pending = _pending_non_goal(tasks_data.get("tasks", []))
-    for task in pending:
-        task["_score"] = score_task(task, order, today_str)
-    return sorted(pending, key=lambda t: t["_score"], reverse=True)[:3]
+    return sort_tasks(pending, order, today_str, sort_mode)[:3]
 
 
 def get_all_scored(user_name: str, workspace: str = "personal") -> list[dict[str, Any]]:

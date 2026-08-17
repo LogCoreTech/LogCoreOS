@@ -33,6 +33,7 @@ from routers import (
     finance_invoicing,
     finance_planning,
     finance_sharing,
+    finance_transfers,
     health,
     help,
     home,
@@ -195,6 +196,30 @@ def _startup_checks() -> None:
 app = FastAPI(title="LogCore OS", version="0.1.0", lifespan=lifespan)
 
 
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, exc: Exception):
+    """An uncaught exception anywhere below would otherwise fall through to
+    Starlette's default ServerErrorMiddleware, which returns a PLAIN-TEXT
+    body ("Internal Server Error") — not JSON. The frontend's request()
+    helper calls res.json() unconditionally on every non-401/204 response
+    (api.js), so that plain-text body gets fed straight into JSON.parse.
+    Safari/WebKit's parse error for non-JSON input is its own opaque
+    "The string did not match the expected pattern." — surfaced verbatim as
+    the error message with no indication anything went wrong server-side
+    (found via a real push-notification bug, 2026-08-15, see docs/MEMORY.md).
+    Always return real JSON here so every client gets a parseable error body
+    and the actual exception is never swallowed from the server logs.
+    """
+    logger.error(
+        "Unhandled exception on %s %s: %s", request.method, request.url.path, exc, exc_info=exc
+    )
+    return Response(
+        content='{"detail": "Internal server error"}',
+        status_code=500,
+        media_type="application/json",
+    )
+
+
 def _is_https_request(request: Request) -> bool:
     """True when the response will reach the client over HTTPS.
 
@@ -324,6 +349,7 @@ app.include_router(finance_banking.router, prefix="/api/v1/finance", tags=["fina
 app.include_router(finance_planning.router, prefix="/api/v1/finance", tags=["finance-planning"])
 app.include_router(finance_invoicing.router, prefix="/api/v1/finance", tags=["finance-invoicing"])
 app.include_router(finance_sharing.router, prefix="/api/v1/finance", tags=["finance-sharing"])
+app.include_router(finance_transfers.router, prefix="/api/v1/finance", tags=["finance-transfers"])
 app.include_router(assets.router, prefix="/api/v1/assets", tags=["assets"])
 app.include_router(contacts.router, prefix="/api/v1/contacts", tags=["contacts"])
 app.include_router(home.router, prefix="/api/v1/home", tags=["home"])

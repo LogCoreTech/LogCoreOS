@@ -1,10 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { finance as financeApi, contacts as contactsApi } from '../../lib/api'
 import { toCents, centsToInput, todayStr } from './money'
 import ContactPicker from '../contacts/ContactPicker'
 
-export default function TransactionModal({ book, tx, allowedKinds, assets, onClose, onSaved, onDeleted }) {
+const KIND_LABELS = { expense: '− Expense', income: '+ Income', transfer: '⇄ Transfer' }
+
+// Transfers are create-only here — editing/deleting an existing transfer leg
+// routes to TransferEditModal instead (both legs move together), so `tx` is
+// never a transfer leg by the time it reaches this component.
+export default function TransactionModal({ book, tx, allowedKinds, assets, allBooks, userWorkspaces, workspace, onClose, onSaved, onDeleted }) {
   const editing = !!tx
   const kinds = allowedKinds?.length ? allowedKinds : ['expense', 'income']
   const accounts = (book?.accounts || []).filter(a => !a.archived || (tx && tx.account_id === a.id))
@@ -27,6 +32,57 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, onClo
   const taxCategories = book?.tax_categories || []
   const navigate = useNavigate()
   const [sourceDeal, setSourceDeal] = useState(null) // resolved when the tx carries a deal_id
+  const amountRef = useRef(null)
+
+  // The Amount field autofocuses on a genuinely new Expense/Income entry (a
+  // deliberate "start typing immediately" convenience) — but for Transfer,
+  // the books/accounts need picking first, and `autoFocus` is a mount-time-
+  // only DOM attribute: it doesn't re-fire on a later kind switch, so a new
+  // transaction that opens as Expense (the default) then gets switched to
+  // Transfer left the field — and the on-screen numeric keyboard — focused
+  // the whole time, covering the picker fields the user actually needed
+  // (reported 2026-08-15, "auto pops up a numbers keyboard like it's
+  // auto-clicking a field"). Explicitly blur on switching to Transfer.
+  useEffect(() => {
+    if (kind === 'transfer') amountRef.current?.blur()
+  }, [kind])
+
+  // Transfer-only state — a second workspace's books are fetched lazily,
+  // only once "Transfer" is actually picked, since most transactions never
+  // need it. Own-workspace books are already loaded (allBooks).
+  const otherWorkspace = userWorkspaces?.includes('personal') && userWorkspaces?.includes('business')
+    ? (workspace === 'business' ? 'personal' : 'business')
+    : null
+  const [otherWorkspaceBooks, setOtherWorkspaceBooks] = useState([])
+  const [toBookId, setToBookId] = useState('')
+  const [toAccountId, setToAccountId] = useState('')
+
+  useEffect(() => {
+    if (kind !== 'transfer' || !otherWorkspace || otherWorkspaceBooks.length > 0) return
+    financeApi.listBooksForWorkspace(otherWorkspace)
+      .then(r => setOtherWorkspaceBooks(Array.isArray(r) ? r.filter(b => !b.archived && b._access === 'edit') : []))
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind])
+
+  const transferBookOptions = [
+    ...(allBooks || []).filter(b => !b.archived && (b._access === 'edit' || !b._access)).map(b => ({ ...b, _ws: workspace })),
+    ...otherWorkspaceBooks.map(b => ({ ...b, _ws: otherWorkspace })),
+  ]
+  const toBook = transferBookOptions.find(b => b.id === toBookId)
+  const toAccounts = (toBook?.accounts || []).filter(a => !a.archived)
+  const currencyMismatch = kind === 'transfer' && toBook && book?.currency && toBook.currency !== book.currency
+
+  useEffect(() => {
+    if (kind !== 'transfer') return
+    if (!toBookId && transferBookOptions.length > 0) setToBookId(transferBookOptions[0].id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, transferBookOptions.length])
+
+  useEffect(() => {
+    setToAccountId(toAccounts[0]?.id || '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toBookId])
 
   useEffect(() => {
     if (!tx?.deal_id) return
@@ -45,6 +101,34 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, onClo
     setError('')
     const cents = toCents(amount)
     if (Number.isNaN(cents) || cents <= 0) { setError('Enter a valid amount above zero.'); return }
+
+    if (kind === 'transfer') {
+      if (!accountId) { setError('Pick a "from" account — add one in book settings first.'); return }
+      if (!toBookId || !toAccountId) { setError('Pick a "to" book and account.'); return }
+      if (book.id === toBookId && accountId === toAccountId) { setError('Pick two different accounts.'); return }
+      if (currencyMismatch) { setError('Both books must use the same currency.'); return }
+      setBusy(true)
+      try {
+        await financeApi.createTransfer({
+          from_book_id: book.id,
+          from_workspace: workspace,
+          from_account_id: accountId,
+          to_book_id: toBookId,
+          to_workspace: toBook._ws,
+          to_account_id: toAccountId,
+          amount_cents: cents,
+          date,
+          notes,
+        })
+        onSaved()
+      } catch (err) {
+        setError(err.message || 'Transfer failed')
+      } finally {
+        setBusy(false)
+      }
+      return
+    }
+
     if (!accountId) { setError('Pick an account — add one in book settings first.'); return }
     const payload = {
       date,
@@ -108,7 +192,7 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, onClo
         )}
 
         <form onSubmit={submit} className="space-y-3">
-          {/* Expense / Income toggle (contribute caps can limit the options) */}
+          {/* Expense / Income / Transfer toggle (contribute caps can limit the options) */}
           <div className="flex gap-1 bg-charcoal-100 dark:bg-charcoal-800 rounded-lg p-1">
             {kinds.map(k => (
               <button
@@ -119,7 +203,7 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, onClo
                     : 'text-charcoal-500 dark:text-charcoal-400'
                 }`}
               >
-                {k === 'expense' ? '− Expense' : '+ Income'}
+                {KIND_LABELS[k] || k}
               </button>
             ))}
           </div>
@@ -128,8 +212,9 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, onClo
             <div>
               <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Amount</label>
               <input
+                ref={amountRef}
                 className="input" inputMode="decimal" placeholder="0.00"
-                value={amount} onChange={e => setAmount(e.target.value)} autoFocus={!editing}
+                value={amount} onChange={e => setAmount(e.target.value)} autoFocus={!editing && kind !== 'transfer'}
               />
             </div>
             <div>
@@ -139,30 +224,67 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, onClo
           </div>
 
           <div>
-            <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Account</label>
+            <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{kind === 'transfer' ? 'From account' : 'Account'}</label>
             <select className="input" value={accountId} onChange={e => setAccountId(e.target.value)}>
               {accounts.length === 0 && <option value="">No accounts yet</option>}
               {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
 
-          <div>
-            <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Category</label>
-            <select className="input" value={categoryValid ? category : ''} onChange={e => setCategory(e.target.value)}>
-              <option value="">Uncategorized</option>
-              {categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-            </select>
-          </div>
+          {/* Transfer target — a different book (possibly a different workspace)
+              or a second account in this same book; picking this book back
+              degenerates into an ordinary same-book transfer, no special-casing. */}
+          {kind === 'transfer' && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-charcoal-500 dark:text-charcoal-400">To book</label>
+                  <select className="input" value={toBookId} onChange={e => setToBookId(e.target.value)}>
+                    {transferBookOptions.length === 0 && <option value="">No books available</option>}
+                    {transferBookOptions.map(b => (
+                      <option key={`${b._ws}:${b.id}`} value={b.id}>
+                        {b.name}{b._ws !== workspace ? ` (${b._ws === 'business' ? 'Business' : 'Personal'})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-charcoal-500 dark:text-charcoal-400">To account</label>
+                  <select className="input" value={toAccountId} onChange={e => setToAccountId(e.target.value)}>
+                    {toAccounts.length === 0 && <option value="">No accounts yet</option>}
+                    {toAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                </div>
+              </div>
+              {currencyMismatch && (
+                <p className="text-sm text-red-500">
+                  {book.currency} → {toBook.currency}: both books must use the same currency.
+                </p>
+              )}
+            </>
+          )}
 
-          <ContactPicker
-            label={kind === 'expense' ? 'Paid to' : 'Pay from'}
-            placeholder={kind === 'expense' ? 'Who was paid' : 'Who paid you'}
-            value={{ name: payee, contactId: payeeContactId }}
-            onChange={(name, contactId) => { setPayee(name); setPayeeContactId(contactId) }}
-          />
+          {kind !== 'transfer' && (
+            <div>
+              <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Category</label>
+              <select className="input" value={categoryValid ? category : ''} onChange={e => setCategory(e.target.value)}>
+                <option value="">Uncategorized</option>
+                {categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
+
+          {kind !== 'transfer' && (
+            <ContactPicker
+              label={kind === 'expense' ? 'Paid to' : 'Pay from'}
+              placeholder={kind === 'expense' ? 'Who was paid' : 'Who paid you'}
+              value={{ name: payee, contactId: payeeContactId }}
+              onChange={(name, contactId) => { setPayee(name); setPayeeContactId(contactId) }}
+            />
+          )}
 
           {/* Linked asset — only shown when an assets list is provided (assets module on) */}
-          {assets && assets.length > 0 && (
+          {kind !== 'transfer' && assets && assets.length > 0 && (
             <div>
               <label className="text-xs text-charcoal-500 dark:text-charcoal-400">
                 Linked asset <span className="text-charcoal-400">(optional)</span>

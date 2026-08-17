@@ -55,6 +55,217 @@ def test_add_dashboard_block_stacks_real_integer_not_null(users):
     assert second_y == 9  # stacked directly below the first block's h=9
 
 
+def test_add_dashboard_block_accepts_a_size_override(users):
+    """2026-08-15: the agent can now request a size (owner ask — "resize the
+    dashboard blocks that it edits"). Width only changes on lg (the 36-col
+    desktop grid); sm stays full-width since mobile is one column; height
+    changes on both so the block reads the same tall either way. Position is
+    still always auto-stacked."""
+    d = dashboards_service.create_dashboard("Alice", "personal", "Alice", "Board")
+
+    r = agent_service._execute_tool(
+        "add_dashboard_block",
+        {
+            "dashboard_id": d["id"],
+            "type": "top3_tasks",
+            "config": {},
+            "layout": {"w": 18, "h": 15},
+        },
+        users["alice"],
+        workspace="personal",
+    )
+    assert r["ok"] is True
+    stored = dashboards_service.get_dashboard("Alice", d["id"], "personal")
+    layout = stored["blocks"][0]["layout"]
+    assert layout["lg"]["w"] == 18
+    assert layout["lg"]["h"] == 15
+    assert layout["sm"]["w"] == 12  # mobile stays full-width, untouched
+    assert layout["sm"]["h"] == 15  # height still matches on mobile
+    assert layout["lg"]["x"] == 0 and layout["lg"]["y"] == 0  # position unaffected
+
+
+def test_add_dashboard_block_clamps_an_out_of_range_size(users):
+    """A nonsense size (zero, negative, wider than the desktop grid itself)
+    is clamped rather than stored as-is or rejected outright."""
+    d = dashboards_service.create_dashboard("Alice", "personal", "Alice", "Board")
+
+    r = agent_service._execute_tool(
+        "add_dashboard_block",
+        {
+            "dashboard_id": d["id"],
+            "type": "top3_tasks",
+            "config": {},
+            "layout": {"w": 999, "h": 0},
+        },
+        users["alice"],
+        workspace="personal",
+    )
+    assert r["ok"] is True
+    layout = dashboards_service.get_dashboard("Alice", d["id"], "personal")["blocks"][0]["layout"]
+    assert layout["lg"]["w"] == 36  # clamped to the actual desktop grid width
+    assert layout["lg"]["h"] == 1  # clamped to at least 1, never 0/negative
+
+
+def test_update_dashboard_block_can_resize_without_moving(users):
+    d = dashboards_service.create_dashboard("Alice", "personal", "Alice", "Board")
+    agent_service._execute_tool(
+        "add_dashboard_block",
+        {"dashboard_id": d["id"], "type": "top3_tasks", "config": {}},
+        users["alice"],
+        workspace="personal",
+    )
+    agent_service._execute_tool(
+        "add_dashboard_block",
+        {"dashboard_id": d["id"], "type": "due_today", "config": {}},
+        users["alice"],
+        workspace="personal",
+    )
+    stored = dashboards_service.get_dashboard("Alice", d["id"], "personal")
+    second_block_id = stored["blocks"][1]["id"]
+    original_y = stored["blocks"][1]["layout"]["lg"]["y"]
+
+    r = agent_service._execute_tool(
+        "update_dashboard_block",
+        {
+            "dashboard_id": d["id"],
+            "block_id": second_block_id,
+            "config": {},
+            "layout": {"w": 24},
+        },
+        users["alice"],
+        workspace="personal",
+    )
+    assert r["ok"] is True
+    updated = dashboards_service.get_dashboard("Alice", d["id"], "personal")
+    updated_block = next(b for b in updated["blocks"] if b["id"] == second_block_id)
+    assert updated_block["layout"]["lg"]["w"] == 24
+    assert updated_block["layout"]["lg"]["y"] == original_y  # position untouched
+    assert updated_block["layout"]["lg"]["h"] == 9  # h omitted from override -> unchanged
+
+
+def test_update_dashboard_block_without_layout_leaves_size_untouched(users):
+    d = dashboards_service.create_dashboard("Alice", "personal", "Alice", "Board")
+    agent_service._execute_tool(
+        "add_dashboard_block",
+        {"dashboard_id": d["id"], "type": "top3_tasks", "config": {}, "layout": {"w": 20, "h": 11}},
+        users["alice"],
+        workspace="personal",
+    )
+    block_id = dashboards_service.get_dashboard("Alice", d["id"], "personal")["blocks"][0]["id"]
+
+    r = agent_service._execute_tool(
+        "update_dashboard_block",
+        {"dashboard_id": d["id"], "block_id": block_id, "config": {"sort_mode": "date"}},
+        users["alice"],
+        workspace="personal",
+    )
+    assert r["ok"] is True
+    updated = dashboards_service.get_dashboard("Alice", d["id"], "personal")["blocks"][0]
+    assert updated["layout"]["lg"]["w"] == 20
+    assert updated["layout"]["lg"]["h"] == 11
+    assert updated["config"]["sort_mode"] == "date"
+
+
+def test_get_dashboard_exposes_block_positions_and_grid_width(users):
+    """2026-08-15: the agent can now read where blocks actually are (owner
+    ask — "a coordinate system... to figure where blocks are positioned")."""
+    d = dashboards_service.create_dashboard("Alice", "personal", "Alice", "Board")
+    agent_service._execute_tool(
+        "add_dashboard_block",
+        {"dashboard_id": d["id"], "type": "top3_tasks", "config": {}, "layout": {"w": 18, "h": 10}},
+        users["alice"],
+        workspace="personal",
+    )
+    result = agent_service._execute_tool(
+        "get_dashboard", {"dashboard_id": d["id"]}, users["alice"], workspace="personal"
+    )
+    assert result["grid"] == {"cols": 36, "row_px": 24}
+    layout = result["blocks"][0]["layout"]
+    assert layout == {"x": 0, "y": 0, "w": 18, "h": 10}
+
+
+def test_update_dashboard_block_can_move_position(users):
+    """The agent can now move (not just resize) an existing block."""
+    d = dashboards_service.create_dashboard("Alice", "personal", "Alice", "Board")
+    agent_service._execute_tool(
+        "add_dashboard_block",
+        {"dashboard_id": d["id"], "type": "top3_tasks", "config": {}},
+        users["alice"],
+        workspace="personal",
+    )
+    block_id = dashboards_service.get_dashboard("Alice", d["id"], "personal")["blocks"][0]["id"]
+
+    r = agent_service._execute_tool(
+        "update_dashboard_block",
+        {
+            "dashboard_id": d["id"],
+            "block_id": block_id,
+            "config": {},
+            "layout": {"x": 12, "y": 5},
+        },
+        users["alice"],
+        workspace="personal",
+    )
+    assert r["ok"] is True
+    updated = dashboards_service.get_dashboard("Alice", d["id"], "personal")["blocks"][0]
+    assert updated["layout"]["lg"]["x"] == 12
+    assert updated["layout"]["lg"]["y"] == 5
+    assert updated["layout"]["lg"]["w"] == 12  # untouched, no w in the override
+    # sm's own x/y are untouched by an lg-only move.
+    assert updated["layout"]["sm"]["x"] == 0
+
+
+def test_update_dashboard_block_clamps_position_against_width(users):
+    """x is clamped so a block can never be placed hanging off the right
+    edge of the desktop grid, accounting for its (possibly also just
+    overridden) width."""
+    d = dashboards_service.create_dashboard("Alice", "personal", "Alice", "Board")
+    agent_service._execute_tool(
+        "add_dashboard_block",
+        {"dashboard_id": d["id"], "type": "top3_tasks", "config": {}},
+        users["alice"],
+        workspace="personal",
+    )
+    block_id = dashboards_service.get_dashboard("Alice", d["id"], "personal")["blocks"][0]["id"]
+
+    r = agent_service._execute_tool(
+        "update_dashboard_block",
+        {
+            "dashboard_id": d["id"],
+            "block_id": block_id,
+            "config": {},
+            "layout": {"x": 999, "w": 30},
+        },
+        users["alice"],
+        workspace="personal",
+    )
+    assert r["ok"] is True
+    updated = dashboards_service.get_dashboard("Alice", d["id"], "personal")["blocks"][0]
+    assert updated["layout"]["lg"]["w"] == 30
+    assert updated["layout"]["lg"]["x"] == 6  # clamped to 36 - 30, not left hanging off the edge
+
+
+def test_add_dashboard_block_ignores_a_stray_position_in_layout(users):
+    """add_dashboard_block's own schema has no x/y — even if a model sends
+    them anyway, position must still come only from stacked_layout()."""
+    d = dashboards_service.create_dashboard("Alice", "personal", "Alice", "Board")
+    r = agent_service._execute_tool(
+        "add_dashboard_block",
+        {
+            "dashboard_id": d["id"],
+            "type": "top3_tasks",
+            "config": {},
+            "layout": {"x": 20, "y": 20, "w": 15},
+        },
+        users["alice"],
+        workspace="personal",
+    )
+    assert r["ok"] is True
+    layout = dashboards_service.get_dashboard("Alice", d["id"], "personal")["blocks"][0]["layout"]
+    assert layout["lg"]["w"] == 15  # size override still applies
+    assert layout["lg"]["x"] == 0 and layout["lg"]["y"] == 0  # position ignored, still auto-stacked
+
+
 def test_add_dashboard_block_requires_contribute_or_edit_access(users):
     d = dashboards_service.create_dashboard("Alice", "personal", "Alice", "Board")
     dashboards_service.update_access(
@@ -195,5 +406,19 @@ def test_get_dashboard_block_catalog_merges_config_fields(users):
     assert by_type["single_task"]["config_fields"] == [
         {"key": "task_id", "label": "Task id (look it up via list_tasks)", "kind": "task"}
     ]
-    # A type with no config (e.g. top3_tasks) still appears, with an empty list.
-    assert by_type["top3_tasks"]["config_fields"] == []
+    # A type with no config (e.g. streaks) still appears, with an empty list.
+    assert by_type["streaks"]["config_fields"] == []
+    # top3_tasks/due_today gained an optional sort_mode selector (2026-08-15).
+    assert by_type["top3_tasks"]["config_fields"] == [
+        {
+            "key": "sort_mode",
+            "label": "Sort order",
+            "kind": "select",
+            "optional": True,
+            "options": [
+                {"value": "priority", "label": "Priority"},
+                {"value": "date", "label": "Date/Time"},
+                {"value": "alpha", "label": "A–Z"},
+            ],
+        }
+    ]

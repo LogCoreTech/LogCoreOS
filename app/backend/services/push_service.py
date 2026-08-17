@@ -128,7 +128,15 @@ def _build_vapid_jwt(private_key: EllipticCurvePrivateKey, endpoint: str) -> str
     """Build a signed VAPID JWT (ES256)."""
     parsed = urllib.parse.urlparse(endpoint)
     audience = f"{parsed.scheme}://{parsed.netloc}"
-    subject = f"mailto:{settings.vapid_subject}"
+    # The VAPID spec (RFC 8292) requires `sub` to be a mailto: or https: URI.
+    # settings.vapid_subject may already be either (an admin who read the
+    # config.py comment literally could set VAPID_SUBJECT=https://example.com)
+    # — only wrap it in mailto: if it isn't already a URI, instead of always
+    # prepending mailto: regardless of what was configured.
+    raw_subject = settings.vapid_subject
+    subject = (
+        raw_subject if raw_subject.startswith(("mailto:", "https:")) else f"mailto:{raw_subject}"
+    )
 
     header_b = _b64u(json.dumps({"typ": "JWT", "alg": "ES256"}, separators=(",", ":")).encode())
     payload_b = _b64u(
@@ -205,25 +213,36 @@ def send_push(user_name: str, title: str, body: str, url: str = "/") -> bool:
     if not sub:
         return False
 
-    private_key, pub_b64u = _load_or_generate_vapid()
-    endpoint = sub["endpoint"]
-    jwt = _build_vapid_jwt(private_key, endpoint)
-
-    payload = json.dumps({"title": title, "body": body, "url": url}).encode()
-    encrypted = _encrypt_payload(sub, payload)
-
-    req = urllib.request.Request(
-        url=endpoint,
-        data=encrypted,
-        method="POST",
-        headers={
-            "Authorization": f"vapid t={jwt},k={pub_b64u}",
-            "Content-Encoding": "aes128gcm",
-            "Content-Type": "application/octet-stream",
-            "TTL": "86400",
-        },
-    )
+    # Everything below — JWT building, payload encryption, and the actual
+    # send — is wrapped in one try/except. Previously only the urlopen() call
+    # was guarded, so a malformed/legacy subscription (bad p256dh/auth
+    # base64, wrong point length, etc.) raised straight out of this function
+    # uncaught, past the router's own error handling, into FastAPI's generic
+    # 500 with a PLAIN-TEXT body ("Internal Server Error", not JSON) — Safari
+    # specifically throws its own opaque "The string did not match the
+    # expected pattern." parsing that as JSON client-side, which is exactly
+    # what made this undiagnosable (2026-08-15). Now any failure here always
+    # returns False with the real reason logged server-side, so /push/test's
+    # existing 502 path (routers/push.py) is what the caller actually sees.
     try:
+        private_key, pub_b64u = _load_or_generate_vapid()
+        endpoint = sub["endpoint"]
+        jwt = _build_vapid_jwt(private_key, endpoint)
+
+        payload = json.dumps({"title": title, "body": body, "url": url}).encode()
+        encrypted = _encrypt_payload(sub, payload)
+
+        req = urllib.request.Request(
+            url=endpoint,
+            data=encrypted,
+            method="POST",
+            headers={
+                "Authorization": f"vapid t={jwt},k={pub_b64u}",
+                "Content-Encoding": "aes128gcm",
+                "Content-Type": "application/octet-stream",
+                "TTL": "86400",
+            },
+        )
         with urllib.request.urlopen(req, timeout=10) as resp:
             success = 200 <= resp.status < 300
             if not success:
@@ -235,5 +254,5 @@ def send_push(user_name: str, title: str, body: str, url: str = "/") -> bool:
             logger.info("Push subscription gone for %s, removing.", user_name)
             delete_subscription(user_name)
         else:
-            logger.error("Push send failed for %s: %s", user_name, exc)
+            logger.error("Push send failed for %s: %s: %s", user_name, type(exc).__name__, exc)
         return False

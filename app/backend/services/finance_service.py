@@ -24,6 +24,7 @@ from datetime import date, datetime, timezone
 from services.file_service import (
     finance_book_dir,
     finance_books_path,
+    finance_prefs_path,
     finance_rules_path,
     finance_tx_path,
     read_json,
@@ -146,6 +147,23 @@ def list_books(store_user: str, workspace: str) -> list[dict]:
 
 def get_book(store_user: str, workspace: str, book_id: str) -> dict | None:
     return next((b for b in list_books(store_user, workspace) if b["id"] == book_id), None)
+
+
+# ---------------------------------------------------------------------------
+# Viewer prefs (last-opened book) — deliberately keyed on the viewer, not the
+# book's own store, since this is "what was *I* just looking at," which may
+# be a pool book. The frontend already holds the full visible-books list and
+# re-validates the id still exists before using it, same as the existing
+# reset-to-default guard.
+# ---------------------------------------------------------------------------
+
+
+def get_last_book_id(user_name: str, workspace: str) -> str | None:
+    return read_json(finance_prefs_path(user_name, workspace), default={}).get("last_book_id")
+
+
+def set_last_book_id(user_name: str, workspace: str, book_id: str | None) -> None:
+    write_json(finance_prefs_path(user_name, workspace), {"last_book_id": book_id})
 
 
 # ---------------------------------------------------------------------------
@@ -955,6 +973,32 @@ def get_transaction(store_user: str, workspace: str, book_id: str, tx_id: str) -
     return None
 
 
+def get_transaction_by_transfer_pair(
+    store_user: str, workspace: str, book_id: str, transfer_pair_id: str, *, negative: bool
+) -> dict | None:
+    """Locate one specific leg of a Transfer by its shared pair id — used by
+    finance_transfers.py, which knows the pair id and both books but not
+    either leg's own tx_id. `negative` picks which leg: add_transaction
+    always stores the "from" leg's amount negated and the "to" leg positive,
+    so the sign is a reliable discriminator regardless of book/workspace.
+
+    This MUST disambiguate by sign, not just return the first pair_id match:
+    a same-book transfer's two legs live in the exact same shard, so an
+    earlier version of this function (matching on transfer_pair_id alone)
+    returned the identical transaction for both the "from" and "to" lookup,
+    and the "to" leg was silently never touched by delete/update — real bug,
+    found 2026-08-15 (see docs/MEMORY.md)."""
+    for year in _shard_years(store_user, workspace, book_id):
+        shard = _read_shard(store_user, workspace, book_id, year)
+        for tx in shard.get("transactions", []):
+            if (
+                tx.get("transfer_pair_id") == transfer_pair_id
+                and (tx["amount_cents"] < 0) == negative
+            ):
+                return tx
+    return None
+
+
 def add_transaction(
     store_user: str,
     workspace: str,
@@ -994,6 +1038,18 @@ def add_transaction(
         "created_by": created_by,
         "created_at": _now(),
         "updated_at": _now(),
+        # Set only for one leg of a Transfer (finance_transfers.py) — never
+        # user-editable directly. Presence alone is what report/budget sums
+        # key off to exclude a transfer from gross income/expense figures;
+        # the peer_* fields let this leg render itself without a cross-book
+        # lookup (mirrors this codebase's existing denormalization pattern,
+        # e.g. dashboards' _template_label).
+        "transfer_pair_id": tx_data.get("transfer_pair_id"),
+        "transfer_peer_book_id": tx_data.get("transfer_peer_book_id"),
+        "transfer_peer_book_name": tx_data.get("transfer_peer_book_name"),
+        "transfer_peer_workspace": tx_data.get("transfer_peer_workspace"),
+        "transfer_peer_account_id": tx_data.get("transfer_peer_account_id"),
+        "transfer_peer_account_name": tx_data.get("transfer_peer_account_name"),
     }
     shard = _read_shard(store_user, workspace, book["id"], tx_date.year)
     shard.setdefault("transactions", []).append(tx)

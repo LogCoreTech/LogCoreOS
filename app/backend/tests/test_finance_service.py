@@ -456,3 +456,30 @@ def test_list_transactions_for_asset_includes_pool_books(brain):
     seen = svc.list_transactions_for_asset("Alice", "member", False, "personal", "asset-9")
     assert len(seen) == 1
     assert seen[0]["book_name"] == "House fund"
+
+
+# ---------------------------------------------------------------------------
+# Last-opened-book prefs (2026-08-15)
+# ---------------------------------------------------------------------------
+
+
+def test_last_book_id_defaults_to_none(brain):
+    assert svc.get_last_book_id("Alice", "personal") is None
+
+
+def test_set_and_get_last_book_id(brain, book):
+    svc.set_last_book_id("Alice", "personal", book["id"])
+    assert svc.get_last_book_id("Alice", "personal") == book["id"]
+
+
+def test_last_book_id_is_workspace_scoped(brain):
+    svc.set_last_book_id("Alice", "personal", "book-personal")
+    svc.set_last_book_id("Alice", "business", "book-business")
+    assert svc.get_last_book_id("Alice", "personal") == "book-personal"
+    assert svc.get_last_book_id("Alice", "business") == "book-business"
+
+
+def test_last_book_id_can_be_cleared(brain, book):
+    svc.set_last_book_id("Alice", "personal", book["id"])
+    svc.set_last_book_id("Alice", "personal", None)
+    assert svc.get_last_book_id("Alice", "personal") is None

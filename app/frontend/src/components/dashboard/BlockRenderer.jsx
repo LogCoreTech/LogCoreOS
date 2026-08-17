@@ -21,7 +21,7 @@ export default function BlockRenderer({ block, onRemove, onEdit, onAction, editi
   if (meta.chromeless) {
     return (
       <div className="h-full w-full relative flex items-center justify-center">
-        {block.ok ? <Comp data={block.data} onAction={onAction} /> : <LockedBlockPlaceholder reason={block.locked_reason} />}
+        {block.ok ? <Comp data={block.data} actions={block.config?.actions} onAction={onAction} /> : <LockedBlockPlaceholder reason={block.locked_reason} />}
         {editing && !locked && (
           <span className="absolute -top-2 -right-2 flex items-center gap-1 bg-white dark:bg-charcoal-800 border border-charcoal-200 dark:border-charcoal-600 rounded-full px-1.5 py-0.5 shadow shrink-0">
             {isConfigurable(block.type) && (
@@ -93,7 +93,7 @@ export default function BlockRenderer({ block, onRemove, onEdit, onAction, editi
         </div>
       )}
       <div className="flex-1 min-h-0 overflow-auto">
-        {block.ok ? <Comp data={block.data} onAction={onAction} /> : <LockedBlockPlaceholder reason={block.locked_reason} />}
+        {block.ok ? <Comp data={block.data} actions={block.config?.actions} onAction={onAction} /> : <LockedBlockPlaceholder reason={block.locked_reason} />}
       </div>
     </div>
   )

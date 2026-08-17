@@ -55,6 +55,7 @@
         "Click \"+ New Task\", give it a title, and pick a category and priority (High/Medium/Low).",
         "Add a due date and time if it matters — overdue and due-today tasks score highest.",
         "Set Type to \"Recurring\" for repeating tasks; completing them on schedule builds a streak.",
+        "Use the \"Sort by\" control above the list to switch between Priority score (default — ranks every task against every other one, regardless of category), Date/Time, and Alphabetical; your choice is remembered.",
         "Check a task off to complete it. Non-recurring done tasks move to History during the nightly tidy-up.",
         "Tasks assigned to you from a shared Household or Team pool show up here with a 🏠 badge."
       ],
@@ -180,6 +181,7 @@
       "tips": [
         "Stuck on any feature? Just ask — the AI reads this Help guide and will explain it and link you to the right section.",
         "In Approve mode, nothing is changed until you click Approve, so it's safe to let it try things.",
+        "It can find and work with notes shared with you too, not just your own — respecting whatever access level (read/contribute/edit) you were actually given.",
         "Ask it to add or change a Dashboard block and you'll see a live preview of your actual dashboard with the change applied, right in the chat, before you approve."
       ],
       "modules": ["chat"]
@@ -210,6 +212,7 @@
       "howto": [
         "Create a Book, then add accounts (checking, savings, credit, cash) and customize its categories.",
         "Add transactions by hand, import a CSV, or have an admin connect your bank via SimpleFIN (read-only).",
+        "Moving money between two of your own books (even across personal and business)? Use Transfer instead of Expense/Income — pick the destination book and account and both sides are created and linked automatically, and never show up as income or expense in your reports or budgets.",
         "Set budgets and recurring bills to get alerts and a projected balance; deviations from your bank balance flag early.",
         "Invoice clients, record partial payments, and see who's behind under Invoices → AR.",
         "Share a book or a single account with someone — \"contribute\" access can be limited to submitting expenses with no visibility into balances."
@@ -231,6 +234,8 @@
         "Upload a photo for any contact — it replaces the default icon at the top of the card.",
         "Build a work history under Career — add a role, then \"Archive this role & start a new one\" when it ends, keeping past roles on record like a resume.",
         "Filter the list to just people or just companies.",
+        "The list sorts alphabetically by name — jump straight to a letter with the A-Z strip beside it.",
+        "Tag a contact as a company and its editor switches to company fields — Locations (one or more addresses) and Hours (open/close per day) instead of personal fields like gender or career.",
         "Log interactions (calls, emails, meetings, notes) to keep a timeline for each contact.",
         "Track opportunities on the deals pipeline (Lead → Contacted → … → Won/Lost).",
         "Set a follow-up date on an interaction or deal to get reminded.",
@@ -462,6 +467,23 @@
     "note": "Found a bug, want a feature, or have a complaint? Email us and we'll take a look. For bug reports, include what you did, what you expected, and what happened (a screenshot helps a lot)."
   },
   "whats_new": [
+    {
+      "version": "0.6.0",
+      "date": "2026-08-15",
+      "highlights": [
+        "Finance now has a real Transfer type — move money between two books, even across personal and business (or between two accounts in the same book), and both sides stay linked without ever counting as income or expense.",
+        "Contacts sort alphabetically with an A-Z jump strip, and company contacts now get their own fields — Locations and Hours — instead of personal fields like gender or career. Company contacts can also have their own custom fields now, set up from a new Settings → Admin Settings → Contact Fields screen.",
+        "Tasks are now one flat, ranked list instead of grouped by category, with a new Sort by control (Priority, Date/Time, or Alphabetical) — the same control was also added to the Top 3 Tasks and Due Today dashboard blocks.",
+        "AI Chat now runs in the background — send a message and keep going, get notified when it's ready or needs your approval, and switch between multiple conversations that each keep working independently. The Chats list opens a conversation directly on click, with a live dot for one still working and an unread mark for one you haven't seen yet.",
+        "Dashboard blocks can now have their own buttons — an Open button per row, or one-click status buttons on Tasks/Assets blocks — instead of separate standalone action blocks.",
+        "Finance now remembers the last book you had open, per workspace.",
+        "Asset attachment images open in a full-screen viewer instead of a new tab.",
+        "The AI in Chat can now see and work with notes shared with you, not just your own.",
+        "The Notes \"···\" menu and every other Notes dialog now open centered on screen, matching the rest of the app.",
+        "Fixed a mobile bug where taps could land inches off target after the on-screen keyboard closed.",
+        "Diagnosed a push-notification delivery report — Web Push was already fully built and firing, with a likely fix now shipped (a real VAPID contact address instead of a placeholder) and clearer error messages for anyone still not receiving them."
+      ]
+    },
     {
       "version": "0.5.0",
       "date": "2026-08-10",

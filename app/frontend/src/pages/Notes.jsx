@@ -128,25 +128,33 @@ function ContextMenu({ node, onClose, onRename, onMove, onDelete, onShare, onLea
   const canLeave = !own && !isPool
   const btn = 'w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-charcoal-100 dark:hover:bg-charcoal-700'
   const danger = 'w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400'
-  if (node.type === 'folder') {
-    return (
-      <div className="card p-1 w-44 shadow-lg z-50">
+  const items = node.type === 'folder'
+    ? (
+      <>
         {canManage && <button onClick={() => { onClose(); onRename(node) }} className={btn}>Rename folder</button>}
         {canManage && <button onClick={() => { onClose(); onArchive(node) }} className={btn}>{node.archived ? 'Unarchive folder' : 'Archive folder'}</button>}
         {canManage && <button onClick={() => { onClose(); onShare(node) }} className={btn}>Share…</button>}
         {canManage && <button onClick={() => { onClose(); onDelete(node) }} className={danger}>Delete folder…</button>}
         {canLeave && <button onClick={() => { onClose(); onLeave(node) }} className={danger}>Leave</button>}
-      </div>
+      </>
     )
-  }
+    : (
+      <>
+        {canManage && <button onClick={() => { onClose(); onRename(node) }} className={btn}>Rename note</button>}
+        {canManage && <button onClick={() => { onClose(); onMove(node) }} className={btn}>Move to folder</button>}
+        {canManage && <button onClick={() => { onClose(); onArchive(node) }} className={btn}>{node.archived ? 'Unarchive note' : 'Archive note'}</button>}
+        {canManage && <button onClick={() => { onClose(); onShare(node) }} className={btn}>Share…</button>}
+        {canManage && <button onClick={() => { onClose(); onDelete(node) }} className={danger}>Delete note…</button>}
+        {canLeave && <button onClick={() => { onClose(); onLeave(node) }} className={danger}>Leave</button>}
+      </>
+    )
+  // Unlike the app's form dialogs (which require an explicit Cancel/✕ so a
+  // half-filled form is never lost by an accidental tap), this is a plain
+  // action list with no state to lose — closing on backdrop click matches
+  // how a menu/dropdown is expected to behave everywhere else.
   return (
-    <div className="card p-1 w-44 shadow-lg z-50">
-      {canManage && <button onClick={() => { onClose(); onRename(node) }} className={btn}>Rename note</button>}
-      {canManage && <button onClick={() => { onClose(); onMove(node) }} className={btn}>Move to folder</button>}
-      {canManage && <button onClick={() => { onClose(); onArchive(node) }} className={btn}>{node.archived ? 'Unarchive note' : 'Archive note'}</button>}
-      {canManage && <button onClick={() => { onClose(); onShare(node) }} className={btn}>Share…</button>}
-      {canManage && <button onClick={() => { onClose(); onDelete(node) }} className={danger}>Delete note…</button>}
-      {canLeave && <button onClick={() => { onClose(); onLeave(node) }} className={danger}>Leave</button>}
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-card p-1 w-44" onClick={e => e.stopPropagation()}>{items}</div>
     </div>
   )
 }
@@ -173,39 +181,32 @@ function NoteShareModal({ node, onClose, onSaved }) {
   }
 
   return (
-    <Modal title={`Share “${node.name}”`} onClose={onClose}>
-      <div className="space-y-3">
-        <p className="text-xs text-charcoal-500 dark:text-charcoal-400">
-          Sharing a folder shares everything inside it. They get a request to accept.
-        </p>
-        <select className="input" value={target} onChange={e => setTarget(e.target.value)}>
-          <option value="">Who…</option>
-          <option value="household">Everyone (household)</option>
-          {members.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
-        </select>
-        <select className="input" value={access} onChange={e => setAccess(e.target.value)}>
-          <option value="read">Can view</option>
-          <option value="contribute">Can edit content</option>
-          <option value="edit">Full access</option>
-        </select>
-        {error && <p className="text-sm text-red-500">{error}</p>}
-        <div className="flex gap-2">
-          <button onClick={onClose} className="btn-ghost flex-1">Cancel</button>
-          <button onClick={save} disabled={busy} className="btn-primary flex-1">{busy ? 'Sharing…' : 'Share'}</button>
+    <div className="modal-overlay">
+      <div className="modal-card p-5 max-w-sm">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold">Share &ldquo;{node.name}&rdquo;</h2>
+          <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
         </div>
-      </div>
-    </Modal>
-  )
-}
-
-// ── Modal shell ───────────────────────────────────────────────────────────────
-
-function Modal({ title, children, onClose }) {
-  return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="card p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
-        <h2 className="font-semibold mb-3">{title}</h2>
-        {children}
+        <div className="space-y-3">
+          <p className="text-xs text-charcoal-500 dark:text-charcoal-400">
+            Sharing a folder shares everything inside it. They get a request to accept.
+          </p>
+          <select className="input" value={target} onChange={e => setTarget(e.target.value)}>
+            <option value="">Who…</option>
+            <option value="household">Everyone (household)</option>
+            {members.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
+          </select>
+          <select className="input" value={access} onChange={e => setAccess(e.target.value)}>
+            <option value="read">Can view</option>
+            <option value="contribute">Can edit content</option>
+            <option value="edit">Full access</option>
+          </select>
+          {error && <p className="text-sm text-red-500">{error}</p>}
+          <div className="flex gap-2">
+            <button onClick={onClose} className="btn-ghost flex-1">Cancel</button>
+            <button onClick={save} disabled={busy} className="btn-primary flex-1">{busy ? 'Sharing…' : 'Share'}</button>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -225,7 +226,7 @@ export default function Notes() {
   const [saving, setSaving]         = useState(false)
   const [saved, setSaved]           = useState(false)
   const [error, setError]           = useState('')
-  const [contextMenu, setContextMenu] = useState(null)  // {node, x, y}
+  const [contextMenu, setContextMenu] = useState(null)  // {node}
   const [shareModal, setShareModal] = useState(null)    // {node}
   const [modal, setModal]           = useState(null)    // {type, item?}
   const [modalInput, setModalInput] = useState('')
@@ -356,14 +357,6 @@ export default function Notes() {
     autoSaveTimer.current = setTimeout(() => { save() }, 1500)
     return () => clearTimeout(autoSaveTimer.current)
   }, [editContent]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Close context menu on outside click
-  useEffect(() => {
-    if (!contextMenu) return
-    const close = () => setContextMenu(null)
-    window.addEventListener('click', close)
-    return () => window.removeEventListener('click', close)
-  }, [contextMenu])
 
   async function openNote(path) {
     setError('')
@@ -613,29 +606,6 @@ export default function Notes() {
         )}
       </div>
 
-      {/* Context menu (inline below sidebar, not absolute positioned) */}
-      {contextMenu && (
-        <div className="border-t border-charcoal-200 dark:border-charcoal-700 p-2">
-          <ContextMenu
-            node={contextMenu.node}
-            folders={folders}
-            onClose={() => setContextMenu(null)}
-            onRename={node => openModal('rename', node)}
-            onMove={node => openModal('move', node)}
-            onDelete={node => openModal(node.type === 'folder' ? 'deleteFolder' : 'deleteNote', node)}
-            onShare={node => setShareModal({ node })}
-            onLeave={handleLeave}
-            onArchive={handleArchiveToggle}
-          />
-        </div>
-      )}
-      {shareModal && (
-        <NoteShareModal
-          node={shareModal.node}
-          onClose={() => setShareModal(null)}
-          onSaved={() => { setShareModal(null); load() }}
-        />
-      )}
     </div>
   )
 
@@ -673,7 +643,12 @@ export default function Notes() {
           spellCheck={false}
           readOnly={readOnly}
           placeholder="Start writing…"
-          className="w-full h-full font-mono text-sm p-4 bg-white dark:bg-charcoal-900 resize-none focus:outline-none leading-relaxed overflow-x-hidden overscroll-contain"
+          // text-base (16px), not text-sm (14px): iOS Safari auto-zooms the
+          // whole page on focus for any text input rendered under 16px, then
+          // never zooms back out on its own — reported 2026-08-15 as "hides
+          // the edges and looks bad, have to manually zoom back out." 16px
+          // is the standard threshold that avoids it; not a visual choice.
+          className="w-full h-full font-mono text-base p-4 bg-white dark:bg-charcoal-900 resize-none focus:outline-none leading-relaxed overflow-x-hidden overscroll-contain"
         />
       </div>
     </div>
@@ -709,129 +684,184 @@ export default function Notes() {
       </div>
 
       {/* Modals */}
+      {contextMenu && (
+        <ContextMenu
+          node={contextMenu.node}
+          onClose={() => setContextMenu(null)}
+          onRename={node => openModal('rename', node)}
+          onMove={node => openModal('move', node)}
+          onDelete={node => openModal(node.type === 'folder' ? 'deleteFolder' : 'deleteNote', node)}
+          onShare={node => setShareModal({ node })}
+          onLeave={handleLeave}
+          onArchive={handleArchiveToggle}
+        />
+      )}
+      {shareModal && (
+        <NoteShareModal
+          node={shareModal.node}
+          onClose={() => setShareModal(null)}
+          onSaved={() => { setShareModal(null); load() }}
+        />
+      )}
       {modal?.type === 'newNote' && (
-        <Modal title="New Note" onClose={() => setModal(null)}>
-          <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-2">
-            {selectedPath && items.find(i => i.path === selectedPath && i.type === 'folder')
-              ? `Will be created inside: ${selectedPath}`
-              : 'Will be created at the top level.'}
-          </p>
-          <input
-            autoFocus
-            className="input w-full mb-3"
-            placeholder="Note name"
-            value={modalInput}
-            onChange={e => setModalInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleCreateNote()}
-          />
-          {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
-          <div className="flex gap-2">
-            <button onClick={() => { setModal(null); setError('') }} className="btn-ghost flex-1">Cancel</button>
-            <button onClick={handleCreateNote} disabled={modalBusy || !modalInput.trim()} className="btn-primary flex-1">
-              {modalBusy ? 'Creating…' : 'Create'}
-            </button>
+        <div className="modal-overlay">
+          <div className="modal-card p-5 max-w-sm">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold">New Note</h2>
+              <button onClick={() => setModal(null)} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+            </div>
+            <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-2">
+              {selectedPath && items.find(i => i.path === selectedPath && i.type === 'folder')
+                ? `Will be created inside: ${selectedPath}`
+                : 'Will be created at the top level.'}
+            </p>
+            <input
+              autoFocus
+              className="input w-full mb-3"
+              placeholder="Note name"
+              value={modalInput}
+              onChange={e => setModalInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleCreateNote()}
+            />
+            {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
+            <div className="flex gap-2">
+              <button onClick={() => { setModal(null); setError('') }} className="btn-ghost flex-1">Cancel</button>
+              <button onClick={handleCreateNote} disabled={modalBusy || !modalInput.trim()} className="btn-primary flex-1">
+                {modalBusy ? 'Creating…' : 'Create'}
+              </button>
+            </div>
           </div>
-        </Modal>
+        </div>
       )}
 
       {modal?.type === 'newFolder' && (
-        <Modal title="New Folder" onClose={() => setModal(null)}>
-          <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-2">
-            {selectedPath && items.find(i => i.path === selectedPath && i.type === 'folder')
-              ? `Will be created inside: ${selectedPath}`
-              : 'Will be created at the top level.'}
-          </p>
-          <input
-            autoFocus
-            className="input w-full mb-3"
-            placeholder="Folder name"
-            value={modalInput}
-            onChange={e => setModalInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleCreateFolder()}
-          />
-          {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
-          <div className="flex gap-2">
-            <button onClick={() => { setModal(null); setError('') }} className="btn-ghost flex-1">Cancel</button>
-            <button onClick={handleCreateFolder} disabled={modalBusy || !modalInput.trim()} className="btn-primary flex-1">
-              {modalBusy ? 'Creating…' : 'Create'}
-            </button>
+        <div className="modal-overlay">
+          <div className="modal-card p-5 max-w-sm">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold">New Folder</h2>
+              <button onClick={() => setModal(null)} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+            </div>
+            <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-2">
+              {selectedPath && items.find(i => i.path === selectedPath && i.type === 'folder')
+                ? `Will be created inside: ${selectedPath}`
+                : 'Will be created at the top level.'}
+            </p>
+            <input
+              autoFocus
+              className="input w-full mb-3"
+              placeholder="Folder name"
+              value={modalInput}
+              onChange={e => setModalInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleCreateFolder()}
+            />
+            {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
+            <div className="flex gap-2">
+              <button onClick={() => { setModal(null); setError('') }} className="btn-ghost flex-1">Cancel</button>
+              <button onClick={handleCreateFolder} disabled={modalBusy || !modalInput.trim()} className="btn-primary flex-1">
+                {modalBusy ? 'Creating…' : 'Create'}
+              </button>
+            </div>
           </div>
-        </Modal>
+        </div>
       )}
 
       {modal?.type === 'rename' && (
-        <Modal title={`Rename ${modal.item?.type === 'folder' ? 'Folder' : 'Note'}`} onClose={() => setModal(null)}>
-          <input
-            autoFocus
-            className="input w-full mb-3"
-            value={modalInput}
-            onChange={e => setModalInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleRename()}
-          />
-          {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
-          <div className="flex gap-2">
-            <button onClick={() => { setModal(null); setError('') }} className="btn-ghost flex-1">Cancel</button>
-            <button onClick={handleRename} disabled={modalBusy || !modalInput.trim()} className="btn-primary flex-1">
-              {modalBusy ? 'Renaming…' : 'Rename'}
-            </button>
+        <div className="modal-overlay">
+          <div className="modal-card p-5 max-w-sm">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold">Rename {modal.item?.type === 'folder' ? 'Folder' : 'Note'}</h2>
+              <button onClick={() => setModal(null)} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+            </div>
+            <input
+              autoFocus
+              className="input w-full mb-3"
+              value={modalInput}
+              onChange={e => setModalInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleRename()}
+            />
+            {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
+            <div className="flex gap-2">
+              <button onClick={() => { setModal(null); setError('') }} className="btn-ghost flex-1">Cancel</button>
+              <button onClick={handleRename} disabled={modalBusy || !modalInput.trim()} className="btn-primary flex-1">
+                {modalBusy ? 'Renaming…' : 'Rename'}
+              </button>
+            </div>
           </div>
-        </Modal>
+        </div>
       )}
 
       {modal?.type === 'move' && (
-        <Modal title="Move Note" onClose={() => setModal(null)}>
-          <p className="text-sm text-charcoal-600 dark:text-charcoal-300 mb-2">
-            Move <strong>{modal.item?.name}</strong> to:
-          </p>
-          <select
-            className="input w-full mb-3"
-            value={modalTarget}
-            onChange={e => setModalTarget(e.target.value)}
-          >
-            <option value="">(Root — no folder)</option>
-            {folders
-              .filter(f => f !== parentOf(modal.item?.path || ''))
-              .map(f => <option key={f} value={f}>{f}</option>)
-            }
-          </select>
-          {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
-          <div className="flex gap-2">
-            <button onClick={() => { setModal(null); setError('') }} className="btn-ghost flex-1">Cancel</button>
-            <button onClick={handleMove} disabled={modalBusy} className="btn-primary flex-1">
-              {modalBusy ? 'Moving…' : 'Move'}
-            </button>
+        <div className="modal-overlay">
+          <div className="modal-card p-5 max-w-sm">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold">Move Note</h2>
+              <button onClick={() => setModal(null)} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+            </div>
+            <p className="text-sm text-charcoal-600 dark:text-charcoal-300 mb-2">
+              Move <strong>{modal.item?.name}</strong> to:
+            </p>
+            <select
+              className="input w-full mb-3"
+              value={modalTarget}
+              onChange={e => setModalTarget(e.target.value)}
+            >
+              <option value="">(Root — no folder)</option>
+              {folders
+                .filter(f => f !== parentOf(modal.item?.path || ''))
+                .map(f => <option key={f} value={f}>{f}</option>)
+              }
+            </select>
+            {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
+            <div className="flex gap-2">
+              <button onClick={() => { setModal(null); setError('') }} className="btn-ghost flex-1">Cancel</button>
+              <button onClick={handleMove} disabled={modalBusy} className="btn-primary flex-1">
+                {modalBusy ? 'Moving…' : 'Move'}
+              </button>
+            </div>
           </div>
-        </Modal>
+        </div>
       )}
 
       {modal?.type === 'deleteNote' && (
-        <Modal title="Delete Note?" onClose={() => setModal(null)}>
-          <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mb-4">
-            <strong>{modal.item?.path}</strong> will be permanently deleted.
-          </p>
-          {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
-          <div className="flex gap-2">
-            <button onClick={() => { setModal(null); setError('') }} className="btn-ghost flex-1">Cancel</button>
-            <button onClick={handleDelete} disabled={modalBusy} className="flex-1 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors">
-              {modalBusy ? 'Deleting…' : 'Delete'}
-            </button>
+        <div className="modal-overlay">
+          <div className="modal-card p-5 max-w-sm">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold">Delete Note?</h2>
+              <button onClick={() => setModal(null)} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+            </div>
+            <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mb-4">
+              <strong>{modal.item?.path}</strong> will be permanently deleted.
+            </p>
+            {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
+            <div className="flex gap-2">
+              <button onClick={() => { setModal(null); setError('') }} className="btn-ghost flex-1">Cancel</button>
+              <button onClick={handleDelete} disabled={modalBusy} className="flex-1 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors">
+                {modalBusy ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
           </div>
-        </Modal>
+        </div>
       )}
 
       {modal?.type === 'deleteFolder' && (
-        <Modal title="Delete Folder?" onClose={() => setModal(null)}>
-          <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mb-4">
-            <strong>{modal.item?.path}</strong> and all its contents will be permanently deleted.
-          </p>
-          {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
-          <div className="flex gap-2">
-            <button onClick={() => { setModal(null); setError('') }} className="btn-ghost flex-1">Cancel</button>
-            <button onClick={handleDelete} disabled={modalBusy} className="flex-1 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors">
-              {modalBusy ? 'Deleting…' : 'Delete Folder'}
-            </button>
+        <div className="modal-overlay">
+          <div className="modal-card p-5 max-w-sm">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold">Delete Folder?</h2>
+              <button onClick={() => setModal(null)} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+            </div>
+            <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mb-4">
+              <strong>{modal.item?.path}</strong> and all its contents will be permanently deleted.
+            </p>
+            {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
+            <div className="flex gap-2">
+              <button onClick={() => { setModal(null); setError('') }} className="btn-ghost flex-1">Cancel</button>
+              <button onClick={handleDelete} disabled={modalBusy} className="flex-1 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors">
+                {modalBusy ? 'Deleting…' : 'Delete Folder'}
+              </button>
+            </div>
           </div>
-        </Modal>
+        </div>
       )}
     </div>
   )

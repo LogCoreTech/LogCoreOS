@@ -31,6 +31,7 @@ const RECORD_PARAM = {
   finance: 'book',
   contacts: 'contact',
   dashboard: 'id',
+  chat: 'chat_id',
 }
 
 // Sections/sub-pages a module exposes beyond its own bare landing page.

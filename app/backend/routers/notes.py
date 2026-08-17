@@ -83,8 +83,7 @@ def _resolve(current_user: dict, workspace: str, path: str, need: str):
     if not found:
         raise HTTPException(status_code=404, detail="Note not found")
     store_user, access = found
-    order = {"read": 0, "contribute": 1, "edit": 2}
-    if order.get(access, -1) < order[need]:
+    if not notes_service.meets(access, need):
         raise HTTPException(status_code=403, detail="You don't have access to change this note.")
     return store_user
 

@@ -53,6 +53,19 @@ def _require_edit(access: str) -> None:
         )
 
 
+def _reject_transfer_leg(store_user: str, workspace: str, book_id: str, tx_id: str) -> None:
+    """A Transfer's two legs are edited/deleted together via
+    finance_transfers.py, never independently — otherwise the pair can
+    desync (amount/date drift) or one side can outlive the other, silently
+    excluded from reports forever with nothing to reunite it."""
+    tx = finance_service.get_transaction(store_user, workspace, book_id, tx_id)
+    if tx and tx.get("transfer_pair_id"):
+        raise HTTPException(
+            status_code=409,
+            detail="This is one side of a transfer — edit or delete it from the Transfer, not the transaction directly.",
+        )
+
+
 def _caps_for(
     user: dict, workspace: str, store_user: str, book: dict, account_id: str | None = None
 ) -> dict | None:
@@ -166,6 +179,10 @@ class AccountUpdate(BaseModel):
     synced_balance_cents: int | None = None
 
 
+class PrefsUpdate(BaseModel):
+    last_book_id: str | None = None
+
+
 class TransactionCreate(BaseModel):
     date: str
     amount_cents: int
@@ -195,6 +212,26 @@ class TransactionUpdate(BaseModel):
 # ---------------------------------------------------------------------------
 # Books
 # ---------------------------------------------------------------------------
+
+
+@router.get("/prefs")
+def get_prefs(
+    current_user: dict = Depends(_require_finance),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_read_limit),
+):
+    return {"last_book_id": finance_service.get_last_book_id(current_user["name"], workspace)}
+
+
+@router.put("/prefs")
+def set_prefs(
+    req: PrefsUpdate,
+    current_user: dict = Depends(_require_finance),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_write_limit),
+):
+    finance_service.set_last_book_id(current_user["name"], workspace, req.last_book_id)
+    return {"ok": True}
 
 
 @router.get("/books")
@@ -473,6 +510,7 @@ def update_transaction(
 ):
     store_user, book, access = _find_or_404(current_user, workspace, book_id)
     _validate_id(tx_id, "transaction ID")
+    _reject_transfer_leg(store_user, workspace, book_id, tx_id)
     if access == "contribute":
         _require_contribute_own_tx(current_user, workspace, store_user, book, tx_id, req)
     else:
@@ -507,6 +545,7 @@ def delete_transaction(
 ):
     store_user, book, access = _find_or_404(current_user, workspace, book_id)
     _validate_id(tx_id, "transaction ID")
+    _reject_transfer_leg(store_user, workspace, book_id, tx_id)
     if access == "contribute":
         _require_contribute_own_tx(current_user, workspace, store_user, book, tx_id, None)
     else:

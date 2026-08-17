@@ -42,6 +42,7 @@ _RESEARCH_TOOLS = {
     "read_journal_entry",
     "list_journal_entries",
     "list_notes",
+    "read_note",
     "get_task_history",
     "search_brain",
     "get_week_snapshot",
@@ -220,12 +221,37 @@ _USER_TOOLS: list[dict] = [
     },
     {
         "name": "list_notes",
-        "description": "List all notes and folders in the user's Notes brain folder.",
+        "description": (
+            "List all notes and folders visible to the user: their own, the household/team pool's, "
+            "and any shared with them by another user. A note from someone else carries an `_owner` "
+            "field (a username, or 'household'/'team' for a pool note) and an `_access` field "
+            "(read|contribute|edit) — own notes have neither. Pass the `_owner` you got back here into "
+            "read_note/update_note/delete_note/move_note's own `owner` param so they resolve to the "
+            "right store even if the same note name exists in more than one place."
+        ),
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
     {
+        "name": "read_note",
+        "description": "Read an existing note's content, including one shared with the user or in the household/team pool.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Relative note path, e.g. 'Work/Meeting Notes'",
+                },
+                "owner": {
+                    "type": "string",
+                    "description": "Optional — the note's `_owner` field from list_notes, if it has one. Disambiguates when the same path could exist in more than one visible store.",
+                },
+            },
+            "required": ["path"],
+        },
+    },
+    {
         "name": "create_note",
-        "description": "Create a new note. Path is relative to Notes/ without the .md extension, e.g. 'Work/Meeting Notes' or 'Ideas'.",
+        "description": "Create a new note in the user's own Notes folder. Path is relative to Notes/ without the .md extension, e.g. 'Work/Meeting Notes' or 'Ideas'.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -243,7 +269,10 @@ _USER_TOOLS: list[dict] = [
     },
     {
         "name": "update_note",
-        "description": "Overwrite an existing note's content. Use list_notes or read_brain_file first if you need to see what's there.",
+        "description": (
+            "Overwrite an existing note's content — the user's own, or one shared with them at "
+            "contribute/edit level. Use list_notes or read_note first if you need to see what's there."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
@@ -252,19 +281,27 @@ _USER_TOOLS: list[dict] = [
                     "description": "Relative note path, e.g. 'Work/Meeting Notes'",
                 },
                 "content": {"type": "string", "description": "New full markdown content"},
+                "owner": {
+                    "type": "string",
+                    "description": "Optional — the note's `_owner` field from list_notes, if it has one. Disambiguates when the same path could exist in more than one visible store.",
+                },
             },
             "required": ["path", "content"],
         },
     },
     {
         "name": "delete_note",
-        "description": "Permanently delete a note by path.",
+        "description": "Permanently delete a note by path — the user's own, or one shared with them at edit level.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "path": {
                     "type": "string",
                     "description": "Relative note path, e.g. 'Work/Meeting Notes'",
+                },
+                "owner": {
+                    "type": "string",
+                    "description": "Optional — the note's `_owner` field from list_notes, if it has one. Disambiguates when the same path could exist in more than one visible store.",
                 },
             },
             "required": ["path"],
@@ -479,7 +516,12 @@ _USER_TOOLS: list[dict] = [
     },
     {
         "name": "search_brain",
-        "description": "Search across all the user's Brain markdown files (notes, journal, memory, profile) for a keyword or phrase.",
+        "description": (
+            "Search across the user's Brain markdown files (notes, journal, memory, profile) for a "
+            "keyword or phrase. Notes shared with the user or in the household/team pool are searched "
+            "too, alongside the user's own; journal/memory/profile search stays scoped to the user's "
+            "own files, since those aren't shareable."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
@@ -490,7 +532,7 @@ _USER_TOOLS: list[dict] = [
     },
     {
         "name": "move_note",
-        "description": "Move or rename a note. Paths are relative to Notes/ without .md extension.",
+        "description": "Move or rename a note — the user's own, or one shared with them at edit level. Paths are relative to Notes/ without .md extension.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -498,6 +540,10 @@ _USER_TOOLS: list[dict] = [
                 "to_path": {
                     "type": "string",
                     "description": "New note path, e.g. 'Brainstorms/Ideas'",
+                },
+                "owner": {
+                    "type": "string",
+                    "description": "Optional — the note's `_owner` field from list_notes, if it has one. Disambiguates when the same path could exist in more than one visible store.",
                 },
             },
             "required": ["from_path", "to_path"],
@@ -1104,7 +1150,7 @@ _USER_TOOLS: list[dict] = [
     },
     {
         "name": "get_dashboard",
-        "description": "Get one dashboard's blocks (id/type/config only — layout/position is human/UI territory and is not exposed here).",
+        "description": "Get one dashboard's blocks, including each one's current position and size on the desktop grid (36 columns wide, 24px rows) — call this before update_dashboard_block if you're moving or resizing an existing block, so you can see what's already occupied and pick a spot that doesn't overlap another block.",
         "input_schema": {
             "type": "object",
             "properties": {"dashboard_id": {"type": "string"}},
@@ -1147,7 +1193,7 @@ _USER_TOOLS: list[dict] = [
     },
     {
         "name": "add_dashboard_block",
-        "description": "Add a block to a dashboard. Requires contribute or edit access. Fails if the dashboard uses a template — its block set is template-controlled (edit the template instead, or use update_dashboard_template). Call get_dashboard_block_catalog first if you don't already know the block type's config shape. The new block is stacked at the bottom automatically — layout is never set here.",
+        "description": "Add a block to a dashboard. Requires contribute or edit access. Fails if the dashboard uses a template — its block set is template-controlled (edit the template instead, or use update_dashboard_template). Call get_dashboard_block_catalog first if you don't already know the block type's config shape. The new block is stacked at the bottom automatically — position (x/y) is never set here, only size is optionally controllable via `layout`.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -1160,19 +1206,56 @@ _USER_TOOLS: list[dict] = [
                     "type": "object",
                     "description": "Config keys per get_dashboard_block_catalog's config_fields for this type",
                 },
+                "layout": {
+                    "type": "object",
+                    "description": (
+                        "Optional size override, in grid units — the desktop grid is 36 columns "
+                        "wide, the mobile grid is 12 columns wide (always full-width there — "
+                        "mobile is effectively one column), and each row unit is a fixed 24px "
+                        "tall. Default size if omitted is 12 columns wide by 9 rows tall (roughly "
+                        "a third of the desktop width). Use a wider `w` for a block with a lot of "
+                        "horizontal content (a table, a wide chart) and a taller `h` for a block "
+                        "with a long list. Position is always auto-stacked below the existing "
+                        "blocks regardless of size."
+                    ),
+                    "properties": {
+                        "w": {"type": "integer", "description": "Width in grid columns, 1-36"},
+                        "h": {"type": "integer", "description": "Height in grid rows (24px each)"},
+                    },
+                },
             },
             "required": ["dashboard_id", "type", "config"],
         },
     },
     {
         "name": "update_dashboard_block",
-        "description": "Replace one existing block's config (never its layout/position). Requires contribute or edit access. Fails if the dashboard uses a template.",
+        "description": "Replace one existing block's config, and optionally its position and/or size. Requires contribute or edit access. Fails if the dashboard uses a template. Call get_dashboard first if you're moving or resizing — it returns every block's current {x, y, w, h} on the desktop grid so you can pick a spot that doesn't land on top of another block. Nothing here checks for overlaps automatically; read the current layout and reason about it yourself, the same way a person dragging a block on screen can see what's already there.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "dashboard_id": {"type": "string"},
                 "block_id": {"type": "string"},
                 "config": {"type": "object"},
+                "layout": {
+                    "type": "object",
+                    "description": (
+                        "Optional position/size override, in grid units (36-column desktop "
+                        "grid, 24px rows — see get_dashboard's `grid` field and each block's "
+                        "own `layout`). Omit any key to leave that aspect of the block's "
+                        "current layout untouched. `x`/`y` move it (top-left corner); `w`/`h` "
+                        "resize it. Only the desktop layout is affected — mobile always stays "
+                        "full-width and keeps its own stacking order regardless."
+                    ),
+                    "properties": {
+                        "x": {
+                            "type": "integer",
+                            "description": "Left edge, in grid columns from 0",
+                        },
+                        "y": {"type": "integer", "description": "Top edge, in grid rows from 0"},
+                        "w": {"type": "integer", "description": "Width in grid columns, 1-36"},
+                        "h": {"type": "integer", "description": "Height in grid rows (24px each)"},
+                    },
+                },
             },
             "required": ["dashboard_id", "block_id", "config"],
         },
@@ -1467,6 +1550,107 @@ def _resolve_member_name(raw: str) -> tuple[str | None, str | None]:
 # ---------------------------------------------------------------------------
 
 
+def _resolve_note_or_error(user: dict, workspace: str, path: str, owner: str | None, need: str):
+    """Resolve a note/folder path the agent's caller can reach at >= `need`
+    access, the same way routers/notes.py's own _resolve() does for real
+    users. Returns (store_user, None) on success or (None, error_dict)."""
+    try:
+        found = notes_service.find_note_store(
+            user["name"],
+            user.get("feature_role", "member"),
+            user.get("role") == "admin",
+            workspace,
+            path,
+            owner=owner,
+        )
+    except ValueError as e:
+        return None, {"error": str(e)}
+    if not found:
+        return None, {"error": f"Note not found: {path!r}"}
+    store_user, access = found
+    if not notes_service.meets(access, need):
+        return None, {"error": f"You only have {access} access to {path!r} — that's not enough."}
+    return store_user, None
+
+
+_LG_COLS = 36  # DashboardGrid.jsx's COLS.lg — desktop grid width
+_MAX_ROWS = 60  # generous cap (24px/row = 1440px tall) against a garbage/huge value
+_MAX_Y = 500  # generous cap against a garbage/huge stacking position
+
+
+def _block_layout_for_agent(block: dict) -> dict:
+    """The desktop-grid position/size get_dashboard exposes to the agent
+    (2026-08-15) — lg only, since that's the one breakpoint the agent can
+    meaningfully reason about and control; sm always mirrors it at
+    full-width, never independently interesting to read or set here."""
+    lg = block.get("layout", {}).get("lg") or {}
+    return {"x": lg.get("x", 0), "y": lg.get("y", 0), "w": lg.get("w", 12), "h": lg.get("h", 9)}
+
+
+def _clamp_block_layout_override(override: dict, *, allow_position: bool, current_w: int) -> dict:
+    """Clamp an agent-supplied {x?, y?, w?, h?} override to sane grid bounds
+    (2026-08-15) — the agent can request a position/size, but never a
+    nonsense one (zero/negative, wider than the desktop grid itself, or
+    starting past its right edge). `allow_position` is False for
+    add_dashboard_block (new blocks always auto-stack; see
+    _apply_layout_override) and True for update_dashboard_block. `current_w`
+    is the block's existing width, used to bound `x` when the override
+    doesn't also change `w` — without it, an x-only move would wrongly clamp
+    against the full grid width instead of the block's real (possibly much
+    narrower) current width, pinning x to 0 for anything already narrower
+    than full-width (caught by test_update_dashboard_block_can_move_position
+    before this shipped)."""
+    result = {}
+    w = override.get("w")
+    if isinstance(w, int) and not isinstance(w, bool):
+        result["w"] = max(1, min(w, _LG_COLS))
+    h = override.get("h")
+    if isinstance(h, int) and not isinstance(h, bool):
+        result["h"] = max(1, min(h, _MAX_ROWS))
+    if allow_position:
+        x = override.get("x")
+        if isinstance(x, int) and not isinstance(x, bool):
+            # Clamped against the resulting width (the override's own new w,
+            # or else the block's current w) so the block can never be
+            # placed hanging off the right edge.
+            max_x = max(0, _LG_COLS - result.get("w", current_w))
+            result["x"] = max(0, min(x, max_x))
+        y = override.get("y")
+        if isinstance(y, int) and not isinstance(y, bool):
+            result["y"] = max(0, min(y, _MAX_Y))
+    return result
+
+
+def _apply_layout_override(layout: dict, override: dict, *, allow_position: bool = False) -> dict:
+    """Apply a clamped {x?, y?, w?, h?} override onto a stacked_layout()-
+    shaped {lg, sm} dict. Width/x only ever change on `lg` (the 36-col
+    desktop grid; `sm` stays full-width at x=0, since mobile is effectively
+    one column); height changes on both so the block reads the same tall on
+    either breakpoint. `sm`'s own y is left untouched — mobile stacking order
+    isn't something the agent has any way to reason about from the desktop
+    grid it's shown, so an lg-only y change doesn't attempt to also guess a
+    corresponding mobile position. Position (x/y) is only ever applied when
+    allow_position=True (update_dashboard_block) — add_dashboard_block always
+    auto-stacks new blocks via dashboards_service.stacked_layout()."""
+    current_w = (layout.get("lg") or {}).get("w", _LG_COLS)
+    clamped = _clamp_block_layout_override(
+        override or {}, allow_position=allow_position, current_w=current_w
+    )
+    if not clamped:
+        return layout
+    result = {bp: dict(v) for bp, v in layout.items()}
+    if "w" in clamped:
+        result["lg"]["w"] = clamped["w"]
+    if "h" in clamped:
+        for bp in result:
+            result[bp]["h"] = clamped["h"]
+    if "x" in clamped:
+        result["lg"]["x"] = clamped["x"]
+    if "y" in clamped:
+        result["lg"]["y"] = clamped["y"]
+    return result
+
+
 def _execute_tool(
     name: str,
     inputs: dict,
@@ -1553,23 +1737,45 @@ def _execute_tool(
                 return journal_service.upsert_entry(user["name"], inputs["date"], inputs["content"])
 
             case "list_notes":
-                return notes_service.list_notes(user["name"])
+                return notes_service.list_visible_notes(
+                    user["name"],
+                    user.get("feature_role", "member"),
+                    user.get("role") == "admin",
+                    workspace,
+                )
+
+            case "read_note":
+                store_user, err = _resolve_note_or_error(
+                    user, workspace, inputs["path"], inputs.get("owner"), "read"
+                )
+                if err:
+                    return err
+                note = notes_service.get_note(store_user, inputs["path"], workspace)
+                return note or {"error": f"Note not found: {inputs['path']!r}"}
 
             case "create_note":
                 return notes_service.create_note(
-                    user["name"], inputs["path"], inputs.get("content", "")
+                    user["name"], inputs["path"], inputs.get("content", ""), workspace
                 )
 
             case "update_note":
-                result = notes_service.update_note(user["name"], inputs["path"], inputs["content"])
-                if result is None:
-                    return {
-                        "error": f"Note not found: {inputs['path']!r}. Use create_note to make a new one."
-                    }
-                return result
+                store_user, err = _resolve_note_or_error(
+                    user, workspace, inputs["path"], inputs.get("owner"), "contribute"
+                )
+                if err:
+                    return err
+                result = notes_service.update_note(
+                    store_user, inputs["path"], inputs["content"], workspace
+                )
+                return result or {"error": f"Note not found: {inputs['path']!r}"}
 
             case "delete_note":
-                ok = notes_service.delete_note(user["name"], inputs["path"])
+                store_user, err = _resolve_note_or_error(
+                    user, workspace, inputs["path"], inputs.get("owner"), "edit"
+                )
+                if err:
+                    return err
+                ok = notes_service.delete_note(store_user, inputs["path"], workspace)
                 return {"deleted": ok}
 
             case "get_profile":
@@ -1779,6 +1985,15 @@ def _execute_tool(
                     ]
                 else:
                     search_roots = [(workspace, ws_path(user["name"], workspace))]
+
+                def _snippet(text: str) -> str | None:
+                    idx = text.lower().find(query)
+                    if idx == -1:
+                        return None
+                    start = max(0, idx - 100)
+                    end = min(len(text), idx + 200)
+                    return text[start:end].strip()
+
                 results = []
                 for ws_label, base in search_roots:
                     if not base.exists():
@@ -1791,23 +2006,56 @@ def _execute_tool(
                             text = p.read_text()
                         except OSError:
                             continue
-                        idx = text.lower().find(query)
-                        if idx == -1:
+                        snippet = _snippet(text)
+                        if snippet is None:
                             continue
-                        start = max(0, idx - 100)
-                        end = min(len(text), idx + 200)
-                        snippet = text[start:end].strip()
                         path_label = f"{ws_label}/{rel}" if cross_workspace else str(rel)
-                        results.append({"path": path_label, "snippet": snippet})
+                        results.append({"path": path_label, "snippet": snippet, "owner": None})
+
+                # Shared/pool notes — own files above are covered by the rglob
+                # walk; journal/memory/profile stay own-files-only since none
+                # of those are shareable.
+                for ws_label, _base in search_roots:
+                    visible = notes_service.list_visible_notes(
+                        user["name"],
+                        user.get("feature_role", "member"),
+                        user.get("role") == "admin",
+                        ws_label,
+                        include_archived=True,
+                    )
+                    for item in visible:
+                        owner = item.get("_owner")
+                        if not owner or item.get("type") != "note":
+                            continue
+                        store_user = notes_service.store_for_owner(owner, user["name"])
+                        note = notes_service.get_note(store_user, item["path"], ws_label)
+                        if not note:
+                            continue
+                        snippet = _snippet(note.get("content") or "")
+                        if snippet is None:
+                            continue
+                        # Matches the own-files path label above exactly (full
+                        # brain-relative, with the Notes/ prefix and .md
+                        # extension) — read_note/update_note still want the
+                        # bare Notes-relative form, same pre-existing gap a
+                        # model already has to bridge for its own search hits.
+                        note_rel = f"Notes/{item['path']}.md"
+                        path_label = f"{ws_label}/{note_rel}" if cross_workspace else note_rel
+                        results.append({"path": path_label, "snippet": snippet, "owner": owner})
                 return results
 
             case "move_note":
+                store_user, err = _resolve_note_or_error(
+                    user, workspace, inputs["from_path"], inputs.get("owner"), "edit"
+                )
+                if err:
+                    return err
                 return notes_service.move_item(
-                    user["name"], inputs["from_path"], inputs["to_path"], "note"
+                    store_user, inputs["from_path"], inputs["to_path"], "note", workspace
                 )
 
             case "create_note_folder":
-                return notes_service.create_folder(user["name"], inputs["path"])
+                return notes_service.create_folder(user["name"], inputs["path"], workspace)
 
             case "create_tasks":
                 created = []
@@ -2488,8 +2736,14 @@ def _execute_tool(
                     "icon": d["icon"],
                     "template_id": d.get("template_id"),
                     "access": found["access"],
+                    "grid": {"cols": _LG_COLS, "row_px": 24},
                     "blocks": [
-                        {"id": b["id"], "type": b["type"], "config": b["config"]}
+                        {
+                            "id": b["id"],
+                            "type": b["type"],
+                            "config": b["config"],
+                            "layout": _block_layout_for_agent(b),
+                        }
                         for b in d["blocks"]
                     ],
                 }
@@ -2562,7 +2816,10 @@ def _execute_tool(
                     "id": str(uuid.uuid4()),
                     "type": inputs["type"],
                     "config": inputs.get("config") or {},
-                    "layout": dashboards_service.stacked_layout(dashboard["blocks"]),
+                    "layout": _apply_layout_override(
+                        dashboards_service.stacked_layout(dashboard["blocks"]),
+                        inputs.get("layout"),
+                    ),
                 }
                 updated = dashboards_service.update_dashboard(
                     found["store"],
@@ -2604,10 +2861,22 @@ def _execute_tool(
                         "error": "This dashboard's block set comes from a template — use "
                         "update_dashboard_template to change its blocks."
                     }
-                if not any(b["id"] == inputs["block_id"] for b in dashboard["blocks"]):
+                target = next(
+                    (b for b in dashboard["blocks"] if b["id"] == inputs["block_id"]), None
+                )
+                if target is None:
                     return {"error": f"Block {inputs['block_id']!r} not found on this dashboard"}
+                new_layout = (
+                    _apply_layout_override(target["layout"], inputs["layout"], allow_position=True)
+                    if inputs.get("layout")
+                    else target["layout"]
+                )
                 new_blocks = [
-                    {**b, "config": inputs["config"]} if b["id"] == inputs["block_id"] else b
+                    (
+                        {**b, "config": inputs["config"], "layout": new_layout}
+                        if b["id"] == inputs["block_id"]
+                        else b
+                    )
                     for b in dashboard["blocks"]
                 ]
                 updated = dashboards_service.update_dashboard(
@@ -2728,6 +2997,7 @@ async def run_agent(
     cross_workspace: bool = False,
     resume: dict | None = None,
     max_steps: int | None = None,
+    chat_id: str | None = None,
 ) -> dict:
     """Run the agent loop and return a run record.
 
@@ -2838,6 +3108,7 @@ async def run_agent(
                 user["name"],
                 {
                     "run_id": run_id,
+                    "chat_id": chat_id,
                     "kind": "question",
                     "mode": mode,
                     "goal": goal,
@@ -2876,6 +3147,7 @@ async def run_agent(
                 user["name"],
                 {
                     "run_id": run_id,
+                    "chat_id": chat_id,
                     "kind": "plan",
                     "mode": mode,
                     "goal": goal,
@@ -2919,6 +3191,7 @@ async def run_agent(
                     user["name"],
                     {
                         "run_id": run_id,
+                        "chat_id": chat_id,
                         "kind": "write",
                         "mode": mode,
                         "goal": goal,
@@ -3023,6 +3296,21 @@ def load_pending_turn(user_name: str, run_id: str) -> dict | None:
     return next((p for p in data["pending"] if p["run_id"] == run_id), None)
 
 
+def get_pending_turn_by_chat_id(user_name: str, chat_id: str) -> dict | None:
+    """The live pending_write/pending_question/pending_plan card for one
+    conversation, if it currently has one — reopening a saved chat archive
+    (a plain .md, no structured step data) previously lost this entirely:
+    the assistant's prompt text ("I need your approval...") reloaded fine,
+    but the actual interactive card (and its run_id, needed to act on it)
+    did not, so a paused approval/question/plan effectively vanished on
+    reload with no way to act on it except starting over (2026-08-15).
+    `routers/chat.py`'s GET /chat/pending/{chat_id} re-attaches this record's
+    `steps`/`mode`/`run_id` onto the last message when Chat.jsx reopens a
+    session whose chat_sessions.json status is awaiting_approval/awaiting_answer."""
+    data = read_json(_pending_turns_path(user_name), default={"pending": []})
+    return next((p for p in data["pending"] if p.get("chat_id") == chat_id), None)
+
+
 def delete_pending_turn(user_name: str, run_id: str) -> None:
     """Consume a pending turn so it can't be replayed twice (e.g. a double-submit
     of the Approve click) — called once, right after a successful load."""
@@ -3030,3 +3318,113 @@ def delete_pending_turn(user_name: str, run_id: str) -> None:
     data = read_json(path, default={"pending": []})
     data["pending"] = [p for p in data["pending"] if p["run_id"] != run_id]
     write_json(path, data)
+
+
+# ---------------------------------------------------------------------------
+# Chat sessions (2026-08-15) — one entry per conversation (chat_id), letting
+# the frontend show a "Chats" list with real status instead of a plain saved-
+# archive list, and giving background-completed/paused turns somewhere to
+# register as unread. Not the archive itself (still a plain .md in Chats/,
+# written by routers/chat.py's _write_chat_archive) — this is the index over
+# it: {chat_id, filename, title, status, unread, updated_at, last_message_preview}.
+# Workspace-scoped (stored under ws_path, like the Chats/ archives themselves,
+# not the workspace-agnostic user_path other agent/*.json files use) — a
+# conversation's legs always live in one workspace's own Chats/ folder, so its
+# index entry has to live there too, or switching workspace mid-conversation
+# would silently point the same chat_id at two different physical files.
+_SESSIONS_CAP = 50
+
+
+def _sessions_path(user_name: str, workspace: str):
+    return ws_path(user_name, workspace) / "agent" / "chat_sessions.json"
+
+
+def load_sessions(user_name: str, workspace: str) -> list[dict]:
+    return read_json(_sessions_path(user_name, workspace), default={"sessions": []})["sessions"]
+
+
+def get_session(user_name: str, workspace: str, chat_id: str) -> dict | None:
+    return next((s for s in load_sessions(user_name, workspace) if s["chat_id"] == chat_id), None)
+
+
+def upsert_session(user_name: str, workspace: str, chat_id: str, **fields) -> dict:
+    """Create or update one session entry, moving it to the front (most-
+    recently-touched-first, same ordering convention as _save_run's runs.json)."""
+    path = _sessions_path(user_name, workspace)
+    data = read_json(path, default={"sessions": []})
+    sessions = data["sessions"]
+    existing = next((s for s in sessions if s["chat_id"] == chat_id), None)
+    if existing:
+        sessions.remove(existing)
+        existing.update(fields)
+        entry = existing
+    else:
+        entry = {"chat_id": chat_id, **fields}
+    sessions.insert(0, entry)
+    data["sessions"] = sessions[:_SESSIONS_CAP]
+    write_json(path, data)
+    return entry
+
+
+def mark_session_read(user_name: str, workspace: str, chat_id: str) -> bool:
+    path = _sessions_path(user_name, workspace)
+    data = read_json(path, default={"sessions": []})
+    entry = next((s for s in data["sessions"] if s["chat_id"] == chat_id), None)
+    if not entry:
+        return False
+    entry["unread"] = False
+    write_json(path, data)
+    return True
+
+
+def delete_session_by_filename(user_name: str, workspace: str, filename: str) -> None:
+    """Called when a saved chat archive is deleted, so its session entry
+    (and the now-dangling filename it points at) doesn't linger."""
+    path = _sessions_path(user_name, workspace)
+    data = read_json(path, default={"sessions": []})
+    data["sessions"] = [s for s in data["sessions"] if s.get("filename") != filename]
+    write_json(path, data)
+
+
+# ---------------------------------------------------------------------------
+# Chat presence (2026-08-15) — lets routers/chat.py skip a completion/
+# approval notification when the requesting user is still actively looking
+# at that exact conversation (owner ask: "ai chat only needs to send a
+# notification... when the user is not on that module"). POST /chat is a
+# synchronous request with no live channel back to the server once it's
+# fired, so the server has no way to know "is the tab still open on this
+# chat" on its own — Chat.jsx pings this on mount/switch and on an interval
+# while the tab is open and visible, so it goes stale on its own once the
+# user backgrounds the tab or navigates away, without needing an explicit
+# "I left" signal. Deliberately a single most-recent value per user, not
+# per-chat_id history — a user only ever actively looks at one conversation
+# in one tab at a time; a second open tab just overwrites it with whichever
+# ping lands last, an acceptable approximation for a notification nicety.
+# Not workspace-scoped, like pending_turns.json — chat_id alone identifies
+# the conversation regardless of workspace.
+_PRESENCE_STALE_AFTER_SECONDS = 45
+
+
+def _presence_path(user_name: str):
+    return user_path(user_name) / "agent" / "chat_presence.json"
+
+
+def record_chat_presence(user_name: str, chat_id: str) -> None:
+    write_json(
+        _presence_path(user_name),
+        {"chat_id": chat_id, "seen_at": datetime.now(timezone.utc).isoformat()},
+    )
+
+
+def is_chat_present(user_name: str, chat_id: str) -> bool:
+    """True if the user pinged presence for this exact chat_id recently
+    enough to assume they're still looking at it right now."""
+    data = read_json(_presence_path(user_name), default={})
+    if data.get("chat_id") != chat_id or not data.get("seen_at"):
+        return False
+    try:
+        seen_at = datetime.fromisoformat(data["seen_at"])
+    except ValueError:
+        return False
+    age = (datetime.now(timezone.utc) - seen_at).total_seconds()
+    return age <= _PRESENCE_STALE_AFTER_SECONDS

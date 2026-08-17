@@ -33,8 +33,14 @@ class Settings(BaseSettings):
     # How many days the "What's New" banner stays visible after an app update.
     whats_new_days: int = Field(5, ge=0, le=60)
 
-    # Web Push / VAPID
-    # Must be a mailto: or https: URL identifying the push sender
+    # Web Push / VAPID — identifies the sender to a push service if it ever
+    # needs to contact you about this instance's pushes (e.g. rate-limit
+    # abuse). Set to a real email you control (bare address — wrapped in
+    # mailto: automatically) or a full "https://your-domain" URL. The
+    # placeholder default is syntactically valid but not a real contact point;
+    # some push services (Apple's included) are stricter about honoring an
+    # obviously-fake subject, so an unreachable placeholder is a plausible
+    # cause of pushes silently not arriving. See docker/.env.example.
     vapid_subject: str = "logcore@localhost"
 
     # n8n workflow automation — bundled service default; override via Admin → n8n

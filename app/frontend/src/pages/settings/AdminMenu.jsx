@@ -8,6 +8,7 @@ export default function AdminMenu() {
 
       <div className="card divide-y divide-charcoal-100 dark:divide-charcoal-800">
         <MenuRow icon="👥" label="Users & Roles" subtitle="Accounts, access, and feature roles" to="/settings/admin/users" />
+        <MenuRow icon="🗂️" label="Contact Fields" subtitle="Custom fields, scoped to person or company" to="/settings/admin/contact-fields" />
         <MenuRow icon="🤖" label="AI" subtitle="Provider, usage & limits, web search" to="/settings/admin/ai" />
         <MenuRow icon="⚙️" label="General" subtitle="Registration, workspaces, session length, updates" to="/settings/admin/general" />
         <MenuRow icon="🏢" label="Team" subtitle="Business pool priorities & bank connections" to="/settings/admin/team" />

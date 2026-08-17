@@ -151,6 +151,8 @@ class ContactCreate(BaseModel):
     key_constraints: str | None = None
     priority_order: dict | None = None
     career_history: list[dict] | None = None
+    locations: list[dict] | None = None
+    hours: list[dict] | None = None
     # Profile-merge fields — private (never leave the owner's own view)
     wake_weekday: str | None = None
     wake_weekend: str | None = None
@@ -200,6 +202,8 @@ class ContactUpdate(BaseModel):
     key_constraints: str | None = None
     priority_order: dict | None = None
     career_history: list[dict] | None = None
+    locations: list[dict] | None = None
+    hours: list[dict] | None = None
     wake_weekday: str | None = None
     wake_weekend: str | None = None
     bedtime: str | None = None

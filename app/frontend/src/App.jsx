@@ -19,6 +19,7 @@ import AdminNewUser from './pages/settings/admin/NewUser'
 import AdminUserDetail from './pages/settings/admin/UserDetail'
 import AdminUserDeletionReview from './pages/settings/admin/UserDeletionReview'
 import AdminRoleDefinitions from './pages/settings/admin/RoleDefinitions'
+import AdminContactFields from './pages/settings/admin/ContactFields'
 import AdminAi from './pages/settings/admin/Ai'
 import AdminGeneral from './pages/settings/admin/General'
 import AdminTeam from './pages/settings/admin/Team'
@@ -95,6 +96,7 @@ export default function App() {
                 <Route path="/settings/admin/users/roles" element={<AdminOnly><AdminRoleDefinitions /></AdminOnly>} />
                 <Route path="/settings/admin/users/:userId" element={<AdminOnly><AdminUserDetail /></AdminOnly>} />
                 <Route path="/settings/admin/users/:userId/delete" element={<AdminOnly><AdminUserDeletionReview /></AdminOnly>} />
+                <Route path="/settings/admin/contact-fields" element={<AdminOnly><AdminContactFields /></AdminOnly>} />
                 <Route path="/settings/admin/ai" element={<AdminOnly><AdminAi /></AdminOnly>} />
                 <Route path="/settings/admin/general" element={<AdminOnly><AdminGeneral /></AdminOnly>} />
                 <Route path="/settings/admin/team" element={<AdminOnly><AdminTeam /></AdminOnly>} />
