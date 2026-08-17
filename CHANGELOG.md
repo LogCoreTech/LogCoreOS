@@ -39,10 +39,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Push notification failures are now diagnosable instead of a generic crash.** A malformed or expired push subscription could previously escape as an unhandled server error with an opaque, misleading client-side message (worse on Safari specifically). `POST /push/test` now reliably returns its intended distinguishable error (400 vs 502) in every case, and any other unexpected server error now returns a real, readable message instead of a cryptic one.
 
 - **Notes and Journal no longer zoom the whole page in when you tap into the editor on mobile** — you previously had to manually pinch back out to see the full screen again. The editor text was rendering slightly smaller than the size mobile Safari requires to avoid its automatic zoom-on-focus behavior.
-
-### Known issue
-
-- **The on-screen keyboard opening can cause a visible double-jump and, on some pages, a repeated auto-scroll-down** — in both a regular browser tab and the installed app icon. Several fixes were attempted and none resolved it; still unfixed.
+- **The on-screen keyboard opening no longer causes a visible double-jump or a repeated auto-scroll-down.** Traced to a viewport setting change that was never actually released — reverted it and the extra correction code layered on top of it back to how keyboard handling worked before.
 
 ### Changed
 

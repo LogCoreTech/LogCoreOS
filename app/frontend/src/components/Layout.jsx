@@ -237,56 +237,6 @@ export default function Layout() {
     return () => window.removeEventListener('keydown', onKey)
   }, [navigate])
 
-  // Defensive backstop for the keyboard show/hide touch-offset bug (see
-  // docs/MEMORY.md) — index.html's interactive-widget=resizes-content is the
-  // primary fix; this catches residual visual-viewport desync on WebKit
-  // versions where that alone isn't enough. No-op when nothing was desynced.
-  useEffect(() => {
-    const vv = window.visualViewport
-    if (!vv) return
-    function isField(el) {
-      return el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA' || el?.isContentEditable
-    }
-    function correct() {
-      // The app's own body is position:fixed/overflow:hidden (no real page
-      // scroll of its own — see docs/MEMORY.md's iOS PWA notes), so (0,0) is
-      // always the correct resting position here; this is purely re-syncing
-      // WebKit's internal touch-hit-testing to match what's already visually
-      // displayed; it does not move any visible content when called once,
-      // at rest.
-      window.scrollTo(0, 0)
-    }
-    function onViewportResize() {
-      if (Math.abs(vv.height - window.innerHeight) < 1) correct()
-    }
-    vv.addEventListener('resize', onViewportResize)
-
-    // The resize listener above only fires the correction once the keyboard
-    // fully closes (full height restored) — it never fires when the user
-    // taps directly from one field into another, since the keyboard stays
-    // open the whole time and vv.height never returns to full. That's a
-    // distinct, real repro of the same underlying desync (confirmed
-    // 2026-08-15): tapping a different field to move focus (rather than the
-    // keyboard's own Done/dismiss control) leaves the same stale touch
-    // offset. Track field-to-field focus changes directly and re-run the
-    // same correction — delayed one frame so it runs after the browser's own
-    // scroll-the-new-field-into-view settles, not fighting it mid-animation.
-    let lastWasField = false
-    function onFocusIn(e) {
-      const nowField = isField(e.target)
-      if (nowField && lastWasField) {
-        requestAnimationFrame(() => requestAnimationFrame(correct))
-      }
-      lastWasField = nowField
-    }
-    document.addEventListener('focusin', onFocusIn)
-
-    return () => {
-      vv.removeEventListener('resize', onViewportResize)
-      document.removeEventListener('focusin', onFocusIn)
-    }
-  }, [])
-
   const disabledIds = new Set(user?.disabledModules || [])
   const visibleModules = ALL_MODULES.filter(m =>
     m.nav !== false && m.to && !disabledIds.has(m.id) &&
