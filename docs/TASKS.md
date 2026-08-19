@@ -38,6 +38,7 @@ From the 2026-07-19 audit (full detail in `docs/Security-Audit-2026-07-19.md`) p
 - [ ] **UptimeRobot monitoring on demo URL** — free tier, set up immediately after deploy
 - [ ] **Off-site backups for demo VPS** — Hetzner snapshots or object storage; on-box `backup.sh` alone is not a backup
 - [ ] **Screenshots in README** — 3+ images + a 30-second GIF of the AI using its memory
+- [ ] **CLA (or DCO + relicensing grant) before the first outside PR merges** — owner is currently sole copyright holder on an AGPLv3 codebase, meaning any future relicensing (enterprise tier, white-label, dual-license) is entirely the owner's call. That freedom goes away the moment an external contributor's code merges without an agreement granting relicensing rights — retrofitting it later means tracking down or rewriting every past contributor's code. Cheap now (a one-page CLA/DCO clause), expensive later. Bundle into the CONTRIBUTING.md task below rather than treating as separate work — sequence before, not after, "good first issue" labeling opens the repo to outside PRs
 - [ ] **CONTRIBUTING.md** — how to run locally and submit a PR
 - [ ] **Website: copy refresh + Try the Demo CTA** — CTA → demo.logcoretech.com; add comparison table (LogCoreOS vs Khoj / Notion AI / Open WebUI)
 - [ ] **OG/social preview image for logcoretech.com** — `<meta og:image>` with branded screenshot
