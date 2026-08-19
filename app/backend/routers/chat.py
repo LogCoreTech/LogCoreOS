@@ -262,6 +262,24 @@ async def chat(
         status="running",
     )
 
+    # Save the user's own message right away, before the (potentially slow,
+    # occasionally failing) agent call below — not bundled into the single
+    # end-of-turn write further down (owner report, 2026-08-17: a message
+    # could take 5-10s to "go through," and if the agent call errored or the
+    # connection dropped before that write, the message vanished entirely —
+    # nothing was ever saved for that turn, not even what the user typed). A
+    # resume has nothing new to save here: the user's message that triggered
+    # it was already durably saved this same way during the original
+    # (paused) turn.
+    if not resume_payload:
+        _write_chat_archive(
+            current_user["name"],
+            effective_workspace,
+            filename,
+            title,
+            history + [{"role": "user", "content": req.message}],
+        )
+
     user_tz = current_user.get("timezone", "UTC")
     try:
         now_local = datetime.now(ZoneInfo(user_tz))

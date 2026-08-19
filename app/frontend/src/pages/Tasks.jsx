@@ -13,6 +13,13 @@ const SORT_MODES = [
   { id: 'alpha', label: 'A–Z' },
 ]
 
+// "14:30" -> "2:30 PM" — same toLocaleString shape Chat.jsx's fmtFilename already
+// uses for timestamps, for visual consistency across the app.
+function fmtDueTime(due_time) {
+  const [h, m] = due_time.split(':')
+  return new Date(2000, 0, 1, +h, +m).toLocaleString(undefined, { hour: 'numeric', minute: '2-digit' })
+}
+
 export default function Tasks() {
   const { user } = useAuth()
   const { workspace } = useWorkspace()
@@ -328,7 +335,9 @@ function TaskCard({ task, catColor, today, onDone, onEdit }) {
           {task.title}
         </p>
         {task.due_date && (
-          <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mt-0.5">Due {task.due_date}</p>
+          <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mt-0.5">
+            Due {task.due_date}{task.due_time && ` · ${fmtDueTime(task.due_time)}`}
+          </p>
         )}
         {task.notes && (
           <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mt-0.5 truncate">{task.notes}</p>

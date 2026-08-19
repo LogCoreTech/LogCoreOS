@@ -91,6 +91,10 @@ class AssetCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     parent_id: str | None = None
     fields: dict = Field(default={})
+    # A blank asset's own ad-hoc field definitions (2026-08-18) — same shape
+    # a Template's `fields` use; only meaningful (and only ever consulted)
+    # when no template/template_id is set.
+    custom_field_defs: list[FieldDefModel] = Field(default=[], max_length=50)
     notes: str | None = Field(None, max_length=5000)
     owner: str = Field("me", pattern="^(me|pool)$")
 
@@ -99,7 +103,12 @@ class AssetUpdate(BaseModel):
     name: str | None = Field(None, max_length=200)
     parent_id: str | None = None
     fields: dict | None = None
+    custom_field_defs: list[FieldDefModel] | None = Field(None, max_length=50)
     notes: str | None = Field(None, max_length=5000)
+
+
+class AttachTemplateRequest(BaseModel):
+    template_id: str = Field(..., max_length=64)
 
 
 class ContributeCaps(BaseModel):
@@ -633,6 +642,40 @@ def update_asset(
             found["store"],
             asset_id,
             updates,
+            workspace=found["store_workspace"],
+            by=current_user["name"],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return result
+
+
+@router.post("/{asset_id}/attach-template")
+def attach_template(
+    asset_id: str,
+    req: AttachTemplateRequest,
+    current_user: dict = Depends(_require_assets),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_write_limit),
+):
+    """Second half of "Save as template" (2026-08-18, owner: "it also would
+    need a convert to template button as well") — the frontend creates the
+    Template first (a plain POST /assets/templates call, from the blank
+    asset's own custom_field_defs), then calls this to attach it back onto
+    the asset those defs came from. Self-service (edit access), not
+    admin-only like /convert below — this never touches sharing/pool
+    membership, just which template the caller's own asset now points at."""
+    _validate_asset_id(asset_id)
+    found = _find_or_404(current_user, workspace, asset_id)
+    if not found["can_edit"]:
+        raise HTTPException(status_code=403, detail="Edit access required")
+    try:
+        result = assets_service.attach_template(
+            found["store"],
+            asset_id,
+            req.template_id,
             workspace=found["store_workspace"],
             by=current_user["name"],
         )

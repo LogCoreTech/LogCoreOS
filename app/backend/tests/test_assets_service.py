@@ -128,6 +128,168 @@ def test_create_asset_unknown_field_rejected(parcel):
         )
 
 
+# Standalone (no-template) assets (owner ask, 2026-08-17) — mirrors how a
+# Dashboard can be created blank instead of from a template.
+
+
+def test_create_asset_without_a_template(users):
+    asset = svc.create_asset("Alice", {"name": "Just a name"}, created_by="Alice")
+    assert asset["template"] is None
+    assert asset["template_id"] is None
+    assert asset["fields"] == {}
+
+
+def test_create_blank_asset_accepts_freeform_custom_fields(users):
+    # Owner report, 2026-08-17: "blank assets has no way to make custom
+    # fields which is mandatory" — a blank asset has no admin-defined field
+    # list, so instead of rejecting every key as unknown (the original,
+    # too-narrow behavior this test used to assert), it now accepts
+    # freeform label/value pairs typed directly.
+    asset = svc.create_asset(
+        "Alice",
+        {"name": "X", "fields": {"Serial Number": "ABC123", "  Color  ": "Red"}},
+        created_by="Alice",
+    )
+    assert asset["fields"] == {"Serial Number": "ABC123", "Color": "Red"}
+
+
+def test_blank_asset_custom_fields_survive_update_and_can_be_cleared(users):
+    # This exercises the real bug found alongside the feature: update_asset()
+    # used to raise "Template None no longer exists" on ANY save of a blank
+    # asset (resolve_template() returned None — "stale reference" — instead
+    # of {} — "genuinely no template" — for one with no template_id/key at
+    # all), so a blank asset couldn't be edited/saved past creation at all.
+    asset = svc.create_asset("Alice", {"name": "X"}, created_by="Alice")
+    updated = svc.update_asset("Alice", asset["id"], {"fields": {"Warranty": "2 years"}})
+    assert updated["fields"] == {"Warranty": "2 years"}
+    cleared = svc.update_asset("Alice", asset["id"], {"fields": {"Warranty": None}})
+    assert "Warranty" not in cleared["fields"]
+
+
+def test_folder_template_with_zero_fields_still_rejects_unknown_keys(users):
+    # A REAL template with an empty fields list (the seeded global Folder
+    # template is exactly this) is not "blank" in the freeform sense — it
+    # must keep rejecting unknown keys, unlike a genuinely template-less asset.
+    svc.create_template({"key": "empty_tpl", "label": "Empty", "fields": []})
+    with pytest.raises(ValueError, match="Unknown field"):
+        svc.create_asset(
+            "Alice",
+            {"template": "empty_tpl", "name": "X", "fields": {"anything": 1}},
+            created_by="Alice",
+        )
+
+
+def test_resolve_template_distinguishes_blank_from_stale_reference(users):
+    blank = svc.create_asset("Alice", {"name": "Blank"}, created_by="Alice")
+    assert svc.resolve_template(blank) == {}
+
+    svc.create_template({"key": "gadget", "label": "Gadget", "fields": []})
+    templated = svc.create_asset(
+        "Alice", {"template": "gadget", "name": "Real"}, created_by="Alice"
+    )
+    templated["template_id"] = "does-not-exist"
+    assert svc.resolve_template(templated) is None
+
+
+# ---------------------------------------------------------------------------
+# Blank-asset typed custom fields + "Save as template" (2026-08-18)
+# ---------------------------------------------------------------------------
+# Owner: "the blank asset custom field needs a picker that can pick all the
+# different custom fields that template editor can. so it can create an
+# asset just the same just without a template. and it also would need a
+# convert to template button as well."
+
+
+def test_blank_asset_custom_field_defs_get_typed_validation(users):
+    asset = svc.create_asset(
+        "Alice",
+        {
+            "name": "X",
+            "custom_field_defs": [{"key": "acreage", "label": "Acreage", "type": "number"}],
+            "fields": {"acreage": 12.5},
+        },
+        created_by="Alice",
+    )
+    assert asset["custom_field_defs"] == [{"key": "acreage", "label": "Acreage", "type": "number"}]
+    assert asset["fields"]["acreage"] == 12.5
+
+
+def test_blank_asset_custom_field_defs_reject_wrong_type(users):
+    with pytest.raises(ValueError, match="must be a number"):
+        svc.create_asset(
+            "Alice",
+            {
+                "name": "X",
+                "custom_field_defs": [{"key": "acreage", "label": "Acreage", "type": "number"}],
+                "fields": {"acreage": "not a number"},
+            },
+            created_by="Alice",
+        )
+
+
+def test_blank_asset_undefined_key_still_freeform(users):
+    # A key not (yet) in custom_field_defs stays freeform-string — the
+    # frontend defines+fills a field in one row, but the backend doesn't
+    # require the def to exist first.
+    asset = svc.create_asset(
+        "Alice",
+        {"name": "X", "custom_field_defs": [], "fields": {"Nickname": "Big Blue"}},
+        created_by="Alice",
+    )
+    assert asset["fields"]["Nickname"] == "Big Blue"
+
+
+def test_update_asset_custom_field_defs_and_value_together(users):
+    # The frontend edits a field's def and its value in the SAME PATCH — the
+    # value must validate against the def as updated in this very call, not
+    # a stale one (custom_field_defs is applied before fields in
+    # update_asset()).
+    asset = svc.create_asset("Alice", {"name": "X"}, created_by="Alice")
+    updated = svc.update_asset(
+        "Alice",
+        asset["id"],
+        {
+            "custom_field_defs": [{"key": "in_use", "label": "In use", "type": "boolean"}],
+            "fields": {"in_use": True},
+        },
+    )
+    assert updated["custom_field_defs"] == [{"key": "in_use", "label": "In use", "type": "boolean"}]
+    assert updated["fields"]["in_use"] is True
+
+
+def test_attach_template_moves_blank_asset_onto_a_real_template(users):
+    asset = svc.create_asset(
+        "Alice",
+        {
+            "name": "X",
+            "custom_field_defs": [{"key": "acreage", "label": "Acreage", "type": "number"}],
+            "fields": {"acreage": 5},
+        },
+        created_by="Alice",
+    )
+    tpl = svc.create_template(
+        {"key": "parcel2", "label": "Parcel", "fields": asset["custom_field_defs"]}
+    )
+    attached = svc.attach_template("Alice", asset["id"], tpl["id"])
+    assert attached["template_id"] == tpl["id"]
+    assert attached["template"] == "parcel2"
+    assert attached["custom_field_defs"] == []
+    assert attached["fields"]["acreage"] == 5
+
+
+def test_attach_template_rejects_already_templated_asset(parcel, users):
+    asset = svc.create_asset("Alice", {"template": "parcel", "name": "X"}, created_by="Alice")
+    other = svc.create_template({"key": "other", "label": "Other", "fields": []})
+    with pytest.raises(ValueError, match="already uses a template"):
+        svc.attach_template("Alice", asset["id"], other["id"])
+
+
+def test_attach_template_rejects_unknown_template(users):
+    asset = svc.create_asset("Alice", {"name": "X"}, created_by="Alice")
+    with pytest.raises(ValueError, match="Unknown template"):
+        svc.attach_template("Alice", asset["id"], "does-not-exist")
+
+
 @pytest.mark.parametrize(
     "fields,match",
     [

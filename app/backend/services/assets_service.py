@@ -145,11 +145,23 @@ def attach_templates(assets: list[dict]) -> list[dict]:
 
 def resolve_template(asset: dict) -> dict | None:
     """Resolve an asset's template — by id (global or any owner's personal) with a
-    fallback to the legacy global-by-key reference for pre-Phase-2 assets."""
+    fallback to the legacy global-by-key reference for pre-Phase-2 assets.
+
+    Returns `{}` for a genuinely blank asset (no template_id and no template
+    key at all — 2026-08-17). `None` specifically means a STALE reference —
+    a template_id/key that used to exist and was deleted — which callers
+    correctly treat as an error. Before this distinction, a blank asset's
+    `update_asset()` call raised "Template None no longer exists" on every
+    single save (any edit sends `fields`, even an empty `{}`), since a blank
+    asset's `template` key is also `None` and `get_global_template(None or
+    "")` finds nothing — blank assets couldn't be saved at all post-create."""
     tid = asset.get("template_id")
     if tid:
         return get_template_by_id(tid)
-    return get_global_template(asset.get("template") or "")
+    key = asset.get("template")
+    if not key:
+        return {}
+    return get_global_template(key)
 
 
 # Backward-compat: some callers still resolve global templates by key.
@@ -435,23 +447,48 @@ def _validate_value(fdef: dict, value: Any) -> Any:
     raise ValueError(f"Unknown field type {ftype!r}")
 
 
-def _validate_fields(template: dict, incoming: dict) -> dict:
+def _validate_fields(template: dict, incoming: dict, custom_defs: list[dict] | None = None) -> dict:
     """Validate incoming values against the template.
 
     Returns {key: value} where None means "unset this key". Unknown keys may only be
     unset (orphaned values from removed template fields stay readable/deletable but
-    can never be set).
+    can never be set) — UNLESS this is a genuinely blank asset (`template` has no
+    `key` at all, not just an empty `fields` list — a real template with zero
+    fields, like the seeded Folder template, keeps rejecting unknown keys as
+    before). A blank asset has no admin-defined field list to validate
+    against, so instead it accepts freeform label/value pairs typed directly
+    on the asset (owner report, 2026-08-17: a blank asset needs SOME way to
+    hold custom data, not just name+notes) — the typed label IS the key
+    (trimmed, capped, no slugification — same free-typed-string treatment
+    Contacts' own `tags` already get), capped to 40 fields per asset.
+
+    `custom_defs` (2026-08-18) is the blank asset's OWN field-definition list
+    — the same typed key/label/type/options shape _validate_field_defs()
+    already validates for a real Template, just scoped to one asset instead
+    of being reusable. A key with a matching def gets the same type-checked
+    treatment a templated field would (via _validate_value); anything else
+    still falls back to the freeform behavior above, so a value can be set
+    before its def exists. Ignored (has no effect) for a templated asset —
+    only ever consulted when `is_blank`.
     """
     defs = {f["key"]: f for f in template.get("fields", [])}
+    is_blank = not template.get("key")
+    if is_blank and custom_defs:
+        defs = {f["key"]: f for f in custom_defs}
     cleaned: dict[str, Any] = {}
     for key, value in (incoming or {}).items():
         if value is None or (isinstance(value, str) and value.strip() == ""):
-            cleaned[key] = None
+            cleaned[str(key).strip()[:60] if is_blank else key] = None
             continue
         fdef = defs.get(key)
         if fdef is None:
+            if is_blank:
+                clean_key = str(key).strip()[:60]
+                if clean_key and len(cleaned) < 40:
+                    cleaned[clean_key] = str(value).strip()[:2000]
+                continue
             raise ValueError(
-                f"Unknown field {key!r} for template {template['key']!r}. "
+                f"Unknown field {key!r} for template {template.get('key', '(blank asset)')!r}. "
                 f"Valid fields: {sorted(defs) or '(none)'}"
             )
         cleaned[key] = _validate_value(fdef, value)
@@ -691,19 +728,31 @@ def create_asset(
     workspace: str = "personal",
     created_by: str = "",
 ) -> dict:
-    # Resolve template by id (global or personal) or the legacy global key.
+    # Resolve template by id (global or personal) or the legacy global key —
+    # optional (owner ask, 2026-08-17: standalone assets, mirroring how a
+    # Dashboard can start blank instead of from a template). No template_id/
+    # template given at all means a genuinely blank asset: no template-
+    # derived fields, template stays None on the record.
     tid = data.get("template_id")
-    if tid:
-        template = get_template_by_id(tid)
-    else:
-        template = get_global_template(data.get("template") or "")
-    if template is None:
-        raise ValueError(f"Unknown template {(tid or data.get('template'))!r}")
+    template: dict = {}
+    if tid or data.get("template"):
+        template = (
+            get_template_by_id(tid) if tid else get_global_template(data.get("template") or "")
+        )
+        if template is None:
+            raise ValueError(f"Unknown template {(tid or data.get('template'))!r}")
     template_key = template.get("key")
     template_id = template.get("id")
     name = (data.get("name") or "").strip()
     if not name:
         raise ValueError("Asset name is required")
+
+    # A blank asset's own ad-hoc, per-asset field definitions (2026-08-18) —
+    # same typed key/label/type/options shape a real Template uses (owner:
+    # "the same picker... so it can create an asset just the same just
+    # without a template"). Validated unconditionally (cheap — empty list
+    # for a templated asset, where it's never consulted by _validate_fields).
+    custom_field_defs = _validate_field_defs(data.get("custom_field_defs") or [])
 
     store = _load(store_user, workspace)
     parent_id = data.get("parent_id")
@@ -722,7 +771,9 @@ def create_asset(
     fields: dict[str, Any] = {
         f["key"]: f["default"] for f in template.get("fields", []) if "default" in f
     }
-    for key, value in _validate_fields(template, data.get("fields") or {}).items():
+    for key, value in _validate_fields(
+        template, data.get("fields") or {}, custom_field_defs
+    ).items():
         if value is None:
             fields.pop(key, None)
         else:
@@ -733,6 +784,7 @@ def create_asset(
         "id": str(uuid.uuid4()),
         "template": template_key,
         "template_id": template_id,
+        "custom_field_defs": custom_field_defs,
         "name": name[:200],
         "parent_id": parent_id,
         "fields": fields,
@@ -790,11 +842,23 @@ def update_asset(
         changes["parent_id"] = [asset.get("parent_id"), new_parent]
         asset["parent_id"] = new_parent
 
+    if "custom_field_defs" in updates:
+        # Validated and stored before "fields" below runs, deliberately —
+        # the frontend edits a blank asset's field defs and its values in
+        # the same PATCH, one row at a time, so a value validated against a
+        # def added in this very call must see that def, not a stale one.
+        new_defs = _validate_field_defs(updates["custom_field_defs"] or [])
+        if new_defs != asset.get("custom_field_defs"):
+            changes["custom_field_defs"] = [asset.get("custom_field_defs"), new_defs]
+            asset["custom_field_defs"] = new_defs
+
     if "fields" in updates:
         template = resolve_template(asset)
         if template is None:
             raise ValueError(f"Template {asset.get('template')!r} no longer exists")
-        for key, value in _validate_fields(template, updates["fields"]).items():
+        for key, value in _validate_fields(
+            template, updates["fields"], asset.get("custom_field_defs")
+        ).items():
             old = asset["fields"].get(key)
             if value is None:
                 if key in asset["fields"]:
@@ -808,6 +872,45 @@ def update_asset(
         asset["updated_at"] = _now_iso(by or store_user)
         _push_history(asset, by, "update", changes)
         _save(store_user, workspace, store)
+    return asset
+
+
+def attach_template(
+    store_user: str, asset_id: str, template_id: str, workspace: str = "personal", by: str = ""
+) -> dict | None:
+    """Retroactively attach a real Template to a currently-blank asset — the
+    second half of "Save as template" (2026-08-18, owner: "it also would
+    need a convert to template button as well"). The router creates the
+    Template first (a plain create_template() call, from the asset's own
+    custom_field_defs) and passes its id here.
+
+    template_id/template are otherwise immutable after creation (AssetUpdate
+    has no such field — template choice is create-only everywhere else) —
+    this is a deliberate, narrow exception, reachable only through this one
+    explicit user-initiated action, not a general PATCH capability. Re-runs
+    the asset's existing values through the template's real _validate_value
+    checks rather than trusting they already match (the template WAS built
+    from these same defs, but a mismatch should still surface as an error,
+    not silently corrupt the asset)."""
+    store = _load(store_user, workspace)
+    by_id = _by_id(store["assets"])
+    asset = by_id.get(asset_id)
+    if asset is None:
+        return None
+    if asset.get("template_id"):
+        raise ValueError("This asset already uses a template")
+    template = get_template_by_id(template_id)
+    if template is None:
+        raise ValueError(f"Unknown template {template_id!r}")
+    validated = _validate_fields(template, asset.get("fields") or {})
+    old_template_id = asset.get("template_id")
+    asset["template_id"] = template["id"]
+    asset["template"] = template.get("key")
+    asset["custom_field_defs"] = []
+    asset["fields"] = {k: v for k, v in validated.items() if v is not None}
+    asset["updated_at"] = _now_iso(by or store_user)
+    _push_history(asset, by, "attach_template", {"template_id": [old_template_id, template["id"]]})
+    _save(store_user, workspace, store)
     return asset
 
 

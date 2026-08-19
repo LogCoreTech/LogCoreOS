@@ -50,7 +50,11 @@ export default function PriorityList({ label, pool, setter, newVal, setNewVal, d
       <div className="flex gap-2">
         <input type="text" value={newVal} onChange={e => setNewVal(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && poolAdd(pool, setter, newVal, setNewVal)}
-          placeholder="Add category…" className="input text-sm" />
+          // `.input` alone is already 16px; the `text-sm` override here
+          // dropped it under the iOS Safari auto-zoom-on-focus threshold
+          // (same bug class as TagInput.jsx, fixed 2026-08-18) — dropped
+          // rather than shrunk, the button next to it is the same size regardless.
+          placeholder="Add category…" className="input" />
         <button onClick={() => poolAdd(pool, setter, newVal, setNewVal)} className="btn-primary px-3 text-sm">+</button>
       </div>
     </div>

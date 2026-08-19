@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { admin as adminApi, features as featuresApi } from '../../../lib/api'
+import { admin as adminApi, contacts as contactsApi, features as featuresApi } from '../../../lib/api'
 import SettingsPageHeader from '../../../components/settings/SettingsPageHeader'
 
 const BLANK_NEW_USER = { email: '', name: '', password: '', role: 'member', feature_role: 'guest', workspaces: ['personal'] }
@@ -11,10 +11,20 @@ export default function NewUser() {
   const [newUser, setNewUser] = useState(BLANK_NEW_USER)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
+  const [availableContacts, setAvailableContacts] = useState([])
+  const [contactQuery, setContactQuery] = useState('')
+  const [selectedContact, setSelectedContact] = useState(null)
 
   useEffect(() => {
     featuresApi.get().then(fd => setRoles(Object.keys(fd.roles || { member: {} }))).catch(() => {})
+    contactsApi.availableForLinking().then(setAvailableContacts).catch(() => {})
   }, [])
+
+  const filteredContacts = (() => {
+    const q = contactQuery.trim().toLowerCase()
+    const list = q ? availableContacts.filter(c => (c.name || '').toLowerCase().includes(q)) : availableContacts
+    return list.slice(0, 20)
+  })()
 
   async function submitCreate(e) {
     e.preventDefault()
@@ -24,6 +34,7 @@ export default function NewUser() {
       const created = await adminApi.createUser({
         ...newUser,
         feature_role: newUser.feature_role || 'guest',
+        contact_id: selectedContact?.id || null,
       })
       navigate(`/settings/admin/users/${created.id}`)
     } catch (err) {
@@ -95,6 +106,43 @@ export default function NewUser() {
               </label>
             ))}
           </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium mb-1">Link to an existing contact (optional)</label>
+          {selectedContact ? (
+            <div className="input text-sm flex items-center justify-between">
+              <span>{selectedContact.type === 'company' ? '🏢' : '🧑'} {selectedContact.name}</span>
+              <button type="button" onClick={() => setSelectedContact(null)} className="text-charcoal-400 hover:text-red-500 text-xs">Change</button>
+            </div>
+          ) : (
+            <>
+              <input
+                type="text"
+                value={contactQuery}
+                onChange={e => setContactQuery(e.target.value)}
+                placeholder="Search household contacts…"
+                className="input text-sm"
+              />
+              {contactQuery.trim() && filteredContacts.length > 0 && (
+                <div className="mt-1 border border-charcoal-200 dark:border-charcoal-700 rounded-lg divide-y divide-charcoal-100 dark:divide-charcoal-800 max-h-40 overflow-y-auto">
+                  {filteredContacts.map(c => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => { setSelectedContact(c); setContactQuery('') }}
+                      className="w-full text-left px-3 py-1.5 text-sm hover:bg-charcoal-50 dark:hover:bg-charcoal-800"
+                    >
+                      {c.type === 'company' ? '🏢' : '🧑'} {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+          <p className="text-xs text-charcoal-400 mt-1">
+            Picks up their existing household contact info as their profile instead of starting blank. Leave blank to start fresh — this can only be set here, at creation.
+          </p>
         </div>
 
         <div>

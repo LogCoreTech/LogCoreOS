@@ -29,6 +29,7 @@ POOL_HOUSEHOLD = "_household"
 POOL_TEAM = "_team"
 POOL_USERS = {"personal": POOL_HOUSEHOLD, "business": POOL_TEAM}
 POOL_LABEL = {POOL_HOUSEHOLD: "household", POOL_TEAM: "team"}
+_OPPOSITE_WORKSPACE = {"personal": "business", "business": "personal"}
 
 _NAME_MAX = 80
 
@@ -179,7 +180,13 @@ def find_dashboard(
     workspace: str,
     dashboard_id: str,
 ) -> dict | None:
-    """Locate a dashboard across own → pool → sharing owners.
+    """Locate a dashboard across own → pool → sharing owners → (2026-08-18)
+    the same three, again, on the OPPOSITE workspace — but only a record
+    explicitly marked `cross_workspace: True` is reachable that way. Mirrors
+    contacts_service's cross_workspace mechanism: a dashboard is still one
+    record living in exactly one file, never duplicated — this just widens
+    where it can be *found*, the same way effective_workspace() does for
+    Contacts, without needing a second stored copy.
 
     Returns {store, store_workspace, dashboard, relation, access} or None.
     """
@@ -226,13 +233,72 @@ def find_dashboard(
             "relation": "shared",
             "access": access,
         }
+
+    # Cross-workspace fallback — same three checks, against the opposite
+    # workspace's own stores, filtered to cross_workspace=True. `resolve_access`
+    # is called with the record's own NATIVE workspace (`opposite`), not the
+    # viewer's ambient one, so a stored "team"/"household" group-share entry
+    # keeps meaning what it meant when the record was created — matching the
+    # equivalent Contacts design decision.
+    opposite = _OPPOSITE_WORKSPACE[workspace]
+
+    other_own = get_dashboard(viewer, dashboard_id, opposite)
+    if other_own is not None and other_own.get("cross_workspace"):
+        other_own = _sync_templated_dashboard(viewer, opposite, other_own)
+        return {
+            "store": viewer,
+            "store_workspace": opposite,
+            "dashboard": other_own,
+            "relation": "own",
+            "access": "edit",
+        }
+
+    other_pool_user = POOL_USERS[opposite]
+    other_pool_dash = get_dashboard(other_pool_user, dashboard_id, "personal")
+    if other_pool_dash is not None and other_pool_dash.get("cross_workspace"):
+        access = resolve_access(
+            viewer, viewer_role, is_admin, other_pool_user, other_pool_dash, opposite
+        )
+        if access is None:
+            return None
+        other_pool_dash = _sync_templated_dashboard(other_pool_user, "personal", other_pool_dash)
+        return {
+            "store": other_pool_user,
+            "store_workspace": "personal",
+            "dashboard": other_pool_dash,
+            "relation": "pool",
+            "access": access,
+        }
+
+    for owner in dashboard_index.sharers_for(viewer, opposite):
+        if owner == viewer:
+            continue
+        dash = get_dashboard(owner, dashboard_id, opposite)
+        if dash is None or not dash.get("cross_workspace"):
+            continue
+        access = resolve_access(viewer, viewer_role, is_admin, owner, dash, opposite)
+        if access is None:
+            return None
+        dash = _sync_templated_dashboard(owner, opposite, dash)
+        return {
+            "store": owner,
+            "store_workspace": opposite,
+            "dashboard": dash,
+            "relation": "shared",
+            "access": access,
+        }
     return None
 
 
 def list_visible_dashboards(
     viewer: str, viewer_role: str, is_admin: bool, workspace: str
 ) -> list[dict]:
-    """Own + workspace pool + shared-to-viewer dashboards, annotated _owner/_access."""
+    """Own + workspace pool + shared-to-viewer dashboards, annotated _owner/_access
+    — plus (2026-08-18) any dashboard on the OPPOSITE workspace explicitly
+    marked `cross_workspace: True`. Off by default: a dashboard stays scoped
+    to the picker/list of the workspace it was created in — "so it doesn't
+    spam the picker on either workspace" (owner) — unless deliberately opted
+    in per-dashboard, even for a user with both workspaces enabled."""
     result: list[dict] = []
 
     for d in list_dashboards(viewer, workspace):
@@ -251,6 +317,33 @@ def list_visible_dashboards(
             continue
         for d in list_dashboards(owner, workspace):
             access = resolve_access(viewer, viewer_role, is_admin, owner, d, workspace)
+            if access is None:
+                continue
+            result.append({**d, "_owner": owner, "_access": access})
+
+    opposite = _OPPOSITE_WORKSPACE[workspace]
+
+    for d in list_dashboards(viewer, opposite):
+        if d.get("cross_workspace"):
+            result.append({**d, "_owner": None, "_access": "edit"})
+
+    other_pool_user = POOL_USERS[opposite]
+    other_pool_label = POOL_LABEL[other_pool_user]
+    for d in list_dashboards(other_pool_user, "personal"):
+        if not d.get("cross_workspace"):
+            continue
+        access = resolve_access(viewer, viewer_role, is_admin, other_pool_user, d, opposite)
+        if access is None:
+            continue
+        result.append({**d, "_owner": other_pool_label, "_access": access})
+
+    for owner in dashboard_index.sharers_for(viewer, opposite):
+        if owner == viewer:
+            continue
+        for d in list_dashboards(owner, opposite):
+            if not d.get("cross_workspace"):
+                continue
+            access = resolve_access(viewer, viewer_role, is_admin, owner, d, opposite)
             if access is None:
                 continue
             result.append({**d, "_owner": owner, "_access": access})
@@ -309,6 +402,7 @@ def create_dashboard(
         "hidden_from": [],
         "contributors": [],
         "share_underlying_data": False,
+        "cross_workspace": False,
         "created_at": now,
         "updated_at": now,
     }
@@ -464,6 +558,8 @@ def update_dashboard(
         dashboard["name"] = str(updates["name"]).strip()[:_NAME_MAX]
     if "icon" in updates:
         dashboard["icon"] = str(updates["icon"] or "📊").strip()[:8]
+    if "cross_workspace" in updates:
+        dashboard["cross_workspace"] = bool(updates["cross_workspace"])
     if "blocks" in updates:
         if dashboard.get("template_id"):
             dashboard["blocks"] = _apply_layout_only(dashboard["blocks"], updates["blocks"])
@@ -697,13 +793,20 @@ def resolve_default_dashboard_id(
     viewer: str, viewer_role: str, is_admin: bool, workspace: str, saved_default: str | None
 ) -> str | None:
     """Self-healing default resolution: prefer the saved default if it still
-    resolves; else the viewer's only owned dashboard (floor-of-one); else the
-    first dashboard they own; else None (empty state)."""
+    resolves (find_dashboard() already checks the opposite workspace for a
+    cross_workspace=True record, so a saved default that lives over there
+    still resolves correctly here — no special-casing needed for that part);
+    else the viewer's own dashboard(s), including any they own natively in
+    the OPPOSITE workspace but marked cross_workspace=True (2026-08-18) — a
+    user whose only dashboard lives in personal but is visible from both
+    should still get it as their business-tab default, not an empty state;
+    else None (empty state)."""
     own = list_dashboards(viewer, workspace)
+    opposite = _OPPOSITE_WORKSPACE[workspace]
+    own_cross = [d for d in list_dashboards(viewer, opposite) if d.get("cross_workspace")]
+    combined = own + own_cross
     if saved_default and find_dashboard(viewer, viewer_role, is_admin, workspace, saved_default):
         return saved_default
-    if len(own) == 1:
-        return own[0]["id"]
-    if own:
-        return own[0]["id"]
+    if combined:
+        return combined[0]["id"]
     return None

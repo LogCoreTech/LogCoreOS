@@ -92,6 +92,18 @@ const TASK_SORT_MODE_FIELD = {
   ],
 }
 
+// Every non-chromeless block gets these two (2026-08-18, owner: "a setting
+// in each block that can optionally show the card background for the
+// block and another to optionally show the header... default on for
+// both") — appended by getConfigFields() below rather than repeated into
+// every CONFIG_FIELD_SCHEMAS entry by hand. `kind: 'boolean'` is a new
+// BlockPicker.jsx field kind (a plain checkbox) — nothing else in this
+// schema needed a true/false toggle before this.
+const _CHROME_FIELDS = [
+  { key: 'show_card', label: 'Show card background', kind: 'boolean', optional: true },
+  { key: 'show_header', label: 'Show header (when not editing)', kind: 'boolean', optional: true },
+]
+
 export const CONFIG_FIELD_SCHEMAS = {
   single_task: [{ key: 'task_id', label: 'Task', kind: 'task' }],
   top3_tasks: [TASK_SORT_MODE_FIELD],
@@ -205,8 +217,17 @@ export const CONFIG_FIELD_SCHEMAS = {
   ],
 }
 
+// The real config-field list for a block type — its own CONFIG_FIELD_SCHEMAS
+// entry (if any) plus the universal chrome fields, except for chromeless
+// types (nav_button/status_button), which have no card/header to toggle at
+// all. Use this instead of reading CONFIG_FIELD_SCHEMAS[type] directly.
+export function getConfigFields(type) {
+  if (BLOCK_REGISTRY[type]?.chromeless) return CONFIG_FIELD_SCHEMAS[type] || []
+  return [...(CONFIG_FIELD_SCHEMAS[type] || []), ..._CHROME_FIELDS]
+}
+
 export function isConfigurable(type) {
-  return (CONFIG_FIELD_SCHEMAS[type]?.length ?? 0) > 0 || !!BLOCK_REGISTRY[type]?.recordKind
+  return !!BLOCK_REGISTRY[type] && !BLOCK_REGISTRY[type].chromeless
 }
 
 // Block-embedded action buttons (2026-08-15) — a user-built repeater of small

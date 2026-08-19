@@ -511,6 +511,170 @@ def m012_rescale_dashboard_mobile_grid_units(brain: Path) -> None:
         logger.info("m012: normalized mobile grid units for %d dashboard(s)", rescaled)
 
 
+def m013_move_self_contacts_to_household_pool(brain: Path) -> None:
+    """Self-contacts move from each user's own personal store into the shared
+    _household pool (2026-08-17) — "always on household" and "survives
+    account deletion" both become free once storage itself lives there, and
+    every user's contact becomes reachable from both workspaces the same way
+    any other forced-cross_workspace pool record is. Idempotent per-user
+    (skipped if already found via the now-household-scanning
+    get_self_contact()); relocates the contact record, its own interactions/
+    deals entries, and its photo file. Hand-rolled, NOT transfer_ownership()
+    — that explicitly rejects self_of contacts, since a self-contact's
+    identity/lock invariants don't match an ordinary ownership transfer.
+    Mirrors transfer_ownership()'s own share-field conversion (shared_with ->
+    contributors) since the destination is a pool. One user's failure never
+    blocks the rest."""
+    from services import contacts_service
+    from services.file_service import brain_path as _brain_path
+    from services.file_service import (
+        contact_deals_path,
+        contact_interactions_path,
+        contact_photo_path,
+        contacts_path,
+    )
+
+    if brain != _brain_path():
+        return
+
+    users_dir = brain / "USERS"
+    if not users_dir.exists():
+        return
+
+    moved = 0
+    for user_dir in users_dir.iterdir():
+        if not user_dir.is_dir() or user_dir.name.startswith("_"):
+            continue
+        name = user_dir.name
+        try:
+            if contacts_service.get_self_contact(name) is not None:
+                continue  # already in the household pool — nothing to do
+
+            own_path = contacts_path(name, "personal")
+            own_data = read_json(own_path, default={"contacts": []})
+            own_list = own_data.get("contacts", [])
+            idx = next((i for i, c in enumerate(own_list) if c.get("self_of") == name), None)
+            if idx is None:
+                continue  # never completed setup / never had one — nothing to migrate
+
+            contact = own_list.pop(idx)
+            contact["cross_workspace"] = True
+            converted_contributors = list(contact.get("contributors") or [])
+            for share in contact.get("shared_with") or []:
+                converted_contributors.append(
+                    {"target": share["target"], "access": share.get("access", "read")}
+                )
+            contact["contributors"] = converted_contributors
+            contact["shared_with"] = []
+            write_json(own_path, {"contacts": own_list})
+
+            household_path = contacts_path(contacts_service.POOL_HOUSEHOLD, "personal")
+            household_data = read_json(household_path, default={"contacts": []})
+            household_list = household_data.get("contacts", [])
+            household_list.append(contact)
+            write_json(household_path, {"contacts": household_list})
+
+            for path_fn, key in (
+                (contact_interactions_path, "interactions"),
+                (contact_deals_path, "deals"),
+            ):
+                src_path = path_fn(name, "personal")
+                src_data = read_json(src_path, default={key: []})
+                src_items = src_data.get(key, [])
+                moving = [x for x in src_items if x.get("contact_id") == contact["id"]]
+                if not moving:
+                    continue
+                remaining = [x for x in src_items if x.get("contact_id") != contact["id"]]
+                write_json(src_path, {key: remaining})
+                dest_path = path_fn(contacts_service.POOL_HOUSEHOLD, "personal")
+                dest_data = read_json(dest_path, default={key: []})
+                write_json(dest_path, {key: dest_data.get(key, []) + moving})
+
+            ext = contact.get("photo_ext")
+            if ext:
+                src_photo = contact_photo_path(name, "personal", contact["id"], ext)
+                if src_photo.exists():
+                    dest_photo = contact_photo_path(
+                        contacts_service.POOL_HOUSEHOLD, "personal", contact["id"], ext
+                    )
+                    dest_photo.parent.mkdir(parents=True, exist_ok=True)
+                    src_photo.replace(dest_photo)
+
+            moved += 1
+        except Exception:
+            logger.exception(
+                "m013: failed to move self-contact to household pool for %r — skipping", name
+            )
+
+    if moved:
+        from services import contacts_index
+
+        contacts_index.rebuild_share_index()
+        logger.info("m013: moved %d self-contact(s) into the household pool", moved)
+
+
+def m014_core_values_to_list(brain: Path) -> None:
+    """`core_values` changed from a comma-separated string to a list of pill
+    entries (2026-08-17) — split any existing string value the same way
+    contacts_service._validate_core_values() now would, across every contact
+    store: every real user's own personal + business stores, and both pool
+    stores (_household/_team, self-contacts included since m013 moved them
+    there). Already-list values (nothing to do, including a from-scratch
+    install with no legacy data) and non-string/falsy values are left alone.
+    One store's failure never blocks the rest."""
+    from services import contacts_service
+    from services.file_service import brain_path as _brain_path
+    from services.file_service import contacts_path
+
+    if brain != _brain_path():
+        return
+
+    def _convert(owner: str, workspace: str) -> int:
+        path = contacts_path(owner, workspace)
+        data = read_json(path, default=None)
+        if data is None:
+            return 0
+        contacts = data.get("contacts", [])
+        changed = False
+        for c in contacts:
+            v = c.get("core_values")
+            if isinstance(v, str):
+                deduped: list[str] = []
+                for s in v.split(","):
+                    s = s.strip()
+                    if s and s not in deduped:
+                        deduped.append(s)
+                c["core_values"] = deduped
+                changed = True
+        if changed:
+            write_json(path, {"contacts": contacts})
+        return 1 if changed else 0
+
+    users_dir = brain / "USERS"
+    stores = [
+        (contacts_service.POOL_HOUSEHOLD, "personal"),
+        (contacts_service.POOL_TEAM, "business"),
+    ]
+    if users_dir.exists():
+        for user_dir in users_dir.iterdir():
+            if not user_dir.is_dir() or user_dir.name.startswith("_"):
+                continue
+            stores.append((user_dir.name, "personal"))
+            stores.append((user_dir.name, "business"))
+
+    converted = 0
+    for owner, workspace in stores:
+        try:
+            converted += _convert(owner, workspace)
+        except Exception:
+            logger.exception(
+                "m014: failed to convert core_values for %r/%r — skipping", owner, workspace
+            )
+
+    if converted:
+        logger.info("m014: converted core_values to a list in %d contact store(s)", converted)
+
+
 MIGRATIONS: list[tuple[str, MigrationFn]] = [
     ("m001_task_type_field", m001_task_type_field),
     ("m002_task_notes_field", m002_task_notes_field),
@@ -524,6 +688,8 @@ MIGRATIONS: list[tuple[str, MigrationFn]] = [
     ("m010_seed_home_dashboards", m010_seed_home_dashboards),
     ("m011_rescale_dashboard_grid_units", m011_rescale_dashboard_grid_units),
     ("m012_rescale_dashboard_mobile_grid_units", m012_rescale_dashboard_mobile_grid_units),
+    ("m013_move_self_contacts_to_household_pool", m013_move_self_contacts_to_household_pool),
+    ("m014_core_values_to_list", m014_core_values_to_list),
 ]
 
 # ── Runner ─────────────────────────────────────────────────────────────────────

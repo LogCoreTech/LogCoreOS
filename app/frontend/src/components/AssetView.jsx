@@ -45,13 +45,23 @@ export default function AssetView({
   const capFields = caps.fields || []
   const capAdds = caps.add || []
   const status = asset.fields?.status
-  const fieldDefs = (template?.fields || []).filter(f => f.key !== 'status')
-  const statusDef = (template?.fields || []).find(f => f.key === 'status')
+  // A blank asset has no template — `template` resolves to `{}` (see
+  // assets_service.resolve_template()), so `template.fields` is always
+  // undefined there and its own `custom_field_defs` is the real source of
+  // field definitions instead. Bug found 2026-08-18 (owner: "custom fields
+  // all look good but they do not display on the viewer at all") — the
+  // typed-custom-fields editor (AssetModal.jsx) was built and wired end to
+  // end, but this read-first view was never updated to look anywhere but
+  // `template.fields`, so a blank asset's fields silently never rendered
+  // here regardless of how many were set.
+  const ownFieldDefs = template?.fields || asset.custom_field_defs || []
+  const fieldDefs = ownFieldDefs.filter(f => f.key !== 'status')
+  const statusDef = ownFieldDefs.find(f => f.key === 'status')
   const navigate = useNavigate()
 
   // Contact-type fields render the contact's name as a jump link — resolve
-  // names once, only when the template actually has a contact field.
-  const hasContactField = (template?.fields || []).some(f => f.type === 'contact')
+  // names once, only when there's actually a contact field to resolve.
+  const hasContactField = ownFieldDefs.some(f => f.type === 'contact')
   const [contactNames, setContactNames] = useState({})
   useEffect(() => {
     if (!hasContactField) return

@@ -77,16 +77,16 @@ export default function Shortcuts() {
   }
 
   return (
-    <div className="max-w-lg mx-auto space-y-6 md:hidden">
+    <div className="max-w-lg mx-auto space-y-6">
       <SettingsPageHeader title="Shortcuts" backTo="/settings" backLabel="Settings" />
 
       <div className="card p-5">
         <div className="flex items-center justify-between mb-1">
-          <h2 className="font-semibold">Bottom Bar Shortcuts</h2>
+          <h2 className="font-semibold">Shortcuts</h2>
           {saved && <span className="text-green-500 text-sm">Saved ✓</span>}
         </div>
         <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-4">
-          Pin up to 4 modules per workspace to the bottom bar. Drag to reorder.
+          Pin up to 4 modules per workspace — shown in the mobile bottom bar and the desktop sidebar&apos;s Pinned section. Drag to reorder.
         </p>
 
         {[

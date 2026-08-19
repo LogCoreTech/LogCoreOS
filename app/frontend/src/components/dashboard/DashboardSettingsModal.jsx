@@ -12,13 +12,15 @@ import AssetPickerField from '../AssetPickerField'
  * likely cause of the edit toolbar overflowing/wrapping awkwardly on narrow
  * mobile screens (owner report, 2026-08-05).
  */
-export default function DashboardSettingsModal({ dashboard, isOwner, onClose, onSaved, onShare, onSetDefault, onDelete }) {
+export default function DashboardSettingsModal({ dashboard, isOwner, user, workspace, onClose, onSaved, onShare, onSetDefault, onDelete }) {
   const [name, setName] = useState(dashboard.name || '')
   const [icon, setIcon] = useState(dashboard.icon || '📊')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [changingSubject, setChangingSubject] = useState(false)
   const [subjectId, setSubjectId] = useState(dashboard.subject_id || null)
+  const [crossWorkspace, setCrossWorkspace] = useState(!!dashboard.cross_workspace)
+  const otherWorkspace = workspace === 'business' ? 'personal' : 'business'
 
   const dirty = name.trim() !== dashboard.name || icon !== dashboard.icon
   const isTemplated = !!dashboard.template_id
@@ -45,6 +47,29 @@ export default function DashboardSettingsModal({ dashboard, isOwner, onClose, on
       setChangingSubject(false)
       await onSaved()
     } catch (e) {
+      setError(e.message || 'Failed to save')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Settings-only toggle (2026-08-18, owner: "dashboards need the toggle
+  // option to set to one workspace only or both. even with both workspaces
+  // allowed for that user. just so it doesnt spam the picker on either
+  // workspace"). Off by default — a dashboard stays scoped to the workspace
+  // it was created in, same as before this existed, unless explicitly opted
+  // in. Saved immediately on toggle (like the pool-visibility toggles
+  // elsewhere in this app) rather than batched with the Save changes button
+  // above, since it's a structural setting, not a form field.
+  async function saveCrossWorkspace(next) {
+    setCrossWorkspace(next)
+    setSaving(true)
+    setError(null)
+    try {
+      await dashboardsApi.update(dashboard.id, { cross_workspace: next })
+      await onSaved()
+    } catch (e) {
+      setCrossWorkspace(!next)
       setError(e.message || 'Failed to save')
     } finally {
       setSaving(false)
@@ -95,6 +120,17 @@ export default function DashboardSettingsModal({ dashboard, isOwner, onClose, on
                 <button className="btn-primary text-sm" onClick={save} disabled={saving}>
                   {saving ? 'Saving…' : 'Save changes'}
                 </button>
+              )}
+              {(user?.workspaces || []).length > 1 && (
+                <label className="flex items-center justify-between gap-3 cursor-pointer">
+                  <span className="text-sm">Also show in my {otherWorkspace} workspace</span>
+                  <input
+                    type="checkbox"
+                    checked={crossWorkspace}
+                    onChange={e => saveCrossWorkspace(e.target.checked)}
+                    disabled={saving}
+                  />
+                </label>
               )}
               <div className="border-t border-charcoal-200 dark:border-charcoal-700" />
             </>

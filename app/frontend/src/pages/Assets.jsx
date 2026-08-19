@@ -251,11 +251,9 @@ export default function Assets() {
           <button onClick={() => setShowTemplates(true)} className="btn-ghost text-xs px-3 py-1.5">
             Templates
           </button>
-          {templates.length > 0 && (
-            <button onClick={() => setModal({ creating: true })} className="btn-primary text-xs px-3 py-1.5">
-              ＋ New Asset
-            </button>
-          )}
+          <button onClick={() => setModal({ creating: true })} className="btn-primary text-xs px-3 py-1.5">
+            ＋ New Asset
+          </button>
         </div>
       </div>
 
@@ -301,23 +299,24 @@ export default function Assets() {
         <div className="flex items-center justify-center h-24">
           <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
         </div>
-      ) : templates.length === 0 ? (
-        <div className="card p-8 text-center space-y-2">
-          <p className="text-sm font-medium">No templates yet</p>
-          <p className="text-xs text-charcoal-400 max-w-sm mx-auto">
-            Assets are built from templates — premade structures like &quot;Land Parcel&quot; or
-            &quot;Vehicle&quot; with the right fields ready to fill in.
-          </p>
-          <button onClick={() => setShowTemplates(true)} className="btn-primary text-xs px-4 py-2 mt-2">
-            Create your first template
-          </button>
-        </div>
       ) : items.length === 0 ? (
         <div className="card p-8 text-center space-y-2">
           <p className="text-sm font-medium">No assets yet</p>
-          <button onClick={() => setModal({ creating: true })} className="btn-primary text-xs px-4 py-2 mt-1">
-            ＋ New Asset
-          </button>
+          <p className="text-xs text-charcoal-400 max-w-sm mx-auto">
+            {templates.length === 0
+              ? 'Start with a blank asset, or set up a template — a premade structure like "Land Parcel" or "Vehicle" with the right fields ready to fill in — for anything you\'ll create more than once.'
+              : 'Start blank, or pick one of your templates.'}
+          </p>
+          <div className="flex items-center justify-center gap-2 mt-1">
+            <button onClick={() => setModal({ creating: true })} className="btn-primary text-xs px-4 py-2">
+              ＋ New Asset
+            </button>
+            {templates.length === 0 && (
+              <button onClick={() => setShowTemplates(true)} className="btn-ghost text-xs px-4 py-2">
+                Create a template
+              </button>
+            )}
+          </div>
         </div>
       ) : filtered.length === 0 ? (
         <div className="card p-8 text-center">

@@ -153,15 +153,43 @@ def test_contacts_transfer_moves_interactions_and_deals(users):
 
 def test_self_contact_excluded_from_eligible_even_when_shared(users):
     """A self-contact must never surface as needing a transfer/delete decision
-    — it dies with the account like today. Without this exclusion, admin
-    deletion would hard-fail mid-execute() since contacts_service now rejects
-    transfer/delete on a self-contact."""
+    — release_self_contact() (called unconditionally in execute()) handles it
+    on its own, not this review surface. Self-contacts live in the household
+    pool now (2026-08-17), not the departing user's own store, so
+    _contacts_eligible()'s own-store scan can't reach one at all anymore —
+    confirmed here even with a contributor grant on it (the visibility
+    mechanism a pool contact actually uses), matching the pre-2026-08-17
+    version of this test's "even when shared" framing."""
     self_contact = crm.create_self_contact("Alice")
     crm.update_access(
-        "Alice", "personal", self_contact["id"], shared_with=[{"target": "Carol", "access": "read"}]
+        crm.POOL_HOUSEHOLD,
+        "personal",
+        self_contact["id"],
+        contributors=[{"target": "Carol", "access": "read"}],
     )
     eligible = uds._contacts_eligible("Alice", ["personal", "business"])
     assert all(i["item_id"] != self_contact["id"] for i in eligible)
+
+
+def test_execute_releases_self_contact_instead_of_deleting_it(users, widget):
+    """The departing user's self-contact survives account deletion (it
+    already lives in the household pool, untouched by deleting Alice's own
+    Brain folder) — execute() just clears self_of so it becomes an ordinary,
+    unlinked household contact, no "former user" marker (owner's explicit
+    choice, no other decision surface involved)."""
+    alice = users["alice"]
+    self_contact = crm.create_self_contact("Alice")
+    crm.add_interaction(
+        crm.POOL_HOUSEHOLD, "personal", self_contact["id"], {"summary": "chat"}, "Alice"
+    )
+
+    uds.execute(alice, [], executed_by="Admin")
+
+    released = crm.get_contact(crm.POOL_HOUSEHOLD, "personal", self_contact["id"])
+    assert released is not None
+    assert released.get("self_of") is None
+    assert released["cross_workspace"] is True  # least-surprise: stays visible from both pools
+    assert len(crm.list_interactions(crm.POOL_HOUSEHOLD, "personal", self_contact["id"])) == 1
 
 
 # ---------------------------------------------------------------------------

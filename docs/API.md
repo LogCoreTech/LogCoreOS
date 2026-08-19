@@ -244,11 +244,14 @@ Create a new user (admin only).
   "password": "secret",
   "name": "Bob",
   "role": "member",
-  "workspaces": ["personal"]
+  "workspaces": ["personal"],
+  "contact_id": null
 }
 ```
 
 `workspaces` defaults to `["personal"]` if omitted.
+
+`contact_id` (optional, 2026-08-17): link this new account to an existing household-pool contact (see `GET /contacts/available-for-linking`) instead of lazily auto-creating a fresh self-contact on first `/contacts/me` visit. `400` if the contact doesn't exist or is already `self_of` someone else. Creation-only — no other endpoint retroactively links an existing contact to an account.
 
 ### `PATCH /auth/admin/users/{user_id}/workspaces`
 Set which workspaces a user can access. Admin only.
@@ -482,6 +485,7 @@ Send a message to the AI, or resume a paused turn. Returns a streaming response 
 - `cross_workspace`: when `true` and the user has both workspaces, the AI searches both personal and business Brain paths (results prefixed `personal/` or `business/`). Only available to dual-workspace users. Ignored when resuming — the *original* turn's workspace is used, so a replayed action can't drift to wherever the caller happens to be now.
 - `accept_overage`: only relevant when the caller is soft-capped (see **AI Usage** below) and already over their limit — set `true` to proceed anyway. When usage is hard-blocked the response is `{ "response": "...", "steps": [], "mode": "usage_blocked" }` and nothing runs; when soft-blocked and `accept_overage` is not yet `true`, the response is `{ "mode": "usage_confirm_required", ... }` and the frontend re-sends with `accept_overage: true` to continue. Accepting holds for the rest of that user's current cap period.
 - `chat_id` (**required**, 2026-08-15): a stable per-conversation id, minted client-side (`crypto.randomUUID()`) the moment a genuinely new conversation starts. Every turn of that conversation — across however many separate `POST /chat` round trips it takes — carries the same `chat_id`, which is what threads the request to one `chat_sessions.json` entry (see **`GET /chat/sessions`** below). The response echoes it back as `{ "chat_id": "...", ... }`. Before the model call, the handler marks that session's `status` `"running"`; on an unhandled exception it's reset to `"idle"` rather than left stuck; on success `notify_user()` fires unconditionally, so a conversation left running in the background (the caller navigated away or closed the app) still produces a notification when it finishes.
+- **The user's message is archived immediately, before the model is called (2026-08-17)** — for a fresh (non-resume) turn, the handler writes `history + [the new user message]` to the chat archive right after marking the session `"running"`, *before* `run_agent()` runs. Previously the user's message and the assistant's reply were only ever written together, after the agent call returned — if the call raised or the request was interrupted, the user's own message was never saved at all. The assistant's reply still gets appended in the normal completion write once the run finishes.
 
 Rate limited: 20 messages per minute per IP.
 
@@ -876,7 +880,8 @@ Router mounted at `/api/v1/assets`. Requires the `assets` module (both workspace
 | `GET` | `/assets` | module users | own + workspace pool + shared-to-me (annotated `_owner`/`_access`; contribute-level entries also carry `_caps`); `?template=`, `?include_archived=true`. Share resolution is index-routed (`assets_share_index.json`) |
 | `GET` | `/assets/members` | module users | member display **names only** for share/hide selectors |
 | `GET` | `/assets/by-contact/{contact_id}` | module users | viewer-visible assets referencing this contact in a **`contact`-type template field** (field type stores a CRM contact id; renders a ContactPicker in the editor and a jump link in AssetView). Feeds the contact References section |
-| `POST` | `/assets` | module users | `{template_id\|template, name, parent_id?, fields?, notes?, owner:"me"\|"pool"}`; `pool` needs admin/`pool_edit`. `parent_id` set → child created in the **parent's store** (requires edit access) inheriting its `shared_with`+`hidden_from` (the "group" mechanic). Asset responses embed the resolved template as `_template`. When the record is created outside the caller's own store, the response carries `_owner` (`team`/`household`/owner name) + `_access: "edit"` like list/find responses |
+| `POST` | `/assets` | module users | `{template_id\|template, name, parent_id?, fields?, custom_field_defs?, notes?, owner:"me"\|"pool"}`; **`template_id`/`template` are both optional (2026-08-17)** — omit both for a blank asset (`template`/`template_id` come back `null`); `pool` needs admin/`pool_edit`. `parent_id` set → child created in the **parent's store** (requires edit access) inheriting its `shared_with`+`hidden_from` (the "group" mechanic). Asset responses embed the resolved template as `_template` (`{}` for a blank asset — never `null`; `null` specifically means a stale template reference that used to exist and was deleted). When the record is created outside the caller's own store, the response carries `_owner` (`team`/`household`/owner name) + `_access: "edit"` like list/find responses |
+| — | — | — | **`fields` on a blank asset** (no `template_id`/`template` at all) is freeform by default (2026-08-17) — any `{label: value}` pairs are accepted directly (label trimmed/capped to 60 chars, value to 2000, capped at 40 fields), UNLESS the key matches an entry in **`custom_field_defs`** (2026-08-18), in which case it gets the same typed `_validate_value()` check a templated field would (`text\|number\|date\|boolean\|select\|contact`, same shape/validation as a real Template's own `fields: [{key,label,type,options?}]`, via `_validate_field_defs()`). An undefined key still falls back to freeform. A real template with an empty `fields` array (e.g. the seeded Folder template) is NOT treated as blank — it still rejects unknown keys as `400 Unknown field`, and `custom_field_defs` has no effect on it. |
 | `PUT` | `/assets/{id}/access` | owner (pool: admin/grant) | share entries are **requests**: `{shared_with:[{target,access,caps?}], hidden_from?, contributors?, cascade=true}`; each new target (user/team/household/role) is notified and the asset stays hidden until they accept. `access` is `read` \| `contribute` \| `edit` — **contribute** carries a `caps` object `{fields:[keys], add:[comments\|files\|children]}` naming exactly which template fields the person may change and what they may add (missing caps default to comment-only). **Resolution is specificity-based: an entry targeting the viewer by name fully overrides any group/role entry** (so one member of an edit-shared group can be restricted to contribute); union only happens between same-level contribute entries. `hidden_from` accepts user names **and dynamic `role:<feature_role>` entries** (hides from everyone holding that role, future assignees included). `contributors` (pool assets only, admin/pool-manager): `[{target: team\|household\|name, caps}]` — capability grants without the accept handshake, since pool assets are already workspace-visible; `shared_with` on pool assets stays rejected. A **by-name contributor entry also downgrades a non-admin `pool_edit` manager** to those caps on that asset (group entries never downgrade managers; admins are never restricted) |
 | `POST` | `/assets/{id}/comments` | edit-level, or contribute with `comments` cap | `{text}` (≤2000 chars) → appended to the asset's attributed comment log (cap 100, oldest trimmed). `400` while `comments_hidden` is on. Notifies every edit-level user (owner, accepted edit shares; pool: admins + `pool_edit` grantees) except the author and anyone who muted the asset/an ancestor — in-app notification with an `open_asset` action (NotifBell "View →" jumps to `/assets?asset=<id>`) plus ntfy/web push with the same deep link |
 | `DELETE` | `/assets/{id}/comments/{comment_id}` | **admin only** | comments are an audit-style log — authors/owners cannot delete; owners hide the section instead. `204` |
@@ -888,6 +893,7 @@ Router mounted at `/api/v1/assets`. Requires the `assets` module (both workspace
 | `POST` | `/assets/{id}/archive` · `/unarchive` | owner / pool manager | **per-node**; `?cascade=true` (un)archives the whole subtree. Archiving only a parent leaves its children active (they float to top level) |
 | `DELETE` | `/assets/{id}` | owner (personal) / **admin** (pool) | `409` if it has children; removes attachment files |
 | `POST` | `/assets/{id}/convert` | **admin** | `{target:"pool"}` — move subtree + files to `_team`/`_household`; strips shares |
+| `POST` | `/assets/{id}/attach-template` | edit access | `{template_id}` (2026-08-18) — "Save as template" second half: retroactively attaches a real Template to a currently-blank asset (frontend creates the Template first via a plain `POST /assets/templates` call from the asset's own `custom_field_defs`, then calls this). `400` if the asset already has a template. Self-service, unlike `/convert` above — this never touches sharing/pool membership, just which template the caller's own asset points at. Clears `custom_field_defs` and re-validates existing field values against the template's real defs (should pass unchanged, checked anyway) |
 | `POST` | `/assets/{id}/files` | owner/edit-share | multipart `file`; jpeg/png/webp/avif/pdf; 10 MB; ≤20 per asset |
 | `GET` | `/assets/{id}/files/{file_id}` | any access | binary response |
 | `DELETE` | `/assets/{id}/files/{file_id}` | owner/edit-share | `204` |
@@ -1048,22 +1054,26 @@ Note: "same book/account for both sides is rejected" above means only the exact 
 
 ## Contacts (CRM)
 
-Router mounted at `/api/v1/contacts`. Requires the `contacts` module (both workspaces, `X-Workspace`-scoped; **disabled for `guest`** by default) — **except `/contacts/me`, gated by login only** (see below). The **Contact** is the canonical person/company **and, since the Profile/Contacts merge, every user's own Profile too**; Finance payees (`payee_contact_id`) and invoice clients (`contact_id`) link to it. Storage: `ws_path/Contacts/{contacts,interactions,deals,pipeline}.json` + `Contacts/photos/{contact_id}.{ext}` for uploaded photos; admin custom-field defs at `_system/contact_fields.json`; pool contacts in `_household`/`_team`. Contact responses are annotated `_owner`/`_access`/`_pinned` (self-contact only, own view only). Sharing mirrors Finance/Assets (read/contribute/edit; **contribute = log interactions + create/advance deals only**; personal = accept handshake, pool = contributors; `hidden_from` beats shares) — **except a fixed set of "private" fields (health, finances, AI preferences, daily routine) which are never shareable, regardless of access level, and a self-contact can never be shared at `edit` — only `read`/`contribute`, so nobody but its owner can ever change it**.
+Router mounted at `/api/v1/contacts`. Requires the `contacts` module (both workspaces, `X-Workspace`-scoped; **disabled for `guest`** by default) — **except `/contacts/me`, gated by login only** (see below). The **Contact** is the canonical person/company **and, since the Profile/Contacts merge, every user's own Profile too**; Finance payees (`payee_contact_id`) and invoice clients (`contact_id`) link to it. Storage: `ws_path/Contacts/{contacts,interactions,deals,pipeline}.json` + `Contacts/photos/{contact_id}.{ext}` for uploaded photos; admin custom-field defs at `_system/contact_fields.json`; pool contacts in `_household`/`_team`. Contact responses are annotated `_owner`/`_access`/`_pinned` (self-contact only, own view only — `_owner` is omitted on your own self-contact's own view, present as normal for anyone else viewing it) , `_online: bool`, and `_last_seen: str | None` (self-contacts only, wired up 2026-08-17 — reads `presence_service.is_online()`/`last_seen_iso()`; never present on an ordinary contact, and only ever computed for a record the caller already has resolved access to, so there's no separate way to look up an arbitrary user's presence). `_last_seen` is the raw last-ping ISO timestamp (or `null` if never pinged) — the frontend formats it into a coarse relative label (minutes for the first hour, hours up to a day, days uncapped after that). Sharing mirrors Finance/Assets (read/contribute/edit; **contribute = log interactions + create/advance deals only**; personal = accept handshake, pool = contributors; `hidden_from` beats shares) — **except a fixed set of "private" fields (health, finances, AI preferences, daily routine) which are never shareable, regardless of access level, and a self-contact can never be shared at `edit` — only `read`/`contribute`, so nobody but its owner can ever change it**. **A new contact defaults into its workspace's pool** (2026-08-17) — visible to the whole household/team unless "make personal" is chosen at creation; pool-contact creation is no longer admin-only, and the creator gets `edit` on what they made. A `cross_workspace: bool` field (default `false`) makes a contact resolvable from the opposite workspace too, as the same record — off by default for an ordinary contact, forced permanently `true` for a self-contact.
 
 ### Self-contact (Profile)
 
 | Method | Path | Access | Notes |
 |--------|------|--------|-------|
-| `GET` | `/contacts/me` | **login only, no module gate** | the caller's own self-contact (`self_of` = their name), auto-created on first access. Physically stored in the **personal** workspace store but resolvable/editable from either workspace — one record, not per-workspace |
+| `GET` | `/contacts/me` | **login only, no module gate** | the caller's own self-contact (`self_of` = their name), auto-created on first access. **Physically stored in the household pool** (2026-08-17, moved out of the caller's own store — see `docs/AGENTS.md`), resolvable/editable from either workspace — one record, not per-workspace |
 | `PATCH` | `/contacts/me` | **login only, no module gate** | same body shape as `PATCH /contacts/{id}` below |
 | `POST`/`DELETE` | `/contacts/{id}/affiliations/{other_id}` | module users, edit on **both** contacts | general bidirectional Contact↔Contact link (family, company↔person, etc.) — a dedicated mutation, never part of the general PATCH; cross-owner linking (edit on only one side) is rejected |
 | `POST` | `/contacts/{id}/photo` | edit | multipart `file` — JPEG/PNG/WebP/AVIF, 5 MB cap. Any contact with edit access, not just self-contacts. Replaces any existing photo |
 | `GET` | `/contacts/{id}/photo` | any access | binary response; `404` if none uploaded |
 | `DELETE` | `/contacts/{id}/photo` | edit | `204` |
 
-`ContactCreate`/`ContactUpdate` also accept the merged-in profile fields: **basic** (shareable) — `pronouns, gender ("male"|"female"), city, state, country, occupation, marital_status, pets, life_mission, core_values, key_constraints`, `priority_order: {"personal": [...], "business": [...]}` (the one workspace-keyed field), and `career_history` (resume-style list, see below); **private** (never shareable, stripped for any viewer who isn't the record's own owner) — `wake_weekday, wake_weekend, bedtime, work_start, work_end, height_cm, height_unit ("ftin"|"cm"), weight_kg, weight_unit ("lbs"|"kg"), blood_type, conditions, medications, diet, exercise, income_range, budget_style, communication_style, tone, response_language, topics_to_emphasize, topics_to_avoid`. `self_of` and `affiliated_contact_ids` are never settable through these models — only via `/contacts/me`'s auto-creation and the dedicated affiliation endpoints respectively.
+`ContactCreate`/`ContactUpdate` also accept the merged-in profile fields: **basic** (shareable) — `pronouns, gender ("male"|"female"), city, state, country, occupation, marital_status, pets, life_mission, core_values, key_constraints`, `priority_order: {"personal": [...], "business": [...]}` (the one workspace-keyed field), `cross_workspace: bool` (see above; forced `true`, un-toggleable, on a self-contact), and `career_history` (resume-style list, see below); **private** (never shareable, stripped for any viewer who isn't the record's own owner) — `wake_weekday, wake_weekend, bedtime, work_start, work_end, height_cm, height_unit ("ftin"|"cm"), weight_kg, weight_unit ("lbs"|"kg"), blood_type, conditions, medications, diet, exercise, income_range, budget_style, communication_style, tone, response_language, topics_to_emphasize, topics_to_avoid`. `self_of` and `affiliated_contact_ids` are never settable through these models — only via `/contacts/me`'s auto-creation, the create-user `contact_id` linking flow, and the dedicated affiliation endpoints respectively.
 
-**`career_history`** — a resume-style list, each entry `{id, title, company_id, industry, education, years_experience, skills, start_date, end_date, archived}`. `education` must be one of a fixed list (`EDUCATION_LEVELS` in `contacts_service.py`: Junior High, High School, Some College, Trade/Vocational School, Associate's/Bachelor's/Master's Degree, Doctorate, Other) — anything else 400s. `company_id` links to a company-type Contact. Not a separate resource: send the whole array on `PATCH`; the client marks the current entry `archived: true` + sets `end_date` and appends a fresh entry to "start a new role." Superseded the old flat `employer`/`industry`/`education`/`years_experience`/`skills` fields.
+**`core_values`** — `list[str]` (2026-08-18, was a single comma-separated string before this — pill entries now, like `tags`), trimmed/deduped/capped at 30 entries of 60 chars each. Also accepts a raw comma-separated string on input (split the same way the one-time `m014` migration converts existing data) since the AI's `update_contact`/`update_profile` tools bypass this Pydantic model's type entirely, calling the service layer directly with a raw dict.
+
+**`career_history`** — a resume-style list, each entry `{id, title, company_id, industry, education, years_experience, skills, start_date, end_date, archived}`. `education` must be one of a fixed list (`EDUCATION_LEVELS` in `contacts_service.py`: Junior High, High School, Some College, Trade/Vocational School, Associate's/Bachelor's/Master's Degree, Doctorate, Other) — anything else 400s. `company_id` links to a company-type Contact. Not a separate resource: send the whole array on `PATCH`; the client can mark the current entry `archived: true` + set `end_date` and append a fresh entry to "start a new role," **or (2026-08-18) append/edit a past entry directly with its own explicit `start_date`/`end_date`** — the backend validates each entry independently and has never enforced "exactly one current entry"; the frontend's own array order doesn't matter either, since both the editor and the read view sort past entries by `start_date` descending for display. Superseded the old flat `employer`/`industry`/`education`/`years_experience`/`skills` fields.
+
+**`hidden_sections`** — `list[str]` (2026-08-18, `ContactUpdate` only — not settable at create time), a subset of six section keys (`values_principles`, `family`, `career`, `address`, `personal`, `priorities`; unknown key → `400`). Self-contact-only in practice (validated generically, but only meaningful when `self_of` is set): each hides its mapped field set from every non-owner viewer, the same way `annotate()`/`find_contact()` already strip the fixed `_PRIVATE_FIELDS` set — except this one is per-contact and owner-chosen rather than fixed and universal. **Settable only by the contact's own owner** — `update_contact()` silently strips `hidden_sections` from any incoming PATCH where the acting viewer isn't `self_of`, same guard that already protects `_PRIVATE_FIELDS` from third-party injection. The record's own owner always sees every section regardless of what's hidden from others.
 
 **`type`** is `"person"` or `"company"` (`CONTACT_TYPES`). It's stored and validated the same for both, but the frontend (`ContactModal.jsx`/`ContactDetail.jsx`) shows different sections by type: person gets the basic/private personal fields above plus `career_history`; company gets `locations`/`hours` below instead, and its "Family" section is relabeled "Affiliated People" (the `affiliated_contact_ids` mechanism itself is identical for both). A self-contact (`self_of` set) is guarded server-side to stay `"person"` — a `PATCH` that tries to flip it to `"company"` is rejected.
 
@@ -1073,10 +1083,13 @@ Router mounted at `/api/v1/contacts`. Requires the `contacts` module (both works
 
 | Method | Path | Access | Notes |
 |--------|------|--------|-------|
-| `GET` | `/contacts?include_archived=` | module users | own + pool + shared-to-me contacts; the viewer's own self-contact is always pinned first (annotated `_pinned: true`), regardless of active workspace |
-| `POST` | `/contacts` | module users | `{type, name, emails?, phones?, address?, tags?, birthday?, status?, notes?, custom?, pool?}`; `pool:true` = admin, creates in the workspace pool |
+| `GET` | `/contacts?include_archived=` | module users | own + pool + shared-to-me contacts, PLUS anyone's `cross_workspace: true` contacts reachable from the opposite workspace (2026-08-17 — see `docs/AGENTS.md`); the viewer's own self-contact is always annotated `_pinned: true` (ordering/pinning-to-the-top is a frontend concern, `Contacts.jsx` finds it by `self_of` — the backend doesn't guarantee any particular list position for it) |
+| `POST` | `/contacts` | module users | `{type, name, emails?, phones?, address?, tags?, birthday?, status?, notes?, custom?, cross_workspace?, pool?}`; `pool` **defaults `true`** (2026-08-17) — a new contact is pool-shared unless explicitly set `false` ("make personal"). No longer admin-gated — any contacts-module user may create directly in the pool, and gets `edit` on their own creation |
+| `GET` | `/contacts/available-for-linking` | **admin** | household-pool contacts with no `self_of` set — candidates for the create-user "link to an existing contact" picker (2026-08-17). Deliberately workspace-independent (always reads the household pool, regardless of the admin's own active tab) |
 | `GET`/`PATCH`/`DELETE` | `/contacts/{id}` | per access | PATCH needs edit; DELETE cascades interactions+deals (pool DELETE admin-only) |
 | `POST` | `/contacts/{id}/archive` · `/unarchive` | edit | |
+| `POST` | `/contacts/{id}/convert` | edit | moves a personal contact into the active workspace's pool (2026-08-17) — self-service, mirrors `transfer_ownership()`; `400` if it's already a pool contact. Returns the full annotated contact (not `{"ok": true}` — the frontend's save flow expects a real record back) |
+| `POST` | `/contacts/convert-bulk` | module users | `{contact_ids?: string[]}` (2026-08-17) — bulk version of the above, scoped to the caller's own personal, non-self contacts; omitting `contact_ids` converts everything eligible. Skips (doesn't fail) any id that's already a pool contact or not owned by the caller. Returns `{converted, skipped}` |
 | `GET`/`POST` | `/contacts/{id}/interactions` | read / contribute | `{type: call\|email\|meeting\|text\|note, summary, date?, follow_up?}` |
 | `PATCH`/`DELETE` | `/contacts/{id}/interactions/{iid}` | contribute / edit | |
 | `GET`/`POST` | `/contacts/{id}/deals` | read / contribute | `{title, value_cents, stage?, expected_close?, follow_up?, notes?}`; stage must exist in the pipeline. Deals carry `linked_asset_ids` + a reserved `invoice_id` (written back by the deal→invoice prefill flow) |
@@ -1388,6 +1401,30 @@ Sharing mirrors Assets/Notes/Contacts exactly: `shared_with` (personal, accept-h
 read/contribute/edit), `hidden_from` (beats shares), `contributors` (pool, no handshake). Access
 resolution goes through `dashboards_service.resolve_access()`/`find_dashboard()`.
 
+**Cross-workspace visibility `cross_workspace`** (2026-08-18, default `false`): a dashboard normally
+only appears in the workspace it was created in — `find_dashboard()`/`list_visible_dashboards()` only
+ever check one workspace's stores. Setting `cross_workspace: true` (via `PATCH /dashboards/{id}`, edit
+access required — a stronger gate than the `contribute` tier the rest of that endpoint's fields use,
+matching how sharing/visibility changes elsewhere in this module are edit-gated) makes that one record
+additionally reachable from the opposite workspace too, via a second own/pool/shared pass against the
+opposite workspace's stores, each leg filtered to `cross_workspace: true`. There is still exactly one
+record in one file — `find_dashboard()` returns `store`/`store_workspace` pointing at wherever it
+actually lives (which may be the *opposite* workspace from the one the caller is viewing), and every
+write (`PATCH`, access changes, block edits) is redirected there, never duplicated. Mirrors
+`contacts_service`'s `cross_workspace`/`effective_workspace()` mechanism, with one deliberate deviation:
+`resolve_access()` for an opposite-workspace hit is called with the record's own *native* workspace, not
+the viewer's ambient one, so a stored "team"/"household" pool-contributor grant keeps meaning what it
+meant when it was written. `resolve_default_dashboard_id()` also folds in the viewer's own
+`cross_workspace: true` dashboards from the opposite workspace, so a user whose only dashboard lives in
+personal but is flagged cross-workspace still gets it as their business-tab default instead of an empty
+state.
+
+**Last-opened restore** (2026-08-18, frontend-only, no new endpoint): `Dashboard.jsx` remembers the last
+opened dashboard per workspace in `localStorage` (`lc_dashboard_last_id_{workspace}`) and reopens it on
+the module's next boot **if within 30 minutes** of when it was last viewed — otherwise falls back to the
+normal resolved default. Same pattern Chat.jsx already uses for its own "last opened conversation"
+restore, with an added expiry window Chat's version doesn't need.
+
 **Security model**: every block re-resolves the *current viewer's* own access to whatever it points
 at, through that module's own existing gate — a dashboard is a read-through view, never an access
 bypass. The one deliberate exception is the owner-only `share_underlying_data` toggle (default
@@ -1402,11 +1439,11 @@ time, no stored "protected" flag.
 
 | Method | Path | Access | Notes |
 |--------|------|--------|-------|
-| `GET` | `/dashboards` | module users | Own + pool + shared-to-viewer dashboards (annotated `_owner`/`_access`), plus the resolved `default_id` for the active workspace |
-| `POST` | `/dashboards` | module users | `{name, icon?, pool?}` — `pool:true` = admin only, creates in the workspace pool |
+| `GET` | `/dashboards` | module users | Own + pool + shared-to-viewer dashboards, **plus** any of those marked `cross_workspace: true` reachable from the opposite workspace too (annotated `_owner`/`_access`), plus the resolved `default_id` for the active workspace |
+| `POST` | `/dashboards` | module users | `{name, icon?, pool?}` — `pool:true` = admin only, creates in the workspace pool (always stored at the `personal` ws_path base regardless of ambient workspace, same convention every pool read already assumed — a `_team` pool dashboard created while the caller's ambient workspace is "business" is not stored under "business") |
 | `GET` | `/dashboards/{id}` | per access | Raw record (edit-mode source of truth) |
-| `GET` | `/dashboards/{id}/render` | per access | **Core endpoint** — resolves dashboard access once, renders every block through the registry, returns `{..., blocks: [{id, type, config, layout, ok, data, locked_reason}]}` |
-| `PATCH` | `/dashboards/{id}` | contribute+ | `{name?, icon?, blocks?}` — `blocks` is a bulk array replace; triggers a reindex for the cross-module reference lookup |
+| `GET` | `/dashboards/{id}/render` | per access | **Core endpoint** — resolves dashboard access once, renders every block through the registry, returns `{..., cross_workspace, blocks: [{id, type, config, layout, ok, data, locked_reason}]}` |
+| `PATCH` | `/dashboards/{id}` | contribute+ (edit+ for `cross_workspace`) | `{name?, icon?, cross_workspace?, blocks?}` — `blocks` is a bulk array replace; triggers a reindex for the cross-module reference lookup |
 | `PUT` | `/dashboards/{id}/access` | edit | `{shared_with?, hidden_from?, contributors?}` |
 | `PUT` | `/dashboards/{id}/share-underlying-data` | **owner only** (not just edit-level) | `{value: bool}` |
 | `DELETE` | `/dashboards/{id}` | edit (owner/pool admin) | `409` if it's the caller's only dashboard in this workspace |
@@ -1430,6 +1467,8 @@ the viewer IS the owner (directly, or via the `share_underlying_data` exception'
 
 **Action buttons** (2026-08-15): any block whose type declares a `recordKind` in the frontend's `blockRegistry.js` (currently Notes, Assets/Collection, Contacts, and every other list-shaped block — task/asset/contact/event/note) can carry `actions: [{id, kind: 'nav'|'status', ...}]` in its own `config`, authored via a repeater in the block-config UI. No new endpoint: `actions` rides inside the existing `config` object already returned by `GET /dashboards/{id}/render`, and a click executes through the target module's own existing endpoint directly from the frontend (`tasksApi`/`assetsApi`/`contactsApi`, the same call `status_button`/`nav_button` already make) — never a dashboard-owned write path. A new `contacts_list` block type (Contacts, `live_aggregate`) was added alongside this as the first general "list of contacts" block.
 
+**Chrome toggles `show_card`/`show_header`** (2026-08-18): two booleans any **non-chromeless** block type's `config` can carry — same no-new-endpoint shape as `actions` above, they just ride inside the existing `config` object through the generic `PATCH /dashboards/{id}` (or the agent's `update_dashboard_block` tool). Both default to `true` when absent — `show_card` toggles the card/border background, `show_header` toggles the icon+label header when the dashboard isn't in edit mode (edit mode always shows it, regardless, since that's the only way to reach a block's ✎/✕ controls). `nav_button`/`status_button` (chromeless block types) never accept either — there's no card/header on those to toggle in the first place.
+
 **Not yet built** (deliberately deferred, not cut from scope — see `docs/TASKS.md`): the "Referenced
 by" UI hooks on non-Assets/Contacts view surfaces, Module Engagement and External Data block types, and
 Spending/Completion trend blocks (need new aggregation endpoints that don't exist yet). Dashboard
@@ -1440,6 +1479,23 @@ fixing its currency-blending bug, 2026-08-12).
 
 `PATCH /auth/me` also accepts `default_dashboard_id: {personal, business}` (same workspace-keyed
 shape as `shortcuts`) — which dashboard opens when the Dashboard nav link is clicked.
+
+---
+
+## Presence
+
+Router mounted at `/api/v1/presence`. App-wide "is this user online right now" tracking (2026-08-17),
+generalized from Chat's own `POST /chat/presence` (which is conversation-scoped and unrelated to this).
+
+### `POST /presence/ping`
+Record the caller's own presence — `Layout.jsx` calls this on mount and every 30s while the tab is
+visible, app-wide (not just on one page). Rate limited: 10/60s.
+
+**Response** `{ "ok": true }`
+
+There is deliberately **no** `GET /presence/{username}` or similar lookup endpoint — presence is only
+ever meant to surface embedded in an already access-controlled read (e.g. a contact record whose
+`self_of` names an online user), never queried directly for an arbitrary user.
 
 ---
 

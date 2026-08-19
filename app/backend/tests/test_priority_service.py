@@ -78,7 +78,10 @@ def _seed_tasks(brain, tasks: list[dict]) -> None:
 
     contact = contacts_service.create_self_contact(PRIORITY_USER)
     contacts_service.update_contact(
-        PRIORITY_USER, "personal", contact["id"], {"priority_order": {"personal": ORDER}}
+        contacts_service.POOL_HOUSEHOLD,
+        "personal",
+        contact["id"],
+        {"priority_order": {"personal": ORDER}},
     )
     rows = [
         {

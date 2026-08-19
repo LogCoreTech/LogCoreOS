@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { dashboards as dashboardsApi } from '../../lib/api'
-import { BLOCK_REGISTRY, CONFIG_FIELD_SCHEMAS } from './blockRegistry'
-import { ACTION_PRESETS_BY_KIND } from './actionKinds'
+import { BLOCK_REGISTRY, getConfigFields } from './blockRegistry'
+import { ACTION_PRESETS_BY_KIND, BUTTON_COLORS } from './actionKinds'
 import ContactPicker from '../contacts/ContactPicker'
 import AssetPickerField from '../AssetPickerField'
 import TaskPicker from '../TaskPicker'
@@ -139,6 +139,16 @@ function renderField(f, config, setConfig, templateMode = false, subjectType = n
           <textarea className="input w-full" rows={4} value={val || ''} onChange={e => set(e.target.value)} />
         </div>
       )
+    case 'boolean':
+      // Unset reads as checked (`!== false`) — matches BlockRenderer.jsx's
+      // own default-on read of these same keys, so the toggle here never
+      // shows a state that doesn't match what's actually rendered.
+      return (
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" checked={val !== false} onChange={e => set(e.target.checked)} />
+          {f.label}
+        </label>
+      )
     default:
       return (
         <div>
@@ -147,6 +157,56 @@ function renderField(f, config, setConfig, templateMode = false, subjectType = n
         </div>
       )
   }
+}
+
+// Compact color-square + popover swatch grid, replacing a plain <select>
+// (owner report, 2026-08-17: a native dropdown showing color names ate too
+// much width in ActionsEditor's already-tight row, squeezing the label input
+// unreadable) — mirrors EmojiPicker.jsx's own button-opens-a-popover-grid
+// shape exactly. The 🎨 badge stays on the button regardless of which color
+// is selected so its purpose reads at a glance; the button's own background
+// (BUTTON_COLORS[].swatch) shows the current pick.
+function ColorSwatchPicker({ value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const current = BUTTON_COLORS.find(c => c.id === (value || 'default')) || BUTTON_COLORS[0]
+
+  useEffect(() => {
+    if (!open) return
+    function onDoc(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+
+  return (
+    <div className="relative shrink-0" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className={`w-7 h-7 rounded-md border text-xs flex items-center justify-center ${current.swatch} ${
+          current.id === 'default' ? 'border-2 border-charcoal-300 dark:border-charcoal-600' : 'border-transparent'}`}
+        title={`Button color: ${current.label} (click to change)`}
+      >
+        🎨
+      </button>
+      {open && (
+        <div className="absolute z-50 right-0 mt-1 p-1.5 bg-white dark:bg-charcoal-900 border border-charcoal-200 dark:border-charcoal-700 rounded-lg shadow-lg flex gap-1">
+          {BUTTON_COLORS.map(c => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => { onChange(c.id); setOpen(false) }}
+              title={c.label}
+              className={`w-6 h-6 rounded-md ${c.swatch} ${
+                c.id === current.id
+                  ? 'ring-2 ring-orange-500 ring-offset-1 ring-offset-white dark:ring-offset-charcoal-900'
+                  : c.id === 'default' ? 'border-2 border-charcoal-300 dark:border-charcoal-600' : 'border border-transparent'}`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // A user-built repeater of block-embedded action buttons (config.actions —
@@ -198,6 +258,7 @@ function ActionsEditor({ config, setConfig, recordKind }) {
               placeholder="Button label (optional)"
               className="input !py-1 flex-1 text-xs min-w-0"
             />
+            <ColorSwatchPicker value={a.color} onChange={color => update(i, { color })} />
             <button type="button" onClick={() => remove(i)} className="text-red-400 hover:text-red-500 px-0.5 shrink-0">✕</button>
           </div>
         ))}
@@ -254,7 +315,7 @@ export default function BlockPicker({ editingBlock = null, onAdd, onSave, onClos
     return acc
   }, {})
 
-  const fields = (selected ? CONFIG_FIELD_SCHEMAS[selected] || [] : [])
+  const fields = (selected ? getConfigFields(selected) : [])
     .filter(f => !f.showIf || config[f.showIf.key] === f.showIf.equals)
 
   return (

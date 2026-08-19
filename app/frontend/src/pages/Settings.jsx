@@ -12,9 +12,7 @@ export default function Settings() {
         <MenuRow icon="👤" label="Profile" subtitle="Your details, priorities, and values" to="/profile" />
         <MenuRow icon="🎨" label="Appearance" subtitle="Dark mode, accent color, background, density" to="/settings/appearance" />
         <MenuRow icon="🔔" label="Notifications" subtitle="ntfy, push notifications, proactive suggestions" to="/settings/notifications" />
-        <div className="md:hidden">
-          <MenuRow icon="⭐" label="Shortcuts" subtitle="Pin modules to the mobile bottom bar" to="/settings/shortcuts" />
-        </div>
+        <MenuRow icon="⭐" label="Shortcuts" subtitle="Pin modules to the mobile bottom bar and the desktop sidebar" to="/settings/shortcuts" />
         <MenuRow icon="🗂" label="Account" subtitle="Timezone, your Brain, export data" to="/settings/account" />
       </div>
 

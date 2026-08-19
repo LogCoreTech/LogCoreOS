@@ -20,6 +20,23 @@ function greeting() {
   return h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening'
 }
 
+// "Last opened dashboard" (2026-08-18, owner: "make it where that as long as
+// you reopen the module within [a window] it will go back to the last
+// opened dashboard instead of the default... make switching back and forth
+// easy") — same client-only, per-workspace localStorage-pointer shape
+// Chat.jsx's own "last opened chat" already established (lc_chat_last_id_*),
+// just with an expiry added, which Chat's version doesn't need (it always
+// restores regardless of elapsed time). 30 minutes: long enough to survive
+// a real task-switch or a short break without snapping back to the
+// computed default, short enough that returning the next day still lands
+// on a sensible default rather than something left open the night before —
+// adjust freely if a different window feels better in practice.
+const LAST_OPENED_WINDOW_MS = 30 * 60 * 1000
+
+function lastDashboardKey(ws) {
+  return `lc_dashboard_last_id_${ws}`
+}
+
 // Bottom-stacked row for a newly added block at this breakpoint. Was
 // `y: Infinity` — JSON.stringify silently turns Infinity into null, so the
 // server stored a literal null instead of a real row number. A concrete
@@ -53,8 +70,6 @@ export default function Dashboard() {
   const [templates, setTemplates] = useState([])
   const [saving, setSaving] = useState(false)
 
-  const idParam = searchParams.get('id')
-
   const loadList = useCallback(async () => {
     const res = await dashboardsApi.list()
     setItems(res.items || [])
@@ -68,6 +83,32 @@ export default function Dashboard() {
     setPendingLayouts(null)
   }, [])
 
+  // Deliberately depends on [workspace] ONLY, not idParam — the previous
+  // version depended on both, and its own `setSearchParams(...)` call
+  // mutated idParam, which is itself a dependency, guaranteeing a second
+  // full run of this same effect on every single fresh load (loadList() +
+  // loadCurrent() both fired twice back to back). `cancelled` only guarded
+  // this effect's own catch/finally, never loadCurrent()'s unconditional
+  // setCurrent() call, so the second run's result could still land after
+  // the first — the deterministic root cause of "dashboard not found every
+  // time the module opens the first time, never on a manual pick" (owner
+  // report, 2026-08-18; a manual pick via selectDashboard() below never hit
+  // this because it set an already-truthy idParam, so the effect only ran
+  // once). A deliberate, explicit user pick or a just-created dashboard now
+  // calls loadCurrent() directly instead of relying on this effect to
+  // notice a URL change — see selectDashboard()/onDashboardCreated() below.
+  //
+  // This restructuring also closes two more owner reports in one pass:
+  // - A `?id=` left over from BEFORE a workspace switch is no longer
+  //   trusted blindly — it's checked against this workspace's own freshly
+  //   fetched `visibleIds` first, so a dashboard that only exists in the
+  //   other workspace gets replaced with a real one for the workspace
+  //   you're actually on now, instead of 404ing or hanging around stale.
+  //   A dashboard explicitly marked visible from both workspaces (the new
+  //   cross_workspace toggle) correctly stays selected either way, since
+  //   the server now includes it in `items` for both.
+  // - The "last opened" pointer (see LAST_OPENED_WINDOW_MS above) is
+  //   checked between a stale/absent URL id and the computed default.
   useEffect(() => {
     let cancelled = false
     async function boot() {
@@ -76,15 +117,33 @@ export default function Dashboard() {
       try {
         const res = await loadList()
         if (cancelled) return
-        const targetId = idParam || res.default_id
+        const visibleIds = new Set((res.items || []).map(d => d.id))
+        let targetId = null
+
+        const urlId = searchParams.get('id')
+        if (urlId && visibleIds.has(urlId)) {
+          targetId = urlId
+        }
+
+        if (!targetId) {
+          try {
+            const raw = localStorage.getItem(lastDashboardKey(workspace))
+            const stored = raw ? JSON.parse(raw) : null
+            if (stored?.id && visibleIds.has(stored.id) && Date.now() - stored.savedAt < LAST_OPENED_WINDOW_MS) {
+              targetId = stored.id
+            }
+          } catch { /* malformed/unavailable storage — fall through to default */ }
+        }
+
+        if (!targetId) targetId = res.default_id
+
         if (!targetId) {
           setCurrent(null)
+          setSearchParams({}, { replace: true })
           setLoading(false)
           return
         }
-        if (!idParam) {
-          setSearchParams({ id: targetId }, { replace: true })
-        }
+        setSearchParams({ id: targetId }, { replace: true })
         await loadCurrent(targetId)
       } catch (e) {
         if (!cancelled) setError(e.message || 'Failed to load dashboard')
@@ -95,11 +154,44 @@ export default function Dashboard() {
     boot()
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspace, idParam])
+  }, [workspace])
+
+  // Persist "last opened" whenever the shown dashboard changes, for the
+  // window-limited restore above — mirrors Chat.jsx's identical per-workspace
+  // localStorage-pointer effect (keyed on chatId there, current.id here).
+  useEffect(() => {
+    if (!current?.id) return
+    try {
+      localStorage.setItem(lastDashboardKey(workspace), JSON.stringify({ id: current.id, savedAt: Date.now() }))
+    } catch { /* private-browsing/storage-full — just skip persistence */ }
+  }, [current?.id, workspace])
+
+  // Auto-refresh (owner ask, 2026-08-17): a block created elsewhere (e.g. a
+  // task added from another tab/session) previously never appeared — and
+  // never got its own action buttons — until a manual reload, since this
+  // page only ever fetched on mount/action before. Same setInterval +
+  // visibilitychange pattern Chat's presence-ping effect already
+  // established (Chat.jsx), just a much longer interval since dashboard
+  // data changes far less often than chat presence. Skipped entirely while
+  // actively editing so a background refetch never clobbers an in-progress
+  // drag/resize/config change.
+  useEffect(() => {
+    if (!current?.id || editing) return
+    function refresh() {
+      if (document.visibilityState === 'visible') loadCurrent(current.id, { resetEditing: false })
+    }
+    const interval = setInterval(refresh, 45000)
+    document.addEventListener('visibilitychange', refresh)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', refresh)
+    }
+  }, [current?.id, editing, loadCurrent])
 
   async function selectDashboard(id) {
     setShowSwitcher(false)
     setSearchParams({ id })
+    await loadCurrent(id)
   }
 
   async function onDashboardCreated(d) {
@@ -107,6 +199,7 @@ export default function Dashboard() {
     setShowSwitcher(false)
     setShowCreateModal(false)
     setSearchParams({ id: d.id })
+    await loadCurrent(d.id)
   }
 
   async function refreshTemplates() {
@@ -312,6 +405,8 @@ export default function Dashboard() {
         <DashboardSettingsModal
           dashboard={current}
           isOwner={isOwner}
+          user={user}
+          workspace={workspace}
           onClose={() => setShowSettings(false)}
           onSaved={async () => { await loadCurrent(current.id, { resetEditing: false }); setShowSettings(false) }}
           onShare={() => { setShowSettings(false); setShowAccess(true) }}
