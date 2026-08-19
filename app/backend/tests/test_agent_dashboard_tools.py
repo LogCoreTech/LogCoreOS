@@ -397,17 +397,67 @@ def test_create_dashboard_pool_requires_admin(users):
     assert "admin" in result["error"].lower()
 
 
+def test_create_dashboard_pool_in_business_workspace_uses_personal_store_path(users):
+    """Regression test (2026-08-18): pool pseudo-users (`_household`/`_team`)
+    always store at the "personal" ws_path base regardless of which
+    workspace they're paired with (file_service.ws_path()'s own contract).
+    This tool used to pass the ambient `workspace` straight through, so a
+    `_team` pool dashboard created while chatting in the business workspace
+    was written to a location no read path ever looks at (every read
+    hardcodes "personal" for pool stores) and vanished immediately — a
+    "dashboard not found" 404 for everyone, including its creator. Found
+    while investigating an unrelated user-reported "dashboard not found"
+    bug; never reachable from the UI (which never sends pool=True for
+    dashboards), only via this agent tool."""
+    result = agent_service._execute_tool(
+        "create_dashboard",
+        {"name": "Team Board", "pool": True},
+        users["alice"],
+        workspace="business",
+    )
+    assert "id" in result
+
+    found = dashboards_service.find_dashboard(
+        users["alice"]["name"], "admin", True, "business", result["id"]
+    )
+    assert found is not None
+    assert found["store"] == "_team"
+    assert found["store_workspace"] == "personal"
+
+    items = dashboards_service.list_visible_dashboards(
+        users["alice"]["name"], "admin", True, "business"
+    )
+    assert any(d["id"] == result["id"] for d in items)
+
+
+_CHROME_FIELDS = [
+    {"key": "show_card", "label": "Show card background", "kind": "boolean", "optional": True},
+    {
+        "key": "show_header",
+        "label": "Show header (when not editing)",
+        "kind": "boolean",
+        "optional": True,
+    },
+]
+
+
 def test_get_dashboard_block_catalog_merges_config_fields(users):
     catalog = agent_service._execute_tool(
         "get_dashboard_block_catalog", {}, users["alice"], workspace="personal"
     )
     by_type = {c["type"]: c for c in catalog}
     assert "single_task" in by_type
+    # Every non-chromeless type's own config fields are followed by the two
+    # universal chrome toggles (2026-08-18) — appended, not merged in place.
     assert by_type["single_task"]["config_fields"] == [
-        {"key": "task_id", "label": "Task id (look it up via list_tasks)", "kind": "task"}
+        {"key": "task_id", "label": "Task id (look it up via list_tasks)", "kind": "task"},
+        *_CHROME_FIELDS,
     ]
-    # A type with no config (e.g. streaks) still appears, with an empty list.
-    assert by_type["streaks"]["config_fields"] == []
+    # A type with no config of its own (e.g. streaks) still appears, and is
+    # no longer an empty list — it always has at least the two chrome
+    # fields now, since every non-chromeless block has a card/header to
+    # toggle regardless of what else is configurable about it.
+    assert by_type["streaks"]["config_fields"] == _CHROME_FIELDS
     # top3_tasks/due_today gained an optional sort_mode selector (2026-08-15).
     assert by_type["top3_tasks"]["config_fields"] == [
         {
@@ -420,5 +470,10 @@ def test_get_dashboard_block_catalog_merges_config_fields(users):
                 {"value": "date", "label": "Date/Time"},
                 {"value": "alpha", "label": "A–Z"},
             ],
-        }
+        },
+        *_CHROME_FIELDS,
     ]
+    # Chromeless types (nav_button/status_button) have no card/header at
+    # all — they must NOT gain the two chrome fields.
+    nav_fields = by_type["nav_button"]["config_fields"]
+    assert not any(f["key"] in ("show_card", "show_header") for f in nav_fields)

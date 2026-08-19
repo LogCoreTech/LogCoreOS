@@ -25,12 +25,13 @@
       "blurb": "Your home screen — now build-it-yourself. Create as many dashboards as you want, each a freeform grid of blocks pulling live data from almost any module: tasks, streaks, Smart Home, Finance, Contacts, Assets, Notes, Calendar, Automations, and more.",
       "howto": [
         "Click the dashboard name at the top to switch between your dashboards — grouped by template if you use them — or create a new one.",
-        "Click \"Edit Dashboard\" to drag/resize blocks, add new ones, or remove existing ones — works the same way on desktop and mobile, and each remembers its own arrangement, so a dashboard can be laid out differently on your phone than on your laptop. On a touchscreen, press and hold a block for a moment before it starts moving — a quick swipe scrolls the page as normal instead. Removing a block asks you to confirm first. Every block's name and icon only show up while you're editing — dashboards look clean and uncluttered the rest of the time.",
+        "Click \"Edit Dashboard\" to drag/resize blocks, add new ones, or remove existing ones — works the same way on desktop and mobile, and each remembers its own arrangement, so a dashboard can be laid out differently on your phone than on your laptop. On a touchscreen, press and hold a block for a moment before it starts moving — a quick swipe scrolls the page as normal instead. Removing a block asks you to confirm first. A block's ✎/✕ edit controls only show up while you're editing.",
+        "Every block has its own card background and name/icon header shown by default — click \"✎\" on a block to turn either one off individually, for a cleaner, more minimal look on blocks that don't need the label or the card outline.",
         "Click \"+ Add Block\" and use the search box to find one quickly, or browse the full catalog grouped into live data, record-linked, actions, and freeform (text/links/headings). Record-linked blocks (Single Task, Contact's Deals, Finance Book Report, etc.) let you search for and pick the exact task, contact, asset, event, book, note, or workflow — you never need to know or type an internal ID. The Documents/Files block shows real image previews and lets you click any file to open it.",
         "The Collection block shows a whole list — or a board grouped by status — of records at once from one asset template, optionally narrowed to just the ones linked to the dashboard's own contact. Pick which fields show, and pick one of the template's own status-style fields to get a one-click status control on every item, right from the dashboard. A Count-only layout is also available for a simple \"how many\" tile.",
         "When creating a new dashboard, you can start blank or pick a template to build from a reusable block set instantly — templates are entirely optional. Some templates ask you to pick a contact or asset first (their \"subject\"); any block set up to use \"this dashboard's own contact/asset\" then shows that record's data. A dashboard made from a template keeps its block set in sync with the template automatically, but its own layout stays yours to rearrange — use \"Detach from template\" (in ⚙ Settings) for full independent control over its blocks too.",
-        "Two Action blocks render as a small standalone button with nothing else around it, so you can fit several in a small space: \"Navigate To…\" jumps to any page, a specific section within Finance/Automations/Settings, a specific record, or a specific dashboard; \"Status/Archive Action\" marks a task done/pending/skipped, updates a contact's gender or marital status, or archives/unarchives an asset or sets one of its own fields, with one click. Every option in both is picked from a real list, never typed — including the button's own label, if you want something more specific than the default.",
-        "While editing, click \"⚙ Settings\" to rename the dashboard, change its icon, share it, set it as your default, or delete it — all in one place.",
+        "Two Action blocks render as a small standalone button with nothing else around it, so you can fit several in a small space: \"Navigate To…\" jumps to any page, a specific section within Finance/Automations/Settings, a specific record, or a specific dashboard; \"Status/Archive Action\" marks a task done/pending/skipped, updates a contact's gender or marital status, or archives/unarchives an asset or sets one of its own fields, with one click. Every option in both is picked from a real list, never typed — including the button's own label and its color, if you want something more specific than the default.",
+        "While editing, click \"⚙ Settings\" to rename the dashboard, change its icon, share it, set it as your default, or delete it — all in one place, or — if you have both a personal and business workspace — flip on \"Also show in my [other workspace] workspace\" so this one dashboard shows up in both instead of just the one it was created in.",
         "Sharing (inside ⚙ Settings) lets you share a dashboard with another person or your household/team pool at read, contribute, or edit access.",
         "As the owner, you can turn on \"Share underlying data\" (also inside ⚙ Settings) so people you've shared with see the same live data you do, even things they normally couldn't access on their own — off by default, and they never see more than you can see.",
         "New here? The Getting Started card walks you through first steps and hides once you're set up.",
@@ -42,7 +43,9 @@
         "Picked the wrong record for a block? Click its \"✎\" button while editing to change what it points to, without deleting and re-adding the block.",
         "Manage templates from the \"Templates\" button next to \"+ New Dashboard.\" Admins can build global templates for everyone; anyone can also build and share their own personal ones — just like Asset Templates.",
         "Made a dashboard from a template? ⚙ Settings lets you change which contact/asset it's about (\"Change subject\") at any time.",
-        "To resize a block, drag the small orange corner mark in its bottom-right corner while editing (desktop only)."
+        "To resize a block, drag the small orange corner mark in its bottom-right corner while editing (desktop only).",
+        "A dashboard you leave open picks up changes made elsewhere (a task created on another device, for example) on its own every so often — no manual reload needed.",
+        "Reopening the Dashboard module takes you back to whichever dashboard you had open last, as long as it's been less than 30 minutes — otherwise it falls back to your default."
       ],
       "modules": ["dashboard"]
     },
@@ -53,7 +56,7 @@
       "blurb": "Tasks are your day-to-day to-dos. LogCore scores them by your life priorities so the most important ones rise to the top automatically.",
       "howto": [
         "Click \"+ New Task\", give it a title, and pick a category and priority (High/Medium/Low).",
-        "Add a due date and time if it matters — overdue and due-today tasks score highest.",
+        "Add a due date and time if it matters — overdue and due-today tasks score highest, and a set time shows right next to the date on the card.",
         "Set Type to \"Recurring\" for repeating tasks; completing them on schedule builds a streak.",
         "Use the \"Sort by\" control above the list to switch between Priority score (default — ranks every task against every other one, regardless of category), Date/Time, and Alphabetical; your choice is remembered.",
         "Check a task off to complete it. Non-recurring done tasks move to History during the nightly tidy-up.",
@@ -182,7 +185,8 @@
         "Stuck on any feature? Just ask — the AI reads this Help guide and will explain it and link you to the right section.",
         "In Approve mode, nothing is changed until you click Approve, so it's safe to let it try things.",
         "It can find and work with notes shared with you too, not just your own — respecting whatever access level (read/contribute/edit) you were actually given.",
-        "Ask it to add or change a Dashboard block and you'll see a live preview of your actual dashboard with the change applied, right in the chat, before you approve."
+        "Ask it to add or change a Dashboard block and you'll see a live preview of your actual dashboard with the change applied, right in the chat, before you approve.",
+        "Your message is saved the instant you send it, so it's never lost even if you close the app or lose connection before the reply comes back."
       ],
       "modules": ["chat"]
     },
@@ -192,7 +196,8 @@
       "title": "Assets",
       "blurb": "Track anything you own — property, vehicles, equipment — as flexible, nestable objects built from templates. Great for organizing and for handing employees limited access.",
       "howto": [
-        "Pick a template (an admin sets up the field structure, e.g. a Vehicle or Folder) and create an asset.",
+        "Pick a template (an admin sets up the field structure, e.g. a Vehicle or Folder) and create an asset — or start blank if nothing needs to be tracked in structured fields. A blank asset can still have its own custom fields, picked from the same field types templates use (text, number, date, yes/no, dropdown, contact) — no template required.",
+        "Built out a blank asset's custom fields and want to reuse that structure? Click \"Save as template\" on it — it becomes a real, reusable template, and the asset itself switches over to using it.",
         "Nest assets under each other (a parcel under a subdivision, equipment under a building) to build a tree.",
         "Attach images or PDFs, add notes, and link related tasks.",
         "Click an asset to read it first; hit ✎ Edit to change it. Share a subtree with a user, your team, or your household.",
@@ -229,10 +234,11 @@
       "title": "Contacts (CRM)",
       "blurb": "Your address book and light CRM. The Contact is the canonical person or company that Finance payees and invoice clients link back to — and every user's own Profile is now a Contact too.",
       "howto": [
-        "Add a contact with emails, phones (with country code and extension), tags, and any admin-defined custom fields.",
-        "Your own Profile lives here as a self-contact, pinned to the top of your Contacts list labeled \"ME\" — it opens as a full page since there's a lot more on it than a typical contact.",
+        "Add a contact with emails, phones (with country code and extension), tags, and any admin-defined custom fields — it's shared with your household or team by default, with a \"keep this personal\" option if you'd rather it stay just yours.",
+        "Any contact can also be flipped to show up in your other workspace too, from the editor — it's still one real record, not a copy, so an edit from either tab always changes the same contact.",
+        "Your own Profile lives here as a self-contact, pinned to the top of your Contacts list labeled \"ME\" — visible to your whole household and team from either workspace, and it opens as a full page since there's a lot more on it than a typical contact.",
         "Upload a photo for any contact — it replaces the default icon at the top of the card.",
-        "Build a work history under Career — add a role, then \"Archive this role & start a new one\" when it ends, keeping past roles on record like a resume.",
+        "Build a work history under Career — add a role, then \"Archive this role & start a new one\" when it ends, keeping past roles on record like a resume. You can also add a past role directly with its own start and end dates, or edit one later — past roles list with the most recent one first.",
         "Filter the list to just people or just companies.",
         "The list sorts alphabetically by name — jump straight to a letter with the A-Z strip beside it.",
         "Tag a contact as a company and its editor switches to company fields — Locations (one or more addresses) and Hours (open/close per day) instead of personal fields like gender or career.",
@@ -240,13 +246,19 @@
         "Track opportunities on the deals pipeline (Lead → Contacted → … → Won/Lost).",
         "Set a follow-up date on an interaction or deal to get reminded.",
         "Link two contacts as affiliated (family, a company and its people, etc.) — the link shows on both contacts' cards.",
-        "Share contacts like assets and finance — \"contribute\" lets someone log interactions and advance deals without editing the core record."
+        "Share contacts like assets and finance — \"contribute\" lets someone log interactions and advance deals without editing the core record.",
+        "Delete a contact from its edit screen — your own contacts anytime, a shared household/team contact only if you're an admin.",
+        "Convert a personal contact into a shared household/team contact from its edit screen — or convert several at once from the → Household/Team button in the Contacts page toolbar, which only shows up when you have contacts eligible to convert.",
+        "Add Core Values as individual pills, one at a time, instead of typing them all into one field.",
+        "On your own profile, each of the Personal, Address, Career, Family, Values & Principles, and Priorities sections has a \"Hide from others\" toggle right next to its heading — turn one on and your household/team stops seeing that section, while you still see everything yourself."
       ],
       "tips": [
         "Link a payee or an invoice client to a contact to see all their spend/receive activity in one place.",
         "Won deals offer a shortcut to create an invoice in Finance.",
         "Health, finances, and AI-preference fields on your own profile are always private — never visible to anyone you share your contact with, no matter what access level you grant.",
-        "Nobody but you can ever be granted edit access to your own contact, even if you share it — others can only get read or contribute access."
+        "Nobody but you can ever be granted edit access to your own contact, even if you share it — others can only get read or contribute access.",
+        "A green or red dot on a household/team member's own contact shows whether they're currently online — click their photo to see exactly how long ago they were last seen.",
+        "The section-hiding toggles on your own profile are only ever settable by you — nobody with access to your contact, even at edit level, can turn one on or off."
       ],
       "modules": ["contacts"]
     },
@@ -296,7 +308,7 @@
         "Your AI chat and priorities are scoped to the workspace you're currently in."
       ],
       "tips": [
-        "Nothing crosses between workspaces automatically — that separation is the whole point.",
+        "Nothing crosses between workspaces automatically by default — that separation is the whole point — but an individual dashboard can be explicitly flagged to show up in both, from that dashboard's own ⚙ Settings.",
         "An admin decides which workspaces you have access to."
       ],
       "modules": []
@@ -469,18 +481,20 @@
   "whats_new": [
     {
       "version": "0.6.0",
-      "date": "2026-08-15",
+      "date": "2026-08-18",
       "highlights": [
-        "Finance now has a real Transfer type — move money between two books, even across personal and business (or between two accounts in the same book), and both sides stay linked without ever counting as income or expense.",
-        "Contacts sort alphabetically with an A-Z jump strip, and company contacts now get their own fields — Locations and Hours — instead of personal fields like gender or career. Company contacts can also have their own custom fields now, set up from a new Settings → Admin Settings → Contact Fields screen.",
-        "Tasks are now one flat, ranked list instead of grouped by category, with a new Sort by control (Priority, Date/Time, or Alphabetical) — the same control was also added to the Top 3 Tasks and Due Today dashboard blocks.",
-        "AI Chat now runs in the background — send a message and keep going, get notified when it's ready or needs your approval, and switch between multiple conversations that each keep working independently. The Chats list opens a conversation directly on click, with a live dot for one still working and an unread mark for one you haven't seen yet.",
-        "Dashboard blocks can now have their own buttons — an Open button per row, or one-click status buttons on Tasks/Assets blocks — instead of separate standalone action blocks.",
-        "Finance now remembers the last book you had open, per workspace.",
-        "Asset attachment images open in a full-screen viewer instead of a new tab.",
-        "The AI in Chat can now see and work with notes shared with you, not just your own.",
+        "Finance now has a real Transfer type — move money between two books, even across personal and business (or between two accounts in the same book), and both sides stay linked without ever counting as income or expense. Household and Team can also connect a joint/family bank account directly to the pool, and Finance now remembers the last book you had open, per workspace.",
+        "Every user's own contact is now permanently visible to their whole household and business team, from either workspace, with a green/red online dot and a click-for-last-seen popover — no separate share step needed. New contacts default to shared with your household/team too (with a \"keep this personal\" option), and any contact can be flipped to also show up in your other workspace. Admins can link a new user account to an existing household contact right when creating it. Contacts also sort alphabetically with an A-Z jump strip, can be deleted from their edit screen, and a personal contact can be converted into a shared household/team contact (single or bulk).",
+        "Company contacts now get their own fields — Locations and Hours — instead of personal fields like gender or career, and can have their own custom fields, set up from a new Settings → Admin Settings → Contact Fields screen.",
+        "Core Values are now individual pills instead of one comma-separated field. Career history lets you add a past role directly with its own start and end dates, not just by ending your current role — past roles can be edited afterward and list with the most recent one first. Your own profile's sensitive sections (Personal, Address, Career, Family, Values & Principles, Priorities) can each be hidden from your household/team with a toggle only you can set.",
+        "Tasks are now one flat, ranked list instead of grouped by category, with a new Sort by control (Priority, Date/Time, or Alphabetical) — the same control was also added to the Top 3 Tasks and Due Today dashboard blocks. A task's due time now shows right next to its due date. Fixed tasks and goals showing a red \"OVERDUE\" badge hours before they were actually due, for anyone west of UTC.",
+        "AI Chat now runs in the background — send a message and keep going, get notified when it's ready or needs your approval, and switch between multiple conversations that each keep working independently. The Chats list opens a conversation directly on click, with a live dot for one still working and an unread mark for one you haven't seen yet. Your message is saved the instant you send it (so it's never lost), the \"Thinking…\" indicator survives a reload, notifications are quieter when you're already watching, a paused approval/question/plan card survives leaving and coming back, and two real crashes (an \"unexpected role\" error after approving a card, and a full page crash when asking the AI to resize a dashboard block) are fixed. The AI can also now see and work with notes shared with you, not just your own, and reopens your last conversation per workspace.",
+        "Dashboard blocks can now have their own buttons — an Open button per row, or one-click status buttons on Tasks/Assets blocks — each with its own color, and now always aligned to the right consistently (two separate alignment bugs, fixed). Each block's card background and header can now be toggled on or off individually (both default on), and the AI can adjust those settings — plus a block's size and position — when building or editing a dashboard for you. An open dashboard also now picks up changes made elsewhere on its own every so often.",
+        "A dashboard can now be flagged to show up in both your personal and business workspaces instead of just the one it was created in, and reopening the Dashboard module returns you to whichever dashboard you had open last (within 30 minutes). Fixed a \"Dashboard not found\" error that showed on every first open of the module, a stale dashboard sticking around after switching workspaces, and a team dashboard created via the AI in chat immediately showing as not found.",
+        "Assets can now be created blank, without picking a template first, with their own typed custom fields — pick from the same six field types (text, number, date, yes/no, dropdown, contact) the admin Template editor uses — and a \"Save as template\" button turns those fields into a real, reusable template. Fixed those same custom fields not showing up anywhere outside of edit mode. Asset attachment images now open in a full-screen viewer instead of a new tab.",
+        "You can now pin your favorite modules to the desktop sidebar, the same way mobile already lets you pin shortcuts to its bottom bar — same settings screen and list, now shown on desktop too.",
         "The Notes \"···\" menu and every other Notes dialog now open centered on screen, matching the rest of the app.",
-        "Fixed a mobile bug where taps could land inches off target after the on-screen keyboard closed.",
+        "Fixed two mobile bugs where typing into a field (Notes/Journal, the Core Values field, an Assets custom-field dropdown, and a couple of others found along the way) zoomed the whole page in, and a bug where taps could land inches off target after the on-screen keyboard closed.",
         "Diagnosed a push-notification delivery report — Web Push was already fully built and firing, with a likely fix now shipped (a real VAPID contact address instead of a placeholder) and clearer error messages for anyone still not receiving them."
       ]
     },

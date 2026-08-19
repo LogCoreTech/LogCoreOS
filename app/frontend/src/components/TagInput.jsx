@@ -72,7 +72,13 @@ export default function TagInput({
           onFocus={() => setOpen(true)}
           onBlur={() => { setTimeout(() => setOpen(false), 120); if (!strict) add(text) }}
           placeholder={value.length ? '' : placeholder}
-          className="flex-1 min-w-[6rem] bg-transparent outline-none text-sm py-0.5"
+          // text-base (16px), not text-sm (14px): iOS Safari auto-zooms the
+          // whole page on focus for any text input under 16px (same bug
+          // class already fixed in Notes.jsx/Journal.jsx, 2026-08-15) —
+          // reported again 2026-08-18 against this component specifically
+          // (Contacts' Core Values pills, Assets' blank select-field
+          // options), since both go through this one shared input.
+          className="flex-1 min-w-[6rem] bg-transparent outline-none text-base py-0.5"
         />
       </div>
       {/* Inline (not absolute) so it can't be clipped by a scrolling modal —

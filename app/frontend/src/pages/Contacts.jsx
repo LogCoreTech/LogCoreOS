@@ -7,6 +7,7 @@ import { useWorkspace } from '../lib/workspace'
 import ContactDetail from '../components/contacts/ContactDetail'
 import ContactModal from '../components/contacts/ContactModal'
 import ContactAvatar from '../components/contacts/ContactAvatar'
+import BulkConvertContactsModal from '../components/contacts/BulkConvertContactsModal'
 import { formatPhone } from '../components/contacts/phone'
 
 const TYPE_FILTERS = [
@@ -28,6 +29,7 @@ export default function Contacts() {
   const [showArchived, setShowArchived] = useState(false)
   const [modal, setModal] = useState(null)      // { contact } for edit / {} for new
   const [detail, setDetail] = useState(null)    // contact being viewed
+  const [showBulkConvert, setShowBulkConvert] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -37,9 +39,16 @@ export default function Contacts() {
         contactsApi.fields().catch(() => []),
         contactsApi.pipeline().catch(() => ({ stages: [] })),
       ])
-      setItems(Array.isArray(list) ? list : [])
+      const cleanList = Array.isArray(list) ? list : []
+      setItems(cleanList)
       setFields(Array.isArray(f) ? f : [])
       if (p?.stages?.length) setPipeline(p.stages)
+      // Re-sync the open detail panel (if any) from the same fresh list —
+      // load() previously only ever touched `items`, so a contact left open
+      // in the detail view (presence dot included) went stale forever until
+      // manually reopened. Falls back to the previous value if the contact's
+      // no longer visible (e.g. it was just archived out from under it).
+      setDetail(prev => (prev ? cleanList.find(c => c.id === prev.id) || prev : prev))
     } finally { setLoading(false) }
     // `workspace` isn't referenced in this callback's own body (the active
     // workspace flows through api.js's request header instead) — it's kept
@@ -48,6 +57,25 @@ export default function Contacts() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace, showArchived])
   useEffect(() => { load() }, [load])
+
+  // Presence (and anything else time-sensitive) goes stale while this page
+  // sits open — Contacts had no refresh mechanism at all before this (owner
+  // report, 2026-08-17: "been on the app a few minutes and the [presence]
+  // dot is still red" — the ping itself was working fine server-side, this
+  // page just never refetched to see the updated result). Mirrors
+  // Dashboard.jsx's own poll-while-visible pattern, at a slightly longer
+  // interval since presence only needs to be approximately fresh, not tight.
+  useEffect(() => {
+    function refresh() {
+      if (document.visibilityState === 'visible') load()
+    }
+    const interval = setInterval(refresh, 60000)
+    document.addEventListener('visibilitychange', refresh)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', refresh)
+    }
+  }, [load])
 
   // ?contact=<id> deep link (from asset contact fields, invoice/tx source chips)
   const [searchParams, setSearchParams] = useSearchParams()
@@ -72,6 +100,13 @@ export default function Contacts() {
   const mine = items.find(c => c.self_of === user?.name)
   const rest = items.filter(c => c !== mine)
   const mineMatch = mine && matches(mine) ? mine : null
+
+  // Eligible for bulk convert-to-pool: the viewer's own personal contacts
+  // only — no `_owner` (not already pool, not shared-to-me from someone
+  // else) and not a self-contact (already permanently pool). Independent of
+  // the current search/type filter — bulk convert operates over everything
+  // eligible, not just what's currently visible on screen.
+  const eligibleForConvert = items.filter(c => !c._owner && !c.self_of)
 
   // Everyone else, alphabetical by name, grouped into first-letter buckets
   // with a sticky header per letter + a jump strip — makes a long list
@@ -128,6 +163,11 @@ export default function Contacts() {
         <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">Contacts</h1><HelpButton section="contacts" /></span>
         <div className="flex gap-2">
           <button onClick={() => setShowArchived(s => !s)} className="btn-ghost text-sm">{showArchived ? 'Hide archived' : 'Show archived'}</button>
+          {eligibleForConvert.length > 0 && (
+            <button onClick={() => setShowBulkConvert(true)} className="btn-ghost text-sm">
+              → {workspace === 'business' ? 'Team' : 'Household'} ({eligibleForConvert.length})
+            </button>
+          )}
           <label className="btn-ghost text-sm cursor-pointer">Import
             <input type="file" accept=".csv" className="hidden" onChange={handleImport} />
           </label>
@@ -208,6 +248,18 @@ export default function Contacts() {
           onSaved={saved => { setModal(null); load(); if (detail) setDetail(saved) }}
         />
       )}
+      {showBulkConvert && (
+        <BulkConvertContactsModal
+          contacts={eligibleForConvert}
+          workspace={workspace}
+          onClose={() => setShowBulkConvert(false)}
+          onDone={res => {
+            setShowBulkConvert(false)
+            load()
+            alert(`Converted ${res.converted}${res.skipped ? `, skipped ${res.skipped}` : ''}.`)
+          }}
+        />
+      )}
       {detail && (
         <ContactDetail
           contact={detail}
@@ -223,10 +275,18 @@ export default function Contacts() {
 }
 
 function ContactRow({ contact: c, user, onOpen }) {
+  // `.card`'s backdrop-blur gives every row its own stacking context, so the
+  // presence popover's z-index only ever wins comparisons inside its own
+  // row — the next row (a later, un-elevated sibling stacking context) was
+  // painting over it regardless (owner report, 2026-08-18: popover
+  // "partially hidden by the contact below it"). Boosting *this* row's own
+  // stacking context above its siblings while its popover is open fixes it
+  // without introducing this codebase's first portal-based popover.
+  const [popoverOpen, setPopoverOpen] = useState(false)
   return (
     <button onClick={() => onOpen(c)}
-      className={`w-full text-left card p-3 flex items-center gap-3 hover:border-orange-500/40 ${c.archived ? 'opacity-50' : ''}`}>
-      <ContactAvatar contact={c} size="w-9 h-9" textSize="text-xl" />
+      className={`w-full text-left card p-3 flex items-center gap-3 hover:border-orange-500/40 ${popoverOpen ? 'relative z-20' : ''} ${c.archived ? 'opacity-50' : ''}`}>
+      <ContactAvatar contact={c} size="w-9 h-9" textSize="text-xl" onPopoverToggle={setPopoverOpen} />
       <div className="flex-1 min-w-0">
         <p className="font-medium truncate flex items-center gap-1.5">
           {c.name}

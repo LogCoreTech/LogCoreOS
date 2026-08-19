@@ -211,6 +211,30 @@ async def test_chat_resets_session_status_if_agent_raises(alice, monkeypatch):
     assert session["status"] == "idle"  # never stuck showing "running"
 
 
+@pytest.mark.asyncio
+async def test_chat_saves_the_user_message_even_if_the_agent_call_raises(alice, monkeypatch):
+    # Regression coverage (owner report, 2026-08-17): the user's own message
+    # used to only ever get archived as part of the single end-of-turn write
+    # alongside the assistant's reply — if the agent call raised (or the
+    # connection dropped) before that point, the message the user typed was
+    # never saved anywhere, not even the fact they sent it. Confirms the
+    # split-write fix: the user's message is saved BEFORE the agent call.
+    monkeypatch.setattr(settings, "anthropic_api_key", "fake-key-for-tests")
+
+    async def boom(*a, **kw):
+        raise RuntimeError("provider exploded")
+
+    monkeypatch.setattr(agent_service, "agent_completion", boom)
+
+    req = ChatRequest(chat_id="chat-4", message="please remember this", mode="auto")
+    with pytest.raises(RuntimeError):
+        await chat(req, current_user=alice, workspace="personal")
+
+    session = agent_service.get_session("Alice", "personal", "chat-4")
+    content = read_markdown(ws_path("Alice", "personal") / "Chats" / session["filename"])
+    assert "**You**: please remember this" in content
+
+
 # ---------------------------------------------------------------------------
 # GET /chat/pending/{chat_id} (2026-08-15) — re-attaching a live pending-turn
 # card onto a reopened session. Regression coverage for a real bug: reopening

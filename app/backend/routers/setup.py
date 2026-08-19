@@ -102,12 +102,17 @@ def setup_user(req: SetupRequest, current_user: dict = Depends(get_current_user)
 
     # Create the user's self-contact — their Contact record IS their profile
     # now (Profile.md/profile.json are retired). priority_order is the one
-    # field kept workspace-keyed inside the record.
+    # field kept workspace-keyed inside the record. Physically stored in the
+    # household pool, not this user's own store (2026-08-17) — must target
+    # POOL_HOUSEHOLD here too, or this update silently finds nothing.
     from services import contacts_service
 
     contact = contacts_service.create_self_contact(name, occupation=safe_role or None)
     contacts_service.update_contact(
-        name, "personal", contact["id"], {"priority_order": {"personal": req.priority_order}}
+        contacts_service.POOL_HOUSEHOLD,
+        "personal",
+        contact["id"],
+        {"priority_order": {"personal": req.priority_order}},
     )
 
     # Replace placeholders in memory files (atomic writes)

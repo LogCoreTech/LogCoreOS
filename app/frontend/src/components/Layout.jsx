@@ -3,9 +3,20 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
 import { ALL_MODULES, getShortcutsForUser } from '../lib/constants'
-import { suggestions as sugApi, assets as assetsApi, finance as financeApi, contacts as contactsApi, notes as notesApi, dashboards as dashboardsApi, dashboardTemplates as dashboardTemplatesApi } from '../lib/api'
+import { suggestions as sugApi, assets as assetsApi, finance as financeApi, contacts as contactsApi, notes as notesApi, dashboards as dashboardsApi, dashboardTemplates as dashboardTemplatesApi, presence as presenceApi } from '../lib/api'
 import { deepLinkUrl } from '../lib/deepLinks'
 import WhatsNewBanner from './WhatsNewBanner'
+
+// Shared by the sidebar's main nav loop and its new Pinned section
+// (2026-08-18) so the active/inactive styling can't drift between the two.
+function navLinkClass(collapsed) {
+  return ({ isActive }) =>
+    `flex items-center gap-3 px-3 py-2 text-sm font-medium transition-colors border-l-2 rounded-r-lg ${
+      isActive
+        ? 'border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400'
+        : 'border-transparent text-charcoal-600 dark:text-charcoal-400 hover:bg-charcoal-100 dark:hover:bg-charcoal-800'
+    } ${collapsed ? 'justify-center' : ''}`
+}
 
 function NotifBell() {
   const [notifs, setNotifs] = useState([])
@@ -223,6 +234,23 @@ export default function Layout() {
     localStorage.setItem('lc_sidebar', next ? 'collapsed' : 'expanded')
   }
 
+  // App-wide online/offline presence (2026-08-17) — same setInterval +
+  // visibilitychange pattern Chat.jsx's own per-conversation presence ping
+  // already established, moved up to Layout so it covers every page, not
+  // just Chat. Feeds a future online/offline dot on user-linked contacts.
+  useEffect(() => {
+    function ping() {
+      if (document.visibilityState === 'visible') presenceApi.ping().catch(() => {})
+    }
+    ping()
+    const interval = setInterval(ping, 30000)
+    document.addEventListener('visibilitychange', ping)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', ping)
+    }
+  }, [])
+
   // Global "?" shortcut → open Help (ignored while typing in a field).
   useEffect(() => {
     function onKey(e) {
@@ -313,6 +341,31 @@ export default function Layout() {
           </div>
         )}
 
+        {/* Pinned — desktop counterpart to mobile's bottom-bar shortcuts
+            (2026-08-18, owner: "pin favorite modules to the side bar on
+            desktop just how mobile has its shortcuts"). Same underlying
+            `shortcuts` data/settings page (Settings → Shortcuts, no longer
+            mobile-only) and the same 4-per-workspace cap — not a second,
+            separate pin list. Skipped in collapsed mode: the full nav list
+            right below is already a compact icon-only stack there, so a
+            second icon-only subset on top would just duplicate it. This
+            whole `<aside>` is already `hidden md:flex` (see below), so
+            nothing extra is needed to keep it off mobile — the existing
+            bottom bar is mobile's own version of the same feature. */}
+        {!collapsed && shortcutModules.length > 0 && (
+          <div className="px-2 pt-2">
+            <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-wide text-charcoal-400 dark:text-charcoal-500">Pinned</p>
+            <nav className="space-y-0.5 pb-2 mb-1 border-b border-charcoal-200 dark:border-charcoal-800">
+              {shortcutModules.map(({ id, to, icon, label }) => (
+                <NavLink key={id} to={to} end={to === '/'} className={navLinkClass(false)}>
+                  <span className="text-base shrink-0">{icon}</span>
+                  {label}
+                </NavLink>
+              ))}
+            </nav>
+          </div>
+        )}
+
         <nav className="flex-1 p-2 space-y-0.5">
           {visibleModules.map(({ id, to, icon, label }) => (
             <NavLink
@@ -320,13 +373,7 @@ export default function Layout() {
               to={to}
               end={to === '/'}
               title={collapsed ? label : undefined}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 text-sm font-medium transition-colors border-l-2 rounded-r-lg ${
-                  isActive
-                    ? 'border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400'
-                    : 'border-transparent text-charcoal-600 dark:text-charcoal-400 hover:bg-charcoal-100 dark:hover:bg-charcoal-800'
-                } ${collapsed ? 'justify-center' : ''}`
-              }
+              className={navLinkClass(collapsed)}
             >
               <span className="text-base shrink-0">{icon}</span>
               {!collapsed && label}

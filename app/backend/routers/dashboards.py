@@ -86,6 +86,10 @@ class BlockIn(BaseModel):
 class DashboardUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=80)
     icon: str | None = Field(default=None, max_length=8)
+    # Settings-only (2026-08-18) — restricted to edit access in the handler
+    # below, same tier as sharing changes, not the plain contribute tier the
+    # rest of this model's fields (blocks) use.
+    cross_workspace: bool | None = None
     blocks: list[BlockIn] | None = None
 
 
@@ -200,12 +204,26 @@ def create_dashboard(
         if current_user.get("role") != "admin":
             raise HTTPException(status_code=403, detail="Admin access required")
         store_user = dashboards_service.pool_for(workspace)
+        # Pool pseudo-users (_household/_team) always store at the "personal"
+        # ws_path base regardless of which workspace they're paired with —
+        # file_service.ws_path()'s own docstring says so, and every READ path
+        # in dashboards_service.py already hardcodes "personal" for the pool
+        # branch. This create path previously passed the ambient `workspace`
+        # straight through instead — for `_team` (paired with "business"),
+        # that silently wrote to .../USERS/_team/Business/Dashboards/..., a
+        # file no read path ever looks at, so the new dashboard vanished
+        # immediately (404 on every subsequent open, including for the admin
+        # who just created it). Found 2026-08-18 while investigating a
+        # "dashboard not found" report — real bug, same fix Assets already
+        # has for its own pool-creation branch (routers/assets.py).
+        store_ws = "personal"
     else:
         store_user = viewer
+        store_ws = workspace
     try:
         dashboard = dashboards_service.create_dashboard(
             store_user,
-            workspace,
+            store_ws,
             viewer,
             body.name,
             body.icon,
@@ -431,6 +449,7 @@ def get_render(
         "subject_id": found["dashboard"].get("subject_id"),
         "subject": _resolve_subject(current_user, workspace, found["dashboard"]),
         "share_underlying_data": found["dashboard"].get("share_underlying_data", False),
+        "cross_workspace": found["dashboard"].get("cross_workspace", False),
         "shared_with": found["dashboard"].get("shared_with", []),
         "hidden_from": found["dashboard"].get("hidden_from", []),
         "contributors": found["dashboard"].get("contributors", []),
@@ -450,6 +469,13 @@ def update_dashboard(
 ):
     found = _find(current_user, workspace, dashboard_id, need="contribute")
     updates = body.model_dump(exclude_unset=True)
+    if (
+        "cross_workspace" in updates
+        and _ACCESS_ORDER.get(found["access"], -1) < _ACCESS_ORDER["edit"]
+    ):
+        raise HTTPException(
+            status_code=403, detail="Edit access required to change workspace visibility"
+        )
     try:
         dashboard = dashboards_service.update_dashboard(
             found["store"], found["store_workspace"], dashboard_id, updates, by=current_user["name"]
@@ -471,7 +497,7 @@ def update_access(
     try:
         dashboard = dashboards_service.update_access(
             found["store"],
-            workspace,
+            found["store_workspace"],
             dashboard_id,
             shared_with=(
                 [s.model_dump() for s in body.shared_with] if body.shared_with is not None else None
@@ -542,7 +568,11 @@ def set_share_underlying_data(
     found = _find(current_user, workspace, dashboard_id)
     try:
         dashboard = dashboards_service.set_share_underlying_data(
-            found["store"], workspace, dashboard_id, body.value, by=current_user["name"]
+            found["store"],
+            found["store_workspace"],
+            dashboard_id,
+            body.value,
+            by=current_user["name"],
         )
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))

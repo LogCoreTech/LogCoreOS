@@ -1,3 +1,4 @@
+import logging
 import re
 import shutil
 from typing import Literal
@@ -27,6 +28,7 @@ from services.rate_limiter import rate_limit
 
 router = APIRouter()
 bearer_optional = HTTPBearer(auto_error=False)
+logger = logging.getLogger("logcore.auth")
 
 _COOKIE = "lc_token"
 
@@ -889,6 +891,12 @@ class CreateUserRequest(BaseModel):
     role: Literal["admin", "member", "guest"] = "member"
     feature_role: str = "guest"
     workspaces: list[str] = ["personal"]
+    # Link this new account to an EXISTING household-pool contact instead of
+    # lazily auto-creating a fresh self-contact on first /contacts/me visit —
+    # creation-only, no other entry point retroactively links one (owner item
+    # #4). Must not already be self_of someone else ("can't reuse an
+    # in-use contact"). See routers/contacts.py's GET /available-for-linking.
+    contact_id: str | None = None
 
 
 class UpdateRoleRequest(BaseModel):
@@ -897,10 +905,45 @@ class UpdateRoleRequest(BaseModel):
 
 @router.post("/admin/users", status_code=201)
 def admin_create_user(req: CreateUserRequest, current_user: dict = Depends(require_admin)):
+    from services import contacts_service
+
+    if req.contact_id:
+        # Fail-fast pre-check so a bad contact_id never creates an account at
+        # all — the authoritative check (same two conditions, race-safe) runs
+        # again inside link_self_contact() itself once the account exists.
+        candidate = contacts_service.get_contact(
+            contacts_service.POOL_HOUSEHOLD, "personal", req.contact_id
+        )
+        if candidate is None:
+            raise HTTPException(status_code=400, detail="Selected contact not found")
+        if candidate.get("self_of"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"That contact is already linked to {candidate['self_of']}'s account",
+            )
+
     try:
         user = auth_service.create_user(req.email, req.password, req.name, role=req.role)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    if req.contact_id:
+        try:
+            contacts_service.link_self_contact(req.contact_id, user["name"])
+        except ValueError:
+            # Exceedingly rare race (another admin linked the same contact in
+            # the instant between the pre-check above and here) — the account
+            # itself was already legitimately created, so don't fail the
+            # whole request over it. The new user gets an ordinary
+            # freshly-created self-contact on their first /contacts/me visit
+            # instead, same as if contact_id had never been provided.
+            logger.warning(
+                "admin_create_user: link_self_contact race for contact_id=%r, user=%r",
+                req.contact_id,
+                user["name"],
+                exc_info=True,
+            )
+
     updates: dict = {}
     feature_role = (req.feature_role or "").strip().lower()
     if feature_role and feature_role != "guest":

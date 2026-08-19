@@ -12,6 +12,7 @@ Keep this up to date. When a task is completed, **remove it** rather than checki
 - [ ] **Land lead search & qualify workflow** — n8n pulling land listings (multiple sources with a fallback from day one) and AI-qualifying against configurable criteria; stub file in `automations_stubs/`; posts to the Automation Inbox (`POST /automations/inbox/items`, `GET /inbox/seen` to skip known listings)
 - [ ] **Deploy first managed-hosting beta instance** — server provisioned + SSH-verified 2026-07-17 (tenant + server details in the private Business repo, never here). Remaining: confirm Hetzner backups toggle + firewall (22 only) → Cloudflare Tunnel hostname + token → install Docker + clone repo + `launch.sh` → dedicated Anthropic API key (per-tenant cost attribution) + spend alert → admin-created tenant account (registration stays closed; no demo reset/banner) → cookie_secure + trust_proxy_headers via Admin → Hosting → verify backup.sh cron; track monthly all-in cost; no Infisical (plain docker/.env — revisit at 3+ instances)
 - [ ] **Per-instance cost visibility for managed hosting** — dedicated API key per instance (Anthropic console breakdown) + monthly all-in cost log in the Business repo. Naturally follows the beta deploy above rather than preceding it
+- [ ] **Fix `test_finance_transfers.py::test_transfer_leg_never_false_matches_a_recurring_bill`** — found failing 2026-08-18 during an unrelated pass (Assets/Contacts/Dashboards, nothing Finance-related touched). Hardcodes `next_due: "2026-08-14"` and checks a 30-day `planning.upcoming_recurring()` window; now that real wall-clock time has passed that date, the bill likely falls out of the "upcoming" bucket the test expects — needs either a relative date (e.g. `today + N days`) or a frozen clock, not a fix to the underlying feature (unconfirmed whether the feature itself is actually broken or just the test's fixed date).
 
 ---
 
@@ -58,11 +59,11 @@ From the 2026-07-19 audit (full detail in `docs/Security-Audit-2026-07-19.md`) p
 - [ ] **Contacts overhaul — big feature bundle (owner batch, 2026-07-20)**:
   1. **Sharing to household/team + peer users** — mirror the Assets/Finance/Notes sharing pattern.
   2. **Tags UI parity** — pill chips with remove buttons like Assets/Notes; tags become a persistent, filterable vocabulary.
-  3. **Cross-workspace contact sync** — admin feature to share a personal contact into the business workspace (or vice versa), edits propagate both ways.
-  4. **Contact links inside Journal and Notes entries.**
-  5. **Per-contact profile page** — the read-first `<dl>`-grid card already shipped (2026-08-03) for every contact; still open is the AI re-inference/update cadence (every few days, batched, only if a link/field changed — owner-approved 2026-07-20, keeps AI cost bounded).
-  6. **Name fields: split into First/Middle/Last + prefix/suffix** — apply to both Contacts and user accounts in the same pass.
-  7. **Cosmetic: customizable contact avatar/"character"** — lowest priority in this bundle.
+  3. **Contact links inside Journal and Notes entries.**
+  4. **Per-contact profile page** — the read-first `<dl>`-grid card already shipped (2026-08-03) for every contact; still open is the AI re-inference/update cadence (every few days, batched, only if a link/field changed — owner-approved 2026-07-20, keeps AI cost bounded).
+  5. **Name fields: split into First/Middle/Last + prefix/suffix** — apply to both Contacts and user accounts in the same pass.
+  6. **Cosmetic: customizable contact avatar/"character"** — lowest priority in this bundle.
+  (Cross-workspace contact sync — sub-item 3 of the original 7 — shipped 2026-08-17 as a per-contact `cross_workspace` toggle, one real record visible from both workspaces rather than an admin-only propagate-both-ways sync; see CHANGELOG.md.)
 - [ ] **Cross-module stale-pointer repair on ownership transfer/deletion** — an Asset's `contact` field, a Deal's `linked_asset_ids`, an Invoice's `contact_id` can go stale when one side transfers to a different owner than the other, or one transfers while the other deletes. Deliberately deferred — matches the app's existing tolerance for stale cross-module ids elsewhere (owner-confirmed acceptable to defer)
 - [ ] **Assets follow-ups (deferred)** — template-key rename; convert pool assets back to personal; multiple named templates with preset values per structure; bulk CSV import; map/gallery views; per-field required/validation rules at template level; pool-task linking; AI bulk ops / cross-branch relations / clone / export-import / history-revert; upgrade the member-name selector to a permissioned/opt-in model (currently any Assets user sees all member names)
 - [ ] **Ollama / local LLM support** — pulled forward from roadmap Phase 6; #1 r/selfhosted credibility feature; ship before/with the Reddit launch
@@ -256,7 +257,7 @@ Generated across a systematic search→generate→compare→document pass over t
 - Break up `services/agent_service.py` (2,368 lines, the whole AI tool registry) into per-module tool files.
 - Close the API-doc coverage gap — only ~39% of the actual 298-endpoint surface is documented in the hand-maintained `docs/API.md`.
 - Hosted developer/API documentation site, generated from the OpenAPI schema — early groundwork for the Phase 7 plugin-ecosystem roadmap item.
-- Migrate the remaining per-user JSON stores (Contacts, Assets, Finance, Dashboards, …) to `file_service.update_json()` — the shared read-modify-write helper shipped 2026-08-12 (see `docs/MEMORY.md`) closes this race for Tasks specifically; every other service still does an unlocked `read_json()`+`write_json()` pair and has the same theoretical lost-update exposure, just not yet demonstrated or fixed there.
+- Migrate the remaining per-user JSON stores (Assets, Finance, Dashboards, …) to `file_service.update_json()` — the shared read-modify-write helper shipped 2026-08-12 (see `docs/MEMORY.md`) closes this race for Tasks specifically, and for Contacts' `create_contact()`/self-contact onboarding specifically as of 2026-08-17 (a real, no-longer-theoretical race once every user's self-contact converges on the same shared household-pool file); every other service, and every other Contacts mutator, still does an unlocked `read_json()`+`write_json()` pair and has the same theoretical lost-update exposure, just not yet demonstrated or fixed there.
 - CONTRIBUTING.md scope note documenting the AI tool-registry pattern in `agent_service.py` — the least self-explanatory, most-touched file for new contributors.
 - Feature-flag-driven canary rollout to managed instances before self-hosted `master`.
 - Staged/canary rollout across managed tenants for releases, distinct from what gets installed.
@@ -326,6 +327,7 @@ Generated across a systematic search→generate→compare→document pass over t
 - True drag-and-drop between kanban deal-stage columns, not just a dropdown.
 - Contacts import from phone/Google contacts CSV.
 - Email/calendar two-way sync for Contacts (blocked on the app having no email infrastructure at all).
+- Convert a pool contact back to personal (2026-08-17 shipped the personal→pool direction, single + bulk; the reverse isn't built — mirrors the identical already-listed gap for Assets above).
 
 ### Notes & Journal
 

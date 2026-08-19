@@ -68,12 +68,13 @@ def _require_contribute(access: str) -> None:
         raise HTTPException(status_code=403, detail="You can't add to this contact.")
 
 
-def _effective_ws(contact: dict, workspace: str) -> str:
-    """Self-contacts physically live in the personal store regardless of the
-    active workspace tab — anchor all reads/writes of the contact's OWN data
-    (record, interactions, deals, sharing) there so business-tab activity
-    never fragments into an invisible parallel store."""
-    return "personal" if contact.get("self_of") else workspace
+# Every read/write of a contact's OWN data (record, interactions, deals,
+# sharing) must anchor to contacts_service.effective_workspace(store_user,
+# contact, workspace) — its TRUE physical home store — not the raw ambient
+# `workspace`, or business-tab activity on a self-contact/cross_workspace
+# contact would silently fragment into an invisible parallel store. Was a
+# router-local self-contact-only helper called `_effective_ws`; generalized
+# into the service function 2026-08-17 (see contacts_service.py).
 
 
 # Profile fields merged in from the retired Profile module. "Basic" fields are
@@ -136,7 +137,16 @@ class ContactCreate(BaseModel):
     status: str | None = None
     notes: str | None = None
     custom: dict | None = None
-    pool: bool = False
+    # Defaults True (2026-08-17) — a new contact is visible to the whole
+    # household/team pool by default; "make personal" (pool=false) is the
+    # explicit opt-out, not the other way around. No longer admin-gated —
+    # any contacts-module user may create directly in their workspace's pool.
+    pool: bool = True
+    # Off by default — an ordinary contact stays in the workspace it was
+    # created in (as a pool object or a "make personal" private contact)
+    # unless explicitly flipped on. Self-contacts are always cross_workspace
+    # regardless of what's sent here (forced server-side).
+    cross_workspace: bool | None = None
     # Profile-merge fields — basic (shareable)
     pronouns: str | None = None
     city: str | None = None
@@ -147,7 +157,7 @@ class ContactCreate(BaseModel):
     marital_status: str | None = None
     pets: str | None = None
     life_mission: str | None = None
-    core_values: str | None = None
+    core_values: list[str] | None = Field(default=None, max_length=30)
     key_constraints: str | None = None
     priority_order: dict | None = None
     career_history: list[dict] | None = None
@@ -189,6 +199,7 @@ class ContactUpdate(BaseModel):
     status: str | None = None
     notes: str | None = None
     custom: dict | None = None
+    cross_workspace: bool | None = None
     pronouns: str | None = None
     city: str | None = None
     state: str | None = None
@@ -198,12 +209,16 @@ class ContactUpdate(BaseModel):
     marital_status: str | None = None
     pets: str | None = None
     life_mission: str | None = None
-    core_values: str | None = None
+    core_values: list[str] | None = Field(default=None, max_length=30)
     key_constraints: str | None = None
     priority_order: dict | None = None
     career_history: list[dict] | None = None
     locations: list[dict] | None = None
     hours: list[dict] | None = None
+    # Self-contact-only, owner-toggleable (2026-08-18) — enforcement (only
+    # the owner can ever change this) lives in contacts_service.update_contact,
+    # not here; the router has no special-case gate for it.
+    hidden_sections: list[str] | None = Field(default=None, max_length=6)
     wake_weekday: str | None = None
     wake_weekend: str | None = None
     bedtime: str | None = None
@@ -287,6 +302,10 @@ class FieldsUpdate(BaseModel):
     fields: list[dict] = Field(default=[], max_length=40)
 
 
+class BulkConvertRequest(BaseModel):
+    contact_ids: list[str] | None = Field(default=None, max_length=2000)
+
+
 # ---------------------------------------------------------------------------
 # Contacts CRUD
 # ---------------------------------------------------------------------------
@@ -315,11 +334,7 @@ def create_contact(
     workspace: str = Depends(get_workspace),
     _rl: None = Depends(_write_limit),
 ):
-    store_user = current_user["name"]
-    if req.pool:
-        if current_user.get("role") != "admin":
-            raise HTTPException(status_code=403, detail="Only admins create shared-pool contacts")
-        store_user = contacts_service.pool_for(workspace)
+    store_user = contacts_service.pool_for(workspace) if req.pool else current_user["name"]
     data = req.model_dump(exclude={"pool"})
     try:
         contact = contacts_service.create_contact(
@@ -346,6 +361,61 @@ def list_roles(
     from services.features_service import load_features
 
     return sorted((load_features().get("roles") or {}).keys())
+
+
+@router.post("/convert-bulk")
+def convert_contacts_bulk(
+    req: BulkConvertRequest,
+    current_user: dict = Depends(_require_contacts),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_write_limit),
+):
+    """Convert some or all of the caller's own personal contacts into the
+    active workspace's pool in one call (owner ask, 2026-08-17: "have so
+    many" personal contacts to move). Self-service, scoped to the caller's
+    own store only — every contact found there is already something they
+    have edit access to (store_user == viewer), so no separate per-item
+    access check is needed; `contact_ids`, if given, is intersected against
+    that same own-store set, so a stray or someone-else's id is silently
+    dropped rather than acted on. Omitting `contact_ids` converts every
+    eligible (non-self) contact in the caller's own store."""
+    store_user = current_user["name"]
+    pool_target = contacts_service.pool_for(workspace)
+    eligible_ids = {
+        c["id"]
+        for c in contacts_service.list_contacts(store_user, workspace)
+        if not c.get("self_of")
+    }
+    targets = eligible_ids if req.contact_ids is None else (set(req.contact_ids) & eligible_ids)
+    converted = 0
+    for contact_id in targets:
+        try:
+            contacts_service.transfer_ownership(
+                store_user, workspace, contact_id, new_owner=pool_target, by=current_user["name"]
+            )
+            converted += 1
+        except ValueError:
+            continue
+    return {"converted": converted, "skipped": len(targets) - converted}
+
+
+@router.get("/available-for-linking")
+def list_contacts_available_for_linking(
+    current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_read_limit),
+):
+    """Household-pool contacts with no self_of set yet — candidates for the
+    "link to an existing contact" picker on the create-user form (owner item
+    #4, creation-only). Admin-only, and deliberately workspace-independent
+    (always reads the household pool regardless of the admin's own currently
+    active workspace tab) — account creation is a household-pool concept,
+    not something that should silently go empty just because the admin
+    happens to be on the business tab right now."""
+    return [
+        {"id": c["id"], "name": c.get("name"), "type": c.get("type")}
+        for c in contacts_service.list_contacts(contacts_service.POOL_HOUSEHOLD, "personal")
+        if not c.get("self_of") and not c.get("archived")
+    ]
 
 
 @router.get("/fields")
@@ -480,9 +550,19 @@ def get_my_contact(
     module. Profile had no module gate before this merge (every authenticated
     user, including guests with contacts disabled by default, could use it);
     this preserves that so nobody loses their own profile because Contacts is
-    disabled for them. All other contact features stay module-gated."""
+    disabled for them. All other contact features stay module-gated.
+
+    Physically stored in the household pool, not the caller's own store
+    (2026-08-17) — annotate() with POOL_HOUSEHOLD as store_user, not
+    current_user["name"], or the response would carry the wrong _owner
+    resolution (annotate()'s own self_of check still correctly omits the
+    badge either way, but store_user also feeds _strip_private()'s legacy
+    comparison, which self_of now covers independently — pass the true store
+    for correctness, not because a real bug currently depends on it)."""
     contact = contacts_service.get_self_contact(current_user["name"], create_if_missing=True)
-    return contacts_service.annotate(contact, current_user["name"], current_user["name"], "edit")
+    return contacts_service.annotate(
+        contact, contacts_service.POOL_HOUSEHOLD, current_user["name"], "edit"
+    )
 
 
 @router.patch("/me")
@@ -494,11 +574,16 @@ def update_my_contact(
     contact = contacts_service.get_self_contact(current_user["name"], create_if_missing=True)
     try:
         updated = contacts_service.update_contact(
-            current_user["name"], "personal", contact["id"], req.model_dump(exclude_unset=True)
+            contacts_service.POOL_HOUSEHOLD,
+            "personal",
+            contact["id"],
+            req.model_dump(exclude_unset=True),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return contacts_service.annotate(updated, current_user["name"], current_user["name"], "edit")
+    return contacts_service.annotate(
+        updated, contacts_service.POOL_HOUSEHOLD, current_user["name"], "edit"
+    )
 
 
 @router.post("/{contact_id}/affiliations/{other_id}")
@@ -566,7 +651,7 @@ def update_contact(
 ):
     store_user, contact, access = _find_or_404(current_user, workspace, contact_id)
     _require_edit(access)
-    ws = _effective_ws(contact, workspace)
+    ws = contacts_service.effective_workspace(store_user, contact, workspace)
     try:
         updated = contacts_service.update_contact(
             store_user,
@@ -580,6 +665,42 @@ def update_contact(
     return contacts_service.annotate(updated, store_user, current_user["name"], "edit")
 
 
+@router.post("/{contact_id}/convert")
+def convert_contact_to_pool(
+    contact_id: str,
+    current_user: dict = Depends(_require_contacts),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_write_limit),
+):
+    """Move a personal contact into the active workspace's pool — mirrors
+    Assets' own convert-to-pool action, but self-service (edit access, not
+    admin-only): any contacts-module user can already create a contact
+    directly into the pool (2026-08-17's pool-default-sharing pass), so
+    gating the "convert an existing one" path behind admin would just be
+    inconsistent friction, not a real security boundary — a user can already
+    get the same end state by creating a fresh pool contact with the same
+    info. Self-contacts are excluded structurally, not by a special-case
+    check: they already live in a pool store (POOL_HOUSEHOLD), so the
+    is_pool(store_user) guard below catches them the same as any other
+    already-pool contact."""
+    store_user, contact, access = _find_or_404(current_user, workspace, contact_id)
+    if contacts_service.is_pool(store_user):
+        raise HTTPException(status_code=400, detail="Already a pool contact")
+    _require_edit(access)
+    pool_target = contacts_service.pool_for(workspace)
+    try:
+        moved = contacts_service.transfer_ownership(
+            store_user, workspace, contact_id, new_owner=pool_target, by=current_user["name"]
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    # Full annotated record, not just {"ok": True} — the frontend's onSaved()
+    # convention (ContactModal.jsx) expects a real contact back, the same
+    # shape update_contact/create_contact already return, so it can re-sync
+    # an open detail panel in place instead of needing a separate reload.
+    return contacts_service.annotate(moved, pool_target, current_user["name"], "edit")
+
+
 @router.post("/{contact_id}/archive")
 def archive_contact(
     contact_id: str,
@@ -591,7 +712,10 @@ def archive_contact(
     _require_edit(access)
     try:
         contacts_service.set_archived(
-            store_user, _effective_ws(contact, workspace), contact_id, True
+            store_user,
+            contacts_service.effective_workspace(store_user, contact, workspace),
+            contact_id,
+            True,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -607,7 +731,12 @@ def unarchive_contact(
 ):
     store_user, contact, access = _find_or_404(current_user, workspace, contact_id)
     _require_edit(access)
-    contacts_service.set_archived(store_user, _effective_ws(contact, workspace), contact_id, False)
+    contacts_service.set_archived(
+        store_user,
+        contacts_service.effective_workspace(store_user, contact, workspace),
+        contact_id,
+        False,
+    )
     return {"ok": True}
 
 
@@ -625,7 +754,11 @@ def delete_contact(
     else:
         _require_edit(access)
     try:
-        contacts_service.delete_contact(store_user, _effective_ws(contact, workspace), contact_id)
+        contacts_service.delete_contact(
+            store_user,
+            contacts_service.effective_workspace(store_user, contact, workspace),
+            contact_id,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"ok": True}
@@ -654,7 +787,7 @@ async def upload_contact_photo(
     data = await file.read()
     if len(data) > _PHOTO_MAX_BYTES:
         raise HTTPException(status_code=400, detail="Image must be under 5 MB")
-    ws = _effective_ws(contact, workspace)
+    ws = contacts_service.effective_workspace(store_user, contact, workspace)
     updated = contacts_service.set_contact_photo(store_user, ws, contact_id, ext)
     if updated is None:
         raise HTTPException(status_code=404, detail="Contact not found")
@@ -675,7 +808,12 @@ def get_contact_photo(
     ext = contact.get("photo_ext")
     if not ext:
         raise HTTPException(status_code=404, detail="No photo uploaded")
-    path = contact_photo_path(store_user, _effective_ws(contact, workspace), contact_id, ext)
+    path = contact_photo_path(
+        store_user,
+        contacts_service.effective_workspace(store_user, contact, workspace),
+        contact_id,
+        ext,
+    )
     if not path.exists():
         raise HTTPException(status_code=404, detail="No photo uploaded")
     mime = {v: k for k, v in _ALLOWED_PHOTO_TYPES.items()}.get(ext, "application/octet-stream")
@@ -691,7 +829,9 @@ def delete_contact_photo(
 ):
     store_user, contact, access = _find_or_404(current_user, workspace, contact_id)
     _require_edit(access)
-    contacts_service.clear_contact_photo(store_user, _effective_ws(contact, workspace), contact_id)
+    contacts_service.clear_contact_photo(
+        store_user, contacts_service.effective_workspace(store_user, contact, workspace), contact_id
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -708,7 +848,7 @@ def list_interactions(
 ):
     store_user, contact, _access = _find_or_404(current_user, workspace, contact_id)
     return contacts_service.list_interactions(
-        store_user, _effective_ws(contact, workspace), contact_id
+        store_user, contacts_service.effective_workspace(store_user, contact, workspace), contact_id
     )
 
 
@@ -725,7 +865,7 @@ def add_interaction(
     try:
         return contacts_service.add_interaction(
             store_user,
-            _effective_ws(contact, workspace),
+            contacts_service.effective_workspace(store_user, contact, workspace),
             contact_id,
             req.model_dump(),
             created_by=current_user["name"],
@@ -747,7 +887,7 @@ def update_interaction(
     _require_contribute(access)
     updated = contacts_service.update_interaction(
         store_user,
-        _effective_ws(contact, workspace),
+        contacts_service.effective_workspace(store_user, contact, workspace),
         interaction_id,
         req.model_dump(exclude_unset=True),
     )
@@ -766,7 +906,7 @@ def delete_interaction(
 ):
     store_user, contact, access = _find_or_404(current_user, workspace, contact_id)
     _require_edit(access)
-    ws = _effective_ws(contact, workspace)
+    ws = contacts_service.effective_workspace(store_user, contact, workspace)
     if not contacts_service.delete_interaction(store_user, ws, interaction_id):
         raise HTTPException(status_code=404, detail="Interaction not found")
     return {"ok": True}
@@ -785,7 +925,9 @@ def list_deals(
     _rl: None = Depends(_read_limit),
 ):
     store_user, contact, _access = _find_or_404(current_user, workspace, contact_id)
-    return contacts_service.list_deals(store_user, _effective_ws(contact, workspace), contact_id)
+    return contacts_service.list_deals(
+        store_user, contacts_service.effective_workspace(store_user, contact, workspace), contact_id
+    )
 
 
 @router.post("/{contact_id}/deals")
@@ -801,7 +943,7 @@ def add_deal(
     try:
         return contacts_service.add_deal(
             store_user,
-            _effective_ws(contact, workspace),
+            contacts_service.effective_workspace(store_user, contact, workspace),
             contact_id,
             req.model_dump(),
             created_by=current_user["name"],
@@ -824,7 +966,7 @@ def update_deal(
     try:
         updated = contacts_service.update_deal(
             store_user,
-            _effective_ws(contact, workspace),
+            contacts_service.effective_workspace(store_user, contact, workspace),
             deal_id,
             req.model_dump(exclude_unset=True),
         )
@@ -845,7 +987,9 @@ def delete_deal(
 ):
     store_user, contact, access = _find_or_404(current_user, workspace, contact_id)
     _require_edit(access)
-    if not contacts_service.delete_deal(store_user, _effective_ws(contact, workspace), deal_id):
+    if not contacts_service.delete_deal(
+        store_user, contacts_service.effective_workspace(store_user, contact, workspace), deal_id
+    ):
         raise HTTPException(status_code=404, detail="Deal not found")
     return {"ok": True}
 
@@ -905,7 +1049,10 @@ def link_deal_asset(
     if found is None:
         raise HTTPException(status_code=404, detail="Asset not found or not visible to you")
     updated = contacts_service.link_asset(
-        store_user, _effective_ws(contact, workspace), deal_id, req.asset_id
+        store_user,
+        contacts_service.effective_workspace(store_user, contact, workspace),
+        deal_id,
+        req.asset_id,
     )
     if updated is None:
         raise HTTPException(status_code=404, detail="Deal not found")
@@ -924,7 +1071,10 @@ def unlink_deal_asset(
     store_user, contact, access = _find_or_404(current_user, workspace, contact_id)
     _require_contribute(access)
     updated = contacts_service.unlink_asset(
-        store_user, _effective_ws(contact, workspace), deal_id, asset_id
+        store_user,
+        contacts_service.effective_workspace(store_user, contact, workspace),
+        deal_id,
+        asset_id,
     )
     if updated is None:
         raise HTTPException(status_code=404, detail="Deal not found")
@@ -996,7 +1146,9 @@ def contact_finance(
     deals_out: list[dict] = []
     try:
         for deal in contacts_service.list_deals(
-            store_user, _effective_ws(contact, workspace), contact_id
+            store_user,
+            contacts_service.effective_workspace(store_user, contact, workspace),
+            contact_id,
         ):
             d_invs = finance_invoice_service.list_invoices_for_deal(
                 viewer, viewer_role, is_admin, workspace, deal["id"]
@@ -1080,7 +1232,7 @@ def update_contact_access(
 ):
     store_user, contact, _access = _find_or_404(current_user, workspace, contact_id)
     _require_owner_or_pool_admin(current_user, store_user)
-    ws = _effective_ws(contact, workspace)
+    ws = contacts_service.effective_workspace(store_user, contact, workspace)
     try:
         record, to_notify = contacts_service.update_access(
             store_user,

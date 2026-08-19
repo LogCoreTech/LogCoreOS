@@ -24,21 +24,45 @@ function formatWeight(kg, unit) {
 // A labeled group of profile fields — only ever renders when at least one of
 // its fields is actually populated (decision: show everything populated,
 // let empty fields/sections vanish entirely rather than showing placeholders).
-function ProfileSection({ title, items }) {
-  const populated = (items || []).filter(([, v]) => v)
+// A list value (e.g. core_values, pill-based as of 2026-08-18) renders as
+// pills instead of flat text.
+function ProfileSection({ title, items, hiddenBadge }) {
+  const populated = (items || []).filter(([, v]) => (Array.isArray(v) ? v.length > 0 : v))
   if (populated.length === 0) return null
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-wide text-charcoal-400 mb-1">{title}</div>
+      <div className="text-[11px] uppercase tracking-wide text-charcoal-400 mb-1 flex items-center gap-1.5">
+        {title}{hiddenBadge}
+      </div>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
         {populated.map(([label, v]) => (
           <div key={label} className="min-w-0">
             <dt className="text-[11px] text-charcoal-400">{label}</dt>
-            <dd className="text-sm break-words">{v}</dd>
+            <dd className="text-sm break-words">
+              {Array.isArray(v) ? (
+                <span className="flex flex-wrap gap-1 mt-0.5">
+                  {v.map(tag => (
+                    <span key={tag} className="badge bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">{tag}</span>
+                  ))}
+                </span>
+              ) : v}
+            </dd>
           </div>
         ))}
       </dl>
     </div>
+  )
+}
+
+// Small, non-interactive "hidden from others" marker next to a section
+// heading — owner-view-only (toggling itself only happens in edit mode via
+// ContactModal/SectionHeader), so there's a way to notice a section is
+// hidden without opening edit mode.
+function HiddenBadge() {
+  return (
+    <span className="badge bg-charcoal-100 dark:bg-charcoal-700 text-charcoal-500 dark:text-charcoal-400 text-[10px] normal-case">
+      hidden from others
+    </span>
   )
 }
 
@@ -132,7 +156,14 @@ export default function ContactDetail({ contact, fields, pipeline, user, onClose
   const companyName = id => allContacts.find(c => c.id === id)?.name
   const career = contact.career_history || []
   const currentCareer = career.find(c => !c.archived)
-  const pastCareer = career.filter(c => c.archived)
+  // Most recent past role first — matches CareerHistoryEditor's own sort.
+  const pastCareer = [...career.filter(c => c.archived)].sort((a, b) => (b.start_date || '').localeCompare(a.start_date || ''))
+  // Owner-only "hidden from others" markers (2026-08-18) — a non-owner
+  // viewer never needs this: a hidden section's fields are already stripped
+  // server-side, so it just reads as empty/absent to them, same as any
+  // other unfilled section.
+  const hiddenSections = contact.hidden_sections || []
+  const isHidden = key => isMe && hiddenSections.includes(key)
 
   const cardShell = fullPage ? 'w-full max-w-2xl mx-auto p-4 md:p-0' : 'modal-card max-w-2xl w-full p-5 max-h-[90dvh] overflow-y-auto'
 
@@ -166,7 +197,7 @@ export default function ContactDetail({ contact, fields, pipeline, user, onClose
           <div className="text-sm space-y-1">
             {(contact.emails || []).map(e => <p key={e}>✉️ <a href={`mailto:${e}`} className="text-orange-600">{e}</a></p>)}
             {(contact.phones || []).map((p, i) => <p key={i}>📞 {formatPhone(p)}</p>)}
-            {contact.address && <p>📍 {contact.address}</p>}
+            {contact.address && <p className="flex items-center gap-1.5">📍 {contact.address} {isHidden('address') && <HiddenBadge />}</p>}
             {contact.birthday && <p>🎂 {contact.birthday}</p>}
             {(contact.city || contact.state || contact.country) && (
               <p>🌎 {[contact.city, contact.state, contact.country].filter(Boolean).join(', ')}</p>
@@ -179,7 +210,9 @@ export default function ContactDetail({ contact, fields, pipeline, user, onClose
 
           {contact.type !== 'company' && (currentCareer || pastCareer.length > 0) && (
             <div>
-              <div className="text-[11px] uppercase tracking-wide text-charcoal-400 mb-1">Career</div>
+              <div className="text-[11px] uppercase tracking-wide text-charcoal-400 mb-1 flex items-center gap-1.5">
+                Career{isHidden('career') && <HiddenBadge />}
+              </div>
               {currentCareer && (
                 <div className="text-sm space-y-0.5">
                   <p className="font-medium">
@@ -232,8 +265,8 @@ export default function ContactDetail({ contact, fields, pipeline, user, onClose
 
           {(contact.type === 'company' || contact.marital_status || contact.pets || affiliated.length > 0) && (
             <div>
-              <div className="text-[11px] uppercase tracking-wide text-charcoal-400 mb-1">
-                {contact.type === 'company' ? 'Affiliated People' : 'Family'}
+              <div className="text-[11px] uppercase tracking-wide text-charcoal-400 mb-1 flex items-center gap-1.5">
+                {contact.type === 'company' ? 'Affiliated People' : 'Family'}{isHidden('family') && <HiddenBadge />}
               </div>
               {contact.type !== 'company' && (
                 <div className="text-sm space-y-1">
@@ -256,15 +289,15 @@ export default function ContactDetail({ contact, fields, pipeline, user, onClose
             </div>
           )}
 
-          <ProfileSection title="Values & Principles" items={[
+          <ProfileSection title="Values & Principles" hiddenBadge={isHidden('values_principles') && <HiddenBadge />} items={[
             ['Life mission', contact.life_mission], ['Core values', contact.core_values],
             ['Key constraints', contact.key_constraints],
           ]} />
 
           {contact.priority_order?.[workspace]?.length > 0 && (
             <div>
-              <div className="text-[11px] uppercase tracking-wide text-charcoal-400 mb-1">
-                {workspace === 'business' ? 'Business Priorities' : 'Life Priorities'}
+              <div className="text-[11px] uppercase tracking-wide text-charcoal-400 mb-1 flex items-center gap-1.5">
+                {workspace === 'business' ? 'Business Priorities' : 'Life Priorities'}{isHidden('priorities') && <HiddenBadge />}
               </div>
               <ol className="text-sm list-decimal list-inside space-y-0.5">
                 {contact.priority_order[workspace].map(cat => <li key={cat}>{cat}</li>)}

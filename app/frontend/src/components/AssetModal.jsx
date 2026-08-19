@@ -2,9 +2,130 @@ import { useState, useEffect } from 'react'
 import { assets as assetsApi, tasks as tasksApi, finance as financeApi } from '../lib/api'
 import TaskModal from './TaskModal'
 import TagInput from './TagInput'
+import EmojiPicker from './EmojiPicker'
 import AssetTreePicker from './AssetTreePicker'
 import AssetView from './AssetView'
 import { AttachmentThumb, formatChanges, FieldInput, CapsSelector } from './assetDisplay'
+
+// Same 6 types (and same backend validation, assets_service._validate_field_defs/
+// _validate_value) TemplateManager.jsx's admin template editor offers — not
+// literally the same component: that editor's key input is a deliberate,
+// stable, permanent identifier a technical admin author types (the object is
+// reusable); here the key is purely internal storage for one asset's own
+// field, auto-derived from the label instead of exposed as a second input.
+const FIELD_TYPES = ['text', 'number', 'date', 'boolean', 'select', 'contact']
+
+function slugifyKey(label, existingKeys) {
+  const base = label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'field'
+  let key = base
+  let i = 2
+  while (existingKeys.has(key)) { key = `${base}_${i}`.slice(0, 40); i += 1 }
+  return key
+}
+
+// Typed custom fields for a BLANK asset (no template) — owner report,
+// 2026-08-17: "blank assets has no way to make custom fields which is
+// mandatory"; owner follow-up, 2026-08-18: "needs a picker that can pick
+// all the different custom fields that template editor can. so it can
+// create an asset just the same just without a template." Each row edits
+// both the field's shape (label/type/options) and its value together — no
+// separate "define, then fill in" phase, since this is a single asset, not
+// a reusable Template a second asset might also draw from.
+function CustomFieldsEditor({ defs, onDefsChange, fields, onFieldsChange }) {
+  function updateDef(i, patch) {
+    onDefsChange(defs.map((d, j) => (j === i ? { ...d, ...patch } : d)))
+  }
+  // Committed on blur (not every keystroke) so retyping the label doesn't
+  // steal focus from the value input below it mid-rename — same reasoning
+  // the old freeform editor's key-rename already used.
+  function renameLabel(i, label) {
+    const existingKeys = new Set(defs.filter((_, j) => j !== i).map(d => d.key))
+    const oldKey = defs[i].key
+    const key = slugifyKey(label, existingKeys)
+    onDefsChange(defs.map((d, j) => (j === i ? { ...d, label, key } : d)))
+    if (oldKey && oldKey !== key && oldKey in fields) {
+      const nextFields = { ...fields, [key]: fields[oldKey] }
+      delete nextFields[oldKey]
+      onFieldsChange(nextFields)
+    }
+  }
+  function remove(i) {
+    const key = defs[i].key
+    onDefsChange(defs.filter((_, j) => j !== i))
+    if (key in fields) {
+      const next = { ...fields }
+      delete next[key]
+      onFieldsChange(next)
+    }
+  }
+  function add() {
+    const existingKeys = new Set(defs.map(d => d.key))
+    const key = slugifyKey(`Field ${defs.length + 1}`, existingKeys)
+    onDefsChange([...defs, { key, label: '', type: 'text', options: [] }])
+  }
+
+  return (
+    <div>
+      <label className="block text-sm font-medium mb-1">
+        Custom fields <span className="text-charcoal-400 font-normal">(optional)</span>
+      </label>
+      <div className="space-y-2">
+        {defs.map((def, i) => (
+          <div key={i} className="border border-charcoal-200 dark:border-charcoal-700 rounded-lg p-2 space-y-2">
+            <div className="flex items-center gap-1.5">
+              <input
+                type="text"
+                defaultValue={def.label}
+                onBlur={e => renameLabel(i, e.target.value)}
+                placeholder="Field name"
+                className="input !py-1 flex-1"
+              />
+              <select value={def.type} onChange={e => updateDef(i, { type: e.target.value })} className="input !py-1 !w-24">
+                {FIELD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <button type="button" onClick={() => remove(i)} className="text-charcoal-400 hover:text-red-500 text-sm px-1 shrink-0">✕</button>
+            </div>
+            {def.type === 'select' && (
+              <TagInput value={def.options || []} onChange={options => updateDef(i, { options })} placeholder="Add an option…" />
+            )}
+            {def.key && <FieldInput def={def} value={fields[def.key]} onChange={v => onFieldsChange({ ...fields, [def.key]: v })} />}
+          </div>
+        ))}
+        <button type="button" onClick={add} className="text-sm text-orange-500 hover:text-orange-600 font-medium">+ Add field</button>
+      </div>
+    </div>
+  )
+}
+
+// "Save as template" (2026-08-18, owner: "it also would need a convert to
+// template button as well") — small confirm step for the new Template's
+// key/label/icon before it's created from the asset's own custom_field_defs
+// and attached back onto this asset.
+function SaveAsTemplateModal({ suggestedLabel, onCancel, onConfirm, busy, error }) {
+  const [label, setLabel] = useState(suggestedLabel)
+  const [icon, setIcon] = useState('')
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={onCancel}>
+      <div className="card p-5 w-full max-w-xs space-y-3" onClick={e => e.stopPropagation()}>
+        <p className="font-semibold">Save as template</p>
+        <p className="text-xs text-charcoal-500 dark:text-charcoal-400">
+          This asset&apos;s custom fields become a reusable template — future assets can start from it too, and this one switches to using it.
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          <input type="text" value={label} onChange={e => setLabel(e.target.value)} placeholder="Label" className="input col-span-2" autoFocus />
+          <EmojiPicker value={icon} onChange={setIcon} />
+        </div>
+        {error && <p className="text-red-500 text-xs">{error}</p>}
+        <div className="flex gap-2">
+          <button onClick={onCancel} className="btn-ghost flex-1 text-sm">Cancel</button>
+          <button onClick={() => onConfirm(label, icon)} disabled={busy || !label.trim()} className="btn-primary flex-1 text-sm">
+            {busy ? 'Saving…' : 'Save template'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function AssetModal({ asset: initialAsset, templates, allAssets: allAssetsProp, defaultParentId, user, workspace, onClose, onSaved, onOpenAsset }) {
   const allAssets = Array.isArray(allAssetsProp) ? allAssetsProp : []
@@ -31,6 +152,13 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
     notes: asset?.notes || '',
     owner: 'me',
   })
+  // A blank asset's own ad-hoc field definitions (2026-08-18) — kept
+  // outside `form` (unlike `fields`) since the template-switch effect below
+  // resets `form.fields` on every template change but has no equivalent
+  // reason to touch these.
+  const [customFieldDefs, setCustomFieldDefs] = useState(asset?.custom_field_defs || [])
+  const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false)
+  const [saveAsTemplateError, setSaveAsTemplateError] = useState('')
   // Existing assets open read-first (clean view); creating starts in the editor.
   // The view's Edit button flips this to 'edit' in place.
   const [mode, setMode] = useState(initialAsset ? 'view' : 'edit')
@@ -84,7 +212,10 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
     ? (asset._template || templatesById[asset.template_id] || null)
     : templatesById[form.template]
   const knownKeys = new Set((template?.fields || []).map(f => f.key))
-  const orphanedKeys = Object.keys(form.fields).filter(k => !knownKeys.has(k))
+  // Meaningless for a blank asset — CustomFieldsEditor above already owns
+  // every one of its fields as intentional, not "leftover from a removed
+  // template field" (there is no template to have removed a field from).
+  const orphanedKeys = template?.key ? Object.keys(form.fields).filter(k => !knownKeys.has(k)) : []
 
   // Prefill defaults when the template changes on a NEW asset. Deliberately
   // scoped to form.template only: `editing` is a one-time bail-out (adding it
@@ -155,7 +286,6 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
   async function submit(e) {
     e.preventDefault()
     if (!form.name.trim()) { setError('Name is required'); return }
-    if (!editing && !form.template) { setError('Pick a template first'); return }
     setLoading(true)
     setError('')
     try {
@@ -164,7 +294,7 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
         fields[k] = v === '' ? null : v
       }
       if (editing) {
-        const payload = { name: form.name, fields, notes: form.notes || null }
+        const payload = { name: form.name, fields, custom_field_defs: customFieldDefs, notes: form.notes || null }
         if (!isForeign) payload.parent_id = form.parent_id || null
         await assetsApi.update(asset.id, payload)
         // Save sharing/hiding in the same Save (owner/pool-manager only) so the
@@ -179,10 +309,11 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
         onClose()
       } else {
         const created = await assetsApi.create({
-          template_id: form.template,
+          template_id: form.template || null,
           name: form.name,
           parent_id: form.parent_id || null,
           fields,
+          custom_field_defs: customFieldDefs,
           notes: form.notes || null,
           owner: form.owner,
         })
@@ -309,6 +440,7 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
   function handleViewUpdate(updated) {
     setAsset(updated)
     setAttachments(updated.attachments || [])
+    setCustomFieldDefs(updated.custom_field_defs || [])
     setForm(f => ({
       ...f,
       name: updated.name ?? f.name,
@@ -316,6 +448,31 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
       notes: updated.notes ?? f.notes,
     }))
     onSaved()
+  }
+
+  // "Save as template" (2026-08-18): create a real Template from this blank
+  // asset's own custom_field_defs, then attach it back — the asset switches
+  // from ad-hoc fields to a real templated one in place, same "flip in place"
+  // idiom the create flow already uses so the modal never has to close/reopen.
+  async function handleSaveAsTemplate(label, icon) {
+    setLoading(true)
+    setSaveAsTemplateError('')
+    try {
+      const key = slugifyKey(label, new Set())
+      const tpl = await assetsApi.createTemplate({
+        key, label: label.trim(), icon, fields: customFieldDefs, owner: 'me',
+      })
+      const updated = await assetsApi.attachTemplate(asset.id, tpl.id)
+      setAsset(updated)
+      setCustomFieldDefs(updated.custom_field_defs || [])
+      setForm(f => ({ ...f, template: updated.template_id || '', fields: { ...(updated.fields || {}) } }))
+      setShowSaveAsTemplate(false)
+      onSaved()
+    } catch (err) {
+      setSaveAsTemplateError(err.message || 'Could not save template')
+    } finally {
+      setLoading(false)
+    }
   }
 
   // Read-first: an existing asset opens in a clean, readable view. Edit (owner /
@@ -363,6 +520,17 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
               <div>
                 <label className="block text-sm font-medium mb-1">Template</label>
                 <div className="flex gap-1 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => set('template', '')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                      form.template === ''
+                        ? 'bg-orange-500 text-white'
+                        : 'bg-charcoal-100 dark:bg-charcoal-700 text-charcoal-600 dark:text-charcoal-300'
+                    }`}
+                  >
+                    Start Blank
+                  </button>
                   {templates.map(t => (
                     <button
                       key={t.id}
@@ -454,15 +622,25 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
               </div>
             )}
 
-            {/* Template fields, in template order */}
-            {(template?.fields || []).map(def => (
-              <FieldInput
-                key={def.key}
-                def={def}
-                value={form.fields[def.key]}
-                onChange={v => setFieldValue(def.key, v)}
+            {/* Template fields, in template order — or, for a blank asset
+                (no template.key at all), a freeform label/value repeater */}
+            {template?.key ? (
+              (template?.fields || []).map(def => (
+                <FieldInput
+                  key={def.key}
+                  def={def}
+                  value={form.fields[def.key]}
+                  onChange={v => setFieldValue(def.key, v)}
+                />
+              ))
+            ) : (
+              <CustomFieldsEditor
+                defs={customFieldDefs}
+                onDefsChange={setCustomFieldDefs}
+                fields={form.fields}
+                onFieldsChange={fields => set('fields', fields)}
               />
-            ))}
+            )}
 
             {/* Orphaned values from removed template fields */}
             {editing && orphanedKeys.length > 0 && (
@@ -728,6 +906,12 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
                     → {workspace === 'business' ? 'Team' : 'Household'}
                   </button>
                 )}
+                {editing && !template?.key && customFieldDefs.length > 0 && (
+                  <button type="button" onClick={() => { setSaveAsTemplateError(''); setShowSaveAsTemplate(true) }} disabled={loading} className="btn-ghost px-3"
+                    title="Turn this asset's custom fields into a reusable template">
+                    Save as template
+                  </button>
+                )}
                 <button type="button" onClick={handleCancel} className="btn-ghost flex-1">Cancel</button>
                 <button type="submit" disabled={loading} className="btn-primary flex-1">
                   {loading ? 'Saving…' : editing ? 'Save' : 'Create'}
@@ -769,6 +953,16 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
               </div>
             </div>
           </div>
+        )}
+
+        {showSaveAsTemplate && (
+          <SaveAsTemplateModal
+            suggestedLabel={asset?.name || ''}
+            busy={loading}
+            error={saveAsTemplateError}
+            onCancel={() => setShowSaveAsTemplate(false)}
+            onConfirm={handleSaveAsTemplate}
+          />
         )}
       </div>
     </div>

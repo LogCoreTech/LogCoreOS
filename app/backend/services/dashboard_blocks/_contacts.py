@@ -20,7 +20,8 @@ def resolve_linked_deals(ctx: BlockRenderCtx) -> BlockRenderResult:
     if found is None:
         return BlockRenderResult(ok=False, locked_reason="no_access")
     store_user, contact, _access = found
-    deals = contacts_service.list_deals(store_user, ctx.workspace, contact_id)
+    ws = contacts_service.effective_workspace(store_user, contact, ctx.workspace)
+    deals = contacts_service.list_deals(store_user, ws, contact_id)
     return BlockRenderResult(ok=True, data={"deals": deals, "contact_name": contact.get("name")})
 
 

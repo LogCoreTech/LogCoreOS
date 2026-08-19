@@ -102,6 +102,86 @@ def test_resolve_default_dashboard_self_healing(users):
     assert resolved2 == d["id"]
 
 
+# --- Cross-workspace visibility toggle (2026-08-18) -------------------------
+# Owner: "dashboards need the toggle option to set to one workspace only or
+# both. even with both workspaces allowed for that user. just so it doesnt
+# spam the picker on either workspace." Off by default, opt-in per dashboard
+# — mirrors contacts_service's cross_workspace mechanism, adapted for
+# Dashboards' one-record-in-one-file storage shape.
+
+
+def test_cross_workspace_off_by_default_stays_workspace_scoped(users):
+    d = svc.create_dashboard("Alice", "personal", "Alice", "Personal Only")
+    assert d["cross_workspace"] is False
+    assert svc.find_dashboard("Alice", "member", False, "business", d["id"]) is None
+    items = svc.list_visible_dashboards("Alice", "member", False, "business")
+    assert items == []
+
+
+def test_cross_workspace_toggle_makes_dashboard_visible_from_opposite_workspace(users):
+    d = svc.create_dashboard("Alice", "personal", "Alice", "Both Places")
+    svc.update_dashboard("Alice", "personal", d["id"], {"cross_workspace": True})
+
+    found = svc.find_dashboard("Alice", "member", False, "business", d["id"])
+    assert found is not None
+    assert found["access"] == "edit"
+    # The TRUE physical home store/workspace is returned, not the ambient
+    # one being viewed from — an edit from the "wrong" tab must land on the
+    # one real record.
+    assert found["store_workspace"] == "personal"
+    assert found["store"] == "Alice"
+
+    items = svc.list_visible_dashboards("Alice", "member", False, "business")
+    assert any(x["id"] == d["id"] for x in items)
+
+    # Still findable natively too — one record, not a duplicate.
+    assert svc.find_dashboard("Alice", "member", False, "personal", d["id"]) is not None
+
+
+def test_cross_workspace_pool_dashboard_visible_from_opposite_pool(users):
+    d = svc.create_dashboard("_household", "personal", "Alice", "Family Board")
+    svc.update_dashboard("_household", "personal", d["id"], {"cross_workspace": True})
+    svc.update_access(
+        "_household",
+        "personal",
+        d["id"],
+        contributors=[{"target": "Bob", "access": "read"}],
+        by="Alice",
+    )
+    # Bob has no `business` contributor grant on _team — the household grant
+    # made above is what's found via the cross-workspace pool check, proving
+    # it actually crosses from _household to being reachable in "business".
+    found = svc.find_dashboard("Bob", "member", False, "business", d["id"])
+    assert found is not None
+    assert found["access"] == "read"
+    assert found["store"] == "_household"
+    assert found["store_workspace"] == "personal"
+
+
+def test_cross_workspace_edit_from_either_tab_hits_the_same_record(users):
+    d = svc.create_dashboard("Alice", "personal", "Alice", "Both Places")
+    svc.update_dashboard("Alice", "personal", d["id"], {"cross_workspace": True})
+
+    found = svc.find_dashboard("Alice", "member", False, "business", d["id"])
+    updated = svc.update_dashboard(
+        found["store"], found["store_workspace"], d["id"], {"name": "Renamed from Business"}
+    )
+    assert updated["name"] == "Renamed from Business"
+    # No duplicate record was created in the business store.
+    assert svc.list_dashboards("Alice", "business") == []
+    assert svc.get_dashboard("Alice", d["id"], "personal")["name"] == "Renamed from Business"
+
+
+def test_resolve_default_includes_cross_workspace_own_dashboard(users):
+    d = svc.create_dashboard("Alice", "personal", "Alice", "Solo, Both Workspaces")
+    svc.update_dashboard("Alice", "personal", d["id"], {"cross_workspace": True})
+    # Alice owns nothing natively in "business" — without the cross-workspace
+    # fallback this would be None (empty state) instead of her one real
+    # dashboard.
+    resolved = svc.resolve_default_dashboard_id("Alice", "member", False, "business", None)
+    assert resolved == d["id"]
+
+
 def test_pool_dashboard_contributor_access(users):
     d = svc.create_dashboard("_household", "personal", "Alice", "Family Board")
     # No contributor grant yet -> Bob can't see it

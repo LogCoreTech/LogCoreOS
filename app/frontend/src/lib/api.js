@@ -220,6 +220,15 @@ export const brain = {
   saveFile: (path, content)       => request('PUT', `/brain/files/${path}`, { content }),
 }
 
+// App-wide online/offline presence (2026-08-17) — Layout.jsx pings this on
+// an interval while any page is open and visible. Distinct from
+// chat.presence above, which is a per-conversation "I'm looking at this
+// exact chat" signal for suppressing a redundant notification, not a
+// general online/offline status.
+export const presence = {
+  ping: () => post('/presence/ping'),
+}
+
 export const push = {
   vapidKey:    ()       => get('/push/vapid-key'),
   subscribe:   (sub)    => post('/push/subscribe', sub),
@@ -271,6 +280,7 @@ export const assets = {
   unarchive:      (id, cascade = false) => post(`/assets/${id}/unarchive${cascade ? '?cascade=true' : ''}`, {}),
   members:        ()               => get('/assets/members'),
   convertToPool:  (id)              => post(`/assets/${id}/convert`, { target: 'pool' }),
+  attachTemplate: (id, templateId)  => post(`/assets/${id}/attach-template`, { template_id: templateId }),
   updateAccess:   (id, data)        => request('PUT', `/assets/${id}/access`, data),
   leave:          (id)              => post(`/assets/${id}/leave`, {}),
   respondShare:   (notifId, accept) => post('/assets/shares/respond', { notif_id: notifId, accept }),
@@ -433,6 +443,7 @@ export const finance = {
 
 export const contacts = {
   list:         (includeArchived = false) => get(`/contacts${includeArchived ? '?include_archived=true' : ''}`),
+  availableForLinking: ()            => get('/contacts/available-for-linking'),
   me:           ()                  => get('/contacts/me'),
   updateMe:     (data)               => request('PATCH', '/contacts/me', data),
   linkAffiliation:   (id, otherId)  => post(`/contacts/${id}/affiliations/${otherId}`, {}),
@@ -446,6 +457,8 @@ export const contacts = {
   remove:       (id)                => del(`/contacts/${id}`),
   archive:      (id)                => post(`/contacts/${id}/archive`, {}),
   unarchive:    (id)                => post(`/contacts/${id}/unarchive`, {}),
+  convert:      (id)                => post(`/contacts/${id}/convert`, {}),
+  convertBulk:  (contactIds = null) => post('/contacts/convert-bulk', { contact_ids: contactIds }),
   interactions: (id)                => get(`/contacts/${id}/interactions`),
   addInteraction:    (id, data)     => post(`/contacts/${id}/interactions`, data),
   updateInteraction: (id, iid, data) => patch(`/contacts/${id}/interactions/${iid}`, data),

@@ -302,7 +302,9 @@ export default function TemplateManager({ templates, user, onClose, onChanged })
                 {form.fields.map((f, i) => (
                   <div key={i} className="border border-charcoal-200 dark:border-charcoal-700 rounded-lg p-2 space-y-2">
                     <div className="flex items-center gap-1.5">
-                      <input type="text" value={f.key} onChange={e => setField(i, { key: e.target.value.toLowerCase() })} placeholder="key" className="input !py-1 !w-28 font-mono text-xs" />
+                      {/* text-xs dropped it under the iOS Safari auto-zoom-on-focus
+                          threshold (same bug class as TagInput.jsx, fixed 2026-08-18) */}
+                      <input type="text" value={f.key} onChange={e => setField(i, { key: e.target.value.toLowerCase() })} placeholder="key" className="input !py-1 !w-28 font-mono" />
                       <input type="text" value={f.label} onChange={e => setField(i, { label: e.target.value })} placeholder="Label" className="input !py-1 flex-1" />
                       <select value={f.type} onChange={e => setField(i, { type: e.target.value })} className="input !py-1 !w-24">
                         {FIELD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}

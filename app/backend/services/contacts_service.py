@@ -52,7 +52,13 @@ _BASIC_SHORT_FIELDS = {
     "marital_status",
     "pets",
 }
-_BASIC_LONG_FIELDS = {"life_mission", "core_values", "key_constraints"}
+# `core_values` used to be one of these (a plain string) but became a list of
+# pill entries 2026-08-18 (owner: "every entry becomes a pill... instead of
+# having to split with commas") — validated separately below via
+# _validate_core_values(), not the generic string-capping loop.
+_BASIC_LONG_FIELDS = {"life_mission", "key_constraints"}
+_CORE_VALUES_MAX = 30
+_CORE_VALUE_LEN = 60
 _PRIVATE_SHORT_FIELDS = {
     "wake_weekday",
     "wake_weekend",
@@ -124,6 +130,24 @@ _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 # years_experience/skills all moved here from the flat schema).
 _CAREER_FIELDS = {"title", "industry", "education", "years_experience", "skills"}
 
+# Self-contact-only, owner-toggleable section visibility (2026-08-18, owner:
+# "hiddeable for user contacts by the user themself only... family, career,
+# address, personal section, priorities" + values & principles from the same
+# request). A DIFFERENT mechanism from _PRIVATE_FIELDS above: that set is
+# fixed and always stripped from every non-owner viewer; this one is
+# per-contact, user-chosen, and defaults to nothing hidden. Company-only
+# sections (Locations/Hours) aren't here — a self-contact is permanently
+# type "person" (guarded in update_contact), so they're structurally
+# unreachable for this feature.
+_HIDEABLE_SECTIONS = {
+    "values_principles": {"life_mission", "core_values", "key_constraints"},
+    "family": {"marital_status", "pets", "affiliated_contact_ids"},
+    "career": {"career_history"},
+    "address": {"address"},
+    "personal": {"gender", "pronouns", "city", "state", "country"},
+    "priorities": {"priority_order"},
+}
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -176,17 +200,48 @@ def get_contact(store_user: str, workspace: str, contact_id: str) -> dict | None
     return next((c for c in list_contacts(store_user, workspace) if c["id"] == contact_id), None)
 
 
+def _mutate_contact(store_user: str, workspace: str, contact_id: str, mutator) -> dict | None:
+    """Atomic find-by-id-and-mutate for a single contact row — used wherever a
+    write follows shortly after another write to the same shared pool file
+    (self-contact onboarding is now exactly that, once self-contacts live in
+    the household pool alongside everyone else's) and can't risk the plain
+    list_contacts()+_save_contacts() two-step race a second concurrent writer
+    could interleave with (see file_service.update_json())."""
+    from services.file_service import update_json
+
+    result: dict = {}
+
+    def _apply(current):
+        contacts = (current or {}).get("contacts", [])
+        for i, c in enumerate(contacts):
+            if c["id"] != contact_id:
+                continue
+            updated = mutator(c)
+            contacts[i] = updated
+            result["contact"] = updated
+            break
+        return {"contacts": contacts}
+
+    update_json(contacts_path(store_user, workspace), _apply, default={"contacts": []})
+    return result.get("contact")
+
+
 # ---------------------------------------------------------------------------
 # Self-contact — the user's own Contact record IS their profile. Physically
-# always stored in the user's PERSONAL store (one record shared across both
-# workspaces), never a pool store.
+# always stored in the HOUSEHOLD POOL (forced-on cross_workspace, survives
+# account deletion for free — see release_self_contact()), resolved/editable
+# from both workspaces regardless of which one is currently active.
 # ---------------------------------------------------------------------------
 
 
 def get_self_contact(user_name: str, create_if_missing: bool = False) -> dict | None:
+    """A self-contact always physically lives in the household pool now (2026-
+    08-17) — forced-always-on cross-workspace visibility, and survives account
+    deletion for free since deleting a user's own Brain folder never touches
+    _household's store. See create_self_contact() and release_self_contact()."""
     if is_pool(user_name):
         return None
-    for c in list_contacts(user_name, "personal"):
+    for c in list_contacts(POOL_HOUSEHOLD, "personal"):
         if c.get("self_of") == user_name:
             return c
     return create_self_contact(user_name) if create_if_missing else None
@@ -200,26 +255,78 @@ def create_self_contact(
     if existing:
         return existing
     contact = create_contact(
-        user_name,
+        POOL_HOUSEHOLD,
         "personal",
-        {"type": "person", "name": display_name or user_name},
+        {"type": "person", "name": display_name or user_name, "cross_workspace": True},
         created_by=user_name,
     )
-    contacts = list_contacts(user_name, "personal")
-    for i, c in enumerate(contacts):
-        if c["id"] != contact["id"]:
-            continue
-        c["self_of"] = user_name
-        contacts[i] = c
-        _save_contacts(user_name, "personal", contacts)
-        contact = c
-        break
+    contact = (
+        _mutate_contact(
+            POOL_HOUSEHOLD, "personal", contact["id"], lambda c: {**c, "self_of": user_name}
+        )
+        or contact
+    )
     if occupation:
         contact = (
-            update_contact(user_name, "personal", contact["id"], {"occupation": occupation})
+            update_contact(POOL_HOUSEHOLD, "personal", contact["id"], {"occupation": occupation})
             or contact
         )
     return contact
+
+
+def link_self_contact(contact_id: str, user_name: str) -> dict:
+    """Mark an EXISTING household-pool contact as `user_name`'s self-contact —
+    the "link an existing contact at account creation" flow (owner item #4,
+    creation-only). Atomic: the not-found/already-linked checks run inside the
+    same locked read-modify-write cycle as the mutation itself, so two admins
+    racing to link the same contact to two different brand-new users can't
+    both succeed. Any existing edit-level contributor grant on the contact is
+    downgraded to contribute — mirrors the standing "nobody but its owner can
+    ever edit a self-contact" rule, which this contact wasn't subject to until
+    now."""
+    from services.file_service import update_json
+
+    outcome: dict = {}
+
+    def _apply(current):
+        contacts = (current or {}).get("contacts", [])
+        for i, c in enumerate(contacts):
+            if c["id"] != contact_id:
+                continue
+            if c.get("self_of"):
+                raise ValueError(f"That contact is already linked to {c['self_of']}'s account")
+            downgraded = [
+                {**e, "access": "contribute"} if e.get("access") == "edit" else e
+                for e in (c.get("contributors") or [])
+            ]
+            updated = {
+                **c,
+                "self_of": user_name,
+                "cross_workspace": True,
+                "type": "person",
+                "contributors": downgraded,
+                "updated_at": _now(),
+            }
+            contacts[i] = updated
+            outcome["contact"] = updated
+            return {"contacts": contacts}
+        raise ValueError("Selected contact not found")
+
+    update_json(contacts_path(POOL_HOUSEHOLD, "personal"), _apply, default={"contacts": []})
+    return outcome["contact"]
+
+
+def release_self_contact(user_name: str) -> None:
+    """Account deletion: the departing user's self-contact already survives on
+    its own (it lives in the household pool, untouched by deleting their own
+    Brain folder) — this just clears self_of so it becomes an ordinary,
+    unlinked household contact. Owner's explicit choice: no "former user"
+    marker, cross_workspace stays True (least-surprise; it just stays visible
+    from both pools like it always was). No-op if the user never had one."""
+    contact = get_self_contact(user_name)
+    if contact is None:
+        return
+    _mutate_contact(POOL_HOUSEHOLD, "personal", contact["id"], lambda c: {**c, "self_of": None})
 
 
 # ---------------------------------------------------------------------------
@@ -451,6 +558,43 @@ def _validate_hours(values) -> list[dict]:
     ]
 
 
+def _validate_core_values(values) -> list[str]:
+    """Pill entries (2026-08-18) — trimmed, capped length, deduped in order,
+    capped count. Same shape/limits as this app's other tag-like lists.
+
+    A plain comma-separated string is accepted too, not just a list — the
+    AI's update_contact/update_profile tools call update_contact() directly
+    with a raw fields dict, bypassing ContactUpdate's Pydantic type entirely,
+    so nothing stops a string from arriving here; without this, iterating a
+    string directly (`for v in values`) would silently split it into
+    individual characters instead of raising or doing something sensible."""
+    if isinstance(values, str):
+        values = values.split(",")
+    out: list[str] = []
+    for v in values or []:
+        s = str(v).strip()[:_CORE_VALUE_LEN]
+        if s and s not in out:
+            out.append(s)
+        if len(out) >= _CORE_VALUES_MAX:
+            break
+    return out
+
+
+def _validate_hidden_sections(values) -> list[str]:
+    """Subset of _HIDEABLE_SECTIONS' keys — an unknown key is a caller bug,
+    not silently dropped, so it raises rather than accepting garbage."""
+    out: list[str] = []
+    for v in values or []:
+        key = str(v).strip()
+        if key not in _HIDEABLE_SECTIONS:
+            raise ValueError(
+                f"Unknown section {key!r}. Valid sections: {sorted(_HIDEABLE_SECTIONS)}"
+            )
+        if key not in out:
+            out.append(key)
+    return out
+
+
 def _validate_contact(data: dict, partial: bool = False) -> dict:
     out: dict = {}
     if "type" in data or not partial:
@@ -513,6 +657,8 @@ def _validate_contact(data: dict, partial: bool = False) -> dict:
     if "weight_kg" in data:
         wk = data.get("weight_kg")
         out["weight_kg"] = _validate_number(wk, "weight_kg", 0, 500)
+    if "core_values" in data:
+        out["core_values"] = _validate_core_values(data.get("core_values"))
     if "career_history" in data:
         out["career_history"] = _validate_career_history(data.get("career_history"))
     if "locations" in data:
@@ -536,6 +682,10 @@ def _validate_contact(data: dict, partial: bool = False) -> dict:
             out[key] = (data.get(key) or "").strip()[:2000]
     if data.get("priority_order") is not None:
         out["priority_order"] = _validate_priority_order(data.get("priority_order"))
+    if "cross_workspace" in data:
+        out["cross_workspace"] = bool(data.get("cross_workspace"))
+    if "hidden_sections" in data:
+        out["hidden_sections"] = _validate_hidden_sections(data.get("hidden_sections"))
     return out
 
 
@@ -616,8 +766,24 @@ def resolve_access(
     if is_pool(store_user):
         if is_admin:
             return "edit"
+        # A self-contact's store_user is the pool, never a real username — the
+        # non-pool branch's `store_user == viewer` owner short-circuit below
+        # can never fire for it, so it needs its own, checked (like that one)
+        # BEFORE hidden_from: a user must never be able to lose access to
+        # their own contact (mirrors AGENTS.md's documented ordering for the
+        # non-pool case).
+        if contact.get("self_of") == viewer:
+            return "edit"
         if is_hidden:
             return None
+        # The creator of an ordinary pool contact gets edit on what they made,
+        # same as creating a personal contact would (store_user == viewer is
+        # automatic there since the store IS the creator's own). Pool
+        # contact creation is no longer admin-only (2026-08-17) — without
+        # this, a non-admin who creates a shared household contact couldn't
+        # edit their own creation afterward, only read it like everyone else.
+        if contact.get("created_by") == viewer:
+            return "edit"
         entries = [
             e
             for e in (contact.get("contributors") or [])
@@ -643,25 +809,71 @@ def resolve_access(
 
 def _strip_private(contact: dict, store_user: str, viewer: str) -> dict:
     """Health/finance/AI-preference fields never leave the record's own
-    store_user's view, regardless of sharing config — a general Contacts rule
-    (not self-contact-specific) that happens to be what keeps a shared
-    self-contact's sensitive fields locked to its owner."""
-    if store_user == viewer:
+    owner's view, regardless of sharing config — a general Contacts rule (not
+    self-contact-specific) that happens to be what keeps a shared
+    self-contact's sensitive fields locked to its owner.
+
+    `store_user == viewer` alone used to be the entire owner check, correct
+    back when a self-contact's store_user WAS the owner's own name. Now that
+    self-contacts live in the household pool, store_user is POOL_HOUSEHOLD —
+    never equal to any real username, including the owner's — so that
+    comparison can never be true again for anyone. Left alone, this would
+    correctly keep stripping these fields from every other pool member (the
+    protection stays intact for outsiders) but would ALSO incorrectly strip
+    them from the contact's own rightful owner viewing their own record. The
+    `self_of == viewer` check restores that (2026-08-17)."""
+    if store_user == viewer or contact.get("self_of") == viewer:
         return contact
     return {k: v for k, v in contact.items() if k not in _PRIVATE_FIELDS}
 
 
-def annotate(contact: dict, store_user: str, viewer: str, access: str) -> dict:
-    out = dict(_strip_private(contact, store_user, viewer))
-    if store_user == POOL_HOUSEHOLD:
-        out["_owner"] = "household"
-    elif store_user == POOL_TEAM:
-        out["_owner"] = "team"
-    elif store_user != viewer:
-        out["_owner"] = store_user
-    out["_access"] = access
+def _strip_hidden_sections(contact: dict, viewer: str) -> dict:
+    """Self-contact-only, owner-chosen section hiding (2026-08-18) — same
+    owner short-circuit as _strip_private (the record's own owner always
+    sees everything, regardless of what they've hidden from others)."""
     if contact.get("self_of") == viewer:
+        return contact
+    hidden = contact.get("hidden_sections") or []
+    if not hidden:
+        return contact
+    strip_fields: set = set()
+    for key in hidden:
+        strip_fields |= _HIDEABLE_SECTIONS.get(key, set())
+    if not strip_fields:
+        return contact
+    return {k: v for k, v in contact.items() if k not in strip_fields}
+
+
+def annotate(contact: dict, store_user: str, viewer: str, access: str) -> dict:
+    out = dict(_strip_hidden_sections(_strip_private(contact, store_user, viewer), viewer))
+    is_own = contact.get("self_of") == viewer
+    if not is_own:
+        # Without this exception, every user's own contact would show a
+        # spurious "🏠 Household" ownership badge on their OWN view of it
+        # (2026-08-17 fix) — a non-owner viewer still correctly sees the
+        # household/team badge below, which is accurate: from their
+        # perspective it genuinely is a shared pool record.
+        if store_user == POOL_HOUSEHOLD:
+            out["_owner"] = "household"
+        elif store_user == POOL_TEAM:
+            out["_owner"] = "team"
+        elif store_user != viewer:
+            out["_owner"] = store_user
+    out["_access"] = access
+    if is_own:
         out["_pinned"] = True
+    if contact.get("self_of"):
+        # Online/offline dot for a user-linked contact (Item 9, wired up
+        # 2026-08-17 now that self-contacts have settled into the household
+        # pool — this reads presence_service.py's infrastructure, shipped
+        # earlier the same day but deliberately left unwired until now).
+        # Only ever surfaced on a record the viewer already has resolved
+        # access to (annotate() always runs after that check) — there's no
+        # separate lookup-by-username path this could leak through.
+        from services.presence_service import is_online, last_seen_iso
+
+        out["_online"] = is_online(contact["self_of"])
+        out["_last_seen"] = last_seen_iso(contact["self_of"])
     return out
 
 
@@ -674,33 +886,100 @@ def store_for_annotated(contact: dict, viewer: str) -> str:
     return owner or viewer
 
 
+def effective_workspace(store_user: str, contact: dict, workspace: str) -> str:
+    """Resolve a (possibly cross_workspace-visible) contact's TRUE physical
+    home store — the workspace whose file it's actually saved in — so a
+    write/interaction/deal made from the "wrong" tab lands on the same real
+    record instead of silently fragmenting into an invisible parallel one.
+
+    Self-contacts are always anchored to "personal" (their forced-on
+    cross-workspace pool home). Any other cross_workspace contact is resolved
+    by checking which of the two workspace files actually holds this id —
+    ordinary (non-cross_workspace) contacts return the ambient `workspace`
+    unchanged, exactly like every call site did before this existed."""
+    if contact.get("self_of"):
+        return "personal"
+    if not contact.get("cross_workspace"):
+        return workspace
+    if get_contact(store_user, workspace, contact.get("id", "")):
+        return workspace
+    other = "business" if workspace == "personal" else "personal"
+    if get_contact(store_user, other, contact.get("id", "")):
+        return other
+    return workspace
+
+
+def _candidate_stores(viewer: str, viewer_role: str, workspace: str) -> list[tuple[str, str]]:
+    """(store_user, store_workspace) pairs worth scanning for `viewer`, who is
+    currently looking from `workspace`. Always includes the viewer's own
+    store and the active pool at the ambient workspace (today's behavior,
+    unchanged, listed first so the common case never pays for the
+    cross-workspace additions below it) plus three cross-workspace additions
+    — the viewer's own OPPOSITE-workspace store, the opposite workspace's
+    pool, and anyone sharing an opposite-workspace contact with this viewer.
+    Every entry from the three additions only ever surfaces a record
+    explicitly flagged `cross_workspace: True` (self-contacts included, via
+    their forced-on flag) — filtered by the caller, same as every entry here
+    still needs its own resolve_access() check regardless of how it got
+    added to this list. Deliberately reuses the existing sharers_for() index
+    for BOTH workspaces rather than a second dedicated cross-workspace index
+    — at this app's self-hosted family/small-team scale the extra per-owner
+    contact-list scan the reuse costs is cheaper than a second index file,
+    its own reindex triggers, and its own boot-warm hook would be worth."""
+    from services.contacts_index import sharers_for
+
+    other_ws = "business" if workspace == "personal" else "personal"
+    stores: list[tuple[str, str]] = [
+        (viewer, workspace),
+        (pool_for(workspace), workspace),
+        (viewer, other_ws),
+        (pool_for(other_ws), other_ws),
+    ]
+    seen = set(stores)
+    for store_user in sharers_for(viewer, viewer_role, workspace):
+        pair = (store_user, workspace)
+        if pair not in seen:
+            stores.append(pair)
+            seen.add(pair)
+    for store_user in sharers_for(viewer, viewer_role, other_ws):
+        pair = (store_user, other_ws)
+        if pair not in seen:
+            stores.append(pair)
+            seen.add(pair)
+    return stores
+
+
+def _cross_workspace_visible(contact: dict, store_ws: str, workspace: str) -> bool:
+    """Only ever True for a native (store_ws == workspace) scan, or a
+    record explicitly opted into cross-workspace visibility (self-contacts
+    count — self_of implies a permanently-forced cross_workspace, checked
+    directly here as defense-in-depth in case that invariant is ever
+    violated elsewhere)."""
+    if store_ws == workspace:
+        return True
+    return bool(contact.get("cross_workspace") or contact.get("self_of"))
+
+
 def list_visible_contacts(
     viewer: str, viewer_role: str, is_admin: bool, workspace: str, include_archived: bool = False
 ) -> list[dict]:
-    from services.contacts_index import sharers_for
-
+    # Side-effect only, matching pre-2026-08-17 behavior — ensures the
+    # viewer's own self-contact exists so the general pool scan below picks
+    # it up naturally (no special-cased short-circuit or forced ordering
+    # needed anymore; annotate() marks it _pinned and Contacts.jsx pins it to
+    # the top of its own render client-side).
+    get_self_contact(viewer, create_if_missing=True)
     results = []
     seen_ids: set[str] = set()
-
-    # The viewer's own self-contact is pinned to the top of THEIR OWN list,
-    # regardless of active workspace — it's one record shared across both
-    # workspaces, physically stored in the personal store (item 8/9 of the
-    # design). Other users' self-contacts are not made cross-workspace-visible
-    # here; they're still resolved the normal way below via sharing.
-    self_contact = get_self_contact(viewer, create_if_missing=True)
-    if self_contact:
-        results.append(annotate(self_contact, viewer, viewer, "edit"))
-        seen_ids.add(self_contact["id"])
-
-    stores = [viewer, pool_for(workspace)]
-    stores += [s for s in sharers_for(viewer, viewer_role, workspace) if s not in stores]
-    for store_user in stores:
-        for contact in list_contacts(store_user, workspace):
+    for store_user, store_ws in _candidate_stores(viewer, viewer_role, workspace):
+        for contact in list_contacts(store_user, store_ws):
             if contact["id"] in seen_ids:
                 continue
             if contact.get("archived") and not include_archived:
                 continue
-            access = resolve_access(viewer, viewer_role, is_admin, store_user, contact, workspace)
+            if not _cross_workspace_visible(contact, store_ws, workspace):
+                continue
+            access = resolve_access(viewer, viewer_role, is_admin, store_user, contact, store_ws)
             if not access:
                 continue
             results.append(annotate(contact, store_user, viewer, access))
@@ -711,27 +990,27 @@ def list_visible_contacts(
 def find_contact(
     viewer: str, viewer_role: str, is_admin: bool, workspace: str, contact_id: str
 ) -> tuple[str, dict, str] | None:
-    """Returns (store_user, contact, access) or None. The viewer's own
-    self-contact short-circuits here so it resolves regardless of the active
-    `workspace` — see list_visible_contacts for why."""
-    from services.contacts_index import sharers_for
-
-    self_contact = get_self_contact(viewer)
-    if self_contact and self_contact["id"] == contact_id:
-        return (viewer, self_contact, "edit")
-
-    stores = [viewer, pool_for(workspace)]
-    stores += [s for s in sharers_for(viewer, viewer_role, workspace) if s not in stores]
-    for store_user in stores:
-        contact = get_contact(store_user, workspace, contact_id)
-        if contact:
-            access = resolve_access(viewer, viewer_role, is_admin, store_user, contact, workspace)
-            if not access:
-                return None
-            # Defense-in-depth: strip here too (not just in annotate()) so a
-            # caller that reads this tuple's raw contact directly — e.g. the
-            # agent's get_contact tool — can never leak private fields.
-            return (store_user, _strip_private(contact, store_user, viewer), access)
+    """Returns (store_user, contact, access) or None. Contact ids are unique
+    per record, so once found in any candidate store that's THE record —
+    matching every candidate pair the same general way, no self-contact
+    special case needed (self-contacts are reached via the native pool scan
+    when workspace == "personal", or the opposite-pool scan otherwise, same
+    as any other forced-cross_workspace pool record)."""
+    for store_user, store_ws in _candidate_stores(viewer, viewer_role, workspace):
+        contact = get_contact(store_user, store_ws, contact_id)
+        if contact is None:
+            continue
+        if not _cross_workspace_visible(contact, store_ws, workspace):
+            return None
+        access = resolve_access(viewer, viewer_role, is_admin, store_user, contact, store_ws)
+        if not access:
+            return None
+        # Defense-in-depth: strip here too (not just in annotate()) so a
+        # caller that reads this tuple's raw contact directly — e.g. the
+        # agent's get_contact tool — can never leak private fields or
+        # owner-hidden sections.
+        stripped = _strip_hidden_sections(_strip_private(contact, store_user, viewer), viewer)
+        return (store_user, stripped, access)
     return None
 
 
@@ -741,6 +1020,13 @@ def find_contact(
 
 
 def create_contact(store_user: str, workspace: str, data: dict, created_by: str) -> dict:
+    """Atomic append via update_json() — not a plain list_contacts()+
+    _save_contacts() two-step. Every user's self-contact now appends to the
+    same shared household-pool file instead of their own (2026-08-17), so two
+    concurrent writers (e.g. two accounts being set up back-to-back) hitting
+    this same file is a real, no-longer-theoretical lost-write risk."""
+    from services.file_service import update_json
+
     fields = _validate_contact(data)
     contact = {
         "id": str(uuid.uuid4()),
@@ -762,16 +1048,23 @@ def create_contact(store_user: str, workspace: str, data: dict, created_by: str)
         "career_history": [],
         "locations": [],
         "hours": [],
+        "core_values": [],
+        "hidden_sections": [],
         "photo_ext": None,
+        "cross_workspace": False,
         "archived": False,
         "created_by": created_by,
         "created_at": _now(),
         "updated_at": _now(),
         **fields,
     }
-    contacts = list_contacts(store_user, workspace)
-    contacts.append(contact)
-    _save_contacts(store_user, workspace, contacts)
+
+    def _append(current):
+        contacts = (current or {}).get("contacts", [])
+        contacts.append(contact)
+        return {"contacts": contacts}
+
+    update_json(contacts_path(store_user, workspace), _append, default={"contacts": []})
     return contact
 
 
@@ -783,9 +1076,27 @@ def update_contact(
     are stripped from the incoming update in that case, so a third party can
     never inject data into fields only the owner will ever be able to read
     back. Callers that always act as their own store_user (self/`/contacts/me`,
-    automation, setup, migrations) can omit it."""
+    automation, setup, migrations) can omit it.
+
+    `viewer != store_user` is no longer sufficient on its own to mean "a third
+    party" — a self-contact's store_user is the household pool, never a real
+    username, so it's permanently != any real viewer including its own owner.
+    Resolve the target's `self_of` first and skip stripping when the viewer
+    IS that contact's own owner (2026-08-17 fix — without this, a user could
+    never successfully update their own health/schedule/AI-preference fields
+    via /contacts/me once self-contacts moved into the pool)."""
     if viewer is not None and viewer != store_user:
-        updates = {k: v for k, v in updates.items() if k not in _PRIVATE_FIELDS}
+        existing = get_contact(store_user, workspace, contact_id)
+        if not (existing and existing.get("self_of") == viewer):
+            # `hidden_sections` rides along with _PRIVATE_FIELDS here — same
+            # "only the record's own owner" rule (2026-08-18): nobody else
+            # may change what's hidden, even someone with edit-level share
+            # access to this contact.
+            updates = {
+                k: v
+                for k, v in updates.items()
+                if k not in _PRIVATE_FIELDS and k != "hidden_sections"
+            }
     fields = _validate_contact(updates, partial=True)
     contacts = list_contacts(store_user, workspace)
     for i, c in enumerate(contacts):
@@ -880,8 +1191,9 @@ def delete_contact(store_user: str, workspace: str, contact_id: str) -> bool:
     _save_deals(store_user, workspace, deals)
     # Strip any dangling affiliation back-references within the SAME store
     # (v1 scope — affiliation linking requires edit on both ends, so both
-    # sides always live in a store this function can see; cross-store
-    # staleness is accepted, matching the app's existing tolerance elsewhere).
+    # sides usually live in a store this function can already see; cross-
+    # store staleness beyond the household-pool check below is accepted,
+    # matching the app's existing tolerance elsewhere).
     changed = False
     for c in remaining:
         ids = c.get("affiliated_contact_ids") or []
@@ -890,6 +1202,24 @@ def delete_contact(store_user: str, workspace: str, contact_id: str) -> bool:
             changed = True
     if changed:
         _save_contacts(store_user, workspace, remaining)
+
+    # Self-contacts live in the household pool now, so an affiliation between
+    # a self-contact and an ordinary contact routinely spans two different
+    # stores — the same-store sweep above alone would leave a dangling
+    # reference on the OTHER user's self-contact whenever the ordinary side
+    # gets deleted from its own store. Not a fully general N-store sweep,
+    # just the one additional store this specific new cross-store case needs.
+    if not (store_user == POOL_HOUSEHOLD and workspace == "personal"):
+        household_contacts = list_contacts(POOL_HOUSEHOLD, "personal")
+        household_changed = False
+        for c in household_contacts:
+            ids = c.get("affiliated_contact_ids") or []
+            if contact_id in ids:
+                c["affiliated_contact_ids"] = [i for i in ids if i != contact_id]
+                household_changed = True
+        if household_changed:
+            _save_contacts(POOL_HOUSEHOLD, "personal", household_contacts)
+
     return True
 
 
@@ -975,8 +1305,8 @@ def link_affiliation(
     store_b, contact_b, access_b = b
     if access_a != "edit" or access_b != "edit":
         raise ValueError("You need edit access to both contacts to link them")
-    ws_a = "personal" if contact_a.get("self_of") else workspace
-    ws_b = "personal" if contact_b.get("self_of") else workspace
+    ws_a = effective_workspace(store_a, contact_a, workspace)
+    ws_b = effective_workspace(store_b, contact_b, workspace)
     ids_a = list(contact_a.get("affiliated_contact_ids") or [])
     if other_id not in ids_a:
         ids_a.append(other_id)
@@ -999,8 +1329,8 @@ def unlink_affiliation(
     store_b, contact_b, access_b = b
     if access_a != "edit" or access_b != "edit":
         raise ValueError("You need edit access to both contacts to unlink them")
-    ws_a = "personal" if contact_a.get("self_of") else workspace
-    ws_b = "personal" if contact_b.get("self_of") else workspace
+    ws_a = effective_workspace(store_a, contact_a, workspace)
+    ws_b = effective_workspace(store_b, contact_b, workspace)
     ids_a = [i for i in (contact_a.get("affiliated_contact_ids") or []) if i != other_id]
     ids_b = [i for i in (contact_b.get("affiliated_contact_ids") or []) if i != contact_id]
     updated_a = _set_affiliations(store_a, ws_a, contact_id, ids_a)
@@ -1155,7 +1485,13 @@ def update_access(
                     if name != store_user and name not in accepted:
                         to_notify.append(name)
         if contributors is not None:
-            c["contributors"] = _clean_share_entries(contributors, c.get("contributors"), pool=True)
+            cleaned_contrib = _clean_share_entries(contributors, c.get("contributors"), pool=True)
+            if c.get("self_of") and any(e.get("access") == "edit" for e in cleaned_contrib):
+                raise ValueError(
+                    "A self-contact can only be shared at read or contribute access — "
+                    "nobody but its owner can ever edit it"
+                )
+            c["contributors"] = cleaned_contrib
         if hidden_from is not None:
             cleaned_hidden = _clean_hidden(hidden_from)
             if c.get("self_of") and c["self_of"] in cleaned_hidden:
@@ -1309,37 +1645,22 @@ def list_deals(store_user: str, workspace: str, contact_id: str | None = None) -
 def find_deal(
     viewer: str, viewer_role: str, is_admin: bool, workspace: str, deal_id: str
 ) -> tuple[str, dict, dict, str] | None:
-    """Locate a deal across viewer + pool + sharer stores. A deal has no access
-    of its own — it inherits the parent contact's resolve_access result.
-    Returns (store_user, deal, contact, access) or None. Deals on the viewer's
-    own self-contact are anchored to the personal store regardless of the
-    active workspace, so they're checked first here the same way
-    find_contact() short-circuits the self-contact itself."""
-    from services.contacts_index import sharers_for
-
-    self_contact = get_self_contact(viewer)
-    if self_contact:
-        self_deal = next(
-            (
-                d
-                for d in _list_deals(viewer, "personal")
-                if d["id"] == deal_id and d.get("contact_id") == self_contact["id"]
-            ),
-            None,
-        )
-        if self_deal:
-            return (viewer, self_deal, self_contact, "edit")
-
-    stores = [viewer, pool_for(workspace)]
-    stores += [s for s in sharers_for(viewer, viewer_role, workspace) if s not in stores]
-    for store_user in stores:
-        deal = next((d for d in _list_deals(store_user, workspace) if d["id"] == deal_id), None)
+    """Locate a deal across every candidate store (mirrors find_contact()). A
+    deal has no access of its own — it inherits the parent contact's
+    resolve_access result. Returns (store_user, deal, contact, access) or
+    None. No self-contact special case needed — a self-contact's own deals
+    live in the household pool's deals.json alongside its record, reached by
+    the same general candidate-store scan as any other deal."""
+    for store_user, store_ws in _candidate_stores(viewer, viewer_role, workspace):
+        deal = next((d for d in _list_deals(store_user, store_ws) if d["id"] == deal_id), None)
         if deal is None:
             continue
-        contact = get_contact(store_user, workspace, deal.get("contact_id") or "")
+        contact = get_contact(store_user, store_ws, deal.get("contact_id") or "")
         if contact is None:
             return None
-        access = resolve_access(viewer, viewer_role, is_admin, store_user, contact, workspace)
+        if not _cross_workspace_visible(contact, store_ws, workspace):
+            return None
+        access = resolve_access(viewer, viewer_role, is_admin, store_user, contact, store_ws)
         return (store_user, deal, contact, access) if access else None
     return None
 
@@ -1575,7 +1896,7 @@ def format_profile_text(contact: dict) -> str:
         lines.append("")
 
     gv = [
-        (lbl, contact[k])
+        (lbl, ", ".join(contact[k]) if k == "core_values" else contact[k])
         for k, lbl in [
             ("life_mission", "Life mission"),
             ("core_values", "Core values"),

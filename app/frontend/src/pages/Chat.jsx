@@ -504,6 +504,16 @@ export default function Chat() {
   // conversation is never blocked by another one still generating.
   const [loadingIds, setLoadingIds] = useState(() => new Set())
   const loading = loadingIds.has(chatId)
+  // chat_ids whose "Thinking…" state came from restoring a session that's
+  // still `status: "running"` server-side (reopened after a reload, or
+  // opened from the drawer/a deep link) rather than from this tab's own
+  // in-flight send()/sendResume() call — those already know when they
+  // finish via their own awaited promise; this is for the case where nobody
+  // in this tab is actually waiting on anything (owner report, 2026-08-17:
+  // "the chat bubble should stay displayed when the agent is running, but
+  // it doesn't save" — the Thinking bubble is pure local state, so it never
+  // reappeared on reopening a conversation that was genuinely still running).
+  const [restoredRunningIds, setRestoredRunningIds] = useState(() => new Set())
   const [chatMode, setChatMode] = useState('approve')
   const [crossWorkspace, setCrossWorkspace] = useState(false)
   const [showModeDrawer, setShowModeDrawer] = useState(false)
@@ -544,6 +554,39 @@ export default function Chat() {
   }, [input])
 
   useEffect(refreshUsage, [workspace])
+
+  // Poll a restored-as-running conversation until the server-side status
+  // actually moves off "running" — nothing else in this tab is watching it
+  // (no live channel exists, same reasoning as the presence-ping design
+  // elsewhere), so without this the Thinking bubble would stay stuck
+  // forever, or the finished reply would only ever show up after a manual
+  // reload. Reuses openSession() to pick up the final content once done —
+  // that call re-derives everything (paused card, plain completion, etc.)
+  // the normal way, so this doesn't need its own completion-handling logic.
+  useEffect(() => {
+    if (restoredRunningIds.size === 0) return
+    const interval = setInterval(async () => {
+      let list
+      try {
+        list = await chatApi.sessions()
+      } catch {
+        return // keep trying next tick
+      }
+      for (const id of restoredRunningIds) {
+        const found = (list || []).find(s => s.chat_id === id)
+        if (found && found.status === 'running') continue
+        setRestoredRunningIds(prev => {
+          const next = new Set(prev)
+          next.delete(id)
+          return next
+        })
+        setLoadingFor(id, false)
+        if (chatIdRef.current === id && found) openSession(found)
+      }
+    }, 4000)
+    return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restoredRunningIds])
 
   // Presence — pings the server so a completion/approval notification isn't
   // also sent for this chat while it's already visible live (2026-08-15,
@@ -863,6 +906,13 @@ export default function Chat() {
       setShowHistory(false)
       chatApi.markSessionRead(session.chat_id).catch(() => {})
       setSessions(prev => prev.map(s => (s.chat_id === session.chat_id ? { ...s, unread: false } : s)))
+      // Still genuinely running server-side (this tab isn't the one that
+      // started it, or it survived a reload) — show the Thinking bubble and
+      // start polling for it to finish, instead of silently looking idle.
+      if (session.status === 'running') {
+        setLoadingFor(session.chat_id, true)
+        setRestoredRunningIds(prev => new Set(prev).add(session.chat_id))
+      }
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
     } catch {
       alert('Failed to load that chat.')

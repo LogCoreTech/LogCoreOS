@@ -91,10 +91,15 @@ def _contacts_eligible(name: str, workspaces: list[str]) -> list[dict]:
     for ws in workspaces:
         for c in contacts_service.list_contacts(name, ws):
             if c.get("self_of"):
-                # A user's own contact dies with their account like today —
-                # it can never be transferred/deleted independently (enforced
-                # in contacts_service too), so it must never surface here as
-                # something needing a decision.
+                # A user's own self_of contact must never surface here as
+                # something needing a decision — contacts_service.
+                # release_self_contact() (called below in execute()) handles
+                # it on its own, unconditionally. Self-contacts now live in
+                # the household pool (2026-08-17), not this user's own store,
+                # so list_contacts(name, ws) will never actually find one
+                # here anymore — this guard is unreachable in practice but
+                # kept as defense-in-depth for the migration window / any
+                # future regression that puts one back in a user's own store.
                 continue
             if not (c.get("shared_with") or c.get("contributors")):
                 continue
@@ -336,6 +341,12 @@ def execute(target_user: dict, decisions: list[dict], executed_by: str) -> None:
             notify_map.setdefault(target["name"], []).append(label)
         else:
             raise ValueError(f"Unknown action {d['action']!r}")
+
+    # The departing user's self-contact already survives on its own (it lives
+    # in the household pool, untouched by deleting their own Brain folder) —
+    # this just clears self_of so it becomes an ordinary, unlinked household
+    # contact rather than a permanently-owned-by-nobody-real record.
+    contacts_service.release_self_contact(name)
 
     # Reference cleanup — strip the departing user from every OTHER store,
     # then rebuild the derived share-index caches (cheap full rescan).

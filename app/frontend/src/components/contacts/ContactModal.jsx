@@ -3,6 +3,8 @@ import { contacts as contactsApi } from '../../lib/api'
 import { useWorkspace } from '../../lib/workspace'
 import ContactPicker from './ContactPicker'
 import { useContactPhotoUrl } from './ContactAvatar'
+import TagInput from '../TagInput'
+import SectionHeader from './SectionHeader'
 
 const DEFAULT_PRIORITY_ORDER = ['Religion', 'Family', 'Job', 'Personal Growth', 'Hobbies']
 const EDUCATION_LEVELS = [
@@ -161,8 +163,14 @@ function AffiliationEditor({ contactId, affiliated, onChange }) {
 
 // Resume-style career history: exactly one "current" (non-archived) entry is
 // editable inline; "Archive" ends it (sets end_date, marks archived) and
-// opens a fresh blank current entry. Past entries render as a compact,
-// removable read-only list below.
+// opens a fresh blank current entry. Past entries can *also* be added
+// directly with their own real dates (not just produced by archiving
+// "current"), and edited after the fact — owner, 2026-08-18: "put old one[s]
+// and order them off dates" — rather than only ever appending a blank
+// "current" and read-only-summarizing everything before it. Past roles
+// display most-recent-first by start_date; the backend doesn't care about
+// array order (see contacts_service._validate_career_history's own
+// docstring), so this is purely a display-time sort.
 function CareerHistoryEditor({ career, onChange }) {
   const [companyNames, setCompanyNames] = useState({})
   useEffect(() => {
@@ -173,8 +181,11 @@ function CareerHistoryEditor({ career, onChange }) {
   }, [])
 
   const current = career.find(c => !c.archived)
-  const past = career.filter(c => c.archived)
+  const past = [...career.filter(c => c.archived)].sort((a, b) => (b.start_date || '').localeCompare(a.start_date || ''))
   const cur = current || {}
+  // A single past entry being drafted (no `id` yet) or edited (has one) —
+  // separate from the always-present current-entry form above it.
+  const [editingPast, setEditingPast] = useState(null)
 
   function updateCurrent(patch) {
     if (current) {
@@ -195,6 +206,21 @@ function CareerHistoryEditor({ career, onChange }) {
 
   function removePast(entry) {
     onChange(career.filter(c => c !== entry))
+    if (editingPast === entry) setEditingPast(null)
+  }
+
+  function savePast() {
+    if (!editingPast.title?.trim()) return
+    if (editingPast.id) {
+      onChange(career.map(c => (c.id === editingPast.id ? editingPast : c)))
+    } else {
+      onChange([...career, { ...editingPast, id: crypto.randomUUID(), archived: true }])
+    }
+    setEditingPast(null)
+  }
+
+  function pastField(patch) {
+    setEditingPast(p => ({ ...p, ...patch }))
   }
 
   return (
@@ -222,19 +248,62 @@ function CareerHistoryEditor({ career, onChange }) {
         </Field>
       </div>
       <input className="input" placeholder="Skills (comma-separated)" value={cur.skills || ''} onChange={e => updateCurrent({ skills: e.target.value })} />
-      {current && (
-        <button type="button" onClick={archiveCurrent} className="btn-ghost text-xs">
-          📁 Archive this role &amp; start a new one
-        </button>
+      <div className="flex gap-2 flex-wrap">
+        {current && (
+          <button type="button" onClick={archiveCurrent} className="btn-ghost text-xs">
+            📁 Archive this role &amp; start a new one
+          </button>
+        )}
+        {!editingPast && (
+          <button type="button" onClick={() => setEditingPast({ archived: true })} className="btn-ghost text-xs">
+            + Add a past role
+          </button>
+        )}
+      </div>
+
+      {editingPast && (
+        <div className="space-y-2 p-2.5 rounded-lg border border-charcoal-200 dark:border-charcoal-700">
+          <p className="text-[11px] text-charcoal-400">{editingPast.id ? 'Edit past role' : 'New past role'}</p>
+          <input className="input" placeholder="Job title" value={editingPast.title || ''} onChange={e => pastField({ title: e.target.value })} />
+          <ContactPicker
+            label="Employer"
+            value={{ name: companyNames[editingPast.company_id] || '', contactId: editingPast.company_id || null }}
+            onChange={(_n, id) => pastField({ company_id: id })}
+            placeholder="Search or add a company…"
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <input className="input" placeholder="Industry" value={editingPast.industry || ''} onChange={e => pastField({ industry: e.target.value })} />
+            <select className="input" value={editingPast.education || ''} onChange={e => pastField({ education: e.target.value })}>
+              <option value="">Education —</option>
+              {EDUCATION_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+            <select className="input" value={editingPast.years_experience || ''} onChange={e => pastField({ years_experience: e.target.value })}>
+              <option value="">Experience —</option>
+              {EXPERIENCE_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+            <Field label="Started">
+              <input type="month" className="input" value={editingPast.start_date || ''} onChange={e => pastField({ start_date: e.target.value })} />
+            </Field>
+            <Field label="Ended">
+              <input type="month" className="input" value={editingPast.end_date || ''} onChange={e => pastField({ end_date: e.target.value })} />
+            </Field>
+          </div>
+          <input className="input" placeholder="Skills (comma-separated)" value={editingPast.skills || ''} onChange={e => pastField({ skills: e.target.value })} />
+          <div className="flex gap-2">
+            <button type="button" onClick={savePast} className="btn-primary text-xs">Save role</button>
+            <button type="button" onClick={() => setEditingPast(null)} className="btn-ghost text-xs">Cancel</button>
+          </div>
+        </div>
       )}
+
       {past.length > 0 && (
         <div className="space-y-1 pt-2 border-t border-charcoal-100 dark:border-charcoal-800">
           <p className="text-[11px] text-charcoal-400">Past roles</p>
           {past.map((c, i) => (
             <div key={c.id || i} className="flex items-center gap-2 text-xs text-charcoal-500 dark:text-charcoal-400">
-              <span className="flex-1 min-w-0 truncate">
+              <button type="button" onClick={() => setEditingPast(c)} className="flex-1 min-w-0 truncate text-left hover:text-orange-500">
                 {c.title || '(untitled)'}{companyNames[c.company_id] ? ` · ${companyNames[c.company_id]}` : ''} ({c.start_date || '?'}–{c.end_date || '?'})
-              </span>
+              </button>
               <button type="button" onClick={() => removePast(c)} className="text-red-500 shrink-0">×</button>
             </div>
           ))}
@@ -383,6 +452,15 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
   const { workspace } = useWorkspace()
   const editing = !!contact?.id
   const isSelf = editing && contact.self_of === user?.name
+  // No delete UI existed anywhere in Contacts (owner report, 2026-08-17) even
+  // though DELETE /contacts/{id} always worked — this was a pure frontend
+  // gap. A self-contact can never be deleted directly (dies with the
+  // account only); pool contacts mirror Assets' own established pattern —
+  // admin-only, even for the contact's own creator, since it's a shared
+  // household/team resource, not a personal one.
+  const isPoolContact = editing && (contact._owner === 'household' || contact._owner === 'team')
+  const isAdmin = user?.role === 'admin'
+  const canDelete = editing && !isSelf && (isPoolContact ? isAdmin : contact._access === 'edit')
   const [form, setForm] = useState({
     type: contact?.type || 'person',
     name: contact?.name || '',
@@ -401,7 +479,6 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
     marital_status: contact?.marital_status || '',
     pets: contact?.pets || '',
     life_mission: contact?.life_mission || '',
-    core_values: contact?.core_values || '',
     key_constraints: contact?.key_constraints || '',
     wake_weekday: contact?.wake_weekday || '',
     wake_weekend: contact?.wake_weekend || '',
@@ -429,9 +506,23 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
   const [careerHistory, setCareerHistory] = useState(contact?.career_history || [])
   const [locations, setLocations] = useState(contact?.locations || [])
   const [hours, setHours] = useState(() => seedHours(contact?.hours))
+  // Pills, like tags/options elsewhere — not a comma-split string (owner,
+  // 2026-08-18: "every entry becomes a pill... instead of having to split
+  // with commas"). `Array.isArray` guard covers a not-yet-migrated legacy
+  // string value defensively, same as TagInput's own prop guard.
+  const [coreValues, setCoreValues] = useState(Array.isArray(contact?.core_values) ? contact.core_values : [])
+  // Which of the (self-contact-only) hideable sections are hidden from
+  // everyone but the owner — owner, 2026-08-18: "hiddeable for user
+  // contacts by the user themself only."
+  const [hiddenSections, setHiddenSections] = useState(contact?.hidden_sections || [])
   const [photoExt, setPhotoExt] = useState(contact?.photo_ext || null)
   const contactId = contact?.id || null
   const [priorityOrder, setPriorityOrder] = useState({ ...(contact?.priority_order || {}) })
+  // Pool default-sharing (create-only — fixed once a contact exists) and the
+  // cross-workspace toggle (editable anytime, except for a self-contact,
+  // which is always cross-workspace and forced server-side regardless).
+  const [keepPersonal, setKeepPersonal] = useState(false)
+  const [crossWorkspace, setCrossWorkspace] = useState(!!contact?.cross_workspace)
   const [affiliatedIds, setAffiliatedIds] = useState(contact?.affiliated_contact_ids || [])
   const [affiliatedContacts, setAffiliatedContacts] = useState([])
   const [busy, setBusy] = useState(false)
@@ -440,6 +531,9 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
   const setCustom = (k, v) => setForm(f => ({ ...f, custom: { ...f.custom, [k]: v } }))
   const splitList = s => s.split(',').map(x => x.trim()).filter(Boolean)
   const activeOrder = priorityOrder[workspace] || [...DEFAULT_PRIORITY_ORDER]
+  function toggleSection(key, hide) {
+    setHiddenSections(prev => (hide ? [...new Set([...prev, key])] : prev.filter(k => k !== key)))
+  }
 
   // Height/weight feet+inches entry state, derived from height_cm on load.
   const initialTotalIn = contact?.height_cm ? Math.round(contact.height_cm / 2.54) : null
@@ -503,12 +597,19 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
       notes: form.notes, custom: form.custom,
       pronouns: form.pronouns, gender: form.gender, city: form.city, state: form.state, country: form.country,
       marital_status: form.marital_status, pets: form.pets,
-      life_mission: form.life_mission, core_values: form.core_values, key_constraints: form.key_constraints,
+      life_mission: form.life_mission, core_values: coreValues, key_constraints: form.key_constraints,
       career_history: careerHistory,
       locations, hours,
     }
+    if (!editing) {
+      payload.pool = !keepPersonal
+    }
+    if (!isSelf) {
+      payload.cross_workspace = crossWorkspace
+    }
     if (isSelf) {
       Object.assign(payload, {
+        hidden_sections: hiddenSections,
         priority_order: { ...priorityOrder, [workspace]: activeOrder },
         wake_weekday: form.wake_weekday, wake_weekend: form.wake_weekend,
         bedtime: form.bedtime, work_start: form.work_start, work_end: form.work_end,
@@ -529,6 +630,25 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
         : await contactsApi.create(payload)
       onSaved(saved)
     } catch (err) { setError(err.message || 'Save failed'); setBusy(false) }
+  }
+
+  async function handleDelete() {
+    if (!confirm(`Permanently delete "${contact.name}"? This cannot be undone.`)) return
+    setBusy(true); setError('')
+    try {
+      await contactsApi.remove(contact.id)
+      onSaved(null)
+    } catch (err) { setError(err.message || 'Delete failed'); setBusy(false) }
+  }
+
+  async function handleConvert() {
+    const poolLabel = workspace === 'business' ? 'Team' : 'Household'
+    if (!confirm(`Make "${contact.name}" a shared ${poolLabel} contact? Everyone with access to ${poolLabel} will be able to see it.`)) return
+    setBusy(true); setError('')
+    try {
+      const updated = await contactsApi.convert(contact.id)
+      onSaved(updated)
+    } catch (err) { setError(err.message || 'Convert failed'); setBusy(false) }
   }
 
   async function refreshPhoto() {
@@ -561,13 +681,34 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
             ))}
           </div>
         )}
+        {!isSelf && (!editing || (user?.workspaces || []).length > 1) && (
+          <div className="flex flex-col gap-1.5 bg-charcoal-50 dark:bg-charcoal-800/50 rounded-lg p-2.5 text-xs">
+            {!editing && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={keepPersonal} onChange={e => setKeepPersonal(e.target.checked)} />
+                Keep this contact personal (don&apos;t share with {workspace === 'business' ? 'Team' : 'Household'})
+              </label>
+            )}
+            {(user?.workspaces || []).length > 1 && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={crossWorkspace} onChange={e => setCrossWorkspace(e.target.checked)} />
+                Also show this contact in my {workspace === 'business' ? 'personal' : 'business'} workspace
+              </label>
+            )}
+          </div>
+        )}
         <input className="input" placeholder="Name" value={form.name} onChange={e => set('name', e.target.value)} autoFocus maxLength={200} />
         <div>
           <input type="email" className="input" placeholder="Emails (comma-separated)" value={form.emails} onChange={e => set('emails', e.target.value)} />
           {hasInvalidEmail && <p className="text-xs text-red-500 mt-1">Each email must look like name@example.com</p>}
         </div>
         <PhoneEditor phones={phones} onChange={setPhones} />
-        <input className="input" placeholder="Address" value={form.address} onChange={e => set('address', e.target.value)} />
+        {/* For a self-contact, Address moves into its own toggleable section
+            further down (isSelf block below) instead of sitting bare here —
+            every other contact keeps it exactly where it's always been. */}
+        {!isSelf && (
+          <input className="input" placeholder="Address" value={form.address} onChange={e => set('address', e.target.value)} />
+        )}
         <div className="grid grid-cols-2 gap-3">
           <input className="input" placeholder="Tags (comma-separated)" value={form.tags} onChange={e => set('tags', e.target.value)} />
           <input className="input" placeholder="Status" value={form.status} onChange={e => set('status', e.target.value)} maxLength={40} />
@@ -605,7 +746,8 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
         ) : (
           <>
             <div className="border-t border-charcoal-100 dark:border-charcoal-800 pt-3 space-y-3">
-              <p className="text-[11px] uppercase tracking-wide text-charcoal-400">Personal</p>
+              <SectionHeader title="Personal" sectionKey={isSelf ? 'personal' : null}
+                hidden={hiddenSections.includes('personal')} onToggle={toggleSection} />
               <div className="grid grid-cols-2 gap-3">
                 <select className="input" value={form.gender} onChange={e => set('gender', e.target.value)}>
                   <option value="">Gender —</option>
@@ -619,17 +761,25 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
               </div>
             </div>
 
+            {isSelf && (
+              <div className="border-t border-charcoal-100 dark:border-charcoal-800 pt-3 space-y-3">
+                <SectionHeader title="Address" sectionKey="address"
+                  hidden={hiddenSections.includes('address')} onToggle={toggleSection} />
+                <input className="input" placeholder="Address" value={form.address} onChange={e => set('address', e.target.value)} />
+              </div>
+            )}
+
             <div className="border-t border-charcoal-100 dark:border-charcoal-800 pt-3 space-y-3">
-              <p className="text-[11px] uppercase tracking-wide text-charcoal-400">Career</p>
+              <SectionHeader title="Career" sectionKey={isSelf ? 'career' : null}
+                hidden={hiddenSections.includes('career')} onToggle={toggleSection} />
               <CareerHistoryEditor career={careerHistory} onChange={setCareerHistory} />
             </div>
           </>
         )}
 
         <div className="border-t border-charcoal-100 dark:border-charcoal-800 pt-3 space-y-3">
-          <p className="text-[11px] uppercase tracking-wide text-charcoal-400">
-            {form.type === 'company' ? 'Affiliated People' : 'Family'}
-          </p>
+          <SectionHeader title={form.type === 'company' ? 'Affiliated People' : 'Family'}
+            sectionKey={isSelf ? 'family' : null} hidden={hiddenSections.includes('family')} onToggle={toggleSection} />
           {form.type !== 'company' && (
             <div className="grid grid-cols-2 gap-3">
               <select className="input" value={form.marital_status} onChange={e => set('marital_status', e.target.value)}>
@@ -657,20 +807,22 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
         </div>
 
         <div className="border-t border-charcoal-100 dark:border-charcoal-800 pt-3 space-y-3">
-          <p className="text-[11px] uppercase tracking-wide text-charcoal-400">Values & Principles</p>
+          <SectionHeader title="Values & Principles" sectionKey={isSelf ? 'values_principles' : null}
+            hidden={hiddenSections.includes('values_principles')} onToggle={toggleSection} />
           <textarea className="input" rows={2} placeholder="Life mission" value={form.life_mission} onChange={e => set('life_mission', e.target.value)} />
-          <input className="input" placeholder="Core values (comma-separated)" value={form.core_values} onChange={e => set('core_values', e.target.value)} />
+          <TagInput value={coreValues} onChange={setCoreValues} placeholder="Add a core value…" />
           <textarea className="input" rows={2} placeholder="Key constraints" value={form.key_constraints} onChange={e => set('key_constraints', e.target.value)} />
         </div>
 
         {isSelf && (
           <>
             <div className="border-t border-charcoal-100 dark:border-charcoal-800 pt-3">
-              <p className="text-[11px] uppercase tracking-wide text-charcoal-400 mb-2">
-                {workspace === 'business' ? 'Business Priorities' : 'Life Priorities'}
-              </p>
-              <PrioritiesEditor order={activeOrder} workspace={workspace}
-                onChange={next => setPriorityOrder(p => ({ ...p, [workspace]: next }))} />
+              <SectionHeader title={workspace === 'business' ? 'Business Priorities' : 'Life Priorities'}
+                sectionKey="priorities" hidden={hiddenSections.includes('priorities')} onToggle={toggleSection} />
+              <div className="mt-2">
+                <PrioritiesEditor order={activeOrder} workspace={workspace}
+                  onChange={next => setPriorityOrder(p => ({ ...p, [workspace]: next }))} />
+              </div>
             </div>
 
             <div className="border-t border-charcoal-100 dark:border-charcoal-800 pt-3 space-y-3">
@@ -783,7 +935,19 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
         </div>
 
         {error && <p className="text-sm text-red-500">{error}</p>}
-        <div className="flex gap-2 pt-1 pb-4">
+        <div className="flex flex-wrap gap-2 pt-1 pb-4">
+          {canDelete && (
+            <button type="button" onClick={handleDelete} disabled={busy}
+              className="px-3 py-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+              Delete
+            </button>
+          )}
+          {editing && !isSelf && !isPoolContact && contact._access === 'edit' && (
+            <button type="button" onClick={handleConvert} disabled={busy} className="btn-ghost px-3"
+              title="Move into the shared pool so your household/team can see it too">
+              → {workspace === 'business' ? 'Team' : 'Household'}
+            </button>
+          )}
           <button type="button" onClick={onClose} className="btn-ghost flex-1">Cancel</button>
           <button type="submit" disabled={busy || hasInvalidEmail} className="btn-primary flex-1">{busy ? 'Saving…' : 'Save'}</button>
         </div>

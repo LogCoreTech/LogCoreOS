@@ -211,5 +211,37 @@ AGENT_CONFIG_SCHEMAS: dict[str, list[dict]] = {
 }
 
 
+# Every non-chromeless block gets these two (2026-08-18, owner: "a setting
+# in each block that can optionally show the card background... and
+# another to optionally show the header... default on for both") — the
+# backend has no BLOCK_REGISTRY.chromeless flag to check (chrome is a
+# frontend-only concept, see BlockRenderer.jsx), so the two chromeless
+# types are named directly here, mirroring blockRegistry.js's own
+# nav_button/status_button chromeless: true entries.
+_CHROMELESS_TYPES = {"nav_button", "status_button"}
+
+_CHROME_FIELDS = [
+    {"key": "show_card", "label": "Show card background", "kind": "boolean", "optional": True},
+    {
+        "key": "show_header",
+        "label": "Show header (when not editing)",
+        "kind": "boolean",
+        "optional": True,
+    },
+]
+
+
+def get_config_fields(block_type: str) -> list[dict]:
+    """The real config-field list for a block type — its own
+    AGENT_CONFIG_SCHEMAS entry (if any) plus the universal chrome fields,
+    except for a chromeless type, which has no card/header to toggle at
+    all. Mirrors blockRegistry.js's getConfigFields() exactly — use this
+    instead of reading AGENT_CONFIG_SCHEMAS[block_type] directly."""
+    base = AGENT_CONFIG_SCHEMAS.get(block_type, [])
+    if block_type in _CHROMELESS_TYPES:
+        return base
+    return base + _CHROME_FIELDS
+
+
 def is_configurable(block_type: str) -> bool:
-    return len(AGENT_CONFIG_SCHEMAS.get(block_type, [])) > 0
+    return block_type not in _CHROMELESS_TYPES

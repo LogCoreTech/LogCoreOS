@@ -57,7 +57,7 @@ def test_get_priority_order_real_user_reads_workspace_slice(user_dir):
 
     contact = contacts_service.create_self_contact(USER)
     contacts_service.update_contact(
-        USER,
+        contacts_service.POOL_HOUSEHOLD,
         "personal",
         contact["id"],
         {"priority_order": {"personal": ["Health", "Family"], "business": ["Revenue"]}},
@@ -71,6 +71,9 @@ def test_get_priority_order_real_user_missing_workspace_slice_defaults(user_dir)
 
     contact = contacts_service.create_self_contact(USER)
     contacts_service.update_contact(
-        USER, "personal", contact["id"], {"priority_order": {"personal": ["Health"]}}
+        contacts_service.POOL_HOUSEHOLD,
+        "personal",
+        contact["id"],
+        {"priority_order": {"personal": ["Health"]}},
     )
     assert svc.get_priority_order(USER, "business") == svc.DEFAULT_PRIORITY_ORDER

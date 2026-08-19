@@ -5,7 +5,7 @@ import { ALL_MODULES, catColor } from '../../lib/constants'
 import { deepLinkUrl } from '../../lib/deepLinks'
 import { assets as assetsApi, contacts as contactsApi, tasks as tasksApi } from '../../lib/api'
 import { AttachmentThumb } from '../assetDisplay'
-import { ACTION_MODULE_BY_KIND } from './actionKinds'
+import { ACTION_MODULE_BY_KIND, buttonColorClasses } from './actionKinds'
 
 function priorityDot(p) {
   return p === 'High' ? 'bg-red-500' : p === 'Medium' ? 'bg-yellow-500' : 'bg-charcoal-400'
@@ -39,7 +39,7 @@ function ActionButton({ action, recordKind, recordId, onDone }) {
       <Link
         to={deepLinkUrl(module, recordId)}
         onClick={e => e.stopPropagation()}
-        className="badge hover:bg-orange-100 dark:hover:bg-orange-900/30 shrink-0"
+        className={`badge shrink-0 ${buttonColorClasses(action.color)}`}
         title={action.label || 'Open'}
       >
         {action.label || '→ Open'}
@@ -66,7 +66,7 @@ function ActionButton({ action, recordKind, recordId, onDone }) {
       type="button"
       onClick={run}
       disabled={state === 'busy'}
-      className={`badge shrink-0 ${state === 'error' ? 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-300' : 'hover:bg-orange-100 dark:hover:bg-orange-900/30'}`}
+      className={`badge shrink-0 ${state === 'error' ? 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-300' : buttonColorClasses(action.color)}`}
       title={action.label || action.preset}
     >
       {state === 'busy' ? '…' : state === 'error' ? '⚠' : (action.label || action.preset)}
@@ -82,8 +82,15 @@ function ActionButton({ action, recordKind, recordId, onDone }) {
 // recordKind, which the block itself already knows.
 export function BlockActionButtons({ actions, recordKind, recordId, onDone }) {
   if (!actions?.length || !recordId || !recordKind) return null
+  // `ml-auto` makes this self-right-aligning in any flex ROW parent, whether
+  // or not that row also has justify-between/a flex-1 sibling doing the same
+  // job (harmless overlap where those already exist — with justify-between
+  // and this being the last child, the auto-margin just absorbs the same
+  // free space justify-between would have anyway). Was previously up to
+  // each call site to remember on its own, and 2 of 9 didn't (CollectionBlock's
+  // Kanban view, NoteEmbedBlock) — owner report, 2026-08-18.
   return (
-    <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+    <div className="flex items-center gap-1 shrink-0 ml-auto" onClick={e => e.stopPropagation()}>
       {actions.map((a, i) => (
         <ActionButton key={i} action={a} recordKind={recordKind} recordId={recordId} onDone={onDone} />
       ))}
@@ -92,8 +99,19 @@ export function BlockActionButtons({ actions, recordKind, recordId, onDone }) {
 }
 
 function TaskRow({ task, actions, onAction }) {
+  // `flex-1` here is load-bearing specifically for Top3TasksBlock below,
+  // where this whole row is itself a flex ITEM inside another flex row
+  // (the numbered `<li>`) — without it, a flex item defaults to sizing to
+  // its own content (flex: 0 1 auto), so a short title left the entire row
+  // — buttons included — bunched at the left instead of stretched to the
+  // block's real width; `ml-auto` on BlockActionButtons can only push to
+  // the edge of whatever box it's actually in, not rescue an unstretched
+  // one (owner, 2026-08-18: "regardless if the text reaches all the way
+  // there or not"). A no-op everywhere else TaskRow is used (a direct
+  // child of a plain `space-y-2` div, not a flex container, where
+  // `flex-1`'s flex-context-only properties have no effect).
   return (
-    <div className="flex items-center gap-2 min-w-0">
+    <div className="flex items-center gap-2 min-w-0 flex-1">
       <span className={`badge shrink-0 ${catColor(task.category)}`}>{task.category}</span>
       <span className="text-sm truncate flex-1">{task.title}</span>
       {task.streak_count > 0 && <span className="text-xs text-orange-500 shrink-0">🔥{task.streak_count}</span>}
@@ -486,7 +504,11 @@ export function NoteEmbedBlock({ data, actions, onAction }) {
   return (
     <div className="flex flex-col gap-2 h-full">
       <p className="text-sm whitespace-pre-wrap line-clamp-6 flex-1">{data.preview}</p>
-      <BlockActionButtons actions={actions} recordKind="note" recordId={data.path} onDone={onAction} />
+      {/* `ml-auto` on BlockActionButtons only affects the cross axis in a
+          flex-col parent — needs its own row to actually sit right. */}
+      <div className="flex justify-end">
+        <BlockActionButtons actions={actions} recordKind="note" recordId={data.path} onDone={onAction} />
+      </div>
     </div>
   )
 }

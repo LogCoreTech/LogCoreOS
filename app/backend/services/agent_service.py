@@ -314,7 +314,8 @@ _USER_TOOLS: list[dict] = [
             "occupation, gender, city, state, country, pronouns, wake_weekday, wake_weekend, bedtime, "
             "work_start, work_end, height_cm, height_unit, weight_kg, weight_unit, blood_type, diet, "
             "exercise, conditions, medications, marital_status, affiliated_contact_ids (linked family/"
-            "company contacts), pets, income_range, budget_style, life_mission, core_values, "
+            "company contacts), pets, income_range, budget_style, life_mission, "
+            "core_values (list of short strings, not a single comma-separated string), "
             "key_constraints, communication_style, tone, response_language, topics_to_emphasize, "
             "topics_to_avoid, notes, priority_order ({personal: [...], business: [...]}), "
             "career_history (resume-style list: [{title, company_id, industry, education, "
@@ -1229,13 +1230,25 @@ _USER_TOOLS: list[dict] = [
     },
     {
         "name": "update_dashboard_block",
-        "description": "Replace one existing block's config, and optionally its position and/or size. Requires contribute or edit access. Fails if the dashboard uses a template. Call get_dashboard first if you're moving or resizing — it returns every block's current {x, y, w, h} on the desktop grid so you can pick a spot that doesn't land on top of another block. Nothing here checks for overlaps automatically; read the current layout and reason about it yourself, the same way a person dragging a block on screen can see what's already there.",
+        "description": "Replace one existing block's config, and optionally its position and/or size — position, size, card background, and header visibility are all yours to set here, not just the block's own data fields. Requires contribute or edit access. Fails if the dashboard uses a template. Call get_dashboard first if you're moving or resizing — it returns every block's current {x, y, w, h} on the desktop grid so you can pick a spot that doesn't land on top of another block. Nothing here checks for overlaps automatically; read the current layout and reason about it yourself, the same way a person dragging a block on screen can see what's already there.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "dashboard_id": {"type": "string"},
                 "block_id": {"type": "string"},
-                "config": {"type": "object"},
+                "config": {
+                    "type": "object",
+                    "description": (
+                        "Config keys per get_dashboard_block_catalog's config_fields for this "
+                        "type — REPLACES the block's entire current config, so re-send every key "
+                        "you want kept, not just the ones you're changing (get_dashboard returns "
+                        "the block's current config to start from). Every non-chromeless block "
+                        "type accepts two extra booleans here regardless of its own data fields: "
+                        "`show_card` (the card/border background) and `show_header` (the icon+label "
+                        "header, when the dashboard isn't in edit mode) — both default to true when "
+                        "omitted, so only send one to turn it off."
+                    ),
+                },
                 "layout": {
                     "type": "object",
                     "description": (
@@ -1841,12 +1854,13 @@ def _execute_tool(
                 if not found:
                     return {"error": "Contact not found"}
                 store_user, contact, _access = found
+                ws = contacts_service.effective_workspace(store_user, contact, workspace)
                 return {
                     "contact": contact,
                     "interactions": contacts_service.list_interactions(
-                        store_user, workspace, contact["id"]
+                        store_user, ws, contact["id"]
                     ),
-                    "deals": contacts_service.list_deals(store_user, workspace, contact["id"]),
+                    "deals": contacts_service.list_deals(store_user, ws, contact["id"]),
                 }
 
             case "create_contact":
@@ -1882,7 +1896,7 @@ def _execute_tool(
                 store_user, contact, access = found
                 if access != "edit":
                     return {"error": "You don't have edit access to this contact"}
-                ws = "personal" if contact.get("self_of") else workspace
+                ws = contacts_service.effective_workspace(store_user, contact, workspace)
                 updated = contacts_service.update_contact(
                     store_user,
                     ws,
@@ -1904,11 +1918,12 @@ def _execute_tool(
                 )
                 if not found:
                     return {"error": "Contact not found"}
-                store_user, _c, access = found
+                store_user, contact, access = found
                 if access not in ("edit", "contribute"):
                     return {"error": "You don't have access to add to this contact"}
+                ws = contacts_service.effective_workspace(store_user, contact, workspace)
                 item = contacts_service.add_interaction(
-                    store_user, workspace, inputs["contact_id"], inputs, created_by=user["name"]
+                    store_user, ws, inputs["contact_id"], inputs, created_by=user["name"]
                 )
                 return {"logged": True, "interaction_id": item["id"]}
 
@@ -1924,11 +1939,12 @@ def _execute_tool(
                 )
                 if not found:
                     return {"error": "Contact not found"}
-                store_user, _c, access = found
+                store_user, contact, access = found
                 if access not in ("edit", "contribute"):
                     return {"error": "You don't have access to add to this contact"}
+                ws = contacts_service.effective_workspace(store_user, contact, workspace)
                 deal = contacts_service.add_deal(
-                    store_user, workspace, inputs["contact_id"], inputs, created_by=user["name"]
+                    store_user, ws, inputs["contact_id"], inputs, created_by=user["name"]
                 )
                 return {"created": True, "deal_id": deal["id"]}
 
@@ -1940,7 +1956,10 @@ def _execute_tool(
                 )
                 try:
                     return contacts_service.update_contact(
-                        user["name"], "personal", self_contact["id"], inputs.get("fields", {})
+                        contacts_service.POOL_HOUSEHOLD,
+                        "personal",
+                        self_contact["id"],
+                        inputs.get("fields", {}),
                     )
                 except ValueError as exc:
                     return {"error": str(exc)}
@@ -2756,13 +2775,12 @@ def _execute_tool(
                 )
 
             case "get_dashboard_block_catalog":
-                from services.dashboard_blocks.agent_schemas import AGENT_CONFIG_SCHEMAS
+                from services.dashboard_blocks.agent_schemas import get_config_fields
                 from services.dashboard_blocks.registry import catalog
 
                 is_admin = user.get("role") == "admin"
                 return [
-                    {**c, "config_fields": AGENT_CONFIG_SCHEMAS.get(c["type"], [])}
-                    for c in catalog(is_admin)
+                    {**c, "config_fields": get_config_fields(c["type"])} for c in catalog(is_admin)
                 ]
 
             case "create_dashboard":
@@ -2770,12 +2788,16 @@ def _execute_tool(
 
                 if inputs.get("pool") and user.get("role") != "admin":
                     return {"error": "Admin access required to create a pool dashboard"}
-                store_user = (
-                    dashboards_service.pool_for(workspace) if inputs.get("pool") else user["name"]
-                )
+                is_pool = bool(inputs.get("pool"))
+                store_user = dashboards_service.pool_for(workspace) if is_pool else user["name"]
+                # Pool pseudo-users always store at the "personal" ws_path
+                # base regardless of which workspace they're paired with —
+                # same fix as routers/dashboards.py's create endpoint
+                # (2026-08-18); this tool had the identical bug.
+                store_ws = "personal" if is_pool else workspace
                 d = dashboards_service.create_dashboard(
                     store_user,
-                    workspace,
+                    store_ws,
                     user["name"],
                     inputs["name"],
                     inputs.get("icon") or "📊",
