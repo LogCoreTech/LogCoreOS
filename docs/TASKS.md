@@ -10,8 +10,6 @@ Keep this up to date. When a task is completed, **remove it** rather than checki
 
 - [ ] **Owner: set a real `VAPID_SUBJECT` in `docker/.env` and confirm Web Push reaches a device** (2026-08-15) — confirmed still outstanding: this instance's `docker/.env` has no `VAPID_SUBJECT` line at all, so it's still running the placeholder `logcore@localhost` default. `POST /push/test` now returns a real, distinguishable `502` ("a subscription exists but the push service rejected or failed the send") instead of an opaque error — that 502 is expected until this is set, not a new bug. Add `VAPID_SUBJECT=you@yourdomain.com` (a real, reachable address — some push services, Apple's included, reject an obviously-fake `sub` claim) to `docker/.env`, recreate the app container (`docker compose up -d app`), then Settings → Notifications → Send Test. If it arrives, "remove ntfy entirely" becomes a real, separate decision to make — not blind guesswork.
 - [ ] **Land lead search & qualify workflow** — n8n pulling land listings (multiple sources with a fallback from day one) and AI-qualifying against configurable criteria; stub file in `automations_stubs/`; posts to the Automation Inbox (`POST /automations/inbox/items`, `GET /inbox/seen` to skip known listings)
-- [ ] **Deploy first managed-hosting beta instance** — server provisioned + SSH-verified 2026-07-17 (tenant + server details in the private Business repo, never here). Remaining: confirm Hetzner backups toggle + firewall (22 only) → Cloudflare Tunnel hostname + token → install Docker + clone repo + `launch.sh` → dedicated Anthropic API key (per-tenant cost attribution) + spend alert → admin-created tenant account (registration stays closed; no demo reset/banner) → cookie_secure + trust_proxy_headers via Admin → Hosting → verify backup.sh cron; track monthly all-in cost; no Infisical (plain docker/.env — revisit at 3+ instances)
-- [ ] **Per-instance cost visibility for managed hosting** — dedicated API key per instance (Anthropic console breakdown) + monthly all-in cost log in the Business repo. Naturally follows the beta deploy above rather than preceding it
 - [ ] **Fix `test_finance_transfers.py::test_transfer_leg_never_false_matches_a_recurring_bill`** — found failing 2026-08-18 during an unrelated pass (Assets/Contacts/Dashboards, nothing Finance-related touched). Hardcodes `next_due: "2026-08-14"` and checks a 30-day `planning.upcoming_recurring()` window; now that real wall-clock time has passed that date, the bill likely falls out of the "upcoming" bucket the test expects — needs either a relative date (e.g. `today + N days`) or a frozen clock, not a fix to the underlying feature (unconfirmed whether the feature itself is actually broken or just the test's fixed date).
 
 ---
@@ -28,23 +26,14 @@ From the 2026-07-19 audit (full detail in `docs/Security-Audit-2026-07-19.md`) p
 
 ---
 
-## Launch surface (do in order)
+## Launch surface (dev work only — business/ops/marketing items tracked in the private Business repo's `TASKS.md`, not here)
 
-- [ ] **Privacy policy page on logcoretech.com** — HIGH PRIORITY: demo VPS is deployed and waiting on this; blocker before demo goes public (GDPR/CCPA)
-- [ ] **Terms of service page on logcoretech.com** — HIGH PRIORITY with privacy policy; needed for demo and managed hosting
 - [ ] **AI cost protection for demo** — the per-user daily message cap is done (Admin → AI Usage & Limits, mode: hard + period: daily already supports this); remaining work is just the Haiku model switch
 - [ ] **Daily demo reset script** — cron wipe of non-admin Brain folders + auth entries nightly
 - [ ] **Demo banner in UI** — "this is a demo, data resets nightly"
-- [ ] **UptimeRobot monitoring on demo URL** — free tier, set up immediately after deploy
-- [ ] **Off-site backups for demo VPS** — Hetzner snapshots or object storage; on-box `backup.sh` alone is not a backup
 - [ ] **Screenshots in README** — 3+ images + a 30-second GIF of the AI using its memory
 - [ ] **CLA (or DCO + relicensing grant) before the first outside PR merges** — owner is currently sole copyright holder on an AGPLv3 codebase, meaning any future relicensing (enterprise tier, white-label, dual-license) is entirely the owner's call. That freedom goes away the moment an external contributor's code merges without an agreement granting relicensing rights — retrofitting it later means tracking down or rewriting every past contributor's code. Cheap now (a one-page CLA/DCO clause), expensive later. Bundle into the CONTRIBUTING.md task below rather than treating as separate work — sequence before, not after, "good first issue" labeling opens the repo to outside PRs
 - [ ] **CONTRIBUTING.md** — how to run locally and submit a PR
-- [ ] **Website: copy refresh + Try the Demo CTA** — CTA → demo.logcoretech.com; add comparison table (LogCoreOS vs Khoj / Notion AI / Open WebUI)
-- [ ] **OG/social preview image for logcoretech.com** — `<meta og:image>` with branded screenshot
-- [ ] **Waitlist form** — Formspree, capture interest before self-serve signup exists
-- [ ] **Cloudflare Analytics enabled** — one toggle, free
-- [ ] **LinkedIn company page** — BLOCKED: requires a registered company (LLC); revisit after LLC formation (tracked in private Business repo)
 
 ---
 
