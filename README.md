@@ -112,6 +112,14 @@ Push notifications are handled via [ntfy](https://ntfy.sh) (self-hosted, include
 
 ---
 
+## Security
+
+The AI agent defaults to read-freely-write-never-without-approval: only an allowlisted set of read-only tools run without asking, every write pauses for your explicit approval first, and every data-access path is scoped to your own account — verified directly in code, not just documented, in the [full audit report](docs/Security-Audit-2026-07-19.md).
+
+Found a vulnerability? Please don't open a public issue — see [SECURITY.md](SECURITY.md) for the disclosure process. A plain-language breakdown (what the AI can access, the threat model, what shipped in the v0.4.0 hardening pass) is also on [logcoretech.com/security](https://logcoretech.com/security/).
+
+---
+
 ## License
 
 AGPL v3 — free to self-host and modify. Any commercial service built on this code must also be published as open source.
