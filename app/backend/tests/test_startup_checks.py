@@ -55,12 +55,27 @@ def _safe_secret_key(monkeypatch):
     monkeypatch.setattr(settings, "allow_insecure_secret_key", False)
 
 
-def test_startup_exits_on_wildcard_cors(brain, monkeypatch):
+def test_startup_falls_back_to_localhost_on_wildcard_cors_with_no_domain(brain, monkeypatch):
+    """2026-08-22: no longer refuses to start — that could brick a fresh
+    instance before its owner can even reach Admin -> Hosting to configure a
+    domain. Falls back to a safe, narrow default instead."""
     monkeypatch.setattr(settings, "allowed_origins", "*")
     monkeypatch.setattr(settings, "allow_insecure_cors", False)
-    with pytest.raises(SystemExit) as exc:
-        main._startup_checks()
-    assert exc.value.code == 1
+    monkeypatch.setattr(main, "effective_domain_url", lambda: "")
+    main._startup_checks()  # must not raise
+    assert settings.allowed_origins == "http://localhost:8000,http://127.0.0.1:8000"
+
+
+def test_startup_trusts_a_configured_hosting_domain_over_wildcard_cors(brain, monkeypatch):
+    """DynamicCORSMiddleware._is_allowed() ignores ALLOWED_ORIGINS entirely once
+    a real domain is on file — an instance with one configured is already safe
+    in practice, so this must not exit, and must not mutate the env var either
+    (nothing here needs fixing)."""
+    monkeypatch.setattr(settings, "allowed_origins", "*")
+    monkeypatch.setattr(settings, "allow_insecure_cors", False)
+    monkeypatch.setattr(main, "effective_domain_url", lambda: "https://app.logcoretech.com")
+    main._startup_checks()  # must not raise
+    assert settings.allowed_origins == "*"
 
 
 def test_startup_allows_wildcard_cors_with_escape_hatch(brain, monkeypatch):
