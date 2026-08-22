@@ -71,12 +71,13 @@ def check_latest_version() -> dict:
             "error": None,
         }
     except Exception as exc:
+        logger.warning("GitHub release check failed: %s", exc)
         result = {
             "latest_version": None,
             "release_url": None,
             "release_name": None,
             "cached_at": time.time(),
-            "error": str(exc),
+            "error": "Could not check for updates. Check server logs for details.",
         }
 
     try:

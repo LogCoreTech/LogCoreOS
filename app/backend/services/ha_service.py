@@ -52,7 +52,12 @@ def test_connection() -> dict:
             ok = r.status_code == 200 and "message" in r.json()
             return {"ok": ok, "url": cfg["url"]}
     except Exception as exc:
-        return {"ok": False, "url": cfg.get("url", ""), "error": str(exc)}
+        logger.warning("Home Assistant connection test failed: %s", exc)
+        return {
+            "ok": False,
+            "url": cfg.get("url", ""),
+            "error": "Connection test failed. Check the URL and token.",
+        }
 
 
 def get_states(domain: str | None = None) -> list:

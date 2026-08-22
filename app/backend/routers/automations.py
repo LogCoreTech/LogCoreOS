@@ -136,7 +136,11 @@ def sync_secrets_to_n8n(
         n8n_service.restart_n8n()
         return {"ok": True, "message": f"Synced {len(secrets)} secret(s) and restarted n8n."}
     except Exception as exc:
-        return {"ok": True, "message": f"Secrets written to n8n.env but restart failed: {exc}"}
+        logger.warning("n8n restart after secrets sync failed: %s", exc)
+        return {
+            "ok": True,
+            "message": "Secrets written to n8n.env but the n8n restart failed. Check server logs.",
+        }
 
 
 # ── Workflow list ──────────────────────────────────────────────────────────────

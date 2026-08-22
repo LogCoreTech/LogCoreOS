@@ -137,7 +137,12 @@ def test_connection() -> dict:
             ok = r.status_code < 400
             return {"ok": ok, "url": cfg["url"]}
     except Exception as exc:
-        return {"ok": False, "url": cfg["url"], "error": str(exc)}
+        logger.warning("n8n connection test failed: %s", exc)
+        return {
+            "ok": False,
+            "url": cfg["url"],
+            "error": "Connection test failed. Check the URL and API key.",
+        }
 
 
 def import_workflow(
@@ -383,7 +388,7 @@ def sync_business_workflows() -> dict:
             wf_json, raw_text = _fetch_wf(base_url, token, key)
         except Exception as exc:
             logger.warning("Failed to fetch workflow '%s': %s", key, exc)
-            result["errors"].append(f"fetch {key}: {exc}")
+            result["errors"].append(f"fetch {key}: request to the workflow source failed")
             continue
 
         new_hash = _content_hash(raw_text)
@@ -398,7 +403,7 @@ def sync_business_workflows() -> dict:
                     c.put(f"/api/v1/workflows/{rec['n8n_id']}", json=wf_json).raise_for_status()
             except Exception as exc:
                 logger.warning("n8n update failed for '%s': %s", key, exc)
-                result["errors"].append(f"update {key}: {exc}")
+                result["errors"].append(f"update {key}: request to n8n failed")
                 continue
             for r in records:
                 if r.get("sync_key") == key:
@@ -415,7 +420,7 @@ def sync_business_workflows() -> dict:
                     n8n_data = resp.json()
             except Exception as exc:
                 logger.warning("n8n import failed for '%s': %s", key, exc)
-                result["errors"].append(f"import {key}: {exc}")
+                result["errors"].append(f"import {key}: request to n8n failed")
                 continue
             new_record: dict = {
                 "id": str(uuid4()),
