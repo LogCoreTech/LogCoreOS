@@ -175,10 +175,14 @@ def require_pool_edit(pool: str):
 
 @router.get("/status")
 def registration_status(_rl: None = Depends(_status_limit)):
-    """Public endpoint — lets the login page know if self-registration is available."""
+    """Public endpoint — lets the login page (and the app shell) know if
+    self-registration is open and whether this is a public demo instance."""
     runtime = auth_service.get_system_settings()
     allow = runtime.get("allow_open_registration", settings.allow_open_registration)
-    return {"registration_open": auth_service.user_count() == 0 or allow}
+    return {
+        "registration_open": auth_service.user_count() == 0 or allow,
+        "demo_mode": settings.demo_mode,
+    }
 
 
 @router.post("/register")

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { auth as authApi } from './api'
 import { applyAccentColor, applyDarkMode, applyBackground, applyDensity, applyCornerStyle, getSystemDarkPreference } from './theme'
+import DemoBanner from '../components/DemoBanner'
 
 const AuthContext = createContext(null)
 
@@ -14,6 +15,14 @@ export function AuthProvider({ children }) {
     try { return JSON.parse(localStorage.getItem('lc_user')) } catch { return null }
   })
   const [sessionChecked, setSessionChecked] = useState(false)
+  const [demoMode, setDemoMode] = useState(false)
+
+  // Instance-wide, not user-specific — fetched once regardless of login
+  // state (the public /auth/status endpoint), so the banner shows on the
+  // login screen too, not just once inside the app.
+  useEffect(() => {
+    authApi.status().then(s => setDemoMode(!!s.demo_mode)).catch(() => {})
+  }, [])
 
   async function refreshUser() {
     try {
@@ -139,7 +148,8 @@ export function AuthProvider({ children }) {
   )
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, updateUserField, refreshUser }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUserField, refreshUser, demoMode }}>
+      {demoMode && <DemoBanner />}
       {children}
     </AuthContext.Provider>
   )

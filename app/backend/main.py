@@ -52,6 +52,7 @@ from routers import (
 )
 from scheduler import start as start_scheduler
 from services.hosting_service import effective_domain_url
+from services.update_service import get_installed_version
 
 logger = logging.getLogger("logcore")
 
@@ -194,7 +195,7 @@ def _startup_checks() -> None:
         )
 
 
-app = FastAPI(title="LogCore OS", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="LogCore OS", version=get_installed_version(), lifespan=lifespan)
 
 
 @app.exception_handler(Exception)

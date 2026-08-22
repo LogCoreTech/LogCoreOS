@@ -20,12 +20,14 @@ Omitting the header or sending an invalid value defaults to `personal`. The fron
 ## Auth
 
 ### `GET /auth/status`
-Public. Returns whether self-registration is open.
+Public. Returns whether self-registration is open and whether this instance is a public demo.
 
 **Response**
 ```json
-{ "registration_open": true }
+{ "registration_open": true, "demo_mode": false }
 ```
+
+`demo_mode` mirrors the `DEMO_MODE` env var — the frontend shows a persistent "this is a demo" banner when true. Never true on a personal or managed-hosting instance.
 
 ### `POST /auth/register`
 Create an account. Requires admin token when registration is closed (except for the very first user).

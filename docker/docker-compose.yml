@@ -27,6 +27,7 @@ services:
       MORNING_DIGEST_HOUR: ${MORNING_DIGEST_HOUR:-6}
       OVERDUE_CHECK_HOUR: ${OVERDUE_CHECK_HOUR:-19}
       ALLOW_OPEN_REGISTRATION: ${ALLOW_OPEN_REGISTRATION:-false}
+      DEMO_MODE: ${DEMO_MODE:-false}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
       # Managed hosting only — leave all three blank for self-hosted
