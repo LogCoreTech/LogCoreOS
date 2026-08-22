@@ -8,6 +8,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.2] — 2026-08-22
+
+### Fixed
+
+- **The AI Chat page could render with the whole app shell shifted upward and a dead gap at the bottom** — most noticeable with several modules enabled and a shorter browser window. Chat's auto-scroll-to-latest-message was scrolling more than just the message list; now scoped to only the container that actually needs it.
+- **The sidebar's module list can now scroll on its own** when there are enough enabled modules to exceed the window height, so Settings/Help/Sign out stay reachable instead of potentially running off the bottom with no way to get to them.
+- **Reopening a saved AI chat conversation from the business workspace no longer fails.** It was always looking in the personal workspace's folder regardless of which one the conversation was actually in. While fixing this, also closed a related gap where a personal-workspace request could read or write a business-workspace file directly by path.
+
 ## [0.6.1] — 2026-08-22
 
 ### Fixed

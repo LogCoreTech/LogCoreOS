@@ -6,16 +6,27 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from routers.auth import get_current_user
+from routers.auth import get_current_user, get_workspace
 from services.rate_limiter import rate_limit
 
 _brain_write_limit = rate_limit(20, 60)  # 20 writes per minute
-from services.file_service import user_path, write_markdown
+from services.file_service import ws_path, write_markdown
 
 router = APIRouter()
 
 _MAX_CONTENT_BYTES = 512_000  # 500 KB — more than enough for any markdown file
-_ALLOWED_DIRS_SKIP = {"Tasks"}  # managed by tasks module, not editable here
+_ALLOWED_DIRS_SKIP = {
+    "Tasks",  # managed by tasks module, not editable here
+    # ws_path()'s "business" base is a literal subfolder of the "personal" base
+    # (brain/USERS/{name}/Business/), not a sibling — so a plain recursive walk
+    # or path resolution against the personal base would otherwise reach straight
+    # into the other workspace's files. Reusing the same skip mechanism blocks
+    # both the listing leak and a path-traversal read/write across the boundary
+    # (a personal-workspace request for "Business/<file>.md" would resolve to
+    # a real file that DOES exist without this, since it's genuinely nested
+    # inside the personal base on disk).
+    "Business",
+}
 
 
 def _list_md(base: Path, rel: str = "") -> list[dict]:
@@ -35,8 +46,8 @@ def _list_md(base: Path, rel: str = "") -> list[dict]:
     return files
 
 
-def _resolve(name: str, rel_path: str) -> Path:
-    """Resolve rel_path inside user's brain folder; raise on unsafe input."""
+def _resolve(name: str, workspace: str, rel_path: str) -> Path:
+    """Resolve rel_path inside user's workspace-scoped brain folder; raise on unsafe input."""
     # Reject anything that isn't a safe relative .md path
     parts = rel_path.split("/")
     if any(p in ("", ".", "..") for p in parts):
@@ -48,8 +59,8 @@ def _resolve(name: str, rel_path: str) -> Path:
     if any(p in _ALLOWED_DIRS_SKIP for p in parts[:-1]):
         raise HTTPException(status_code=403, detail="That folder is managed by another module")
 
-    base = user_path(name).resolve()
-    target = (user_path(name) / rel_path).resolve()
+    base = ws_path(name, workspace).resolve()
+    target = (ws_path(name, workspace) / rel_path).resolve()
     try:
         target.relative_to(base)
     except ValueError:
@@ -58,16 +69,23 @@ def _resolve(name: str, rel_path: str) -> Path:
 
 
 @router.get("/files")
-def list_files(current_user: dict = Depends(get_current_user)):
-    base = user_path(current_user["name"])
+def list_files(
+    current_user: dict = Depends(get_current_user),
+    workspace: str = Depends(get_workspace),
+):
+    base = ws_path(current_user["name"], workspace)
     if not base.exists():
         return []
     return _list_md(base)
 
 
 @router.get("/files/{file_path:path}")
-def get_file(file_path: str, current_user: dict = Depends(get_current_user)):
-    target = _resolve(current_user["name"], file_path)
+def get_file(
+    file_path: str,
+    current_user: dict = Depends(get_current_user),
+    workspace: str = Depends(get_workspace),
+):
+    target = _resolve(current_user["name"], workspace, file_path)
     if not target.exists():
         raise HTTPException(status_code=404, detail="File not found")
     return {"path": file_path, "content": target.read_text()}
@@ -82,9 +100,10 @@ def save_file(
     file_path: str,
     req: SaveRequest,
     current_user: dict = Depends(get_current_user),
+    workspace: str = Depends(get_workspace),
     _rl: None = Depends(_brain_write_limit),
 ):
-    target = _resolve(current_user["name"], file_path)
+    target = _resolve(current_user["name"], workspace, file_path)
     if not target.exists():
         raise HTTPException(status_code=404, detail="File not found")
     write_markdown(target, req.content)

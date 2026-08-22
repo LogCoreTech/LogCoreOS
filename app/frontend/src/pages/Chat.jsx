@@ -541,7 +541,7 @@ export default function Chat() {
   }
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
   }, [messages])
 
   // Auto-grow the composer textarea with content, capped so it can't swallow
@@ -913,7 +913,7 @@ export default function Chat() {
         setLoadingFor(session.chat_id, true)
         setRestoredRunningIds(prev => new Set(prev).add(session.chat_id))
       }
-      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' }), 50)
     } catch {
       alert('Failed to load that chat.')
     } finally {

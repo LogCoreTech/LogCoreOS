@@ -366,7 +366,7 @@ export default function Layout() {
           </div>
         )}
 
-        <nav className="flex-1 p-2 space-y-0.5">
+        <nav className="flex-1 min-h-0 overflow-y-auto p-2 space-y-0.5">
           {visibleModules.map(({ id, to, icon, label }) => (
             <NavLink
               key={id}

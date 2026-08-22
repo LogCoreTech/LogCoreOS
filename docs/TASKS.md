@@ -276,7 +276,6 @@ Generated across a systematic search→generate→compare→document pass over t
 - Near-zero-downtime updates for managed tenants (blue-green/rolling), once downtime is actually measured against a promise.
 - Per-module selective export (e.g. just Contacts or Finance) distinct from the full Brain zip.
 - Report bundle size on every PR to catch silent bloat.
-- Fix the stale "admin-only writes" description of `brain.py` in `docs/AGENTS.md`/`docs/MAP.md` — in practice it's correctly self-service (any user edits their own `.md` files only), the docs are just outdated.
 
 ### Finance module
 

@@ -30,7 +30,7 @@ LogCoreOS/
 │   │   │   ├── auth.py           → login, register, logout, /me, admin user management, AI/search/hosting settings, infisical + feature flags
 │   │   │   ├── tasks.py          → task CRUD, top3, scored, history
 │   │   │   ├── chat.py           → AI chat with plan/auto/research modes, Brain context injection, tool use, chat save/load; conversations are workspace-scoped sessions keyed by a required `chat_id` — `POST /chat` marks the session "running" before calling `run_agent`, resets to "idle" on an unhandled exception, and calls `notify_user()` on completion; `GET /chat/sessions` (list, for the Chats drawer) + `POST /chat/sessions/{chat_id}/read` (clear unread) read/write agent_service.py's session index
-│   │   │   ├── brain.py          → Brain file read/write (path-validated, admin-only writes)
+│   │   │   ├── brain.py          → Brain file read/write, workspace-scoped via X-Workspace (fixed 2026-08-22 — previously always resolved personal regardless of header); path-validated, self-service (any user edits their own `.md` files only — the older "admin-only writes" description here was stale); `Business/` rejected as a path segment since it's the business workspace's own nested base folder on disk, not an ordinary personal subfolder
 │   │   │   ├── notes.py          → notes module (files + folders CRUD, move)
 │   │   │   ├── journal.py        → journal module (daily entries by date)
 │   │   │   ├── calendar.py       → calendar module (tasks view + events CRUD)
