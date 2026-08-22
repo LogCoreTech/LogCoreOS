@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.3] — 2026-08-22
+
+### Fixed
+
+- **AI Chat on mobile: the composer could sit noticeably higher than the bottom of the screen, with empty space below it.** The page was reserving clearance for the mobile navigation bar twice over — once as part of the shared page layout, and again inside the chat page itself. Removed the duplicate; the composer now sits where it should.
+
 ## [0.6.2] — 2026-08-22
 
 ### Fixed

@@ -480,6 +480,13 @@
   },
   "whats_new": [
     {
+      "version": "0.6.3",
+      "date": "2026-08-22",
+      "highlights": [
+        "Fixed a remaining AI Chat layout issue on mobile — the message box could sit higher than it should with empty space below it. It now sits where it should."
+      ]
+    },
+    {
       "version": "0.6.2",
       "date": "2026-08-22",
       "highlights": [

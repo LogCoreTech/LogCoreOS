@@ -1237,9 +1237,6 @@ export default function Chat() {
           </form>
         </div>
       </div>
-
-      {/* Clears the fixed mobile footer nav so the input row is never hidden behind it */}
-      <div className="h-20 md:hidden shrink-0" aria-hidden="true" />
     </div>
 
       {/* Saved chats drawer — kept as a sibling of the page container above,
