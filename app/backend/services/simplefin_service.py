@@ -33,6 +33,16 @@ _ERROR_NOTIFY_EVERY = timedelta(hours=24)
 
 VALID_TARGET_STORES = {"self", "household", "team"}
 
+# SimpleFIN setup tokens decode to a claim URL the server itself POSTs to.
+# Without a host allowlist, anyone who can submit a setup token (a bank
+# connection is member-requested, admin-claimed — see module docstring) could
+# hand the server an arbitrary https:// URL and make it issue a request to an
+# internal-only service (n8n, the Docker socket-proxy, etc). Restricted to
+# SimpleFIN's own domain, matching what this codebase's own tests/docs already
+# assume (bridge.simplefin.org).
+_ALLOWED_CLAIM_HOST_SUFFIX = ".simplefin.org"
+_ALLOWED_CLAIM_HOST_EXACT = "simplefin.org"
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -116,8 +126,12 @@ def decode_setup_token(setup_token: str) -> str:
         claim_url = base64.b64decode(setup_token.strip(), validate=True).decode("utf-8").strip()
     except Exception:
         raise ValueError("That doesn't look like a SimpleFIN setup token.")
-    if not claim_url.startswith("https://"):
+    parts = urlsplit(claim_url)
+    if parts.scheme != "https":
         raise ValueError("Setup token must decode to an https claim URL.")
+    host = (parts.hostname or "").lower()
+    if host != _ALLOWED_CLAIM_HOST_EXACT and not host.endswith(_ALLOWED_CLAIM_HOST_SUFFIX):
+        raise ValueError("Setup token must decode to a simplefin.org claim URL.")
     return claim_url
 
 
@@ -128,7 +142,8 @@ def claim_and_save(user_name: str, setup_token: str) -> dict:
         resp = httpx.post(claim_url, timeout=_TIMEOUT)
         resp.raise_for_status()
     except httpx.HTTPError as exc:
-        raise ValueError(f"SimpleFIN claim failed: {exc}")
+        logger.warning("SimpleFIN claim failed for %s: %s", user_name, exc)
+        raise ValueError("SimpleFIN claim failed. Check the setup token and try again.")
     access_url = resp.text.strip()
     if not access_url.startswith("http"):
         raise ValueError("SimpleFIN did not return a valid access URL.")
@@ -297,8 +312,12 @@ def sync_user(user_name: str, notify_on_error: bool = True) -> dict:
     try:
         bank_accounts = fetch_accounts(user_name, start_ts=start_ts)
     except ValueError as exc:
+        logger.warning("SimpleFIN sync failed for %s: %s", user_name, exc)
+        # The full detail is still recorded on the connection's own last_error
+        # (surfaced via the admin-only status/reveal endpoints for
+        # troubleshooting) — only the direct HTTP response is genericized.
         _record_error(user_name, conn, str(exc), notify_on_error)
-        return {"error": str(exc)}
+        return {"error": "SimpleFIN sync failed. Check the connection status for details."}
 
     by_id = {a.get("id"): a for a in bank_accounts}
     created = 0

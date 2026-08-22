@@ -98,6 +98,27 @@ def test_decode_setup_token():
         sf.decode_setup_token(base64.b64encode(b"http://insecure/claim").decode())
 
 
+def test_decode_setup_token_allows_simplefin_org_subdomains():
+    url = "https://beta-bridge.simplefin.org/claim/abc123"
+    token = base64.b64encode(url.encode()).decode()
+    assert sf.decode_setup_token(token) == url
+
+
+def test_decode_setup_token_rejects_non_simplefin_hosts():
+    """SSRF guard: a claim URL must resolve to SimpleFIN's own domain, not an
+    arbitrary https:// host (e.g. an internal service like n8n/socket-proxy,
+    or attacker-controlled infrastructure)."""
+    for evil in [
+        "https://n8n:5678/api/v1/workflows",
+        "https://evil.example.com/claim/x",
+        "https://simplefin.org.evil.com/claim/x",
+        "https://notsimplefin.org/claim/x",
+    ]:
+        token = base64.b64encode(evil.encode()).decode()
+        with pytest.raises(ValueError):
+            sf.decode_setup_token(token)
+
+
 def test_claim_and_save(brain, monkeypatch):
     url = "https://bridge.simplefin.org/claim/abc123"
     token = base64.b64encode(url.encode()).decode()
