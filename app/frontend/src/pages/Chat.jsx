@@ -56,12 +56,23 @@ function renderInline(text, keyPrefix) {
     if (pattern.type === 'code') {
       out.push(<code key={k} className="px-1 py-0.5 rounded bg-charcoal-100 dark:bg-charcoal-800 text-[0.85em] font-mono">{match[1]}</code>)
     } else if (pattern.type === 'link') {
-      const external = /^https?:\/\//i.test(match[2])
-      out.push(
-        <a key={k} href={match[2]} className="text-orange-500 hover:underline" {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
-          {match[1]}
-        </a>
-      )
+      const url = match[2]
+      // Only render as a real link when the scheme is safe (http/https/mailto)
+      // or it's an in-app relative path (e.g. /help#finance). Anything else —
+      // javascript:, data:, etc — renders as plain text instead, since this
+      // text can echo back web-search results or Brain content the AI read,
+      // not just the model's own trusted output.
+      const safe = /^(https?:|mailto:)/i.test(url) || url.startsWith('/')
+      if (!safe) {
+        out.push(match[1])
+      } else {
+        const external = /^https?:\/\//i.test(url)
+        out.push(
+          <a key={k} href={url} className="text-orange-500 hover:underline" {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
+            {match[1]}
+          </a>
+        )
+      }
     } else if (pattern.type === 'bold') {
       out.push(<strong key={k} className="font-semibold">{match[1]}</strong>)
     } else {
