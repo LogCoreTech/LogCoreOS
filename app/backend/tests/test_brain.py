@@ -17,7 +17,7 @@ from fastapi import HTTPException
 
 from routers import brain
 from services import auth_service
-from services.file_service import ws_path, write_markdown
+from services.file_service import write_markdown, ws_path
 
 
 @pytest.fixture()

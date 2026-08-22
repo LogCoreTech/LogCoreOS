@@ -10,7 +10,7 @@ from routers.auth import get_current_user, get_workspace
 from services.rate_limiter import rate_limit
 
 _brain_write_limit = rate_limit(20, 60)  # 20 writes per minute
-from services.file_service import ws_path, write_markdown
+from services.file_service import write_markdown, ws_path
 
 router = APIRouter()
 
