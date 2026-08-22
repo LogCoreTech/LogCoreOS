@@ -113,7 +113,30 @@ def _warm_share_index() -> None:
 
 def _startup_checks() -> None:
     if settings.allowed_origins.strip() == "*":
-        if settings.allow_insecure_cors:
+        # DynamicCORSMiddleware._is_allowed() ignores this env var entirely
+        # once a real domain is on file in brain/hosting.json (Admin ->
+        # Hosting) — it compares only against that domain in that branch. So
+        # an instance with a real domain configured is already safe in
+        # practice regardless of this static env var, and refusing to start
+        # here would be checking a value the app doesn't even use at request
+        # time. This also permanently closes a real deadlock discovered
+        # 2026-08-22: two already-deployed instances silently failed every
+        # auto-update for over a week because this check (added 2026-08-14)
+        # only shipped in a later commit than the one they were stuck on —
+        # the shell-script self-heal for exactly this situation existed, but
+        # lived in the same stuck commit's future, unreachable by definition.
+        # A check that consults the live, already-working config source
+        # instead of a static pre-boot env var can't strand itself this way.
+        configured_domain = effective_domain_url()
+        if configured_domain:
+            logger.warning(
+                "ALLOWED_ORIGINS is '*', but a real domain (%s) is already "
+                "configured via Admin -> Hosting, so CORS is already scoped "
+                "to that domain in practice. Set ALLOWED_ORIGINS to match in "
+                "docker/.env to silence this warning.",
+                configured_domain,
+            )
+        elif settings.allow_insecure_cors:
             logger.critical(
                 "\n"
                 "╔══════════════════════════════════════════════════════╗\n"
@@ -125,16 +148,26 @@ def _startup_checks() -> None:
                 "╚══════════════════════════════════════════════════════╝"
             )
         else:
-            # Fail closed: every real deployment binds non-loopback (the Docker
-            # image always runs with --host 0.0.0.0), so a wildcard origin here
-            # is never just a theoretical risk. Mirrors the SECRET_KEY check
-            # below — refuse to start rather than run silently insecure.
-            logger.critical(
-                "ALLOWED_ORIGINS is '*' (allow all origins) — refusing to start. "
-                "Set ALLOWED_ORIGINS to your domain in docker/.env, or set "
-                "ALLOW_INSECURE_CORS=true for local development only."
+            # No real domain on file yet and no explicit insecure opt-in.
+            # Refusing to start here (the original 2026-08-14 behavior) has
+            # a real cost: it can brick a fresh instance before the owner
+            # can even reach Admin -> Hosting to configure a domain in the
+            # first place. Falling back to a narrow, loopback-only default
+            # instead is strictly safer than wildcard and doesn't block
+            # normal use — same-origin requests (the standard way this app
+            # is accessed: frontend and API served from one origin, whether
+            # that's localhost, a LAN IP, or a real domain/tunnel) are never
+            # subject to CORS at all, so this only ever blocks genuine
+            # cross-origin requests, exactly the thing worth blocking by
+            # default until a real domain is explicitly configured.
+            settings.allowed_origins = "http://localhost:8000,http://127.0.0.1:8000"
+            logger.warning(
+                "ALLOWED_ORIGINS is '*' and no Admin -> Hosting domain is "
+                "configured yet — falling back to localhost-only CORS "
+                "instead of refusing to start. Configure Admin -> Hosting "
+                "with your real domain, or set ALLOWED_ORIGINS in "
+                "docker/.env, to remove this warning."
             )
-            sys.exit(1)
 
     if not settings.cookie_secure:
         logger.warning(

@@ -483,7 +483,7 @@
       "version": "0.6.1",
       "date": "2026-08-22",
       "highlights": [
-        "A few small polish items this release: clearer Privacy Policy and Terms of Service links during sign-up, a couple of reliability fixes behind the scenes, and the version shown in the API docs now always matches what's actually installed."
+        "If an update ever silently stops applying on an instance that already has a domain configured under Admin → Hosting, that's now fixed for good — the startup check that could get an already-working instance permanently stuck now trusts your configured domain instead. A few other small polish items too: clearer Privacy Policy and Terms of Service links during sign-up, and the version shown in the API docs now always matches what's actually installed."
       ]
     },
     {
