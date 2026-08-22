@@ -568,11 +568,17 @@ Get a specific agent run by ID.
 
 ## Brain
 
+All three endpoints below respect the `X-Workspace` header (2026-08-22 fix — previously
+always resolved against the personal folder regardless of the header, so a business-workspace
+file, e.g. a chat archive, silently 404'd). `Business/` is rejected as an explicit path segment
+on every request regardless of workspace — it's ws_path()'s own business-workspace base folder,
+physically nested inside the personal one on disk, not an ordinary personal subfolder.
+
 ### `GET /brain/files`
-List all files in the user's brain folder.
+List all `.md` files in the user's brain folder for the active workspace.
 
 ### `GET /brain/files/{path}`
-Read a brain file. Path is relative to the user's brain folder.
+Read a brain file. Path is relative to the active workspace's brain folder.
 
 ### `PUT /brain/files/{path}`
 Update a brain file. The file must already exist.

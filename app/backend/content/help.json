@@ -480,6 +480,13 @@
   },
   "whats_new": [
     {
+      "version": "0.6.2",
+      "date": "2026-08-22",
+      "highlights": [
+        "A round of AI Chat polish: fixed a layout issue where the page could appear shifted upward with empty space at the bottom, the sidebar's module list now scrolls on its own if you have enough modules enabled to fill the screen, and a saved conversation from the Business workspace could fail to reopen — now fixed."
+      ]
+    },
+    {
       "version": "0.6.1",
       "date": "2026-08-22",
       "highlights": [
