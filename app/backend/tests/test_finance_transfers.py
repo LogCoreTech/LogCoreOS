@@ -7,6 +7,7 @@ routers/finance_transfers.py itself, not in finance_service.py.
 """
 
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -415,6 +416,10 @@ def test_transfer_leg_never_false_matches_a_recurring_bill(owner, personal_book)
     """The whole reason on_transactions_added() is deliberately skipped for
     transfer legs: match_bill() is category-blind (account+sign+amount
     tolerance+date tolerance only)."""
+    # Relative to today, not a hardcoded date — this only needs to land
+    # inside upcoming_recurring()'s 30-day/3-day-grace window, not on any
+    # specific calendar date (a fixed past date ages out of both).
+    due = (date.today() + timedelta(days=5)).isoformat()
     planning.add_recurring(
         "Owner",
         "personal",
@@ -424,7 +429,7 @@ def test_transfer_leg_never_false_matches_a_recurring_bill(owner, personal_book)
             "amount_cents": -10_000,
             "account_id": _acct(personal_book),
             "cadence": "monthly",
-            "next_due": "2026-08-14",
+            "next_due": due,
         },
         created_by="Owner",
     )
@@ -440,15 +445,13 @@ def test_transfer_leg_never_false_matches_a_recurring_bill(owner, personal_book)
             to_workspace="personal",
             to_account_id=fresh_savings["accounts"][0]["id"],
             amount_cents=10_000,
-            date="2026-08-14",
+            date=due,
         ),
         owner,
     )
     upcoming = planning.upcoming_recurring("Owner", "personal", personal_book["id"], days=30)
     rent = next(r for r in upcoming["upcoming"] if r["name"] == "Rent")
-    assert (
-        rent["next_due"] == "2026-08-14"
-    )  # not advanced — the transfer leg never fed the bill matcher
+    assert rent["next_due"] == due  # not advanced — the transfer leg never fed the bill matcher
 
 
 def test_update_transfer_moves_both_legs_together(owner, personal_book, business_book):

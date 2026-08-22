@@ -77,6 +77,14 @@ class Settings(BaseSettings):
     # Set to true to allow open registration (dev/testing only).
     allow_open_registration: bool = False
 
+    # Marks this instance as a public demo (e.g. app.logcoretech.com) — surfaces
+    # a "this is a demo, data resets nightly" banner in the UI, and is the
+    # required safety gate for demo_reset.py (it refuses to delete anything
+    # unless this is explicitly true, so a cron job copy-pasted onto a real
+    # personal/family instance by mistake can't silently wipe real user data).
+    # Never set this on a personal or managed-hosting instance.
+    demo_mode: bool = False
+
     # Set to true when running behind a trusted reverse proxy (nginx, Caddy).
     # Allows the rate limiter to read the real client IP from X-Forwarded-For.
     # Leave false when the app is exposed directly — otherwise clients can spoof IPs.

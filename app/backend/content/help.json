@@ -480,6 +480,13 @@
   },
   "whats_new": [
     {
+      "version": "0.6.1",
+      "date": "2026-08-22",
+      "highlights": [
+        "A few small polish items this release: clearer Privacy Policy and Terms of Service links during sign-up, a couple of reliability fixes behind the scenes, and the version shown in the API docs now always matches what's actually installed."
+      ]
+    },
+    {
       "version": "0.6.0",
       "date": "2026-08-18",
       "highlights": [

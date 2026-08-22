@@ -8,6 +8,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-08-22
+
+### Fixed
+
+- **Diagnosed why both real deployed instances (the public demo and a managed-hosting client) had silently stopped auto-updating for over a week.** The 2026-08-14 CORS hardening release correctly made the app refuse to start with a wildcard `ALLOWED_ORIGINS`, but neither instance's `docker/.env` was ever updated with a real origin — so every update attempt since has rebuilt, crashed immediately on startup, failed its health check, and auto-rolled back. `update.sh`'s rollback safety net worked exactly as designed the whole time; this was a real config gap on deployed instances, not a bug in the updater. Fixed on the demo instance with a real origin (not the insecure escape hatch).
+- The FastAPI app's reported version (visible at `/docs` and in the OpenAPI schema) was hardcoded to `0.1.0` regardless of what was actually installed — now reads the same `installed_version.json` that `update.sh`/`launch.sh` already maintain.
+- A flaky test (`test_transfer_leg_never_false_matches_a_recurring_bill`) hardcoded a date that aged out of its own assertion window as real time passed it; now computed relative to today.
+
+### Added
+
+- **Login and registration now link to the Privacy Policy and Terms of Service.**
+- **`DEMO_MODE`** — a new, off-by-default instance flag for public demo deployments only. Shows a standing "this is a demo, data resets nightly" banner (with Privacy/Terms links), and is the required safety gate for a new nightly reset script (`demo_reset.py` / `docker/demo_reset.sh`) that wipes non-admin accounts — the script refuses to run at all unless this flag is explicitly set, so it can't be copy-pasted onto a personal or managed instance by mistake.
+- `docker/.env.example` now documents using a Haiku model for `AI_MODEL` on a public demo, to control per-message AI cost.
+
 ## [0.6.0] — 2026-08-18
 
 ### Added

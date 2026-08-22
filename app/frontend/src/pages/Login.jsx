@@ -155,6 +155,19 @@ export default function Login() {
             >
               {loading ? 'Please wait…' : mode === 'login' ? 'Sign In' : 'Create Account'}
             </button>
+
+            {mode === 'register' && (
+              <p className="text-xs text-center text-charcoal-500 dark:text-charcoal-400">
+                By creating an account you agree to our{' '}
+                <a href="https://logcoretech.com/privacy/" target="_blank" rel="noopener noreferrer" className="underline hover:text-charcoal-700 dark:hover:text-charcoal-200">
+                  Privacy Policy
+                </a>{' '}
+                and{' '}
+                <a href="https://logcoretech.com/terms/" target="_blank" rel="noopener noreferrer" className="underline hover:text-charcoal-700 dark:hover:text-charcoal-200">
+                  Terms of Service
+                </a>.
+              </p>
+            )}
           </form>
         </div>
       </div>
