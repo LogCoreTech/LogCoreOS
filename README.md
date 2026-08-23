@@ -92,6 +92,9 @@ We handle setup, updates, backups, and uptime — you just use the app.
 
 > Hosted plans coming soon. [logcoretech.com](https://logcoretech.com)
 
+For businesses that want custom n8n workflows built and maintained on top of their instance, we
+also offer automation retainer plans. See [logcoretech.com/pricing](https://logcoretech.com/pricing).
+
 ---
 
 ## Your Data
