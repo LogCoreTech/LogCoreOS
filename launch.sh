@@ -301,6 +301,20 @@ generate_secret_key() {
   fi
 }
 
+# A Fernet key (used for INFISICAL_CACHE_KEY) is 32 random bytes, urlsafe-base64
+# encoded — not the hex format generate_secret_key() produces. Deliberately does
+# NOT rely on the `cryptography` package being importable by the host's python3
+# (only the app container has it installed) — plain stdlib os/base64 is enough.
+generate_fernet_key() {
+  if command -v python3 &>/dev/null; then
+    python3 -c "import os, base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+  elif command -v openssl &>/dev/null; then
+    openssl rand 32 | openssl base64 -A | tr '+/' '-_'
+  else
+    head -c 32 /dev/urandom | base64 | tr -d '\n' | tr '+/' '-_'
+  fi
+}
+
 # ── .env helpers ──────────────────────────────────────────────────────────────
 
 env_set() {
@@ -339,6 +353,11 @@ generate_env() {
   # safe to set the encryption key now). Never regenerated for an existing .env.
   env_set N8N_API_KEY         "$(generate_secret_key)"
   env_set N8N_ENCRYPTION_KEY  "$(generate_secret_key)"
+
+  # Same reasoning: fresh install → no encrypted Infisical cache/token file yet,
+  # so it's safe to set this now. Never regenerated for an existing .env — see
+  # the INFISICAL_CACHE_KEY comment in docker/.env.example.
+  env_set INFISICAL_CACHE_KEY "$(generate_fernet_key)"
 
   log_info "docker/.env created with a generated SECRET_KEY."
   log_info "After first login, go to Admin → AI Settings to add your API key."

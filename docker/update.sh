@@ -78,6 +78,36 @@ migrate_insecure_cors() {
     fi
 }
 
+# ── Infisical cache-encryption key migration ──────────────────────────────────
+# An instance already running before this key existed has no INFISICAL_CACHE_KEY
+# in docker/.env. The app itself degrades gracefully without one (plaintext +
+# a one-time log warning, never a hard failure — unlike the CORS case above),
+# so this isn't required for the update to succeed. It's provisioned here
+# anyway so managed instances actually using Infisical get real encryption on
+# their next update instead of needing a manual .env edit. update.sh doesn't
+# source launch.sh (each script here is self-contained), so the same
+# generate_fernet_key() logic is duplicated inline rather than shared.
+migrate_infisical_cache_key() {
+    [[ -f "$ENV_FILE" ]] || return 0
+    grep -qE '^INFISICAL_CACHE_KEY=.+' "$ENV_FILE" 2>/dev/null && return 0
+
+    local key
+    if command -v python3 &>/dev/null; then
+        key="$(python3 -c "import os, base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())")"
+    elif command -v openssl &>/dev/null; then
+        key="$(openssl rand 32 | openssl base64 -A | tr '+/' '-_')"
+    else
+        key="$(head -c 32 /dev/urandom | base64 | tr -d '\n' | tr '+/' '-_')"
+    fi
+
+    if grep -qE '^#?INFISICAL_CACHE_KEY=' "$ENV_FILE" 2>/dev/null; then
+        sed -i "s|^#\?INFISICAL_CACHE_KEY=.*|INFISICAL_CACHE_KEY=${key}|" "$ENV_FILE"
+    else
+        printf '\nINFISICAL_CACHE_KEY=%s\n' "$key" >> "$ENV_FILE"
+    fi
+    log "Generated a new INFISICAL_CACHE_KEY in docker/.env — the Infisical secrets cache/token will now be encrypted at rest."
+}
+
 # ── Logging ───────────────────────────────────────────────────────────────────
 
 log() {
@@ -280,6 +310,7 @@ do_update() {
     log "=== LogCore OS update starting ==="
 
     migrate_insecure_cors
+    migrate_infisical_cache_key
 
     # 1. Backup Brain before touching anything
     if [[ -f "$DOCKER_DIR/backup.sh" ]]; then

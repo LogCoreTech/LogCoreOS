@@ -348,9 +348,11 @@ def sync_business_workflows() -> dict:
     """
     result: dict = {"created": 0, "updated": 0, "deleted": 0, "skipped": 0, "errors": []}
 
-    # 1. Read credentials from Infisical cache
-    cache_path = brain_path() / "_system" / "infisical_cache.json"
-    cache = read_json(cache_path, default={})
+    # 1. Read credentials from Infisical cache (may be encrypted at rest — never
+    # read infisical_cache.json directly, go through infisical_loader.read_cache())
+    from services import infisical_loader
+
+    cache = infisical_loader.read_cache()
     secrets = cache.get("secrets", {})
     base_url = secrets.get("WORKFLOWS_BASE_URL", "").rstrip("/")
     token = secrets.get("WORKFLOWS_TOKEN", "")

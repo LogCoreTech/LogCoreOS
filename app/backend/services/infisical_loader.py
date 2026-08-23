@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
+from cryptography.fernet import Fernet, InvalidToken
 
 logger = logging.getLogger("logcore.infisical")
 
@@ -45,14 +46,13 @@ def _resolve_token() -> tuple[str | None, str | None]:
     if token:
         return token, "env"
     cfg = _config_file()
-    if cfg.exists():
-        try:
-            data = json.loads(cfg.read_text())
-            t = data.get("token", "").strip()
-            if t:
-                return t, "file"
-        except (json.JSONDecodeError, OSError):
-            pass
+    data, was_plaintext = _read_encrypted_json(cfg)
+    if data is not None:
+        if was_plaintext and _cipher() is not None:
+            _write_encrypted_json(cfg, data)
+        t = (data.get("token") or "").strip()
+        if t:
+            return t, "file"
     return None, None
 
 
@@ -82,25 +82,77 @@ def _fetch_secrets(token: str) -> dict[str, str]:
     return {s["secretKey"]: s["secretValue"] for s in secrets if "secretKey" in s}
 
 
+def _cipher() -> Fernet | None:
+    """The Fernet cipher for encrypting infisical_cache.json/infisical_config.json
+    at rest, or None if INFISICAL_CACHE_KEY isn't configured (or is invalid) — in
+    which case callers fall back to plaintext rather than failing startup. The
+    key deliberately lives in docker/.env, not brain/_system/: this whole
+    directory is swept into one tarball by backup.sh, so a key stored next to
+    its own ciphertext would defeat the point. See docs/MEMORY.md."""
+    key = os.environ.get("INFISICAL_CACHE_KEY", "").strip()
+    if not key:
+        return None
+    try:
+        return Fernet(key.encode())
+    except Exception:
+        logger.warning("INFISICAL_CACHE_KEY is set but invalid — storing/reading as plaintext.")
+        return None
+
+
+def _read_encrypted_json(path: Path) -> tuple[dict | None, bool]:
+    """Returns (data, was_legacy_plaintext). (None, False) if missing/corrupt."""
+    if not path.exists():
+        return None, False
+    raw = path.read_bytes()
+    cipher = _cipher()
+    if cipher:
+        try:
+            return json.loads(cipher.decrypt(raw)), False
+        except InvalidToken:
+            pass  # legacy plaintext on disk, or the key changed — try as plaintext
+        except json.JSONDecodeError:
+            return None, False
+    try:
+        return json.loads(raw), True
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return None, False
+
+
+def _write_encrypted_json(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(data, indent=2).encode()
+    cipher = _cipher()
+    path.write_bytes(cipher.encrypt(payload) if cipher else payload)
+
+
 def _write_cache(secrets: dict[str, str]) -> None:
-    cache = _cache_file()
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    cache.write_text(
-        json.dumps(
-            {"fetched_at": datetime.now(timezone.utc).isoformat(), "secrets": secrets}, indent=2
-        )
+    _write_encrypted_json(
+        _cache_file(),
+        {"fetched_at": datetime.now(timezone.utc).isoformat(), "secrets": secrets},
     )
 
 
 def _load_cache() -> dict[str, str] | None:
-    cache = _cache_file()
-    if not cache.exists():
+    data, was_plaintext = _read_encrypted_json(_cache_file())
+    if data is None:
         return None
-    try:
-        data = json.loads(cache.read_text())
-        return data.get("secrets")
-    except (json.JSONDecodeError, OSError):
-        return None
+    if was_plaintext and _cipher() is not None:
+        # A key is now configured but this file predates it — migrate in place
+        # so it's encrypted on disk from the next read onward.
+        _write_encrypted_json(_cache_file(), data)
+    return data.get("secrets")
+
+
+def read_cache() -> dict:
+    """Public reader for other modules (e.g. n8n_service, the automations
+    router) that need the raw cached-secrets envelope — never read
+    infisical_cache.json directly, it may be encrypted."""
+    data, was_plaintext = _read_encrypted_json(_cache_file())
+    if data is None:
+        return {}
+    if was_plaintext and _cipher() is not None:
+        _write_encrypted_json(_cache_file(), data)
+    return data
 
 
 def load_infisical_secrets() -> None:
@@ -118,6 +170,11 @@ def load_infisical_secrets() -> None:
 
     _token_source = source
     logger.info("Infisical token found (source: %s) — fetching secrets...", source)
+    if _cipher() is None:
+        logger.warning(
+            "INFISICAL_CACHE_KEY is not set — the Infisical secrets cache and token "
+            "file will be stored in plaintext until it's configured. See docker/.env.example."
+        )
 
     try:
         secrets = _fetch_secrets(token)
@@ -162,9 +219,7 @@ def get_status() -> dict:
 
 def save_token_to_file(token: str) -> None:
     """Write a token to the brain config file (used by Admin UI for rotation)."""
-    cfg = _config_file()
-    cfg.parent.mkdir(parents=True, exist_ok=True)
-    cfg.write_text(json.dumps({"token": token}, indent=2))
+    _write_encrypted_json(_config_file(), {"token": token})
 
 
 def clear_token_file() -> None:

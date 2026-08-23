@@ -121,10 +121,9 @@ def sync_secrets_to_n8n(
     _rl: None = Depends(_write_limit),
 ):
     """Write cached Infisical secrets to docker/n8n.env and restart n8n."""
-    from services.file_service import brain_path, read_json
+    from services import infisical_loader
 
-    cache_path = brain_path() / "_system" / "infisical_cache.json"
-    cache = read_json(cache_path, default={})
+    cache = infisical_loader.read_cache()
     secrets = cache.get("secrets", {})
     if not secrets:
         raise HTTPException(
