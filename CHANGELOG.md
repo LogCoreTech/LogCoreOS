@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.4] — 2026-08-22
+
 ### Security
 
 - **Closed a critical SSRF gap in SimpleFIN bank-connection setup**: a claim URL decoded from a submitted setup token was accepted for any `https://` host with no domain allowlist, letting a malicious token point the server at an internal-only service. Now restricted to `simplefin.org` (and subdomains).

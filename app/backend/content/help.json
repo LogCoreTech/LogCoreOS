@@ -480,6 +480,13 @@
   },
   "whats_new": [
     {
+      "version": "0.6.4",
+      "date": "2026-08-22",
+      "highlights": [
+        "Another round of security hardening: closed a request-forgery gap in SimpleFIN bank-connection setup, fixed a link-safety gap in AI chat, and stopped a few admin screens from showing raw internal error details. Updated several backend dependencies — including the file-upload handling library — to patch known security advisories. Also improved secrets storage for managed hosting instances."
+      ]
+    },
+    {
       "version": "0.6.3",
       "date": "2026-08-22",
       "highlights": [
