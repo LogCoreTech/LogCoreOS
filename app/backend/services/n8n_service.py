@@ -373,7 +373,8 @@ def sync_business_workflows() -> dict:
                 stub["key"] = key
                 stubs[key] = stub
             except Exception as exc:
-                result["errors"].append(f"bad stub {stub_file.name}: {exc}")
+                logger.warning("Bad workflow stub %s: %s", stub_file.name, exc)
+                result["errors"].append(f"bad stub {stub_file.name}: could not be parsed")
 
     if not stubs:
         logger.debug("No workflow stubs found in %s", STUBS_DIR)
