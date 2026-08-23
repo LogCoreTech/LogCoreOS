@@ -8,6 +8,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+
+- **Closed a critical SSRF gap in SimpleFIN bank-connection setup**: a claim URL decoded from a submitted setup token was accepted for any `https://` host with no domain allowlist, letting a malicious token point the server at an internal-only service. Now restricted to `simplefin.org` (and subdomains).
+- **A crafted `javascript:`/`data:` link in AI chat content (e.g. echoed from a web search) could render as a clickable link** in the chat markdown renderer. Now only `http(s)`/`mailto`/in-app relative links render as links; anything else renders as inert text.
+- **9 admin-facing endpoints (Home Assistant/n8n connection tests, n8n workflow sync, GitHub release check) no longer return raw exception text in their HTTP response** — full detail still goes to server logs.
+- Added `permissions: contents: read` to the CI workflow (previously implicit/unscoped).
+- Dependency bumps: `python-multipart` 0.0.18 → 0.0.32, `python-dotenv` 1.0.1 → 1.2.3, `pytest` 8.2.2 → 9.1.1 (+ `pytest-asyncio` → 1.4.0), `black` 24.4.2 → 26.5.1. Clears the GitHub Dependabot/code-scanning alert backlog aside from one CSV-import validation-message alert left as-is (deliberate, safe user-facing text about the user's own file, not a real leak).
+- **The Infisical secrets cache and token file (`brain/_system/infisical_cache.json`/`infisical_config.json`) are now encrypted at rest**, closing the last open item from the alert sweep above. Only relevant to managed-hosting instances with Infisical connected — self-hosted instances never create these files. Requires a new `INFISICAL_CACHE_KEY` in `docker/.env` (auto-generated for fresh installs by `launch.sh`, auto-provisioned for existing ones on their next `update.sh` run); falls back to today's plaintext behavior with a one-time warning if it's ever missing, rather than failing to start.
+
 ## [0.6.3] — 2026-08-22
 
 ### Fixed
