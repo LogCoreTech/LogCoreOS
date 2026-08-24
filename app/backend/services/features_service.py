@@ -22,7 +22,11 @@ from pathlib import Path
 
 from services.file_service import read_json, write_json
 
-ALL_MODULE_IDS = [
+# Modules not yet converted into module_packages/ format — hardcoded here same
+# as always. As each one converts, it's removed from this list and supplied
+# dynamically by all_module_ids() instead, via its own manifest's install
+# state. See module_registry.py.
+_CORE_MODULE_IDS = [
     "dashboard",
     "tasks",
     "goals",
@@ -40,7 +44,20 @@ ALL_MODULE_IDS = [
     "contacts",
 ]
 
-_PERSONAL_MEMBER = {m: True for m in ALL_MODULE_IDS if m not in ("automations_business", "team")}
+
+def all_module_ids() -> list[str]:
+    """Every valid module id right now: whatever's left of the hardcoded core
+    list, unioned with every module_packages/ module currently installed.
+    Call this fresh each time rather than caching — it must reflect live
+    install state, not a snapshot from import time."""
+    from module_registry import active_manifests
+
+    return _CORE_MODULE_IDS + sorted(active_manifests())
+
+
+_PERSONAL_MEMBER = {
+    m: True for m in _CORE_MODULE_IDS if m not in ("automations_business", "team")
+}
 
 _BUSINESS_MEMBER = {
     "dashboard": True,
@@ -98,7 +115,7 @@ def load_features() -> dict:
         roles["guest"] = _guest_map(_PERSONAL_MEMBER)
     # Fill in any missing module keys for each role
     for role_name, role_map in roles.items():
-        for mod in ALL_MODULE_IDS:
+        for mod in all_module_ids():
             if mod not in role_map:
                 role_map[mod] = True
     result["roles"] = roles
@@ -130,6 +147,14 @@ def get_effective_disabled(
     user_disabled_modules can be:
       - list[str]: legacy flat list applied to every workspace
       - dict[str, list[str]]: workspace-keyed {"personal": [...], "business": [...]}
+
+    Also unions in every module_packages/ module that's discovered on disk but
+    NOT currently installed — this is the single choke point that makes an
+    "uninstalled" module's data actually inaccessible (Brain browser, AI
+    tools, dashboard blocks all read disabled_modules through this
+    function), rather than every consumer needing its own install-state
+    check. Locked (uninstallable) modules are always installed by
+    construction, so they never appear here.
     """
     features = load_features()
     roles = features.get("roles", {})
@@ -142,4 +167,10 @@ def get_effective_disabled(
     else:
         user_disabled = set(user_disabled_modules or [])
 
-    return sorted(role_disabled | user_disabled)
+    from module_registry import discover_manifests
+    from services import mod_store_service
+
+    manifests, _errors = discover_manifests()
+    not_installed = set(manifests) - mod_store_service.get_installed_ids()
+
+    return sorted(role_disabled | user_disabled | not_installed)

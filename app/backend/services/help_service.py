@@ -21,8 +21,9 @@ _cache: dict[str, Any] | None = None
 _EMPTY: dict[str, Any] = {"sections": [], "faq": [], "support": {}, "whats_new": []}
 
 
-def get_content() -> dict[str, Any]:
-    """Return the parsed help content (cached — the file is static per release)."""
+def _static_content() -> dict[str, Any]:
+    """The bundled content/help.json file only — cached, since that file is
+    static per release."""
     global _cache
     if _cache is None:
         try:
@@ -32,6 +33,25 @@ def get_content() -> dict[str, Any]:
             logger.exception("help content failed to load from %s", _CONTENT_PATH)
             _cache = _EMPTY
     return _cache
+
+
+def get_content() -> dict[str, Any]:
+    """Static help.json sections merged with every DISCOVERED module's own
+    help_section (module_packages/<id>/manifest.py) — NOT cached the way the
+    static file is, since which modules are discovered/installed can change
+    without a new release. A module's section shows regardless of its
+    install state (same "describe everything, not just what's enabled"
+    principle as capabilities_index() below) — accepted as a small, static
+    amount of always-visible copy per module rather than building help-content
+    module-awareness into the Help page's own gating."""
+    from module_registry import discover_manifests
+
+    content = dict(_static_content())
+    manifests, _errors = discover_manifests()
+    module_sections = [m.help_section for m in manifests.values() if m.help_section]
+    if module_sections:
+        content = {**content, "sections": [*content.get("sections", []), *module_sections]}
+    return content
 
 
 def _section_by_id(section_id: str) -> dict | None:
@@ -90,25 +110,54 @@ def as_text(section_id: str | None = None) -> str:
 def capabilities_index(enabled_modules: set[str] | list[str] | None = None) -> str:
     """A compact 'module → what it does' index for the AI system context.
 
-    Restricted to the modules the user actually has enabled so the AI only ever points
-    them to features they can use. Sections with no `modules` (cross-cutting topics like
-    Sharing or Personal vs Business) are always included.
+    Describes EVERY module, not just enabled ones — a disabled or
+    not-installed module still gets a line, annotated with its real state,
+    so the AI can proactively say "Journal isn't installed, ask an admin" or
+    similar. This is a deliberately SOFT, informational-only channel: it only
+    changes what the model is told, never what it can actually call — the
+    real tool list (_get_tools() in agent_service.py) stays hard-gated by
+    disabled_modules regardless of what this index says. Sections with no
+    `modules` (cross-cutting topics like Sharing or Personal vs Business) are
+    always included, unannotated.
     """
+    from module_registry import discover_manifests
+    from services import mod_store_service
+
     enabled = set(enabled_modules) if enabled_modules is not None else None
+    manifests, _errors = discover_manifests()
+    not_installed = set(manifests) - mod_store_service.get_installed_ids()
+
     lines: list[str] = []
     for s in get_content().get("sections", []):
         if s.get("admin_only"):
             continue
         mods = s.get("modules") or []
-        if mods and enabled is not None and not (set(mods) & enabled):
-            continue
         blurb = (s.get("blurb") or "").split(". ")[0].rstrip(".")
-        lines.append(f"- {s.get('title')} (/help#{s.get('id')}): {blurb}.")
+        title, anchor = s.get("title"), s.get("id")
+
+        if not mods:
+            lines.append(f"- {title} (/help#{anchor}): {blurb}.")
+            continue
+
+        if enabled is not None and not (set(mods) & enabled):
+            if set(mods) & not_installed:
+                lines.append(
+                    f"- {title}: {blurb}. NOT INSTALLED — available in the Mod Store; "
+                    "an admin can install it if the user wants this."
+                )
+            else:
+                lines.append(f"- {title}: {blurb}. Currently turned off for this user.")
+            continue
+
+        lines.append(f"- {title} (/help#{anchor}): {blurb}.")
+
     if not lines:
         return ""
     return (
-        "LogCore modules the user can use (point them to the right one when relevant; "
-        "cite the /help#<id> anchor):\n" + "\n".join(lines)
+        "LogCore modules (point the user to the right one when relevant; cite the "
+        "/help#<id> anchor for ones they can actually use — the ones marked NOT "
+        "INSTALLED or turned off can be mentioned, but their tools aren't available "
+        "to you right now):\n" + "\n".join(lines)
     )
 
 

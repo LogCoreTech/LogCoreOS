@@ -717,14 +717,21 @@ def run_pending(brain: Path | None = None) -> int:
             fcntl.flock(lock_file, fcntl.LOCK_UN)
 
 
-def _run_pending_locked(brain: Path) -> int:
+def _run_list(brain: Path, migrations: list[tuple[str, MigrationFn]]) -> int:
+    """Run every not-yet-applied migration in `migrations` against `brain`,
+    tracking completion in the same shared migrations.json state file
+    regardless of which list (core or a module's) a migration came from.
+    Namespacing (a module's own "modid:m001_..." naming convention) is what
+    keeps two lists' names from colliding — see module_registry.py's
+    boot-time collision check, which excludes a module before it ever gets
+    here if that convention was violated."""
     state_path = _state_path(brain)
     state = read_json(state_path, default={"applied": []})
     applied: list[str] = state.get("applied", [])
     applied_set = set(applied)
 
     count = 0
-    for name, fn in MIGRATIONS:
+    for name, fn in migrations:
         if name in applied_set:
             continue
         try:
@@ -740,6 +747,27 @@ def _run_pending_locked(brain: Path) -> int:
                 "Migration %s FAILED: %s — skipping and continuing", name, exc, exc_info=True
             )
 
+    return count
+
+
+def _module_migrations() -> list[tuple[str, MigrationFn]]:
+    """Migrations from every DISCOVERED module_packages/ module — present on
+    disk, not just installed. A module's migration must run at every boot
+    regardless of install state, same as core migrations always run
+    regardless of which features are toggled (e.g. a locked module's own
+    upgrade migration is what MARKS it installed in the first place)."""
+    from module_registry import discover_manifests
+
+    manifests, _errors = discover_manifests()
+    out: list[tuple[str, MigrationFn]] = []
+    for manifest in manifests.values():
+        out.extend(manifest.migrations)
+    return out
+
+
+def _run_pending_locked(brain: Path) -> int:
+    count = _run_list(brain, MIGRATIONS)
+    count += _run_list(brain, _module_migrations())
     if count:
         logger.info("Applied %d migration(s).", count)
     return count

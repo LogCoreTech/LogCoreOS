@@ -43,6 +43,7 @@ def render_block(
     is_admin: bool,
     workspace: str,
     dash_access: str | None,
+    viewer_disabled_modules: set[str] | None = None,
 ) -> BlockRenderResult:
     spec = REGISTRY.get(block.get("type"))
     if spec is None:
@@ -54,6 +55,13 @@ def render_block(
 
     if spec.admin_only and not is_admin and not can_exception:
         return BlockRenderResult(ok=False, locked_reason="admin_only")
+
+    # Module-disabled gating checks whichever identity THIS pass is about to
+    # resolve as — viewer's own modules here at pass 1, the owner's at pass 2
+    # below — riding the exact same share_underlying_data exception structure
+    # as the admin_only check above, not a separate toggle.
+    if spec.module and spec.module in (viewer_disabled_modules or set()) and not can_exception:
+        return BlockRenderResult(ok=False, locked_reason="module_disabled")
 
     resolved_config, ready = _resolve_subject_config(block.get("config") or {}, dashboard)
     if not ready:
@@ -71,10 +79,16 @@ def render_block(
         config=resolved_config,
         dashboard_owner=owner,
     )
-    try:
-        result = spec.resolver(ctx)
-    except Exception:
-        return BlockRenderResult(ok=False, locked_reason="not_found")
+    if spec.module and spec.module in (viewer_disabled_modules or set()):
+        # can_exception is true here (the not-can_exception case already
+        # returned above) — skip straight to pass 2 rather than running the
+        # viewer's own resolver against a module they don't have.
+        result = BlockRenderResult(ok=False, locked_reason="module_disabled")
+    else:
+        try:
+            result = spec.resolver(ctx)
+        except Exception:
+            return BlockRenderResult(ok=False, locked_reason="not_found")
 
     if result.ok or not can_exception:
         return result
@@ -87,6 +101,18 @@ def render_block(
     owner_user = auth_service.get_user_by_name(owner)
     if owner_user is None:
         return result  # fail closed — owner account gone
+
+    if spec.module:
+        from services.features_service import get_effective_disabled
+
+        owner_disabled = get_effective_disabled(
+            owner_user.get("feature_role", "member"),
+            owner_user.get("disabled_modules", []),
+            workspace,
+        )
+        if spec.module in owner_disabled:
+            return BlockRenderResult(ok=False, locked_reason="module_disabled")
+
     owner_ctx = BlockRenderCtx(
         viewer=owner,
         viewer_role=owner_user.get("feature_role", "member"),
@@ -111,13 +137,21 @@ def render_dashboard(
     is_admin: bool,
     workspace: str,
     dash_access: str | None,
+    viewer_disabled_modules: set[str] | None = None,
 ) -> list[dict]:
     """Resolves dash_access is passed in ONCE by the caller (routers/dashboards.py
     already called find_dashboard) — never re-resolved per block."""
     out = []
     for block in dashboard.get("blocks") or []:
         result = render_block(
-            dashboard, block, viewer, viewer_role, is_admin, workspace, dash_access
+            dashboard,
+            block,
+            viewer,
+            viewer_role,
+            is_admin,
+            workspace,
+            dash_access,
+            viewer_disabled_modules,
         )
         out.append(
             {

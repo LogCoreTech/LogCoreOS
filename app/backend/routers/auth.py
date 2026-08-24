@@ -547,9 +547,7 @@ def update_user_role_legacy(
     return {"ok": True, "role": req.role}
 
 
-from services.features_service import ALL_MODULE_IDS as _ALL_MODULE_IDS
-
-VALID_MODULE_IDS = set(_ALL_MODULE_IDS)
+from services.features_service import all_module_ids as _all_module_ids
 
 _VALID_WORKSPACES = {"personal", "business"}
 
@@ -560,7 +558,9 @@ class ModuleAccessRequest(BaseModel):
     @field_validator("disabled_modules")
     @classmethod
     def validate_module_ids(cls, v: list[str]) -> list[str]:
-        invalid = [m for m in v if m not in VALID_MODULE_IDS]
+        # Computed fresh, not cached at import time — must reflect live
+        # install state, same reasoning as all_module_ids() itself.
+        invalid = [m for m in v if m not in set(_all_module_ids())]
         if invalid:
             raise ValueError(f"Unknown module IDs: {invalid}")
         return v
@@ -661,7 +661,7 @@ class WorkspaceModulesRequest(BaseModel):
     @field_validator("disabled_modules")
     @classmethod
     def validate_mods(cls, v: list[str]) -> list[str]:
-        invalid = [m for m in v if m not in VALID_MODULE_IDS]
+        invalid = [m for m in v if m not in set(_all_module_ids())]
         if invalid:
             raise ValueError(f"Unknown module IDs: {invalid}")
         return v

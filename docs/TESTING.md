@@ -27,6 +27,33 @@ What it does: patches `settings.brain_path` to a fresh temp directory and pre-cr
 
 ---
 
+## The `fake_module` Fixture (Mod Store / module_registry.py)
+
+Testing `module_registry.py`'s discovery mechanism needs a real, importable `module_packages/<id>/`
+package on disk — mocking `importlib` around it would just test the mock, and this codebase's own
+"no mocks for the filesystem" rule (below) applies just as much to dynamic-import discovery as it
+does to plain file reads. The `fake_module` fixture (in `conftest.py`) writes a real package into
+the actual `app/backend/module_packages/` directory for the duration of one test, then deletes it
+and purges it from `sys.modules` (Python caches imports — without this, one test's fake module
+would leak into every later test that happens to reuse the same id).
+
+```python
+def test_something(fake_module, brain):
+    fake_module("t_my_test_mod", MANIFEST_SRC, agent_tools_src=AGENT_TOOLS_SRC)
+    # module_packages/t_my_test_mod/ now exists on disk with a real manifest.py
+    ...
+```
+
+Always prefix test module ids with `t_` (or similar) — never reuse a real module id like
+`"journal"`, since that will exist as a real package once modules start converting. Manifest source
+is a plain Python string written to disk verbatim — see the existing test files
+(`test_module_registry.py`, `test_dashboard_block_module_gating.py`, `test_agent_module_tools.py`)
+for working manifest/router/dashboard_block/agent_tools templates to copy from. Most tests using
+this fixture also need the `brain` fixture, since `mod_store_service.mark_installed()` and
+`get_effective_disabled()`'s not-installed union both read/write Brain `_system/` files.
+
+---
+
 ## How to Write a Test for a New Service
 
 1. Import the service functions directly — don't go through routers.
@@ -56,12 +83,19 @@ Exception: external HTTP calls (AI provider, n8n, HA, Tavily) should be mocked w
 
 ---
 
-## Current Coverage (662 tests, 37 files)
+## Current Coverage (832 tests, 44 files)
 
 Core-service coverage below (the module suites — finance, contacts, assets, help, etc. — make up the remainder of the files):
 
 | File | Tests | What's covered |
 |------|-------|----------------|
+| `test_module_registry.py` | 8 | Discovery (valid module, malformed-module isolation, id-mismatch rejection, migration-name collision exclusion), `active_manifests()` install-state filtering, `register_routers()` failure isolation (optional logs-and-skips, locked crashes boot) |
+| `test_mod_store_service.py` | 7 | Catalog merge (coming_soon→available, error status), install/uninstall round-trip, data-untouched-on-uninstall, history log survives reinstall |
+| `test_features_service_modules.py` | 6 | `all_module_ids()` + `get_effective_disabled()`'s not-installed union |
+| `test_brain_module_gating.py` | 5 | Bypass-confirmed-then-closed pairs: a module's `owned_brain_paths` hidden from the generic Brain browser only when disabled for that user (not instance-wide) |
+| `test_dashboard_block_module_gating.py` | 5 | Catalog filtering + `render_block()`'s per-pass identity gating (viewer at pass 1, owner at pass 2's `share_underlying_data` exception) — including the subtle "viewer disabled, owner enabled" and "both disabled" cases |
+| `test_agent_module_tools.py` | 5 | `_get_tools()` hard-excludes a disabled/not-installed module's tools; `_execute_tool()` actually dispatches through to a module's `agent_tools.py` |
+| `test_help_service_modules.py` | 4 | `get_content()` merges a module's `help_section`; `capabilities_index()` annotates not-installed vs. disabled-but-installed vs. enabled |
 | `test_features.py` | 15 | Role CRUD + name normalization (`features_service.py` + `routers/features.py`), `get_effective_disabled()` (role map, workspace-keyed dict, unknown-role fallback), assign-role-to-user round trip. Imports router functions directly, not just the service — see the file's own docstring for why |
 | `test_file_service.py` | 25 | Atomic reads/writes, path resolution, `user_path`, `ws_path` |
 | `test_notes_service.py` | 21 | Notes CRUD, folder management, move operations |

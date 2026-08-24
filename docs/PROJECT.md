@@ -169,6 +169,17 @@ The App currently provides:
 
 - Workspace switching — personal / business dual-workspace support; per-workspace data paths, module visibility, and feature role defaults; workspace toggle pill in sidebar for dual-access users; admin UI for granting and per-workspace module control
 
+**In progress — Mod Store / universal module system (started 2026-08-24):**
+
+A real architectural shift, not just a feature: every module above is converting, one at a time,
+into a self-contained `module_packages/<id>/` format with its own manifest/version — including
+foundational ones (Tasks, Chat, Dashboards-the-feature), which just carry `uninstallable: true`
+rather than being excluded from the system. End state: `main.py` has zero hardcoded per-module
+router registrations. Phase 1 (the registry mechanism itself — discovery, install/uninstall state,
+all four enforcement-gap fixes) is done, fully tested, with zero real modules converted yet. Full
+design in `docs/MEMORY.md`'s 2026-08-24 entry and `/home/logcore/.claude/plans/i-want-you-to-composed-scone.md`;
+rollout order tracked in `docs/TASKS.md`.
+
 **Planned (future phases):**
 
 - Projects (deferred from Phase 1; roadmapped for Phase 3+)

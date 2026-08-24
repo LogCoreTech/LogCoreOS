@@ -1,9 +1,10 @@
 """Agent loop — wraps tool-enabled AI completions over user data."""
 
 import json
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Callable
 
 from services import (
     auth_service,
@@ -26,10 +27,24 @@ from services.file_service import (
     ws_path,
 )
 
+logger = logging.getLogger("logcore.agent")
+
 MAX_STEPS = 10
 _RUNS_CAP = 50
 _PENDING_CAP = 20
-_BRAIN_SKIP = {"Tasks"}
+
+
+def _brain_skip(user: dict) -> set[str]:
+    """Same reasoning as routers/brain.py's own skip-list — a module's owned
+    Brain paths are off-limits to the AI's generic list/read/search tools
+    only while that module is disabled for THIS user (conditional, per-user,
+    matching every module's own dual-access pattern — not just "never
+    installed instance-wide"), unioned with the always-skipped Tasks folder
+    (structurally different shape, JSON not markdown)."""
+    from module_registry import brain_paths_for_disabled
+
+    disabled = set(user.get("disabled_modules", []))
+    return {"Tasks"} | brain_paths_for_disabled(disabled)
 
 # Tools available in research mode — read-only access only
 _RESEARCH_TOOLS = {
@@ -1498,6 +1513,53 @@ _ADMIN_TOOLS: list[dict] = [
 ]
 
 
+def _module_tool_dispatch() -> dict[str, tuple[str, Callable]]:
+    """{tool_name: (module_id, execute_fn)} built fresh from every ACTIVE
+    module's agent_tools.py. O(1) dispatch for the executor's fallback case,
+    rather than iterating modules and calling each in turn. Computed fresh
+    (not cached at import time) so it reflects live install state, same
+    reasoning as everything else install-state-dependent in this system."""
+    from module_registry import active_manifests
+
+    dispatch: dict[str, tuple[str, Callable]] = {}
+    for module_id, manifest in active_manifests().items():
+        if not manifest.owned_agent_tools:
+            continue
+        try:
+            import importlib
+
+            mod = importlib.import_module(f"module_packages.{module_id}.backend.agent_tools")
+        except Exception:
+            logger.exception(
+                "module_packages/%s: agent_tools failed to import — its tools unavailable",
+                module_id,
+            )
+            continue
+        for tool_name in manifest.owned_agent_tools:
+            dispatch[tool_name] = (module_id, mod.execute)
+    return dispatch
+
+
+def _module_tool_schemas() -> list[dict]:
+    """Tool schemas contributed by every ACTIVE module's agent_tools.py."""
+    from module_registry import active_manifests
+
+    schemas: list[dict] = []
+    for module_id, manifest in active_manifests().items():
+        if not manifest.owned_agent_tools:
+            continue
+        try:
+            import importlib
+
+            mod = importlib.import_module(f"module_packages.{module_id}.backend.agent_tools")
+            schemas.extend(mod.TOOL_SCHEMAS)
+        except Exception:
+            logger.exception(
+                "module_packages/%s: agent_tools schemas failed to load", module_id
+            )
+    return schemas
+
+
 def _get_tools(user: dict) -> list[dict]:
     from services.ha_service import is_configured as _ha_configured
 
@@ -1508,7 +1570,24 @@ def _get_tools(user: dict) -> list[dict]:
         "trigger_home_automation",
     }
     ha_ok = _ha_configured()
+    disabled = set(user.get("disabled_modules", []))
     tools = [t for t in _USER_TOOLS if ha_ok or t["name"] not in _HA_TOOL_NAMES]
+
+    # Module-contributed tools: hard-gated by disabled_modules, same as every
+    # other enforcement-gap fix in this system — a disabled/uninstalled
+    # module's tools are never even offered to the model, so it can never
+    # attempt a call that's guaranteed to fail (see help_service's
+    # capabilities_index() for the SEPARATE, softer "the AI knows this
+    # module exists but isn't installed" awareness channel).
+    from module_registry import discover_manifests
+
+    manifests, _errors = discover_manifests()
+    owned_by_disabled: set[str] = set()
+    for module_id, manifest in manifests.items():
+        if module_id in disabled:
+            owned_by_disabled.update(manifest.owned_agent_tools)
+    tools.extend(t for t in _module_tool_schemas() if t["name"] not in owned_by_disabled)
+
     if user.get("role") == "admin":
         tools.extend(_ADMIN_TOOLS)
     return tools
@@ -1703,9 +1782,10 @@ def _execute_tool(
                 if not base.exists():
                     return []
                 files = []
+                skip = _brain_skip(user)
                 for p in sorted(base.rglob("*.md")):
                     rel = p.relative_to(base)
-                    if not any(part in _BRAIN_SKIP for part in rel.parts):
+                    if not any(part in skip for part in rel.parts):
                         files.append({"path": str(rel), "name": p.name})
                 return files
 
@@ -2014,12 +2094,13 @@ def _execute_tool(
                     return text[start:end].strip()
 
                 results = []
+                skip = _brain_skip(user)
                 for ws_label, base in search_roots:
                     if not base.exists():
                         continue
                     for p in sorted(base.rglob("*.md")):
                         rel = p.relative_to(base)
-                        if any(part in _BRAIN_SKIP for part in rel.parts):
+                        if any(part in skip for part in rel.parts):
                             continue
                         try:
                             text = p.read_text()
@@ -2996,6 +3077,13 @@ def _execute_tool(
                 return result or {"error": f"Template {inputs['template_id']!r} not found"}
 
             case _:
+                dispatch = _module_tool_dispatch()
+                entry = dispatch.get(name)
+                if entry is not None:
+                    _module_id, execute_fn = entry
+                    result = execute_fn(name, inputs, user)
+                    if result is not None:
+                        return result
                 return {"error": f"Unknown tool: {name!r}"}
 
     except ValueError as exc:

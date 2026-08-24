@@ -336,10 +336,10 @@ async def chat(
     # LogCore can do, points the user to the right module, and reads the Help guide
     # (get_help) when they're confused or ask how to do something.
     from services import help_service
-    from services.features_service import ALL_MODULE_IDS
+    from services.features_service import all_module_ids
 
     disabled = set(current_user.get("disabled_modules", []))
-    enabled = {m for m in ALL_MODULE_IDS if m not in disabled}
+    enabled = {m for m in all_module_ids() if m not in disabled}
     cap_index = help_service.capabilities_index(enabled)
     help_guidance = (
         "Helping the user use LogCore:\n"

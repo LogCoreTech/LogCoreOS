@@ -1507,6 +1507,50 @@ ever meant to surface embedded in an already access-controlled read (e.g. a cont
 
 ---
 
+## Mod Store
+
+Router mounted at `/api/v1/mod-store` (2026-08-24). First-party module catalog + install state for
+the universal module system (`module_registry.py`) — see `docs/MEMORY.md`'s 2026-08-24 entry for
+the full design. Phase 1 only: the mechanism exists, but no real module has converted into
+`module_packages/` yet, so every endpoint below is live but the catalog only ever lists
+`coming_soon` entries for now.
+
+### `GET /mod-store/catalog`
+Admin only. Every catalog entry (`content/mod_store_catalog.json`) merged with live state:
+`installed`, `uninstallable`, `version` (from the module's manifest if present), and `status`
+(`coming_soon` | `available` | `error` — a module whose manifest/router failed to import shows
+`error` here, not a silent gap). Rate limited: 30/60s.
+
+### `GET /mod-store/installed`
+Any logged-in user. `{ "installed": ["id", ...] }` — the marker file's contents. The frontend's own
+module-loading needs this, not just admins.
+
+### `GET /mod-store/active`
+Any logged-in user. `{ "active": ["id", ...] }` — which module ids are actually registered in the
+**running process** (cached on `app.state.active_module_ids` at boot), distinct from `/installed`:
+between clicking Install and clicking Restart Now, `/installed` says yes but `/active` still says
+no, since `register_routers()` only runs once at process start.
+
+### `POST /mod-store/install/{module_id}`
+Admin only. Validates the id against `discover_manifests()` (whitelist lookup — never used to build
+a filesystem path), catalog status must be `available`, rejects if already installed. Runs the
+module's `on_install()` hook if any, then flips the marker. **Does not restart anything.**
+Response: `{ "ok": true, "module_id", "restart_required": true }`. Rate limited: 10/60s.
+
+### `POST /mod-store/uninstall/{module_id}`
+Admin only. 404 if not installed, 400 if the module is `uninstallable` (enforced server-side, not
+just a hidden button in the UI). Flips the marker — never touches the module's Brain data or its
+code on disk ("hide only, never delete"). Response shape matches install. Rate limited: 10/60s.
+
+### `POST /mod-store/restart`
+Admin only. Body: `{ "force": false }`. Restarts the app's own `logcore-app` container via the same
+locked-down socket-proxy Docker mechanism `n8n_service.py`'s `restart_n8n()` already uses — this is
+what actually applies an install/uninstall, never automatic. If other users currently appear online
+(`presence_service.is_online()`) and `force` isn't set, returns `409` with
+`{ "message", "online_users": [...] }` instead of restarting. Rate limited: 10/60s.
+
+---
+
 ## Health
 
 ### `GET /health`

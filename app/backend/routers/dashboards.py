@@ -374,7 +374,9 @@ def respond_to_template_share(
 
 @router.get("/catalog")
 def get_catalog(current_user: dict = Depends(_require_dashboards)):
-    return catalog(current_user.get("role") == "admin")
+    return catalog(
+        current_user.get("role") == "admin", set(current_user.get("disabled_modules", []))
+    )
 
 
 @router.get("/members")
@@ -434,7 +436,13 @@ def get_render(
     role = current_user.get("feature_role", "member")
     is_admin = current_user.get("role") == "admin"
     blocks = render_dashboard(
-        found["dashboard"], viewer, role, is_admin, workspace, found["access"]
+        found["dashboard"],
+        viewer,
+        role,
+        is_admin,
+        workspace,
+        found["access"],
+        set(current_user.get("disabled_modules", [])),
     )
     template_id = found["dashboard"].get("template_id")
     template = dashboard_templates_service.get_template_by_id(template_id) if template_id else None

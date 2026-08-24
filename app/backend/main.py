@@ -16,6 +16,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from config import settings
 from migrations.runner import run_pending as run_migrations
+from module_registry import register_routers
 from routers import (
     ai_usage,
     assets,
@@ -39,6 +40,7 @@ from routers import (
     home,
     infisical,
     journal,
+    mod_store,
     notes,
     presence,
     priorities,
@@ -61,6 +63,19 @@ logger = logging.getLogger("logcore")
 async def lifespan(app: FastAPI):
     _startup_checks()
     run_migrations()
+    # Module routers are wired up here, AFTER migrations — a locked module's
+    # installed_modules.json entry is seeded by its own upgrade migration, so
+    # registering any earlier (e.g. at plain import time) would silently skip
+    # it on a fresh boot. See module_registry.py's register_routers() docstring
+    # for the fail-loud-on-locked-module-failure behavior.
+    app.state.active_module_ids = register_routers(app)
+    # The SPA catch-all must be added AFTER every router above (core and
+    # module) — Starlette matches by insertion order, and this wildcard would
+    # otherwise shadow any route added after it. See spa_fallback()'s docstring.
+    if static_dir.exists():
+        app.add_api_route(
+            "/{full_path:path}", spa_fallback, methods=["GET"], include_in_schema=False
+        )
     _warm_share_index()
     _announce_whats_new()
     start_scheduler()
@@ -394,38 +409,41 @@ app.include_router(help.router, prefix="/api/v1/help", tags=["help"])
 app.include_router(ai_usage.router, prefix="/api/v1/ai-usage", tags=["ai-usage"])
 app.include_router(dashboards.router, prefix="/api/v1/dashboards", tags=["dashboards"])
 app.include_router(presence.router, prefix="/api/v1/presence", tags=["presence"])
+app.include_router(mod_store.router, prefix="/api/v1/mod-store", tags=["mod-store"])
 
 # Serve React frontend — must come last
 static_dir = Path(__file__).parent.parent / "frontend" / "dist"
+_static_root = static_dir.resolve()
+
 if static_dir.exists():
     # Serve the built JS/CSS bundle. Mounted at /static (Vite assetsDir) — NOT /assets,
     # which is an app page route and must fall through to the SPA handler.
     if (static_dir / "static").exists():
         app.mount("/static", StaticFiles(directory=str(static_dir / "static")), name="static")
 
-    # Serve any file that exists at the root of dist (icons, manifest, sw.js, etc.)
-    _static_root = static_dir.resolve()
 
-    @app.get("/{full_path:path}", include_in_schema=False)
-    async def spa_fallback(full_path: str):
-        """SPA catch-all — serve the file if it exists, otherwise index.html for client-side routing."""
-        candidate = (static_dir / full_path).resolve()
-        # Containment check prevents path traversal outside the dist directory
-        if candidate.is_relative_to(_static_root) and candidate.is_file():
-            headers = {}
-            # Cache root images (login banner, icons) so re-visits/logout don't
-            # re-fetch and re-paint them. Bundle assets live under /static (hashed,
-            # cached by their own mount); sw.js must stay revalidated.
-            if candidate.suffix.lower() in {
-                ".png",
-                ".jpg",
-                ".jpeg",
-                ".webp",
-                ".avif",
-                ".svg",
-                ".ico",
-            }:
-                headers["Cache-Control"] = "public, max-age=86400"
-            return FileResponse(str(candidate), headers=headers)
-        # no-cache: always revalidate before serving, but allow storage (needed for iOS PWA)
-        return FileResponse(str(static_dir / "index.html"), headers={"Cache-Control": "no-cache"})
+async def spa_fallback(full_path: str):
+    """SPA catch-all — serve the file if it exists, otherwise index.html for client-side routing.
+
+    Registered from lifespan(), not as a plain @app.get decorator — it must
+    land in app.router.routes AFTER every module router (core AND
+    dynamically-registered), since Starlette matches routes by insertion
+    order and this wildcard would otherwise shadow them. Module routers are
+    only registered inside lifespan(), after migrations run (a locked
+    module's install state depends on its own upgrade migration having
+    already applied) — so the catch-all has to be registered there too, in
+    the correct order, rather than at plain import time like the rest of
+    this file's routers.
+    """
+    candidate = (static_dir / full_path).resolve()
+    # Containment check prevents path traversal outside the dist directory
+    if candidate.is_relative_to(_static_root) and candidate.is_file():
+        headers = {}
+        # Cache root images (login banner, icons) so re-visits/logout don't
+        # re-fetch and re-paint them. Bundle assets live under /static (hashed,
+        # cached by their own mount); sw.js must stay revalidated.
+        if candidate.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".avif", ".svg", ".ico"}:
+            headers["Cache-Control"] = "public, max-age=86400"
+        return FileResponse(str(candidate), headers=headers)
+    # no-cache: always revalidate before serving, but allow storage (needed for iOS PWA)
+    return FileResponse(str(static_dir / "index.html"), headers={"Cache-Control": "no-cache"})

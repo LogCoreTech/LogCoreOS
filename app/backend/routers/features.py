@@ -4,7 +4,7 @@ from pydantic import BaseModel, field_validator
 from routers.auth import require_admin
 from services import auth_service, features_service
 from services.auth_service import get_user_by_id, update_user
-from services.features_service import ALL_MODULE_IDS
+from services.features_service import all_module_ids
 
 router = APIRouter()
 
@@ -17,7 +17,7 @@ class RoleModulesRequest(BaseModel):
     @field_validator("modules")
     @classmethod
     def validate_module_ids(cls, v: dict) -> dict:
-        invalid = [k for k in v if k not in ALL_MODULE_IDS]
+        invalid = [k for k in v if k not in all_module_ids()]
         if invalid:
             raise ValueError(f"Unknown module IDs: {invalid}")
         return v
@@ -42,7 +42,7 @@ class CreateRoleRequest(BaseModel):
     @field_validator("modules")
     @classmethod
     def validate_module_ids(cls, v: dict) -> dict:
-        invalid = [k for k in v if k not in ALL_MODULE_IDS]
+        invalid = [k for k in v if k not in all_module_ids()]
         if invalid:
             raise ValueError(f"Unknown module IDs: {invalid}")
         return v
@@ -64,7 +64,7 @@ def create_role(req: CreateRoleRequest, _: dict = Depends(require_admin)):
     if req.name in roles:
         raise HTTPException(status_code=400, detail=f"Role '{req.name}' already exists.")
     # Fill in missing module defaults (True = enabled)
-    full_map = {m: req.modules.get(m, True) for m in ALL_MODULE_IDS}
+    full_map = {m: req.modules.get(m, True) for m in all_module_ids()}
     roles[req.name] = full_map
     data["roles"] = roles
     features_service.save_features(data)
@@ -78,7 +78,7 @@ def update_role(role_name: str, req: RoleModulesRequest, _: dict = Depends(requi
     roles = data.get("roles", {})
     if role_name not in roles:
         raise HTTPException(status_code=404, detail=f"Role '{role_name}' not found.")
-    full_map = {m: req.modules.get(m, True) for m in ALL_MODULE_IDS}
+    full_map = {m: req.modules.get(m, True) for m in all_module_ids()}
     roles[role_name] = full_map
     data["roles"] = roles
     features_service.save_features(data)
