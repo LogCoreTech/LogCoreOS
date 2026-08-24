@@ -5,8 +5,8 @@ import re
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from module_packages.journal.backend import service as journal_service
 from routers.auth import get_workspace, require_module
-from services import journal_service
 from services.rate_limiter import rate_limit
 
 _require_journal = require_module("journal")

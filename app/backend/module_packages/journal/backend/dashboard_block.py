@@ -1,7 +1,7 @@
 """Journal Entry block — journal is personal (never shared), so this only ever
 resolves via the owner/viewer scope mechanic, same as Tasks."""
 
-from services import journal_service
+from module_packages.journal.backend import service as journal_service
 from services.dashboard_blocks._tasks import _scoped_target
 from services.dashboard_blocks.registry import (
     BlockRenderCtx,
@@ -31,5 +31,6 @@ register(
         resolver=resolve_journal_entry,
         scope_configurable=True,
         record_ref_fields={"date": "journal"},
+        module="journal",
     )
 )

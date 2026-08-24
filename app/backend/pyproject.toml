@@ -5,3 +5,11 @@ target-version = ["py311"]
 [tool.isort]
 profile = "black"
 line_length = 100
+
+[tool.pytest.ini_options]
+# A converted module's own tests live in module_packages/<id>/tests/, not
+# just app/backend/tests/ — see docs/TESTING.md. testpaths only applies when
+# no path is given on the command line, so `pytest tests/ -v` (the old
+# narrower convention) still works for core-only runs; the full-suite command
+# is now bare `pytest -v` or `pytest tests/ module_packages/ -v`.
+testpaths = ["tests", "module_packages"]

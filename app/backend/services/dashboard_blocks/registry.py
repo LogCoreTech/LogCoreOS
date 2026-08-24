@@ -90,7 +90,6 @@ def _load_all_resolvers() -> None:
         _finance,
         _freeform,
         _home,
-        _journal,
         _notes,
         _pool,
         _tasks,

@@ -1,13 +1,13 @@
-"""Tests for services/journal_service.py."""
+"""Tests for module_packages/journal/backend/service.py."""
 
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 import pytest
 
-import services.journal_service as svc
+import module_packages.journal.backend.service as svc
 
 USER = "TestUser"
 

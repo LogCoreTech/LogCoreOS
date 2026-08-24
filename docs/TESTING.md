@@ -83,12 +83,14 @@ Exception: external HTTP calls (AI provider, n8n, HA, Tavily) should be mocked w
 
 ---
 
-## Current Coverage (832 tests, 44 files)
+## Current Coverage (838 tests, 46 files + module_packages/journal/tests/)
 
-Core-service coverage below (the module suites — finance, contacts, assets, help, etc. — make up the remainder of the files):
+Core-service coverage below (the module suites — finance, contacts, assets, help, etc. — make up the remainder of the files). Since 2026-08-24, `testpaths` (pyproject.toml) covers both `tests/` and `module_packages/` — run bare `pytest`/`pytest -v` for the full suite, or `pytest tests/ -v` to narrow to core-only (an explicit path on the command line overrides `testpaths`).
 
 | File | Tests | What's covered |
 |------|-------|----------------|
+| `module_packages/journal/tests/test_journal_service.py` | 18 | Journal's own CRUD logic — moved verbatim from `tests/test_journal_service.py` when journal converted into a module (2026-08-24), import path updated only |
+| `test_journal_module_conversion.py` | 6 | The conversion machinery, not journal's CRUD: `m015` fresh-vs-upgrade migration split, `on_install`/`on_new_user` backfill hooks (incl. pseudo-user exclusion), a full install→uninstall→reinstall round-trip proving data survives the whole cycle |
 | `test_module_registry.py` | 8 | Discovery (valid module, malformed-module isolation, id-mismatch rejection, migration-name collision exclusion), `active_manifests()` install-state filtering, `register_routers()` failure isolation (optional logs-and-skips, locked crashes boot) |
 | `test_mod_store_service.py` | 7 | Catalog merge (coming_soon→available, error status), install/uninstall round-trip, data-untouched-on-uninstall, history log survives reinstall |
 | `test_features_service_modules.py` | 6 | `all_module_ids()` + `get_effective_disabled()`'s not-installed union |

@@ -47,7 +47,9 @@
         "A dashboard you leave open picks up changes made elsewhere (a task created on another device, for example) on its own every so often — no manual reload needed.",
         "Reopening the Dashboard module takes you back to whichever dashboard you had open last, as long as it's been less than 30 minutes — otherwise it falls back to your default."
       ],
-      "modules": ["dashboard"]
+      "modules": [
+        "dashboard"
+      ]
     },
     {
       "id": "tasks",
@@ -67,7 +69,9 @@
         "Reorder your category priorities in Profile; it directly changes which tasks surface first.",
         "You can also ask the AI in Chat to \"add three tasks for the move\" and approve them in one step."
       ],
-      "modules": ["tasks"]
+      "modules": [
+        "tasks"
+      ]
     },
     {
       "id": "goals",
@@ -84,7 +88,9 @@
         "Ask the AI to \"break this goal into tasks\" — it proposes concrete subtasks you can create in one approval.",
         "Goals are kept out of the daily task surfaces on purpose, so they don't crowd out your day-to-day."
       ],
-      "modules": ["goals"]
+      "modules": [
+        "goals"
+      ]
     },
     {
       "id": "calendar",
@@ -100,7 +106,9 @@
       "tips": [
         "The calendar follows your active workspace — personal and business each have their own events."
       ],
-      "modules": ["calendar"]
+      "modules": [
+        "calendar"
+      ]
     },
     {
       "id": "household",
@@ -116,7 +124,9 @@
       "tips": [
         "Household is personal-workspace only and completely separate from the business Team pool — data never crosses between them."
       ],
-      "modules": ["household"]
+      "modules": [
+        "household"
+      ]
     },
     {
       "id": "team",
@@ -131,7 +141,9 @@
       "tips": [
         "Team lives only in the business workspace. Personal/Household data can never leak into it."
       ],
-      "modules": ["team"]
+      "modules": [
+        "team"
+      ]
     },
     {
       "id": "notes",
@@ -151,22 +163,9 @@
         "Archiving a folder doesn't archive what's inside it — archive each item you want tucked away.",
         "Admins can rename, move, share, archive, and delete notes shared into the household/team pool, same as any other shared module."
       ],
-      "modules": ["notes"]
-    },
-    {
-      "id": "journal",
-      "icon": "📔",
-      "title": "Journal",
-      "blurb": "A private daily journal — one Markdown entry per day, stored by date in your Brain.",
-      "howto": [
-        "Pick a date (defaults to today) and write your entry in Markdown.",
-        "Entries auto-save; use the History button to jump back to a previous day.",
-        "Your AI can read journal entries when you ask it to reflect on patterns or summarize a period."
-      ],
-      "tips": [
-        "Journal is personal-workspace only."
-      ],
-      "modules": ["journal"]
+      "modules": [
+        "notes"
+      ]
     },
     {
       "id": "chat",
@@ -188,7 +187,9 @@
         "Ask it to add or change a Dashboard block and you'll see a live preview of your actual dashboard with the change applied, right in the chat, before you approve.",
         "Your message is saved the instant you send it, so it's never lost even if you close the app or lose connection before the reply comes back."
       ],
-      "modules": ["chat"]
+      "modules": [
+        "chat"
+      ]
     },
     {
       "id": "assets",
@@ -207,7 +208,9 @@
         "Comments on an asset are an attributed log — a good way for a crew to leave notes that notify the owner.",
         "Archiving hides an asset without deleting it; hard delete is admin-only and blocked while it still has children."
       ],
-      "modules": ["assets"]
+      "modules": [
+        "assets"
+      ]
     },
     {
       "id": "finance",
@@ -226,7 +229,9 @@
         "Your personal books are private — even admins can't see them unless you share them.",
         "Everything derived (balances, reports, AR) is computed live; you never have to reconcile stored totals."
       ],
-      "modules": ["finance"]
+      "modules": [
+        "finance"
+      ]
     },
     {
       "id": "contacts",
@@ -260,7 +265,9 @@
         "A green or red dot on a household/team member's own contact shows whether they're currently online — click their photo to see exactly how long ago they were last seen.",
         "The section-hiding toggles on your own profile are only ever settable by you — nobody with access to your contact, even at edit level, can turn one on or off."
       ],
-      "modules": ["contacts"]
+      "modules": [
+        "contacts"
+      ]
     },
     {
       "id": "automations",
@@ -277,7 +284,9 @@
         "Business workflows live in the shared team scope; personal ones are yours alone.",
         "The bundled n8n only runs when you actually have workflows, keeping things lightweight."
       ],
-      "modules": ["automations"]
+      "modules": [
+        "automations"
+      ]
     },
     {
       "id": "home",
@@ -294,7 +303,9 @@
         "You can also ask the AI to \"turn off the living room lights\" once Home Assistant is connected.",
         "Smart Home is personal-workspace only."
       ],
-      "modules": ["home"]
+      "modules": [
+        "home"
+      ]
     },
     {
       "id": "workspaces",

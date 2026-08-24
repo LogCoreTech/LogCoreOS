@@ -96,6 +96,16 @@ def setup_user(req: SetupRequest, current_user: dict = Depends(get_current_user)
     except FileExistsError:
         return {"ok": True, "message": "User folder already exists"}
 
+    # Give every currently-active converted module a chance to provision its
+    # own per-user data (e.g. journal's Journal/ folder, which used to be an
+    # unconditional part of the template above) — the same hook on_install()
+    # uses to backfill existing users, just triggered per-signup instead.
+    from module_registry import active_manifests
+
+    for manifest in active_manifests().values():
+        if manifest.on_new_user:
+            manifest.on_new_user(brain_path(), name)
+
     # Validate free-text categories (still used for the sanitize side-effect / error surfacing)
     for c in req.custom_categories:
         _sanitize(c, "category")

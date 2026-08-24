@@ -37,9 +37,9 @@ class ModuleManifest:
     get_router: Callable[[], "APIRouter"]
     owned_brain_paths: list[str] = field(default_factory=list)
     owned_agent_tools: list[str] = field(default_factory=list)
+    read_only_agent_tools: list[str] = field(default_factory=list)
     owned_block_types: list[str] = field(default_factory=list)
     migrations: list[tuple[str, MigrationFn]] = field(default_factory=list)
-    template_seed_dirs: list[str] = field(default_factory=list)
     uninstallable: bool = False
     on_install: Callable[[Path], None] | None = None
     on_new_user: Callable[[Path, str], None] | None = None
@@ -111,6 +111,20 @@ def _check_migration_collisions(
                 del manifests[module_id]
                 break
             seen[name] = module_id
+
+
+def read_only_agent_tool_names() -> set[str]:
+    """Union of read_only_agent_tools across every ACTIVE module — feeds
+    agent_service.py's _RESEARCH_TOOLS/_READ_TOOLS sets so a module's
+    genuinely read-only tools (e.g. read_journal_entry) work in research
+    mode and run without approval in approve mode, same as any core
+    read-only tool. A tool NOT listed here defaults to write-gated even if
+    it's in owned_agent_tools — matches this codebase's existing
+    "new tools are write-gated by default" rule, just extended to modules."""
+    names: set[str] = set()
+    for manifest in active_manifests().values():
+        names.update(manifest.read_only_agent_tools)
+    return names
 
 
 def brain_paths_for_disabled(disabled_modules: set[str]) -> set[str]:

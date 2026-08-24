@@ -1,11 +1,15 @@
-"""Shared fixtures for all backend tests."""
+"""Shared fixtures for the whole backend test suite — both app/backend/tests/
+and every module_packages/<id>/tests/ (a module's own tests need the same
+`brain`/`fake_module` fixtures, and conftest.py fixtures are only inherited
+by test files in the SAME directory tree or below, so this lives at the
+common ancestor of both rather than in tests/conftest.py alone)."""
 
 import shutil
 import sys
 from pathlib import Path
 
 # Add app/backend to sys.path so imports resolve without package install
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent))
 
 import pytest
 
@@ -20,7 +24,7 @@ def brain(tmp_path, monkeypatch):
     return tmp_path / "brain"
 
 
-_MODULE_PACKAGES_DIR = Path(__file__).parent.parent / "module_packages"
+_MODULE_PACKAGES_DIR = Path(__file__).parent / "module_packages"
 
 
 @pytest.fixture()

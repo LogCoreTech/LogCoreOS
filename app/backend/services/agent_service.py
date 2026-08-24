@@ -8,7 +8,6 @@ from typing import Any, Callable
 
 from services import (
     auth_service,
-    journal_service,
     notes_service,
     priority_service,
     profile_service,
@@ -46,6 +45,7 @@ def _brain_skip(user: dict) -> set[str]:
     disabled = set(user.get("disabled_modules", []))
     return {"Tasks"} | brain_paths_for_disabled(disabled)
 
+
 # Tools available in research mode — read-only access only
 _RESEARCH_TOOLS = {
     "list_tasks",
@@ -54,8 +54,6 @@ _RESEARCH_TOOLS = {
     "list_brain_files",
     "read_brain_file",
     "get_profile",
-    "read_journal_entry",
-    "list_journal_entries",
     "list_notes",
     "read_note",
     "get_task_history",
@@ -209,29 +207,6 @@ _USER_TOOLS: list[dict] = [
                 "content": {"type": "string", "description": "Initial content (defaults to empty)"},
             },
             "required": ["path"],
-        },
-    },
-    {
-        "name": "read_journal_entry",
-        "description": "Read the user's journal entry for a specific date.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "date": {"type": "string", "description": "Date in YYYY-MM-DD format"},
-            },
-            "required": ["date"],
-        },
-    },
-    {
-        "name": "write_journal_entry",
-        "description": "Create or update the user's journal entry for a specific date.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "date": {"type": "string", "description": "Date in YYYY-MM-DD format"},
-                "content": {"type": "string", "description": "Full markdown content of the entry"},
-            },
-            "required": ["date", "content"],
         },
     },
     {
@@ -720,25 +695,6 @@ _USER_TOOLS: list[dict] = [
         "name": "get_week_snapshot",
         "description": "Get a full overview of the current week — tasks due this week, overdue tasks, and tasks completed this week. Use at the start of any planning or review session.",
         "input_schema": {"type": "object", "properties": {}, "required": []},
-    },
-    {
-        "name": "list_journal_entries",
-        "description": "List journal entries with their full content, optionally filtered by date range. Useful for progress summaries and reflection.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "since": {
-                    "type": "string",
-                    "description": "Only return entries on or after this date (YYYY-MM-DD)",
-                },
-                "until": {
-                    "type": "string",
-                    "description": "Only return entries on or before this date (YYYY-MM-DD)",
-                },
-                "limit": {"type": "integer", "description": "Max entries to return (default 7)"},
-            },
-            "required": [],
-        },
     },
     {
         "name": "run_suggestion",
@@ -1820,15 +1776,6 @@ def _execute_tool(
                 write_markdown(path, inputs.get("content", ""))
                 return {"ok": True, "created": inputs["path"]}
 
-            case "read_journal_entry":
-                entry = journal_service.get_entry(user["name"], inputs["date"])
-                if entry is None:
-                    return {"date": inputs["date"], "content": "", "exists": False}
-                return {**entry, "exists": True}
-
-            case "write_journal_entry":
-                return journal_service.upsert_entry(user["name"], inputs["date"], inputs["content"])
-
             case "list_notes":
                 return notes_service.list_visible_notes(
                     user["name"],
@@ -2207,22 +2154,6 @@ def _execute_tool(
                         t for t in completed if ws <= (t.get("completed_at") or "")[:10] <= we
                     ],
                 }
-
-            case "list_journal_entries":
-                since = inputs.get("since")
-                until = inputs.get("until")
-                limit = int(inputs.get("limit", 7))
-                entries = journal_service.list_entries(user["name"])
-                if since:
-                    entries = [e for e in entries if e["date"] >= since]
-                if until:
-                    entries = [e for e in entries if e["date"] <= until]
-                result = []
-                for e in entries[:limit]:
-                    full = journal_service.get_entry(user["name"], e["date"])
-                    if full:
-                        result.append({"date": e["date"], "content": full.get("content", "")})
-                return result
 
             case "complete_shared_task":
                 task = task_service.get_task("_household", inputs["task_id"])
@@ -3179,7 +3110,10 @@ async def run_agent(
     if mode in ("auto", "approve"):
         active_tools = [t for t in all_tools if t["name"] != "propose_plan"]
     elif mode == "research":
-        active_tools = [t for t in all_tools if t["name"] in _RESEARCH_TOOLS]
+        from module_registry import read_only_agent_tool_names
+
+        research_tools = _RESEARCH_TOOLS | read_only_agent_tool_names()
+        active_tools = [t for t in all_tools if t["name"] in research_tools]
     else:  # plan
         active_tools = all_tools
 
@@ -3280,7 +3214,10 @@ async def run_agent(
         # Approve mode: pause before any write — nothing in this response is
         # executed; the frontend shows the pending writes for user approval.
         if mode == "approve":
-            pending = [tc for tc in response.tool_calls if tc.name not in _READ_TOOLS]
+            from module_registry import read_only_agent_tool_names
+
+            read_tools = _READ_TOOLS | read_only_agent_tool_names()
+            pending = [tc for tc in response.tool_calls if tc.name not in read_tools]
             if pending:
                 if response.text:
                     steps.append({"type": "thought", "content": response.text, "step": step_num})
