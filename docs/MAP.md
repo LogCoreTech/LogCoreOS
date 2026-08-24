@@ -149,7 +149,7 @@ LogCoreOS/
 │           │   │   ├── Notifications.jsx → ntfy channel+rotate, Web Push, Proactive Suggestions (merged from 3 former cards)
 │           │   │   ├── Shortcuts.jsx     → shortcuts editor — drives both mobile's bottom bar AND (2026-08-18) desktop's sidebar "Pinned" section from the same per-workspace list; no longer mobile-only, row shown on every screen size in Settings.jsx
 │           │   │   ├── Account.jsx       → timezone, "Your Brain" link (→ /brain), export Brain zip
-│           │   │   ├── AdminMenu.jsx     → Admin Settings drill-down menu (admin-only): Users & Roles/AI/General/Team/Household/Hosting/Contact Fields rows
+│           │   │   ├── AdminMenu.jsx     → Admin Settings drill-down menu (admin-only): Users & Roles/AI/General/Team/Household/Hosting/Contact Fields/Mod Store rows
 │           │   │   └── admin/            → one page per Admin Settings row (relocated from the old Admin.jsx + AiUsage.jsx, not rewritten):
 │           │   │       ├── Users.jsx           → user list; "+ Add User" and "Role Definitions →" rows
 │           │   │       ├── NewUser.jsx         → create-user form as its own page
@@ -161,6 +161,7 @@ LogCoreOS/
 │           │   │       ├── Team.jsx            → Team pool priorities + PoolBankConnections (pool="team")
 │           │   │       ├── Household.jsx       → Household pool priorities + Smart Home (Home Assistant config) + PoolBankConnections (pool="household")
 │           │   │       ├── Hosting.jsx         → Hosting (domain/proxy/tunnel) + Managed Hosting (Infisical, self-hides when unconfigured) + n8n Automation + automation token reveal/rotate
+│           │   │       ├── ModStore.jsx        → Mod Store (2026-08-24): GET /mod-store/catalog+/installed+/active drive 7 explicit per-row states (rowState()) crossing the `installed` marker with the `active` (really-registered) signal; a page-level "Restart Now" banner appears whenever any row is pending either direction; confirm-before-uninstall + the online-users-before-restart warning both use plain window.confirm() (matches UserDetail.jsx's existing convention, not a custom modal)
 │           │   │       └── ContactFields.jsx   → Contacts custom-field admin authoring screen (mirrors TemplateManager.jsx's add/edit/reorder/delete pattern) — key/label/type/select-options + a Person/Company `applies_to` checkbox pair, guards against unchecking the last remaining value; the only frontend caller of `PUT /contacts/fields` (none existed before this)
 │           │   ├── Login.jsx      → login + register form
 │           │   └── Setup.jsx      → first-time setup wizard (Personal/Business profile, priorities, timezone)

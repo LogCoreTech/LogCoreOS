@@ -14,6 +14,7 @@ export default function AdminMenu() {
         <MenuRow icon="🏢" label="Team" subtitle="Business pool priorities & bank connections" to="/settings/admin/team" />
         <MenuRow icon="🏠" label="Household" subtitle="Household priorities, Smart Home, bank connections" to="/settings/admin/household" />
         <MenuRow icon="🌐" label="Hosting" subtitle="Domain, managed hosting, n8n automation" to="/settings/admin/hosting" />
+        <MenuRow icon="🧩" label="Mod Store" subtitle="Install first-party modules" to="/settings/admin/mod-store" />
       </div>
 
       <div className="h-20 md:hidden" aria-hidden="true" />

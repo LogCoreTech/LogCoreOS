@@ -27,6 +27,7 @@ import AdminGeneral from './pages/settings/admin/General'
 import AdminTeam from './pages/settings/admin/Team'
 import AdminHousehold from './pages/settings/admin/Household'
 import AdminHosting from './pages/settings/admin/Hosting'
+import AdminModStore from './pages/settings/admin/ModStore'
 import Calendar from './pages/Calendar'
 import Household from './pages/Household'
 import Team from './pages/Team'
@@ -134,6 +135,7 @@ export default function App() {
                 <Route path="/settings/admin/team" element={<AdminOnly><AdminTeam /></AdminOnly>} />
                 <Route path="/settings/admin/household" element={<AdminOnly><AdminHousehold /></AdminOnly>} />
                 <Route path="/settings/admin/hosting" element={<AdminOnly><AdminHosting /></AdminOnly>} />
+                <Route path="/settings/admin/mod-store" element={<AdminOnly><AdminModStore /></AdminOnly>} />
                 <Route path="/help"     element={<Help />} />
               </Route>
             </Routes>

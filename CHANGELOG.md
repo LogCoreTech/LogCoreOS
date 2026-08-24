@@ -8,6 +8,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Mod Store** (Admin → Mod Store): install and uninstall first-party LogCoreOS modules. Journal is
+  the first converted module — it's no longer a permanent core feature, and a fresh install now
+  ships without it by default; existing instances that already used it keep it installed
+  automatically. Uninstalling a module never deletes its data — reinstalling picks everything back
+  up untouched. Installing/uninstalling requires an admin-triggered restart to take effect (never
+  automatic), with a warning if other users currently appear online.
+
+### Changed
+
+- Every module in the app is being converted into this same self-contained format over time,
+  including foundational ones (which will be marked non-removable, not excluded) — journal is the
+  first, proving the pattern; the rest follow one at a time.
+
 ## [0.6.4] — 2026-08-22
 
 ### Security

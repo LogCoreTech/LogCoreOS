@@ -75,6 +75,7 @@ export const MODULE_SECTIONS = {
     { value: '/settings/admin/team', label: 'Admin Settings → Team', adminOnly: true },
     { value: '/settings/admin/household', label: 'Admin Settings → Household', adminOnly: true },
     { value: '/settings/admin/hosting', label: 'Admin Settings → Hosting', adminOnly: true },
+    { value: '/settings/admin/mod-store', label: 'Admin Settings → Mod Store', adminOnly: true },
   ],
 }
 
