@@ -1,6 +1,8 @@
+import { Suspense, lazy } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/auth'
 import { WorkspaceProvider } from './lib/workspace'
+import { MODULE_PACKAGES, isPackageModule } from './lib/moduleRegistry'
 import ErrorBoundary from './components/ErrorBoundary'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
@@ -29,7 +31,6 @@ import Calendar from './pages/Calendar'
 import Household from './pages/Household'
 import Team from './pages/Team'
 import Notes from './pages/Notes'
-import Journal from './pages/Journal'
 import Login from './pages/Login'
 import Setup from './pages/Setup'
 import Profile from './pages/Profile'
@@ -54,9 +55,27 @@ function AdminOnly({ children }) {
 }
 
 function ModuleRoute({ moduleId, children }) {
-  const { user } = useAuth()
+  const { user, activeModuleIds } = useAuth()
   if (user?.disabledModules?.includes(moduleId)) return <Navigate to="/" replace />
+  // A converted module's route also needs to be genuinely live in the
+  // CURRENT backend process, not just "installed" (the marker file, which
+  // disabledModules already reflects) — between an admin clicking Install
+  // and clicking Restart Now, the marker says active but the router isn't
+  // registered yet and would 404. Core modules skip this check entirely
+  // (they're never in activeModuleIds, which only ever lists module_packages
+  // ids — they're always live by definition).
+  if (isPackageModule(moduleId) && !activeModuleIds.includes(moduleId)) {
+    return <Navigate to="/" replace />
+  }
   return children
+}
+
+function PageSkeleton() {
+  return (
+    <div className="flex-1 flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
 }
 
 export default function App() {
@@ -76,13 +95,26 @@ export default function App() {
                 <Route path="/household" element={<ModuleRoute moduleId="household"><Household /></ModuleRoute>} />
                 <Route path="/team"      element={<ModuleRoute moduleId="team"><Team /></ModuleRoute>} />
                 <Route path="/notes"     element={<ModuleRoute moduleId="notes"><Notes /></ModuleRoute>} />
-                <Route path="/journal"   element={<ModuleRoute moduleId="journal"><Journal /></ModuleRoute>} />
                 <Route path="/chat"      element={<ModuleRoute moduleId="chat"><Chat /></ModuleRoute>} />
                 <Route path="/automations" element={<ModuleRoute moduleId="automations"><Automations /></ModuleRoute>} />
                 <Route path="/home"        element={<ModuleRoute moduleId="home"><Home /></ModuleRoute>} />
                 <Route path="/assets"      element={<ModuleRoute moduleId="assets"><Assets /></ModuleRoute>} />
                 <Route path="/finance"     element={<ModuleRoute moduleId="finance"><Finance /></ModuleRoute>} />
                 <Route path="/contacts"    element={<ModuleRoute moduleId="contacts"><Contacts /></ModuleRoute>} />
+                {MODULE_PACKAGES.map(pkg => {
+                  const Page = lazy(pkg.loadPage)
+                  return (
+                    <Route
+                      key={pkg.id}
+                      path={pkg.to}
+                      element={
+                        <ModuleRoute moduleId={pkg.id}>
+                          <Suspense fallback={<PageSkeleton />}><Page /></Suspense>
+                        </ModuleRoute>
+                      }
+                    />
+                  )
+                })}
                 <Route path="/brain"     element={<Brain />} />
                 <Route path="/profile"   element={<Profile />} />
                 <Route path="/settings" element={<Settings />} />

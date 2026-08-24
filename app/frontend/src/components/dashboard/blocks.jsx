@@ -513,16 +513,6 @@ export function NoteEmbedBlock({ data, actions, onAction }) {
   )
 }
 
-export function JournalEntryBlock({ data }) {
-  if (!data?.preview) return <Empty text="No entry for this date." />
-  return (
-    <div>
-      <p className="text-xs text-charcoal-400 mb-1">{data.date}</p>
-      <p className="text-sm whitespace-pre-wrap line-clamp-6">{data.preview}</p>
-    </div>
-  )
-}
-
 export function WorkflowStatusBlock({ data }) {
   const wf = data?.workflow
   if (!wf) return <Empty text="Workflow not found." />

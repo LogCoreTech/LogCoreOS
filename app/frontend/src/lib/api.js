@@ -66,11 +66,15 @@ async function request(method, path, body, extraHeaders) {
   return data
 }
 
-const get    = (path)       => request('GET',    path)
-const post   = (path, body) => request('POST',   path, body)
-const put    = (path, body) => request('PUT',    path, body)
-const patch  = (path, body) => request('PATCH',  path, body)
-const del    = (path)       => request('DELETE', path)
+// Exported (not just used internally below) so a converted module's own
+// frontend/api.js — e.g. module_packages/journal/frontend/api.js — can build
+// its client on the same session-handling/error-normalization logic instead
+// of duplicating fetch/credentials/header code per module.
+export const get    = (path)       => request('GET',    path)
+export const post   = (path, body) => request('POST',   path, body)
+export const put    = (path, body) => request('PUT',    path, body)
+export const patch  = (path, body) => request('PATCH',  path, body)
+export const del    = (path)       => request('DELETE', path)
 
 async function requestFile(method, path, file) {
   const fd = new FormData()
@@ -512,13 +516,6 @@ export const notes = {
   roles:        ()                            => get('/notes/roles'),
 }
 
-export const journal = {
-  list:   ()                => get('/journal'),
-  get:    (date)            => get(`/journal/${date}`),
-  upsert: (date, content)   => request('PUT', `/journal/${date}`, { content }),
-  remove: (date)            => del(`/journal/${date}`),
-}
-
 export const calendar = {
   tasks:       ()           => get('/calendar/tasks'),
   events:      ()           => get('/calendar/events'),
@@ -655,5 +652,40 @@ export const user = {
     a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] || 'brain.zip'
     a.click()
     URL.revokeObjectURL(url)
+  },
+}
+
+export const modStore = {
+  catalog:    ()             => get('/mod-store/catalog'),
+  installed:  ()             => get('/mod-store/installed'),
+  active:     ()             => get('/mod-store/active'),
+  install:    (id)           => post(`/mod-store/install/${id}`, {}),
+  uninstall:  (id)           => post(`/mod-store/uninstall/${id}`, {}),
+  // Bypasses the generic request() helper deliberately: a 409 here means
+  // "other users are online, confirm before proceeding" — an expected,
+  // structured response ({message, online_users}) the caller should branch
+  // on, not a string error. request()'s generic error handling only knows
+  // how to stringify an array or plain-string `detail`; an object detail
+  // would collapse to the useless "[object Object]".
+  async restart(force = false) {
+    const res = await fetch(`${BASE}/mod-store/restart`, {
+      method: 'POST',
+      headers: headers(),
+      credentials: 'include',
+      body: JSON.stringify({ force }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (res.status === 409) {
+      return {
+        ok: false,
+        conflict: true,
+        onlineUsers: data.detail?.online_users || [],
+        message: data.detail?.message || 'Other users are currently online.',
+      }
+    }
+    if (!res.ok) {
+      throw new Error(data.detail || 'Restart failed — check server logs.')
+    }
+    return { ok: true, conflict: false, ...data }
   },
 }

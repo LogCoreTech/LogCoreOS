@@ -1,11 +1,13 @@
+import { lazy } from 'react'
 import {
   AiUsageMeBlock, AiUsageOverviewBlock, CollectionBlock, ContactsListBlock, CustomFieldsBlock, DocumentsBlock, DueTodayBlock,
   FinanceActivityBlock, FinanceBookReportBlock, GoalsProgressBlock, HeadingDividerBlock,
-  HomeFavouritesBlock, InboxSummaryBlock, JournalEntryBlock, LinkButtonBlock, LinkedAssetsBlock,
+  HomeFavouritesBlock, InboxSummaryBlock, LinkButtonBlock, LinkedAssetsBlock,
   LinkedContactBlock, LinkedDealsBlock, LinkedTasksBlock, MyAssetsSummaryBlock, NavButtonBlock,
   NoteEmbedBlock, PoolTasksBlock, RecentAiActionsBlock, SingleEventBlock, SingleTaskBlock,
   StatusButtonBlock, StreaksBlock, TextBlock, Top3TasksBlock, UpcomingEventsBlock, WorkflowStatusBlock,
 } from './blocks'
+import { MODULE_PACKAGES } from '../../lib/moduleRegistry'
 
 // Frontend render-component mirror of the backend registry (services/dashboard_blocks/registry.py).
 // Icon + Component + default grid size live here; admin_only/workspace gating comes from
@@ -57,7 +59,6 @@ export const BLOCK_REGISTRY = {
   collection: { Component: CollectionBlock, icon: '📋', label: 'Collection (List/Board)', defaultLayout: { w: 18, h: 12 }, recordKind: 'asset' },
   contacts_list: { Component: ContactsListBlock, icon: '👥', label: 'Contacts List', defaultLayout: { w: 12, h: 9 }, shape: 'list', recordKind: 'contact' },
   note_embed: { Component: NoteEmbedBlock, icon: '📝', label: 'Note Embed', defaultLayout: { w: 12, h: 9 }, recordKind: 'note' },
-  journal_entry: { Component: JournalEntryBlock, icon: '📔', label: 'Journal Entry', defaultLayout: { w: 12, h: 9 } },
   workflow_status: { Component: WorkflowStatusBlock, icon: '⚙️', label: 'Automation Workflow Status', defaultLayout: { w: 9, h: 6 } },
   inbox_summary: { Component: InboxSummaryBlock, icon: '📥', label: 'Automation Inbox Summary', defaultLayout: { w: 9, h: 6 }, shape: 'list' },
   ai_usage_me: { Component: AiUsageMeBlock, icon: '🤖', label: 'AI Usage — My Usage', defaultLayout: { w: 9, h: 6 } },
@@ -72,6 +73,23 @@ export const BLOCK_REGISTRY = {
   // Default sizes sit at the grid's own MIN_W/MIN_H floor for the same reason.
   nav_button: { Component: NavButtonBlock, icon: '➡️', label: 'Navigate To…', defaultLayout: { w: 5, h: 3 }, chromeless: true },
   status_button: { Component: StatusButtonBlock, icon: '🔄', label: 'Status/Archive Action', defaultLayout: { w: 6, h: 3 }, chromeless: true },
+}
+
+// A converted module's own block type(s) — e.g. journal's journal_entry —
+// register here from their manifest instead of a hardcoded entry above.
+// `lazy()` is called once at module-load time (not per-render), same
+// requirement React has for any lazy component reference to stay stable.
+// Actual GATING (admin_only/module-disabled) is still the backend's
+// GET /dashboards/catalog, exactly as the comment above BLOCK_REGISTRY
+// already establishes for every other entry here.
+for (const pkg of MODULE_PACKAGES) {
+  if (!pkg.block) continue
+  BLOCK_REGISTRY[pkg.block.type] = {
+    Component: lazy(pkg.block.loadComponent),
+    icon: pkg.block.icon,
+    label: pkg.block.label,
+    defaultLayout: pkg.block.defaultLayout,
+  }
 }
 
 // Config field schema for record-linked / configurable block types. Each field's
@@ -140,7 +158,6 @@ export const CONFIG_FIELD_SCHEMAS = {
   linked_tasks: [{ key: 'asset_id', label: 'Asset', kind: 'asset' }],
   linked_contact: [{ key: 'asset_id', label: 'Asset (shows its linked contact)', kind: 'asset' }],
   note_embed: [{ key: 'path', label: 'Note', kind: 'note' }],
-  journal_entry: [{ key: 'date', label: 'Date', kind: 'date' }],
   single_event: [{ key: 'event_id', label: 'Event', kind: 'event' }],
   workflow_status: [{ key: 'workflow_id', label: 'Workflow', kind: 'workflow' }],
   text_block: [{ key: 'text', label: 'Text', kind: 'textarea' }],
@@ -215,6 +232,12 @@ export const CONFIG_FIELD_SCHEMAS = {
     },
     { key: 'label', label: 'Button label (optional)', kind: 'text', optional: true },
   ],
+}
+
+for (const pkg of MODULE_PACKAGES) {
+  if (pkg.block?.configSchema) {
+    CONFIG_FIELD_SCHEMAS[pkg.block.type] = pkg.block.configSchema
+  }
 }
 
 // The real config-field list for a block type — its own CONFIG_FIELD_SCHEMAS

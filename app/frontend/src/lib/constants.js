@@ -1,3 +1,5 @@
+import { MODULE_PACKAGES } from './moduleRegistry'
+
 export const CATEGORY_COLORS = {
   Religion:         'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
   God:              'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
@@ -16,15 +18,17 @@ export function catColor(cat) {
 }
 
 // ── Module registry ────────────────────────────────────────────────────────────
-// Add future modules here — they appear in the drawer and Settings automatically.
-export const ALL_MODULES = [
+// Add future CORE (never converted) modules here — they appear in the drawer
+// and Settings automatically. A CONVERTED module (module_packages/<id>/)
+// needs no entry here at all — it's discovered automatically via
+// moduleRegistry.js's import.meta.glob and merged into ALL_MODULES below.
+const CORE_MODULES = [
   { id: 'dashboard',            to: '/',             icon: '⊞',          label: 'Dashboard'             },
   { id: 'tasks',                to: '/tasks',        icon: '✓',           label: 'Tasks'                 },
   { id: 'goals',                to: '/goals',        icon: '🎯',          label: 'Goals'                 },
   { id: 'calendar',             to: '/calendar',     icon: '📅',          label: 'Calendar'              },
   { id: 'household',            to: '/household',    icon: '🏠',          label: 'Household',  workspace: 'personal' },
   { id: 'notes',                to: '/notes',        icon: '📝',          label: 'Notes'                 },
-  { id: 'journal',              to: '/journal',      icon: '📖',          label: 'Journal',    workspace: 'personal' },
   { id: 'chat',                 to: '/chat',         icon: '◈',           label: 'AI Chat'               },
   { id: 'automations',          to: '/automations',  icon: '⚡',          label: 'Automations'           },
   { id: 'automations_business', nav: false,                               label: 'Business Automations', workspace: 'business' },
@@ -33,6 +37,13 @@ export const ALL_MODULES = [
   { id: 'assets',               to: '/assets',       icon: '🗂️',         label: 'Assets'                },
   { id: 'finance',              to: '/finance',      icon: '💵',          label: 'Finance'               },
   { id: 'contacts',             to: '/contacts',     icon: '👥',          label: 'Contacts'              },
+]
+
+export const ALL_MODULES = [
+  ...CORE_MODULES,
+  ...MODULE_PACKAGES.map(m => ({
+    id: m.id, to: m.to, icon: m.icon, label: m.label, workspace: m.workspace,
+  })),
 ]
 
 export const DEFAULT_SHORTCUTS = ['dashboard', 'tasks', 'chat']

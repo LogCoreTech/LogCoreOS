@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import HelpButton from '../components/HelpButton'
-import { journal as journalApi } from '../lib/api'
+import HelpButton from '../../../components/HelpButton'
+import { journal as journalApi } from './api'
 
 function _todayStr() {
   const d = new Date()

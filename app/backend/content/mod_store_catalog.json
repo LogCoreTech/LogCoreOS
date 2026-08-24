@@ -1,6 +1,14 @@
 {
   "modules": [
     {
+      "id": "journal",
+      "name": "Journal",
+      "description": "A private daily journal — one Markdown entry per day.",
+      "category": "personal",
+      "icon": "📖",
+      "status": "available"
+    },
+    {
       "id": "field_ops",
       "name": "Field Ops",
       "description": "Subdivisions, lots, phase scheduling, and mobile SmartForm checklists for residential trade subcontractors.",

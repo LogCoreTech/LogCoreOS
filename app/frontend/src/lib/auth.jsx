@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react'
-import { auth as authApi } from './api'
+import { auth as authApi, modStore as modStoreApi } from './api'
 import { applyAccentColor, applyDarkMode, applyBackground, applyDensity, applyCornerStyle, getSystemDarkPreference } from './theme'
 import DemoBanner from '../components/DemoBanner'
 
@@ -16,6 +16,26 @@ export function AuthProvider({ children }) {
   })
   const [sessionChecked, setSessionChecked] = useState(false)
   const [demoMode, setDemoMode] = useState(false)
+  // Which module_packages/ modules are actually registered in the CURRENT
+  // backend process — distinct from user.disabledModules (which reflects the
+  // installed_modules.json marker live, even before a pending restart has
+  // picked it up). Nav/routing for a converted module must gate on this, not
+  // just disabledModules, or a just-installed-not-yet-restarted module would
+  // show as reachable while its router still 404s. Empty array is the
+  // correct default before the first fetch resolves — no converted module
+  // is falsely treated as active.
+  const [activeModuleIds, setActiveModuleIds] = useState([])
+
+  async function refreshActiveModules() {
+    try {
+      const { active } = await modStoreApi.active()
+      setActiveModuleIds(active || [])
+    } catch {
+      // Same philosophy as refreshUser()'s catch — a transient failure here
+      // must not eject any module a user was already using; the next poll
+      // (30s, same cadence as refreshUser) will pick up the real state.
+    }
+  }
 
   // Instance-wide, not user-specific — fetched once regardless of login
   // state (the public /auth/status endpoint), so the banner shows on the
@@ -68,7 +88,7 @@ export function AuthProvider({ children }) {
 
   // On mount, verify the cookie session is still valid
   useEffect(() => {
-    refreshUser().finally(() => setSessionChecked(true))
+    Promise.all([refreshUser(), refreshActiveModules()]).finally(() => setSessionChecked(true))
   }, [])
 
   function login(id, name, role, disabledModules = [], timezone = 'UTC', accentColor = null, darkMode = 'system', background = null, density = 'comfortable', cornerStyle = 'rounded', workspaces = ['personal']) {
@@ -130,12 +150,17 @@ export function AuthProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.name])
 
-  // Poll /me every 30 seconds so admin permission changes take effect live.
-  // Keyed on user?.name so the interval is only torn down/recreated when the
-  // logged-in identity changes, not on every unrelated `user` field update.
+  // Poll /me every 30 seconds so admin permission changes take effect live —
+  // active modules on the same cadence, so a Restart Now elsewhere is picked
+  // up without a manual reload. Keyed on user?.name so the interval is only
+  // torn down/recreated when the logged-in identity changes, not on every
+  // unrelated `user` field update.
   useEffect(() => {
     if (!user) return
-    const id = setInterval(() => refreshUser(), 30_000)
+    const id = setInterval(() => {
+      refreshUser()
+      refreshActiveModules()
+    }, 30_000)
     return () => clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.name])
@@ -148,7 +173,7 @@ export function AuthProvider({ children }) {
   )
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, updateUserField, refreshUser, demoMode }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUserField, refreshUser, demoMode, activeModuleIds, refreshActiveModules }}>
       {demoMode && <DemoBanner />}
       {children}
     </AuthContext.Provider>

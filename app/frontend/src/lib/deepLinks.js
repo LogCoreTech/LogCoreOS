@@ -3,14 +3,15 @@
 // than one place (Layout.jsx's notification-bell navTarget() and the
 // dashboard's nav_button block both go through this).
 
-export const MODULE_ROUTES = {
+import { MODULE_PACKAGES } from './moduleRegistry'
+
+const _CORE_MODULE_ROUTES = {
   tasks: '/tasks',
   goals: '/goals',
   calendar: '/calendar',
   household: '/household',
   team: '/team',
   notes: '/notes',
-  journal: '/journal',
   chat: '/chat',
   automations: '/automations',
   home: '/home',
@@ -18,6 +19,13 @@ export const MODULE_ROUTES = {
   finance: '/finance',
   contacts: '/contacts',
   dashboard: '/',
+}
+
+// A converted module needs no entry here — its route is discovered from its
+// own manifest.js (moduleRegistry.js), same as constants.js's ALL_MODULES.
+export const MODULE_ROUTES = {
+  ..._CORE_MODULE_ROUTES,
+  ...Object.fromEntries(MODULE_PACKAGES.map(m => [m.id, m.to])),
 }
 
 // Query param each module's own page reads for a specific-record deep link.
