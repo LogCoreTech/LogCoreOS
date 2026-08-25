@@ -1547,7 +1547,11 @@ Admin only. Body: `{ "force": false }`. Restarts the app's own `logcore-app` con
 locked-down socket-proxy Docker mechanism `n8n_service.py`'s `restart_n8n()` already uses — this is
 what actually applies an install/uninstall, never automatic. If other users currently appear online
 (`presence_service.is_online()`) and `force` isn't set, returns `409` with
-`{ "message", "online_users": [...] }` instead of restarting. Rate limited: 10/60s.
+`{ "message", "online_users": [...] }` instead of restarting. Docker connectivity/container lookup
+happens synchronously (a real config/permission failure still returns `502` immediately); the actual
+`container.restart()` call is deferred to a `BackgroundTasks` job that only runs after the HTTP
+response has been sent, plus a short delay — calling it inline would race the response with the
+container's own shutdown (2026-08-24, see `docs/MEMORY.md`). Rate limited: 10/60s.
 
 ---
 

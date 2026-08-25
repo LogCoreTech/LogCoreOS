@@ -8,8 +8,9 @@ automatic) that actually applies the change to the running process.
 """
 
 import logging
+import time
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from routers.auth import get_current_user, require_admin
@@ -66,6 +67,7 @@ class RestartRequest(BaseModel):
 @router.post("/restart")
 def restart(
     req: RestartRequest,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(require_admin),
     _rl: None = Depends(_write_limit),
 ):
@@ -90,11 +92,26 @@ def restart(
     try:
         import docker as docker_sdk
 
-        docker_sdk.from_env().containers.get("logcore-app").restart()
+        container = docker_sdk.from_env().containers.get("logcore-app")
     except Exception:
-        logger.exception("mod store restart failed")
+        logger.exception("mod store restart failed — could not reach the app container")
         raise HTTPException(status_code=502, detail="Restart failed — check server logs.")
 
+    # The actual restart call kills THIS process (it's the container's own
+    # request handler restarting its own container) — calling it inline,
+    # synchronously, races the HTTP response: Docker can SIGTERM this worker
+    # before the response finishes reaching the browser, which looks like a
+    # crash even on an entirely normal restart. Deferred via BackgroundTasks
+    # (Starlette runs these only after the response has been sent) plus a
+    # short delay so the response has time to actually leave the box first.
+    def _do_restart() -> None:
+        time.sleep(2)
+        try:
+            container.restart()
+        except Exception:
+            logger.exception("mod store restart failed")
+
+    background_tasks.add_task(_do_restart)
     return {"ok": True, "restarting": True}
 
 

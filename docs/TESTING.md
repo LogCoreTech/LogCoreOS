@@ -83,7 +83,7 @@ Exception: external HTTP calls (AI provider, n8n, HA, Tavily) should be mocked w
 
 ---
 
-## Current Coverage (838 tests, 46 files + module_packages/journal/tests/)
+## Current Coverage (847 tests, 47 files + module_packages/journal/tests/)
 
 Core-service coverage below (the module suites — finance, contacts, assets, help, etc. — make up the remainder of the files). Since 2026-08-24, `testpaths` (pyproject.toml) covers both `tests/` and `module_packages/` — run bare `pytest`/`pytest -v` for the full suite, or `pytest tests/ -v` to narrow to core-only (an explicit path on the command line overrides `testpaths`).
 
@@ -93,6 +93,7 @@ Core-service coverage below (the module suites — finance, contacts, assets, he
 | `test_journal_module_conversion.py` | 6 | The conversion machinery, not journal's CRUD: `m015` fresh-vs-upgrade migration split, `on_install`/`on_new_user` backfill hooks (incl. pseudo-user exclusion), a full install→uninstall→reinstall round-trip proving data survives the whole cycle |
 | `test_module_registry.py` | 8 | Discovery (valid module, malformed-module isolation, id-mismatch rejection, migration-name collision exclusion), `active_manifests()` install-state filtering, `register_routers()` failure isolation (optional logs-and-skips, locked crashes boot) |
 | `test_mod_store_service.py` | 7 | Catalog merge (coming_soon→available, error status), install/uninstall round-trip, data-untouched-on-uninstall, history log survives reinstall |
+| `test_mod_store_router.py` | 9 | The router's own endpoint functions (`install`/`uninstall`/`restart`), not just the service layer — 404/409 validation, the online-users 409 conflict + `force` bypass, and `restart()`'s self-restart-must-be-deferred regression test (a fake `docker` module injected via `monkeypatch.setitem(sys.modules, "docker", ...)`, since the SDK is imported locally inside the function; asserts `container.restart()` is **not** called until the `BackgroundTasks` job actually runs, and that a Docker connection failure still 502s synchronously) |
 | `test_features_service_modules.py` | 6 | `all_module_ids()` + `get_effective_disabled()`'s not-installed union |
 | `test_brain_module_gating.py` | 5 | Bypass-confirmed-then-closed pairs: a module's `owned_brain_paths` hidden from the generic Brain browser only when disabled for that user (not instance-wide) |
 | `test_dashboard_block_module_gating.py` | 5 | Catalog filtering + `render_block()`'s per-pass identity gating (viewer at pass 1, owner at pass 2's `share_underlying_data` exception) — including the subtle "viewer disabled, owner enabled" and "both disabled" cases |
@@ -109,7 +110,6 @@ Core-service coverage below (the module suites — finance, contacts, assets, he
 | `test_recurring_service.py` | 15 | Next-due arithmetic including leap years, streak logic |
 | `test_task_service.py` | 15 | Task CRUD, pagination, type handling |
 | `test_auth_service.py` | 22 | User CRUD, JWT create/verify, bcrypt, JTI revocation, constant-time login + account lockout, **notification-channel rotation** |
-| `test_journal_service.py` | 13 | Daily entry CRUD |
 | `test_rate_limiter.py` | 12 | IP-based rate limiting, window enforcement |
 
 ---
