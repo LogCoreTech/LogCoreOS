@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import HelpButton from '../components/HelpButton'
-import { home as homeApi } from '../lib/api'
+import HelpButton from '../../../components/HelpButton'
+import { home as homeApi } from './api'
 
 const DOMAIN_TABS = [
   { id: 'all',       label: 'All' },
@@ -304,7 +304,7 @@ export default function Home() {
         <div className="card p-4">
           <p className="text-red-500 text-sm">{error}</p>
           <p className="text-charcoal-400 dark:text-charcoal-500 text-sm mt-2">
-            Configure your Home Assistant URL and token in <strong>Admin → Smart Home</strong>.
+            Configure your Home Assistant URL and token in <strong>Admin → Household</strong>.
           </p>
         </div>
       </div>
@@ -317,7 +317,7 @@ export default function Home() {
         <h1 className="text-2xl font-bold">Smart Home</h1>
         <div className="card p-4 text-center text-charcoal-400 dark:text-charcoal-500">
           <p className="text-3xl mb-2">💡</p>
-          <p>No devices found. Connect Home Assistant in <strong>Admin → Smart Home</strong>.</p>
+          <p>No devices found. Connect Home Assistant in <strong>Admin → Household</strong>.</p>
         </div>
       </div>
     )

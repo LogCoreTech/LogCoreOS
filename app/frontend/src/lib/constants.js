@@ -32,7 +32,6 @@ const CORE_MODULES = [
   { id: 'chat',                 to: '/chat',         icon: '◈',           label: 'AI Chat'               },
   { id: 'automations',          to: '/automations',  icon: '⚡',          label: 'Automations'           },
   { id: 'automations_business', nav: false,                               label: 'Business Automations', workspace: 'business' },
-  { id: 'home',                 to: '/home',         icon: '💡',          label: 'Smart Home', workspace: 'personal' },
   { id: 'team',                 to: '/team',         icon: '🧑‍🤝‍🧑',  label: 'Team',        workspace: 'business' },
   { id: 'assets',               to: '/assets',       icon: '🗂️',         label: 'Assets'                },
   { id: 'finance',              to: '/finance',      icon: '💵',          label: 'Finance'               },

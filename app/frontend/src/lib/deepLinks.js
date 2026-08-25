@@ -14,7 +14,6 @@ const _CORE_MODULE_ROUTES = {
   notes: '/notes',
   chat: '/chat',
   automations: '/automations',
-  home: '/home',
   assets: '/assets',
   finance: '/finance',
   contacts: '/contacts',

@@ -37,7 +37,6 @@ from routers import (
     finance_transfers,
     health,
     help,
-    home,
     infisical,
     mod_store,
     notes,
@@ -400,7 +399,6 @@ app.include_router(finance_sharing.router, prefix="/api/v1/finance", tags=["fina
 app.include_router(finance_transfers.router, prefix="/api/v1/finance", tags=["finance-transfers"])
 app.include_router(assets.router, prefix="/api/v1/assets", tags=["assets"])
 app.include_router(contacts.router, prefix="/api/v1/contacts", tags=["contacts"])
-app.include_router(home.router, prefix="/api/v1/home", tags=["home"])
 app.include_router(team.router, prefix="/api/v1/team", tags=["team"])
 app.include_router(update.router, prefix="/api/v1/update", tags=["update"])
 app.include_router(help.router, prefix="/api/v1/help", tags=["help"])

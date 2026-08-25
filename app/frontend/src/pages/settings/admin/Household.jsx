@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
-import { priorities as prioritiesApi, home as homeApi } from '../../../lib/api'
+import { priorities as prioritiesApi } from '../../../lib/api'
+import { home as homeApi } from '../../../module_packages/home/frontend/api'
+import { useAuth } from '../../../lib/auth'
+import { isPackageModule } from '../../../lib/moduleRegistry'
 import PriorityList from '../../../components/settings/PriorityList'
 import PoolBankConnections from '../../../components/settings/PoolBankConnections'
 import SettingsPageHeader from '../../../components/settings/SettingsPageHeader'
@@ -106,7 +109,25 @@ function SmartHomeSection() {
   )
 }
 
+function SmartHomeNotInstalled() {
+  return (
+    <div className="card p-5 space-y-1">
+      <h2 className="font-semibold">Smart Home</h2>
+      <p className="text-sm text-charcoal-500 dark:text-charcoal-400">
+        Smart Home isn&apos;t installed — install it from Admin → Mod Store to connect Home Assistant.
+      </p>
+    </div>
+  )
+}
+
 export default function Household() {
+  const { user, activeModuleIds } = useAuth()
+  // Home's own admin config form lives on this page (not a dedicated Home
+  // admin page — see docs/MEMORY.md 2026-08-24), so it needs the same
+  // installed+active stacked gate ModuleRoute applies to Home's own /home
+  // route, just for a section instead of a whole page.
+  const homeInstalled = !user?.disabledModules?.includes('home')
+    && (!isPackageModule('home') || activeModuleIds.includes('home'))
   const [household, setHousehold] = useState([])
   const [loading, setLoading]     = useState(true)
   const [saving, setSaving]       = useState(false)
@@ -179,7 +200,7 @@ export default function Household() {
         </button>
       </div>
 
-      <SmartHomeSection />
+      {homeInstalled ? <SmartHomeSection /> : <SmartHomeNotInstalled />}
 
       <PoolBankConnections pool="household" accountLabel="joint family" />
 

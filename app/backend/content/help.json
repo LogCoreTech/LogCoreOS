@@ -289,25 +289,6 @@
       ]
     },
     {
-      "id": "home",
-      "icon": "🏡",
-      "title": "Smart Home",
-      "blurb": "Control your Home Assistant devices from LogCore — lights, switches, sensors, climate, scenes, and automations.",
-      "howto": [
-        "An admin connects your Home Assistant URL and token in Admin → Smart Home.",
-        "Browse entities by domain and toggle or adjust them from the tiles.",
-        "Activate scenes or trigger HA automations from their panels.",
-        "Star your favourites to pin them to the Dashboard widget for quick access."
-      ],
-      "tips": [
-        "You can also ask the AI to \"turn off the living room lights\" once Home Assistant is connected.",
-        "Smart Home is personal-workspace only."
-      ],
-      "modules": [
-        "home"
-      ]
-    },
-    {
       "id": "workspaces",
       "icon": "🔀",
       "title": "Personal vs Business",

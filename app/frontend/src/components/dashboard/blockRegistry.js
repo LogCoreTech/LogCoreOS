@@ -2,7 +2,7 @@ import { lazy } from 'react'
 import {
   AiUsageMeBlock, AiUsageOverviewBlock, CollectionBlock, ContactsListBlock, CustomFieldsBlock, DocumentsBlock, DueTodayBlock,
   FinanceActivityBlock, FinanceBookReportBlock, GoalsProgressBlock, HeadingDividerBlock,
-  HomeFavouritesBlock, InboxSummaryBlock, LinkButtonBlock, LinkedAssetsBlock,
+  InboxSummaryBlock, LinkButtonBlock, LinkedAssetsBlock,
   LinkedContactBlock, LinkedDealsBlock, LinkedTasksBlock, MyAssetsSummaryBlock, NavButtonBlock,
   NoteEmbedBlock, PoolTasksBlock, RecentAiActionsBlock, SingleEventBlock, SingleTaskBlock,
   StatusButtonBlock, StreaksBlock, TextBlock, Top3TasksBlock, UpcomingEventsBlock, WorkflowStatusBlock,
@@ -28,7 +28,6 @@ export const BLOCK_REGISTRY = {
   streaks: { Component: StreaksBlock, icon: '🔥', label: 'Active Streaks', defaultLayout: { w: 12, h: 9 }, shape: 'list', recordKind: 'task' },
   goals_progress: { Component: GoalsProgressBlock, icon: '🏆', label: 'Goals Progress', defaultLayout: { w: 12, h: 9 }, shape: 'list', recordKind: 'task' },
   single_task: { Component: SingleTaskBlock, icon: '✅', label: 'Single Task', defaultLayout: { w: 9, h: 6 }, recordKind: 'task' },
-  home_favourites: { Component: HomeFavouritesBlock, icon: '💡', label: 'Smart Home Favourites', defaultLayout: { w: 18, h: 9 } },
   // No recordKind: pool tasks live in the household/team pool store, routed
   // through sharedApi/teamApi (never tasksApi) depending on t._source — and
   // Tasks.jsx's own ?task= deep-link lookup only searches the viewer's own

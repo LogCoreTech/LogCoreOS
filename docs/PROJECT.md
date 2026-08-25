@@ -175,10 +175,13 @@ A real architectural shift, not just a feature: every module above is converting
 into a self-contained `module_packages/<id>/` format with its own manifest/version — including
 foundational ones (Tasks, Chat, Dashboards-the-feature), which just carry `uninstallable: true`
 rather than being excluded from the system. End state: `main.py` has zero hardcoded per-module
-router registrations. Phase 1 (the registry mechanism itself — discovery, install/uninstall state,
-all four enforcement-gap fixes) is done, fully tested, with zero real modules converted yet. Full
-design in `docs/MEMORY.md`'s 2026-08-24 entry and `/home/logcore/.claude/plans/i-want-you-to-composed-scone.md`;
-rollout order tracked in `docs/TASKS.md`.
+router registrations. The registry mechanism itself (discovery, install/uninstall state, all four
+enforcement-gap fixes, the admin Mod Store UI) is done and fully tested. Two modules converted so
+far: journal (increment 1) and Smart Home (increment 2, 2026-08-24) — both confirmed working
+end-to-end, including a real restart, on the owner's live instance. Calendar (increment 3) is next.
+Full design in `docs/MEMORY.md`'s 2026-08-24 entries and
+`/home/logcore/.claude/plans/i-want-you-to-composed-scone.md`; rollout order tracked in
+`docs/TASKS.md`.
 
 **Planned (future phases):**
 

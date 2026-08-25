@@ -36,7 +36,6 @@ import Login from './pages/Login'
 import Setup from './pages/Setup'
 import Profile from './pages/Profile'
 import Automations from './pages/Automations'
-import Home from './pages/Home'
 import Assets from './pages/Assets'
 import Finance from './pages/Finance'
 import Contacts from './pages/Contacts'
@@ -98,7 +97,6 @@ export default function App() {
                 <Route path="/notes"     element={<ModuleRoute moduleId="notes"><Notes /></ModuleRoute>} />
                 <Route path="/chat"      element={<ModuleRoute moduleId="chat"><Chat /></ModuleRoute>} />
                 <Route path="/automations" element={<ModuleRoute moduleId="automations"><Automations /></ModuleRoute>} />
-                <Route path="/home"        element={<ModuleRoute moduleId="home"><Home /></ModuleRoute>} />
                 <Route path="/assets"      element={<ModuleRoute moduleId="assets"><Assets /></ModuleRoute>} />
                 <Route path="/finance"     element={<ModuleRoute moduleId="finance"><Finance /></ModuleRoute>} />
                 <Route path="/contacts"    element={<ModuleRoute moduleId="contacts"><Contacts /></ModuleRoute>} />

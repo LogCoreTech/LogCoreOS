@@ -168,7 +168,7 @@ export default function ModStore() {
 
       <p className="text-xs text-charcoal-500 dark:text-charcoal-400">
         First-party modules that extend LogCoreOS with an install. Everything here is
-        built and reviewed before it's listed — nothing here is community-submitted.
+        built and reviewed before it&apos;s listed — nothing here is community-submitted.
       </p>
 
       {pendingRestart && (

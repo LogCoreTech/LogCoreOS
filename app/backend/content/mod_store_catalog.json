@@ -9,6 +9,14 @@
       "status": "available"
     },
     {
+      "id": "home",
+      "name": "Smart Home",
+      "description": "Control and monitor Home Assistant devices, scenes, and automations.",
+      "category": "personal",
+      "icon": "💡",
+      "status": "available"
+    },
+    {
       "id": "field_ops",
       "name": "Field Ops",
       "description": "Subdivisions, lots, phase scheduling, and mobile SmartForm checklists for residential trade subcontractors.",

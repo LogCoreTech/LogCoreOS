@@ -169,21 +169,6 @@ export function SingleTaskBlock({ data, actions, onAction }) {
   return <TaskRow task={task} actions={actions} onAction={onAction} />
 }
 
-export function HomeFavouritesBlock({ data }) {
-  const entities = data?.entities || []
-  if (!entities.length) return <Empty text="No favourited devices." />
-  return (
-    <div className="grid grid-cols-2 gap-2">
-      {entities.map(e => (
-        <div key={e.entity_id} className="p-2 rounded-lg border border-charcoal-200 dark:border-charcoal-700 bg-charcoal-50 dark:bg-charcoal-800">
-          <p className="text-sm font-medium truncate">{e.attributes?.friendly_name || e.entity_id}</p>
-          <p className="text-xs text-charcoal-500 dark:text-charcoal-400">{e.state}</p>
-        </div>
-      ))}
-    </div>
-  )
-}
-
 export function PoolTasksBlock({ data }) {
   const tasks = data?.tasks || []
   if (!tasks.length) return <Empty text="No pending pool tasks." />
