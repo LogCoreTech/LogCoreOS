@@ -21,7 +21,7 @@ def _configure_ha(brain):
 
 
 def test_ha_tools_present_when_installed_and_configured(brain):
-    mod_store_service.mark_installed("home", by="tester")
+    mod_store_service.mark_installed("home_assistant", by="tester")
     _configure_ha(brain)
 
     names = {t["name"] for t in agent_service._get_tools(_user())}
@@ -30,7 +30,7 @@ def test_ha_tools_present_when_installed_and_configured(brain):
 
 
 def test_ha_tools_absent_when_installed_but_not_configured(brain):
-    mod_store_service.mark_installed("home", by="tester")
+    mod_store_service.mark_installed("home_assistant", by="tester")
     # deliberately no ha_config.json written
 
     names = {t["name"] for t in agent_service._get_tools(_user())}
@@ -67,7 +67,7 @@ def test_control_home_device_requires_approval():
 
 
 def test_execute_tool_dispatches_get_home_state_through_to_ha_service(brain):
-    mod_store_service.mark_installed("home", by="tester")
+    mod_store_service.mark_installed("home_assistant", by="tester")
     _configure_ha(brain)
 
     with patch.object(ha_service, "get_state", return_value={"entity_id": "light.x", "state": "on"}) as mock_get:

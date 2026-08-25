@@ -1216,59 +1216,62 @@ Workflow-written reviewable items inside the Automations module (no separate mod
 
 ## Home Assistant
 
-Router mounted at `/api/v1/home` (module id `home`, unchanged by the 2026-08-24 display-name rename
-from "Smart Home"). Requires the `home` module to be enabled (personal workspace only). The admin
+Router mounted at `/api/v1/home_assistant` (module id `home_assistant` — both the id and this prefix
+renamed 2026-08-24 from `home`/`/api/v1/home` alongside the display-name rename from "Smart Home";
+migration m017 carries an already-upgraded instance's installed/disabled state across the id change.
+The frontend route stays `/home`, deliberately not renamed — see docs/MEMORY.md's 2026-08-24
+entries). Requires the `home_assistant` module to be enabled (personal workspace only). The admin
 `/status`+`/config` endpoints below are called from Admin → Hosting's own section, not a dedicated
-Home admin page — see docs/MEMORY.md's 2026-08-24 entries.
+Home Assistant admin page.
 
 ### Admin — HA Config
 
-#### `GET /home/status`
+#### `GET /home_assistant/status`
 Get Home Assistant connection status. Returns whether HA is configured and reachable.
 
-#### `POST /home/config`
+#### `POST /home_assistant/config`
 Save Home Assistant URL and long-lived token. Admin only. Config stored at `brain/_system/ha_config.json`.
 
 **Body** `{ "url": "http://homeassistant.local:8123", "token": "eyJ..." }`
 
 ### Entities
 
-#### `GET /home/entities`
+#### `GET /home_assistant/entities`
 List all entity states from Home Assistant.
 
-#### `GET /home/entities/{entity_id}`
+#### `GET /home_assistant/entities/{entity_id}`
 Get state of a single entity.
 
-#### `POST /home/entities/{entity_id}/call`
+#### `POST /home_assistant/entities/{entity_id}/call`
 Call a Home Assistant service on an entity (e.g., `light.turn_on`).
 
 **Body** `{ "service": "turn_on", "data": { "brightness": 200 } }`
 
-#### `GET /home/areas`
+#### `GET /home_assistant/areas`
 List all areas defined in Home Assistant.
 
 ### Scenes & Automations
 
-#### `GET /home/scenes`
+#### `GET /home_assistant/scenes`
 List all scenes.
 
-#### `POST /home/scenes/{entity_id}/activate`
+#### `POST /home_assistant/scenes/{entity_id}/activate`
 Activate a scene.
 
-#### `GET /home/automations`
+#### `GET /home_assistant/automations`
 List all HA automations.
 
-#### `POST /home/automations/{entity_id}/trigger`
+#### `POST /home_assistant/automations/{entity_id}/trigger`
 Trigger a HA automation.
 
 ### Favourites
 
-#### `GET /home/favourites`
+#### `GET /home_assistant/favourites`
 Get the current user's pinned favourite entity IDs.
 
 **Response** `{ "favourites": ["light.living_room", "switch.fan"] }`
 
-#### `PUT /home/favourites`
+#### `PUT /home_assistant/favourites`
 Replace the current user's favourite entity list.
 
 **Body** `{ "favourites": ["light.living_room", "switch.fan"] }`

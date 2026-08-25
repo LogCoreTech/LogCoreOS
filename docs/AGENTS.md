@@ -135,7 +135,7 @@ The module registry lives in `app/frontend/src/lib/constants.js` (`ALL_MODULES`)
 
 Backend enforcement: `require_module("module_id")` is a FastAPI dependency factory that returns 403 if the module is in `user["disabled_modules"]` for the current workspace.
 
-Valid module IDs: `dashboard`, `tasks`, `goals`, `calendar`, `household`, `notes`, `journal`, `chat`, `automations`, `automations_business`, `home`, `team`, `assets`, `finance`, `contacts`
+Valid module IDs: `dashboard`, `tasks`, `goals`, `calendar`, `household`, `notes`, `journal`, `chat`, `automations`, `automations_business`, `home_assistant`, `team`, `assets`, `finance`, `contacts`
 
 ### Workspace Switching
 Users can have one or both of two workspaces: `personal` and `business`. The active workspace is stored in `localStorage('lc_ws')` and sent on every API call as the `X-Workspace: personal|business` request header.
@@ -603,7 +603,7 @@ See `agent/README.md` for the full in-app agent architecture and tool registry.
 |------|------------|
 | **Brain** | The user's data directory (`brain/USERS/{name}/`) — Markdown + JSON files. No database. The filesystem IS the database. |
 | **workspace** | A data context: `personal` or `business`. Each user can have one or both. Data paths, module visibility, and notification jobs are all workspace-scoped. |
-| **module** | A named feature area (e.g. `tasks`, `chat`, `home`). Each maps to a frontend page and a backend router. Can be enabled/disabled per user per workspace. |
+| **module** | A named feature area (e.g. `tasks`, `chat`, `home_assistant`). Each maps to a frontend page and a backend router. Can be enabled/disabled per user per workspace. |
 | **feature role** | A custom role (e.g. `cleaner`, `nanny`) that controls which modules are visible. Separate from auth role (`admin` / `member` / `guest`). Stored in `brain/_system/features.json`. |
 | **pool** | A shared task/event store for a group. Two pools exist: `_household` (personal workspace) and `_team` (business workspace). Each is a pseudo-user directory in `brain/USERS/`. |
 | **pseudo-user** | A `brain/USERS/` directory that isn't a real user account — used for shared pools (`_household`, `_team`) and the `_template` directory. |

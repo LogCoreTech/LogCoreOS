@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { admin as adminApi, infisical as infisicalApi, automations as automationsApi, assets as assetsApi } from '../../../lib/api'
-import { home as homeApi } from '../../../module_packages/home/frontend/api'
+import { home as homeApi } from '../../../module_packages/home_assistant/frontend/api'
 import { useAuth } from '../../../lib/auth'
 import { isPackageModule } from '../../../lib/moduleRegistry'
 import SettingsPageHeader from '../../../components/settings/SettingsPageHeader'
@@ -641,8 +641,8 @@ export default function Hosting() {
   // page — see docs/MEMORY.md 2026-08-24 — so it needs the same
   // installed+active stacked gate ModuleRoute applies to Home's own /home
   // route, just for a section instead of a whole page.
-  const homeInstalled = !user?.disabledModules?.includes('home')
-    && (!isPackageModule('home') || activeModuleIds.includes('home'))
+  const homeInstalled = !user?.disabledModules?.includes('home_assistant')
+    && (!isPackageModule('home_assistant') || activeModuleIds.includes('home_assistant'))
 
   return (
     <div className="max-w-lg mx-auto space-y-6">

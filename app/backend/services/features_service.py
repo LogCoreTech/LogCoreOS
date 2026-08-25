@@ -67,13 +67,14 @@ _BUSINESS_MEMBER = {
     "chat": True,
     "automations": True,
     "automations_business": True,
-    # "home" stays explicit here even though it's no longer in
-    # _CORE_MODULE_IDS (converted to module_packages/home/, 2026-08-24) —
-    # this dict is hand-authored, not derived, and load_features() defaults
-    # any module MISSING from a role map to True. Without this explicit
-    # False, a fresh business-profile instance would default Home Assistant
-    # to enabled, which is wrong — it's personal-only.
-    "home": False,
+    # "home_assistant" (id renamed from "home" 2026-08-24) stays explicit
+    # here even though it's no longer in _CORE_MODULE_IDS (converted to
+    # module_packages/home_assistant/, 2026-08-24) — this dict is
+    # hand-authored, not derived, and load_features() defaults any module
+    # MISSING from a role map to True. Without this explicit False, a fresh
+    # business-profile instance would default Home Assistant to enabled,
+    # which is wrong — it's personal-only.
+    "home_assistant": False,
     "team": True,
     "assets": True,
     "finance": True,

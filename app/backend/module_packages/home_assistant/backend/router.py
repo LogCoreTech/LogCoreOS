@@ -11,7 +11,7 @@ from services.rate_limiter import rate_limit
 
 logger = logging.getLogger("logcore.home")
 
-_require_home = require_module("home")
+_require_home = require_module("home_assistant")
 _read_limit = rate_limit(60, 60)
 _write_limit = rate_limit(20, 60)
 

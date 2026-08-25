@@ -38,6 +38,6 @@ register(
         resolver=resolve_home_favourites,
         workspace="personal",
         scope_configurable=True,
-        module="home",
+        module="home_assistant",
     )
 )

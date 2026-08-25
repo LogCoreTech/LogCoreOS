@@ -9,7 +9,7 @@
       "status": "available"
     },
     {
-      "id": "home",
+      "id": "home_assistant",
       "name": "Home Assistant",
       "description": "Control and monitor Home Assistant devices, scenes, and automations.",
       "category": "personal",
