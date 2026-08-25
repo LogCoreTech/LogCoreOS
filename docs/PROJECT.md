@@ -176,12 +176,16 @@ into a self-contained `module_packages/<id>/` format with its own manifest/versi
 foundational ones (Tasks, Chat, Dashboards-the-feature), which just carry `uninstallable: true`
 rather than being excluded from the system. End state: `main.py` has zero hardcoded per-module
 router registrations. The registry mechanism itself (discovery, install/uninstall state, all four
-enforcement-gap fixes, the admin Mod Store UI) is done and fully tested. Three modules converted so
+enforcement-gap fixes, the admin Mod Store UI) is done and fully tested. Four modules converted so
 far: journal (increment 1) and Home Assistant (increment 2, 2026-08-24, full internal id rename
 too) are both confirmed working end-to-end on the owner's live instance. Automations/n8n Automation
 (2026-08-25, taken out of the original planned order at the owner's request — display name only,
-id/routes/internal names deliberately left unchanged) is built and fully tested but not yet
-verified on the live instance. Calendar is next after that.
+id/routes/internal names deliberately left unchanged) and Calendar (2026-08-25, increment 4, no
+rename at all this time — the owner's explicit "keep as calendar" — plus a new feature riding along:
+the personal calendar's household/team pool-events toggle now hides itself entirely when that pool
+module isn't installed/active for the viewer, instead of offering a button that would silently
+no-op) are both built and fully tested but not yet verified on the live instance. Tasks (locked,
+`uninstallable: true`) is next per the rollout order.
 Full design in `docs/MEMORY.md`'s 2026-08-24/25 entries and
 `/home/logcore/.claude/plans/i-want-you-to-composed-scone.md`; rollout order tracked in
 `docs/TASKS.md`.

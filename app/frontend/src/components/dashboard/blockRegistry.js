@@ -4,8 +4,8 @@ import {
   FinanceActivityBlock, FinanceBookReportBlock, GoalsProgressBlock, HeadingDividerBlock,
   LinkButtonBlock, LinkedAssetsBlock,
   LinkedContactBlock, LinkedDealsBlock, LinkedTasksBlock, MyAssetsSummaryBlock, NavButtonBlock,
-  NoteEmbedBlock, PoolTasksBlock, RecentAiActionsBlock, SingleEventBlock, SingleTaskBlock,
-  StatusButtonBlock, StreaksBlock, TextBlock, Top3TasksBlock, UpcomingEventsBlock,
+  NoteEmbedBlock, PoolTasksBlock, RecentAiActionsBlock, SingleTaskBlock,
+  StatusButtonBlock, StreaksBlock, TextBlock, Top3TasksBlock,
 } from './blocks'
 import { MODULE_PACKAGES } from '../../lib/moduleRegistry'
 
@@ -34,8 +34,6 @@ export const BLOCK_REGISTRY = {
   // task list, not assigned pool tasks. Wiring actions here would either
   // write to the wrong store or silently no-op on nav — worse than omitting.
   pool_tasks: { Component: PoolTasksBlock, icon: '🧑‍🤝‍🧑', label: 'Household/Team Tasks', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
-  upcoming_events: { Component: UpcomingEventsBlock, icon: '📆', label: 'Upcoming Events', defaultLayout: { w: 12, h: 9 }, shape: 'list', recordKind: 'event' },
-  single_event: { Component: SingleEventBlock, icon: '📌', label: 'Single Event', defaultLayout: { w: 9, h: 6 }, recordKind: 'event' },
   finance_activity: { Component: FinanceActivityBlock, icon: '💰', label: 'Finance Activity', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
   finance_book_report: { Component: FinanceBookReportBlock, icon: '📊', label: 'Finance Book Report', defaultLayout: { w: 9, h: 9 } },
   // Labels below spell out the data's actual source (a linked Contact or
@@ -161,7 +159,6 @@ export const CONFIG_FIELD_SCHEMAS = {
   linked_tasks: [{ key: 'asset_id', label: 'Asset', kind: 'asset' }],
   linked_contact: [{ key: 'asset_id', label: 'Asset (shows its linked contact)', kind: 'asset' }],
   note_embed: [{ key: 'path', label: 'Note', kind: 'note' }],
-  single_event: [{ key: 'event_id', label: 'Event', kind: 'event' }],
   text_block: [{ key: 'text', label: 'Text', kind: 'textarea' }],
   link_button: [
     { key: 'label', label: 'Button label', kind: 'text' },

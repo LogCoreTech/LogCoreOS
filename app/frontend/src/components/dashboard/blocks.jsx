@@ -185,37 +185,6 @@ export function PoolTasksBlock({ data }) {
   )
 }
 
-export function UpcomingEventsBlock({ data, actions, onAction }) {
-  const events = data?.events || []
-  if (!events.length) return <Empty text="No upcoming events." />
-  return (
-    <div className="space-y-2">
-      {events.map(e => (
-        <div key={e.id} className="flex items-center justify-between text-sm gap-2">
-          <span className="truncate flex-1">{e.title}</span>
-          <span className="text-xs text-charcoal-400 shrink-0">{e.date}</span>
-          <BlockActionButtons actions={actions} recordKind="event" recordId={e.id} onDone={onAction} />
-        </div>
-      ))}
-    </div>
-  )
-}
-
-export function SingleEventBlock({ data, actions, onAction }) {
-  const e = data?.event
-  if (!e) return <Empty text="Event not found." />
-  return (
-    <div className="flex items-start justify-between gap-2">
-      <div className="min-w-0">
-        <p className="text-sm font-medium truncate">{e.title}</p>
-        <p className="text-xs text-charcoal-400">{e.date}</p>
-        {e.notes && <p className="text-xs text-charcoal-500 mt-1">{e.notes}</p>}
-      </div>
-      <BlockActionButtons actions={actions} recordKind="event" recordId={e.id} onDone={onAction} />
-    </div>
-  )
-}
-
 export function FinanceActivityBlock({ data }) {
   const txs = data?.transactions || []
   if (!txs.length) return <Empty text="No transactions." />

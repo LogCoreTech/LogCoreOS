@@ -702,7 +702,7 @@ Delete a journal entry.
 
 ## Calendar
 
-All endpoints require the `calendar` module to be enabled.
+Router mounted at `/api/v1/calendar` (module id `calendar` — converted into `module_packages/calendar/` 2026-08-25; same no-rename treatment as Automations, taken one step further — the display name stayed "Calendar" too, per the owner's explicit "keep as calendar"). `events_service.py` and its `EventCreate`/`EventUpdate` models stay in core (not moved into the module package) since Household's and Team's own pool-calendar endpoints import them directly for `_household`/`_team` pseudo-user events — those pool endpoints gate on `require_module("household")`/`require_module("team")` only, never `require_module("calendar")`, so a personal Calendar uninstall never affects them. All endpoints below require the `calendar` module to be enabled.
 
 ### `GET /calendar/tasks`
 Get tasks that have a due date (for calendar display).

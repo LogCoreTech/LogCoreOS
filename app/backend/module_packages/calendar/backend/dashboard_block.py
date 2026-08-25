@@ -44,6 +44,7 @@ register(
         category="live_aggregate",
         resolver=resolve_upcoming_events,
         scope_configurable=True,
+        module="calendar",
     )
 )
 register(
@@ -54,5 +55,6 @@ register(
         resolver=resolve_single_event,
         scope_configurable=True,
         record_ref_fields={"event_id": "calendar"},
+        module="calendar",
     )
 )

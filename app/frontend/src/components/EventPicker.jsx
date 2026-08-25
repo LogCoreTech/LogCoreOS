@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { calendar as calendarApi } from '../lib/api'
+import { calendar as calendarApi } from '../module_packages/calendar/frontend/api'
 
 /**
  * Search-autocomplete over the user's calendar events, mirroring

@@ -26,7 +26,6 @@ const CORE_MODULES = [
   { id: 'dashboard',            to: '/',             icon: '⊞',          label: 'Dashboard'             },
   { id: 'tasks',                to: '/tasks',        icon: '✓',           label: 'Tasks'                 },
   { id: 'goals',                to: '/goals',        icon: '🎯',          label: 'Goals'                 },
-  { id: 'calendar',             to: '/calendar',     icon: '📅',          label: 'Calendar'              },
   { id: 'household',            to: '/household',    icon: '🏠',          label: 'Household',  workspace: 'personal' },
   { id: 'notes',                to: '/notes',        icon: '📝',          label: 'Notes'                 },
   { id: 'chat',                 to: '/chat',         icon: '◈',           label: 'AI Chat'               },

@@ -22,7 +22,6 @@ from routers import (
     assets,
     auth,
     brain,
-    calendar,
     chat,
     contacts,
     dashboards,
@@ -385,7 +384,6 @@ app.include_router(export.router, prefix="/api/v1/user", tags=["export"])
 app.include_router(shared.router, prefix="/api/v1/shared", tags=["shared"])
 app.include_router(push.router, prefix="/api/v1/push", tags=["push"])
 app.include_router(notes.router, prefix="/api/v1/notes", tags=["notes"])
-app.include_router(calendar.router, prefix="/api/v1/calendar", tags=["calendar"])
 app.include_router(suggestions.router, prefix="/api/v1/suggestions", tags=["suggestions"])
 app.include_router(infisical.router, prefix="/api/v1/auth", tags=["infisical"])
 app.include_router(features.router, prefix="/api/v1/auth", tags=["features"])

@@ -25,6 +25,14 @@
       "status": "available"
     },
     {
+      "id": "calendar",
+      "name": "Calendar",
+      "description": "A month view of your world: events you create plus any tasks that have a due date, all on one grid.",
+      "category": "general",
+      "icon": "📅",
+      "status": "available"
+    },
+    {
       "id": "field_ops",
       "name": "Field Ops",
       "description": "Subdivisions, lots, phase scheduling, and mobile SmartForm checklists for residential trade subcontractors.",

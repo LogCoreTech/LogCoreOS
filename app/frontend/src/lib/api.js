@@ -520,15 +520,6 @@ export const notes = {
   roles:        ()                            => get('/notes/roles'),
 }
 
-export const calendar = {
-  tasks:       ()           => get('/calendar/tasks'),
-  events:      ()           => get('/calendar/events'),
-  addEvent:    (body)       => post('/calendar/events', body),
-  getEvent:    (id)         => get(`/calendar/events/${id}`),
-  updateEvent: (id, body)   => patch(`/calendar/events/${id}`, body),
-  removeEvent: (id)         => del(`/calendar/events/${id}`),
-}
-
 export const suggestions = {
   list:              ()    => get('/suggestions'),
   update:            (id, data) => request('PUT', `/suggestions/${id}`, data),

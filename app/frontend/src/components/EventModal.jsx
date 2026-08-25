@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { calendar as calendarApi } from '../lib/api'
+import { calendar as calendarApi } from '../module_packages/calendar/frontend/api'
 
 export const EVENT_COLORS = {
   blue:   '#3b82f6',

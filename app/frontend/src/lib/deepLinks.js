@@ -8,7 +8,6 @@ import { MODULE_PACKAGES } from './moduleRegistry'
 const _CORE_MODULE_ROUTES = {
   tasks: '/tasks',
   goals: '/goals',
-  calendar: '/calendar',
   household: '/household',
   team: '/team',
   notes: '/notes',
@@ -27,17 +26,24 @@ export const MODULE_ROUTES = {
 }
 
 // Query param each module's own page reads for a specific-record deep link.
-// Only modules with an actual `useSearchParams` handler belong here —
-// automations has no per-workflow detail view to land on yet.
-const RECORD_PARAM = {
+// Only modules with an actual `useSearchParams` handler belong here — a
+// converted module needs no entry, its param is discovered from its own
+// manifest.js's `recordParam` field instead (same merge MODULE_ROUTES gets
+// from `to`, above). automations has no per-workflow detail view to land on
+// yet, so it declares no recordParam and is absent from both halves.
+const _CORE_RECORD_PARAM = {
   tasks: 'task',
-  calendar: 'event',
   notes: 'path',
   assets: 'asset',
   finance: 'book',
   contacts: 'contact',
   dashboard: 'id',
   chat: 'chat_id',
+}
+
+const RECORD_PARAM = {
+  ..._CORE_RECORD_PARAM,
+  ...Object.fromEntries(MODULE_PACKAGES.filter(m => m.recordParam).map(m => [m.id, m.recordParam])),
 }
 
 // Sections/sub-pages a module exposes beyond its own bare landing page.

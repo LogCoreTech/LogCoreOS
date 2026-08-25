@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import HelpButton from '../components/HelpButton'
-import { calendar as calendarApi, shared as sharedApi, team as teamApi } from '../lib/api'
-import { useAuth } from '../lib/auth'
-import { useWorkspace } from '../lib/workspace'
-import TaskModal from '../components/TaskModal'
-import EventModal from '../components/EventModal'
-import CalendarGrid from '../components/CalendarGrid'
+import HelpButton from '../../../components/HelpButton'
+import { calendar as calendarApi } from './api'
+import { shared as sharedApi, team as teamApi } from '../../../lib/api'
+import { useAuth } from '../../../lib/auth'
+import { useWorkspace } from '../../../lib/workspace'
+import { isPackageModule } from '../../../lib/moduleRegistry'
+import TaskModal from '../../../components/TaskModal'
+import EventModal from '../../../components/EventModal'
+import CalendarGrid from '../../../components/CalendarGrid'
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
@@ -26,7 +28,7 @@ function todayStr() {
 }
 
 export default function Calendar() {
-  const { user } = useAuth()
+  const { user, activeModuleIds } = useAuth()
   const { workspace } = useWorkspace()
   const isAdmin  = user?.role === 'admin'
   const isPersonal = workspace === 'personal'
@@ -36,6 +38,14 @@ export default function Calendar() {
   // Can this user push events into / edit the active workspace's pool?
   const poolKey = isPersonal ? 'household' : 'team'
   const canEditPool = isAdmin || (user?.poolEdit || []).includes(poolKey)
+  // Same stacked installed+active check ModuleRoute/Hosting.jsx already use
+  // for a converted module's own route/admin section — Household and Team
+  // haven't converted yet, so isPackageModule() is false for both today and
+  // this check trivially passes, but it's already correct for when they do
+  // (owner request, 2026-08-25: hide the pool toggle entirely rather than
+  // show a button that silently does nothing).
+  const poolModuleVisible = !user?.disabledModules?.includes(poolKey)
+    && (!isPackageModule(poolKey) || activeModuleIds.includes(poolKey))
 
   const today = new Date()
   const [year, setYear]   = useState(today.getFullYear())
@@ -75,8 +85,8 @@ export default function Calendar() {
     const [t, e, pe, pt] = await Promise.allSettled([
       calendarApi.tasks(),
       calendarApi.events(),
-      poolApi.sharedEvents(),
-      poolApi.list(),
+      poolModuleVisible ? poolApi.sharedEvents() : Promise.resolve([]),
+      poolModuleVisible ? poolApi.list() : Promise.resolve([]),
     ])
     if (t.status  === 'fulfilled') setTasks(t.value)
     if (e.status  === 'fulfilled') setEvents(e.value)
@@ -116,7 +126,7 @@ export default function Calendar() {
 
   const allCalendarTasks = [
     ...tasks.filter(t => t.status !== 'done'),
-    ...(showPool
+    ...(poolModuleVisible && showPool
       ? assignedPoolTasks.filter(t => t.status !== 'done').map(t => ({ ...t, _household: true, _poolEmoji: poolEmoji }))
       : []),
   ]
@@ -125,7 +135,7 @@ export default function Calendar() {
   // Merge personal + shared pool events; tag pool ones for CalendarGrid display
   const allEvents = [
     ...events,
-    ...(showPool ? poolEvents.map(e => ({ ...e, _household: true, _poolEmoji: poolEmoji })) : []),
+    ...(poolModuleVisible && showPool ? poolEvents.map(e => ({ ...e, _household: true, _poolEmoji: poolEmoji })) : []),
   ]
 
   const isPoolEv = editEvent?._household === true
@@ -148,14 +158,16 @@ export default function Calendar() {
                 {p}
               </button>
             ))}
-            <button
-              onClick={() => setShowPool(h => !h)}
-              className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${
-                showPool ? POOL_ON : POOL_OFF
-              }`}
-            >
-              {poolEmoji}
-            </button>
+            {poolModuleVisible && (
+              <button
+                onClick={() => setShowPool(h => !h)}
+                className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${
+                  showPool ? POOL_ON : POOL_OFF
+                }`}
+              >
+                {poolEmoji}
+              </button>
+            )}
           </div>
           <button
             onClick={() => { setEditEvent(null); setShowEventModal(true) }}
@@ -224,7 +236,7 @@ export default function Calendar() {
           event={editEvent}
           defaultDate={selected || undefined}
           saveApi={isPoolEv ? poolEventApi : undefined}
-          poolSaveApi={!isPoolEv && canEditPool ? poolEventApi : undefined}
+          poolSaveApi={!isPoolEv && canEditPool && poolModuleVisible ? poolEventApi : undefined}
           poolLabel={poolLabel}
           isHouseholdEvent={isPoolEv}
           onClose={() => { setShowEventModal(false); setEditEvent(null) }}
