@@ -614,7 +614,7 @@ export default function Automations() {
   return (
     <div className="max-w-2xl mx-auto space-y-5">
       <div className="flex items-center justify-between gap-6">
-        <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">Automations</h1><HelpButton section="automations" /></span>
+        <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">n8n Automation</h1><HelpButton section="automations" /></span>
         {view === 'workflows' ? (
           <button onClick={() => setImporting(true)} className="btn-primary text-sm px-4 py-1.5 rounded-full shrink-0">
             + Import Workflow

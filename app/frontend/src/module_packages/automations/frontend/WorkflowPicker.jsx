@@ -37,7 +37,7 @@ export default function WorkflowPicker({ value, onChange, label, placeholder }) 
     return (
       <div>
         {label && <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>}
-        <input className="input" placeholder={placeholder} disabled value="Automations unavailable" />
+        <input className="input" placeholder={placeholder} disabled value="n8n Automation unavailable" />
       </div>
     )
   }

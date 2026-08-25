@@ -36,10 +36,14 @@ const CORE_MODULES = [
   { id: 'contacts',             to: '/contacts',     icon: '👥',          label: 'Contacts'              },
 ]
 
+// `navLabel` is optional (undefined for every CORE_MODULES entry and most
+// converted modules) — a shorter name for the one space-constrained surface
+// that needs it (Layout.jsx's mobile bottom nav bar), falls back to `label`
+// everywhere else. See module_packages/automations/manifest.js for why.
 export const ALL_MODULES = [
   ...CORE_MODULES,
   ...MODULE_PACKAGES.map(m => ({
-    id: m.id, to: m.to, icon: m.icon, label: m.label, workspace: m.workspace,
+    id: m.id, to: m.to, icon: m.icon, label: m.label, navLabel: m.navLabel, workspace: m.workspace,
   })),
 ]
 

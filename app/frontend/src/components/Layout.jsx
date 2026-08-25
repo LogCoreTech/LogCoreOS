@@ -461,7 +461,7 @@ export default function Layout() {
         height-resolution chain, then `fixed` while still nested) both looked
         correct in Chromium and both failed on-device. */}
     <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-charcoal-950 border-t border-charcoal-200 dark:border-charcoal-800 flex z-40 pb-[env(safe-area-inset-bottom)]">
-      {shortcutModules.map(({ id, to, icon, label }) => (
+      {shortcutModules.map(({ id, to, icon, label, navLabel }) => (
         <NavLink
           key={id}
           to={to}
@@ -475,7 +475,7 @@ export default function Layout() {
           }
         >
           <span className="text-lg leading-none">{icon}</span>
-          {label}
+          {navLabel || label}
         </NavLink>
       ))}
 

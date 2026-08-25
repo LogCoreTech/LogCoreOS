@@ -7,11 +7,21 @@
 // (workflow_status, inbox_summary) — the first module to need more than one,
 // which is why `blocks` is an array here and, since 2026-08-25, for every
 // converted module.
+//
+// `navLabel` (optional, falls back to `label` everywhere it's not read) is
+// a second, deliberately shorter name — Layout.jsx's mobile bottom nav bar
+// is a single fixed-height flex row of ~5 items; "n8n Automation" wrapping
+// to two lines there stretched the whole row taller than the other items
+// (owner report, 2026-08-25). Every other surface (Mod Store, Help, the
+// page's own heading, the "All Modules" drawer's roomier grid) still shows
+// the full "n8n Automation" — this is the one place that needs the short
+// form, not a general rename.
 export default {
   id: 'automations',
   to: '/automations',
   icon: '⚙️',
   label: 'n8n Automation',
+  navLabel: 'Automations',
   loadPage: () => import('./frontend/Automations.jsx'),
   blocks: [
     {
