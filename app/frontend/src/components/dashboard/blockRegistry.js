@@ -2,10 +2,10 @@ import { lazy } from 'react'
 import {
   AiUsageMeBlock, AiUsageOverviewBlock, CollectionBlock, ContactsListBlock, CustomFieldsBlock, DocumentsBlock, DueTodayBlock,
   FinanceActivityBlock, FinanceBookReportBlock, GoalsProgressBlock, HeadingDividerBlock,
-  InboxSummaryBlock, LinkButtonBlock, LinkedAssetsBlock,
+  LinkButtonBlock, LinkedAssetsBlock,
   LinkedContactBlock, LinkedDealsBlock, LinkedTasksBlock, MyAssetsSummaryBlock, NavButtonBlock,
   NoteEmbedBlock, PoolTasksBlock, RecentAiActionsBlock, SingleEventBlock, SingleTaskBlock,
-  StatusButtonBlock, StreaksBlock, TextBlock, Top3TasksBlock, UpcomingEventsBlock, WorkflowStatusBlock,
+  StatusButtonBlock, StreaksBlock, TextBlock, Top3TasksBlock, UpcomingEventsBlock,
 } from './blocks'
 import { MODULE_PACKAGES } from '../../lib/moduleRegistry'
 
@@ -58,8 +58,6 @@ export const BLOCK_REGISTRY = {
   collection: { Component: CollectionBlock, icon: '📋', label: 'Collection (List/Board)', defaultLayout: { w: 18, h: 12 }, recordKind: 'asset' },
   contacts_list: { Component: ContactsListBlock, icon: '👥', label: 'Contacts List', defaultLayout: { w: 12, h: 9 }, shape: 'list', recordKind: 'contact' },
   note_embed: { Component: NoteEmbedBlock, icon: '📝', label: 'Note Embed', defaultLayout: { w: 12, h: 9 }, recordKind: 'note' },
-  workflow_status: { Component: WorkflowStatusBlock, icon: '⚙️', label: 'Automation Workflow Status', defaultLayout: { w: 9, h: 6 } },
-  inbox_summary: { Component: InboxSummaryBlock, icon: '📥', label: 'Automation Inbox Summary', defaultLayout: { w: 9, h: 6 }, shape: 'list' },
   ai_usage_me: { Component: AiUsageMeBlock, icon: '🤖', label: 'AI Usage — My Usage', defaultLayout: { w: 9, h: 6 } },
   ai_usage_overview: { Component: AiUsageOverviewBlock, icon: '🛡️', label: 'AI Usage — All Users', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
   recent_ai_actions: { Component: RecentAiActionsBlock, icon: '🕘', label: 'Recent AI Actions', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
@@ -74,20 +72,26 @@ export const BLOCK_REGISTRY = {
   status_button: { Component: StatusButtonBlock, icon: '🔄', label: 'Status/Archive Action', defaultLayout: { w: 6, h: 3 }, chromeless: true },
 }
 
-// A converted module's own block type(s) — e.g. journal's journal_entry —
-// register here from their manifest instead of a hardcoded entry above.
-// `lazy()` is called once at module-load time (not per-render), same
-// requirement React has for any lazy component reference to stay stable.
-// Actual GATING (admin_only/module-disabled) is still the backend's
-// GET /dashboards/catalog, exactly as the comment above BLOCK_REGISTRY
-// already establishes for every other entry here.
+// A converted module's own block type(s) — e.g. journal's journal_entry,
+// automations' workflow_status + inbox_summary — register here from their
+// manifest's `blocks` array instead of a hardcoded entry above. `lazy()` is
+// called once at module-load time (not per-render), same requirement React
+// has for any lazy component reference to stay stable. Actual GATING
+// (admin_only/module-disabled) is still the backend's GET /dashboards/
+// catalog, exactly as the comment above BLOCK_REGISTRY already establishes
+// for every other entry here. `blocks` is always an array (even a
+// single-block module like journal/home_assistant declares a one-item
+// array) — one shape for every converted module, not a singular-vs-plural
+// special case depending on how many block types a module happens to own.
+// Spreads every field a manifest block declares (not just icon/label/
+// defaultLayout) — a hardcoded field list here would silently drop optional
+// ones like `shape`/`chromeless`/`recordKind` the moment a converted module
+// needed them, exactly as automations' own inbox_summary (shape: 'list')
+// needs right now.
 for (const pkg of MODULE_PACKAGES) {
-  if (!pkg.block) continue
-  BLOCK_REGISTRY[pkg.block.type] = {
-    Component: lazy(pkg.block.loadComponent),
-    icon: pkg.block.icon,
-    label: pkg.block.label,
-    defaultLayout: pkg.block.defaultLayout,
+  // eslint-disable-next-line no-unused-vars -- configSchema deliberately excluded, handled by the loop below instead
+  for (const { loadComponent, configSchema, ...block } of pkg.blocks || []) {
+    BLOCK_REGISTRY[block.type] = { ...block, Component: lazy(loadComponent) }
   }
 }
 
@@ -158,7 +162,6 @@ export const CONFIG_FIELD_SCHEMAS = {
   linked_contact: [{ key: 'asset_id', label: 'Asset (shows its linked contact)', kind: 'asset' }],
   note_embed: [{ key: 'path', label: 'Note', kind: 'note' }],
   single_event: [{ key: 'event_id', label: 'Event', kind: 'event' }],
-  workflow_status: [{ key: 'workflow_id', label: 'Workflow', kind: 'workflow' }],
   text_block: [{ key: 'text', label: 'Text', kind: 'textarea' }],
   link_button: [
     { key: 'label', label: 'Button label', kind: 'text' },
@@ -234,8 +237,8 @@ export const CONFIG_FIELD_SCHEMAS = {
 }
 
 for (const pkg of MODULE_PACKAGES) {
-  if (pkg.block?.configSchema) {
-    CONFIG_FIELD_SCHEMAS[pkg.block.type] = pkg.block.configSchema
+  for (const block of pkg.blocks || []) {
+    if (block.configSchema) CONFIG_FIELD_SCHEMAS[block.type] = block.configSchema
   }
 }
 

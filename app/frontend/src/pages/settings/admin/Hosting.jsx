@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { admin as adminApi, infisical as infisicalApi, automations as automationsApi, assets as assetsApi } from '../../../lib/api'
+import { admin as adminApi, infisical as infisicalApi, assets as assetsApi } from '../../../lib/api'
 import { home as homeApi } from '../../../module_packages/home_assistant/frontend/api'
+import { automations as automationsApi } from '../../../module_packages/automations/frontend/api'
 import { useAuth } from '../../../lib/auth'
 import { isPackageModule } from '../../../lib/moduleRegistry'
 import SettingsPageHeader from '../../../components/settings/SettingsPageHeader'
@@ -635,21 +636,34 @@ function HomeAssistantNotInstalled() {
   )
 }
 
+function N8nNotInstalled() {
+  return (
+    <div className="card p-5 space-y-1">
+      <h2 className="font-semibold">n8n Automation</h2>
+      <p className="text-sm text-charcoal-500 dark:text-charcoal-400">
+        n8n Automation isn&apos;t installed — install it from Admin → Mod Store to connect it.
+      </p>
+    </div>
+  )
+}
+
 export default function Hosting() {
   const { user, activeModuleIds } = useAuth()
-  // Home's own admin config form lives here, not on a dedicated Home admin
-  // page — see docs/MEMORY.md 2026-08-24 — so it needs the same
-  // installed+active stacked gate ModuleRoute applies to Home's own /home
-  // route, just for a section instead of a whole page.
+  // Home Assistant's and n8n Automation's own admin config forms both live
+  // here, not on a dedicated admin page each — see docs/MEMORY.md — so both
+  // need the same installed+active stacked gate ModuleRoute applies to a
+  // converted module's own route, just for a section instead of a whole page.
   const homeInstalled = !user?.disabledModules?.includes('home_assistant')
     && (!isPackageModule('home_assistant') || activeModuleIds.includes('home_assistant'))
+  const automationsInstalled = !user?.disabledModules?.includes('automations')
+    && (!isPackageModule('automations') || activeModuleIds.includes('automations'))
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
       <SettingsPageHeader title="Hosting" backTo="/settings/admin" backLabel="Admin Settings" />
       <HostingSection />
       <InfisicalSection />
-      <N8nSection />
+      {automationsInstalled ? <N8nSection /> : <N8nNotInstalled />}
       {homeInstalled ? <HomeAssistantSection /> : <HomeAssistantNotInstalled />}
 
       <div className="h-20 md:hidden" aria-hidden="true" />

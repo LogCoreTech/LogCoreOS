@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { automations as automationsApi } from '../lib/api'
+import { automations as automationsApi } from './api'
 
 /**
  * Search-autocomplete over n8n automation workflows (personal + business),

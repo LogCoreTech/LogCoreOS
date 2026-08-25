@@ -158,7 +158,7 @@ The App currently provides:
 
 **Phase 3 (partial — shipped early):**
 
-- n8n Automations integration — personal and business workflow cards, import/run/logs via n8n REST API; business workflows auto-synced from `automations_stubs/` on startup
+- n8n Automation integration (renamed from "Automations," 2026-08-25) — personal and business workflow cards, import/run/logs via n8n REST API; business workflows auto-synced from `automations_stubs/` on startup
 - Home Assistant — entity tiles, scene control, HA automation management, per-user starred favourites on dashboard widget; admin config panel (renamed from "Smart Home," 2026-08-24)
 - Team module — business-workspace shared task + event pool (`_team`), structurally separate from Household (`_household`); no data can cross between the two
 - Assets module — template-driven nestable object tracking (subdivisions → parcels, vehicles, equipment): admin-curated typed field templates, subtree sharing + per-user hide, pool conversion (survives account deletion), archive-first lifecycle, change history, attachments, task linking, AI tools, and a token-authenticated n8n automation API
@@ -176,10 +176,13 @@ into a self-contained `module_packages/<id>/` format with its own manifest/versi
 foundational ones (Tasks, Chat, Dashboards-the-feature), which just carry `uninstallable: true`
 rather than being excluded from the system. End state: `main.py` has zero hardcoded per-module
 router registrations. The registry mechanism itself (discovery, install/uninstall state, all four
-enforcement-gap fixes, the admin Mod Store UI) is done and fully tested. Two modules converted so
-far: journal (increment 1) and Home Assistant (increment 2, 2026-08-24) — both confirmed working
-end-to-end, including a real restart, on the owner's live instance. Calendar (increment 3) is next.
-Full design in `docs/MEMORY.md`'s 2026-08-24 entries and
+enforcement-gap fixes, the admin Mod Store UI) is done and fully tested. Three modules converted so
+far: journal (increment 1) and Home Assistant (increment 2, 2026-08-24, full internal id rename
+too) are both confirmed working end-to-end on the owner's live instance. Automations/n8n Automation
+(2026-08-25, taken out of the original planned order at the owner's request — display name only,
+id/routes/internal names deliberately left unchanged) is built and fully tested but not yet
+verified on the live instance. Calendar is next after that.
+Full design in `docs/MEMORY.md`'s 2026-08-24/25 entries and
 `/home/logcore/.claude/plans/i-want-you-to-composed-scone.md`; rollout order tracked in
 `docs/TASKS.md`.
 

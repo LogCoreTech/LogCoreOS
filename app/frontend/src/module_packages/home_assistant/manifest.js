@@ -17,11 +17,15 @@ export default {
   label: 'Home Assistant',
   workspace: 'personal',
   loadPage: () => import('./frontend/Home.jsx'),
-  block: {
-    type: 'home_assistant_favourites',
-    loadComponent: () => import('./frontend/HomeFavouritesBlock.jsx'),
-    icon: '💡',
-    label: 'Home Assistant Favourites',
-    defaultLayout: { w: 18, h: 9 },
-  },
+  // Array (2026-08-25 — generalized from a singular `block` key once
+  // automations needed to own two block types), even for a one-block module.
+  blocks: [
+    {
+      type: 'home_assistant_favourites',
+      loadComponent: () => import('./frontend/HomeFavouritesBlock.jsx'),
+      icon: '💡',
+      label: 'Home Assistant Favourites',
+      defaultLayout: { w: 18, h: 9 },
+    },
+  ],
 }

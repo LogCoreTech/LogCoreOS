@@ -2,7 +2,8 @@
 n8n_service.find_workflow) and Inbox Summary (in-process count over
 automation_inbox_service.load_store — not a new aggregation subsystem)."""
 
-from services import automation_inbox_service, n8n_service
+from module_packages.automations.backend import inbox_service as automation_inbox_service
+from services import n8n_service
 from services.dashboard_blocks._tasks import _scoped_target
 from services.dashboard_blocks.registry import (
     BlockRenderCtx,
@@ -47,6 +48,7 @@ register(
         resolver=resolve_workflow_status,
         scope_configurable=True,
         record_ref_fields={"workflow_id": "automations"},
+        module="automations",
     )
 )
 register(
@@ -56,5 +58,6 @@ register(
         category="live_aggregate",
         resolver=resolve_inbox_summary,
         scope_configurable=True,
+        module="automations",
     )
 )

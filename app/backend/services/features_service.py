@@ -34,8 +34,6 @@ _CORE_MODULE_IDS = [
     "household",
     "notes",
     "chat",
-    "automations",
-    "automations_business",
     "team",
     "assets",
     "finance",
@@ -53,9 +51,7 @@ def all_module_ids() -> list[str]:
     return _CORE_MODULE_IDS + sorted(active_manifests())
 
 
-_PERSONAL_MEMBER = {
-    m: True for m in _CORE_MODULE_IDS if m not in ("automations_business", "team")
-}
+_PERSONAL_MEMBER = {m: True for m in _CORE_MODULE_IDS if m != "team"}
 
 _BUSINESS_MEMBER = {
     "dashboard": True,
@@ -65,8 +61,6 @@ _BUSINESS_MEMBER = {
     "household": False,
     "notes": True,
     "chat": True,
-    "automations": True,
-    "automations_business": True,
     # "home_assistant" (id renamed from "home" 2026-08-24) stays explicit
     # here even though it's no longer in _CORE_MODULE_IDS (converted to
     # module_packages/home_assistant/, 2026-08-24) — this dict is

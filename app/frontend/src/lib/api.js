@@ -1,4 +1,8 @@
-const BASE = '/api/v1'
+// Exported (not just used internally below) so a converted module's own
+// frontend/api.js can build a hand-rolled fetch (e.g. a multipart upload
+// requestFile() doesn't support the exact shape of) on the same base path,
+// instead of hardcoding '/api/v1' a second time.
+export const BASE = '/api/v1'
 
 function getWorkspace() {
   return localStorage.getItem('lc_ws') || 'personal'
@@ -543,42 +547,6 @@ export const features = {
   deleteRole:  (name)                 => del(`/auth/admin/features/roles/${name}`),
   roleUsers:   (name)                 => get(`/auth/admin/features/roles/${name}/users`),
   setUserRole: (userId, feature_role) => patch(`/auth/admin/features/users/${userId}/role`, { feature_role }),
-}
-
-export const automations = {
-  list:          (scope = 'all') => get(`/automations?scope=${scope}`),
-  importFile:    async (file, name, scope, tags) => {
-    const fd = new FormData()
-    fd.append('file', file)
-    fd.append('name', name || '')
-    fd.append('scope', scope || 'personal')
-    fd.append('tags', JSON.stringify(tags || []))
-    const res = await fetch(`${BASE}/automations/import`, { method: 'POST', credentials: 'include', body: fd })
-    if (res.status === 401) {
-      localStorage.removeItem('lc_user')
-      if (!window.location.pathname.startsWith('/login')) window.location.href = '/login'
-      throw new Error('Session expired.')
-    }
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.detail || 'Import failed')
-    return data
-  },
-  remove:        (id)  => del(`/automations/${id}`),
-  activate:      (id)  => post(`/automations/${id}/activate`, {}),
-  deactivate:    (id)  => post(`/automations/${id}/deactivate`, {}),
-  run:           (id)  => post(`/automations/${id}/run`, {}),
-  logs:          (id, limit = 10) => get(`/automations/${id}/logs?limit=${limit}`),
-  n8nStatus:     ()    => get('/automations/n8n/status'),
-  saveN8nConfig: (cfg) => post('/automations/n8n/config', cfg),
-  syncSecrets:   ()    => post('/automations/n8n/sync-secrets', {}),
-  syncWorkflows: ()    => post('/automations/n8n/sync-workflows', {}),
-  // Automation Inbox (workspace-scoped via X-Workspace header)
-  inbox:         ()                  => get('/automations/inbox'),
-  createInbox:   (data)              => post('/automations/inboxes', data),
-  updateInbox:   (id, data)          => patch(`/automations/inboxes/${id}`, data),
-  removeInbox:   (id)                => del(`/automations/inboxes/${id}`),
-  setItemStatus: (id, status, note)  => post(`/automations/inbox/items/${id}/status`, { status, note: note || null }),
-  removeItem:    (id)                => del(`/automations/inbox/items/${id}`),
 }
 
 export const infisical = {

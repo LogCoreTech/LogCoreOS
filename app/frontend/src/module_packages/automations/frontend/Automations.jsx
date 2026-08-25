@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import HelpButton from '../components/HelpButton'
+import HelpButton from '../../../components/HelpButton'
 import { useSearchParams } from 'react-router-dom'
-import { automations as api, auth as authApi } from '../lib/api'
-import { useAuth } from '../lib/auth'
-import { useWorkspace } from '../lib/workspace'
-import TagInput from '../components/TagInput'
+import { automations as api } from './api'
+import { auth as authApi } from '../../../lib/api'
+import { useAuth } from '../../../lib/auth'
+import { useWorkspace } from '../../../lib/workspace'
+import TagInput from '../../../components/TagInput'
 
 function fmt(iso) {
   if (!iso) return 'Never'

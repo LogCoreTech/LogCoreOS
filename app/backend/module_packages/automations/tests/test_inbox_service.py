@@ -3,13 +3,13 @@
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 import pytest
 from fastapi import HTTPException
 
+from module_packages.automations.backend import inbox_service as svc
 from services import auth_service
-from services import automation_inbox_service as svc
 from services import automations_config, suggestions_service
 
 
@@ -22,7 +22,7 @@ def users(brain):
 
 
 def _post_items(user, workflow_key, items, workspace="business"):
-    from routers.automations import AutomationInboxPost, InboxItemIn, automation_post_items
+    from module_packages.automations.backend.router import AutomationInboxPost, InboxItemIn, automation_post_items
 
     return automation_post_items(
         AutomationInboxPost(
@@ -37,7 +37,7 @@ def _post_items(user, workflow_key, items, workspace="business"):
 
 
 def _set_status(item_id, status, user, workspace="business", note=None):
-    from routers.automations import ItemStatusUpdate, set_item_status
+    from module_packages.automations.backend.router import ItemStatusUpdate, set_item_status
 
     return set_item_status(
         item_id,
@@ -75,7 +75,7 @@ def test_unmapped_key_goes_to_general_created_once(users):
 
 
 def test_dedup_and_seen_endpoint(users):
-    from routers.automations import automation_seen_ids
+    from module_packages.automations.backend.router import automation_seen_ids
 
     _post_items("_team", "land-lead-search", [LEAD, LEAD2])
     result = _post_items("_team", "land-lead-search", [LEAD, LEAD2])
@@ -126,7 +126,7 @@ def test_personal_scope_owner_acts_and_manages(users):
     updated = _set_status(item_id, "interested", users["bob"], workspace="personal")
     assert updated["status_by"] == "Bob"
     # Owner manages their own personal inboxes without admin role
-    from routers.automations import InboxUpdate, update_inbox
+    from module_packages.automations.backend.router import InboxUpdate, update_inbox
 
     renamed = update_inbox(
         box["id"],
@@ -139,7 +139,7 @@ def test_personal_scope_owner_acts_and_manages(users):
 
 
 def test_business_inbox_manage_is_admin_only(users):
-    from routers.automations import InboxCreate, create_inbox
+    from module_packages.automations.backend.router import InboxCreate, create_inbox
 
     with pytest.raises(HTTPException) as exc:
         create_inbox(
@@ -242,7 +242,7 @@ def test_inbox_delete_blocked_with_items_and_item_delete(users):
 
 
 def test_invalid_token_rejected(users):
-    from routers.automations import _require_automation_token
+    from module_packages.automations.backend.router import _require_automation_token
 
     automations_config.get_api_token()  # ensure a token exists
     with pytest.raises(HTTPException) as exc:
@@ -257,7 +257,7 @@ def test_invalid_token_rejected(users):
 
 
 def test_inbox_item_rejects_non_http_url():
-    from routers.automations import InboxItemIn
+    from module_packages.automations.backend.router import InboxItemIn
 
     for bad in (
         "javascript:alert(1)",
@@ -269,7 +269,7 @@ def test_inbox_item_rejects_non_http_url():
 
 
 def test_inbox_item_accepts_http_url_and_normalizes_empty():
-    from routers.automations import InboxItemIn
+    from module_packages.automations.backend.router import InboxItemIn
 
     assert (
         InboxItemIn(external_id="x", title="t", url="https://ok.example").url

@@ -30,8 +30,6 @@ const CORE_MODULES = [
   { id: 'household',            to: '/household',    icon: '🏠',          label: 'Household',  workspace: 'personal' },
   { id: 'notes',                to: '/notes',        icon: '📝',          label: 'Notes'                 },
   { id: 'chat',                 to: '/chat',         icon: '◈',           label: 'AI Chat'               },
-  { id: 'automations',          to: '/automations',  icon: '⚡',          label: 'Automations'           },
-  { id: 'automations_business', nav: false,                               label: 'Business Automations', workspace: 'business' },
   { id: 'team',                 to: '/team',         icon: '🧑‍🤝‍🧑',  label: 'Team',        workspace: 'business' },
   { id: 'assets',               to: '/assets',       icon: '🗂️',         label: 'Assets'                },
   { id: 'finance',              to: '/finance',      icon: '💵',          label: 'Finance'               },

@@ -498,28 +498,6 @@ export function NoteEmbedBlock({ data, actions, onAction }) {
   )
 }
 
-export function WorkflowStatusBlock({ data }) {
-  const wf = data?.workflow
-  if (!wf) return <Empty text="Workflow not found." />
-  return (
-    <div className="flex items-center justify-between text-sm">
-      <span className="truncate">{wf.name}</span>
-      <span className={`badge shrink-0 ml-2 ${wf.active ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : ''}`}>
-        {wf.active ? 'active' : 'inactive'}
-      </span>
-    </div>
-  )
-}
-
-export function InboxSummaryBlock({ data }) {
-  return (
-    <div className="text-sm">
-      <p><span className="text-orange-500 font-semibold">{data?.new_count ?? 0}</span> new item{(data?.new_count ?? 0) === 1 ? '' : 's'}</p>
-      <p className="text-charcoal-400 text-xs">{data?.total ?? 0} total in inbox</p>
-    </div>
-  )
-}
-
 export function AiUsageMeBlock({ data }) {
   const u = data?.usage
   if (!u) return <Empty text="No usage data." />

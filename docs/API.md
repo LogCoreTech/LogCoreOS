@@ -1143,9 +1143,9 @@ Send a test push notification to the current user. As of 2026-08-15 the failure 
 
 ---
 
-## Automations (n8n)
+## n8n Automation
 
-Router mounted at `/api/v1/automations`. Requires the `automations` module to be enabled (or `automations_business` for business-scope workflows).
+Router mounted at `/api/v1/automations` (module id `automations` — converted into `module_packages/automations/` 2026-08-25; unlike Home Assistant's full internal rename, only the display name changed here, per the owner's explicit instruction — id/directory/routes/AI-tool-names all stayed as "automations"). Requires the `automations` module to be enabled. The `automations_business` role-editor checkbox mentioned in older docs never actually gated anything at the router level — confirmed by exhaustive grep before removing it as part of this conversion — every scope (`personal`/`business`) has always gone through this same single `require_module("automations")` check, distinguished only by `?scope=`/workspace, not a second module id. The n8n admin config endpoints below are called from Admin → Hosting's own section (same pattern as Home Assistant's config form), not a dedicated automations admin page.
 
 ### Admin — n8n Config
 

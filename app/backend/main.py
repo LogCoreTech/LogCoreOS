@@ -21,7 +21,6 @@ from routers import (
     ai_usage,
     assets,
     auth,
-    automations,
     brain,
     calendar,
     chat,
@@ -390,7 +389,6 @@ app.include_router(calendar.router, prefix="/api/v1/calendar", tags=["calendar"]
 app.include_router(suggestions.router, prefix="/api/v1/suggestions", tags=["suggestions"])
 app.include_router(infisical.router, prefix="/api/v1/auth", tags=["infisical"])
 app.include_router(features.router, prefix="/api/v1/auth", tags=["features"])
-app.include_router(automations.router, prefix="/api/v1/automations", tags=["automations"])
 app.include_router(finance.router, prefix="/api/v1/finance", tags=["finance"])
 app.include_router(finance_banking.router, prefix="/api/v1/finance", tags=["finance-banking"])
 app.include_router(finance_planning.router, prefix="/api/v1/finance", tags=["finance-planning"])

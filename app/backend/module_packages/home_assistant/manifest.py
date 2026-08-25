@@ -119,7 +119,14 @@ def m017_rename_home_id_to_home_assistant(brain: Path) -> None:
     users_dir = brain / "USERS"
     if users_dir.exists():
         for user_dir in users_dir.iterdir():
-            if not user_dir.is_dir():
+            # _template is the setup scaffold copied for every new signup,
+            # not a real user or pool — it must never be treated as data to
+            # migrate here (caught live: a real local dev server had this
+            # exact bug rename USERS/_template/Home -> .../HomeAssistant,
+            # since _template is a perfectly normal directory otherwise).
+            # Matches journal's own on_install() convention of excluding
+            # every underscore-prefixed name, not just _template by itself.
+            if not user_dir.is_dir() or user_dir.name.startswith("_"):
                 continue
             old = user_dir / "Home"
             new = user_dir / "HomeAssistant"

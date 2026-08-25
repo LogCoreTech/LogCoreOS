@@ -13,7 +13,6 @@ const _CORE_MODULE_ROUTES = {
   team: '/team',
   notes: '/notes',
   chat: '/chat',
-  automations: '/automations',
   assets: '/assets',
   finance: '/finance',
   contacts: '/contacts',

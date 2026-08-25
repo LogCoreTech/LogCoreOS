@@ -7,8 +7,8 @@ import re
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field, field_validator
 
+from module_packages.automations.backend import inbox_service
 from routers.auth import get_current_user, get_workspace, require_admin, require_module
-from services import automation_inbox_service as inbox_service
 from services import automations_config, n8n_service
 from services.auth_service import get_user_by_name
 from services.rate_limiter import rate_limit

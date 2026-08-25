@@ -22,7 +22,7 @@
       "id": "dashboard",
       "icon": "🏠",
       "title": "Dashboard",
-      "blurb": "Your home screen — now build-it-yourself. Create as many dashboards as you want, each a freeform grid of blocks pulling live data from almost any module: tasks, streaks, Home Assistant, Finance, Contacts, Assets, Notes, Calendar, Automations, and more.",
+      "blurb": "Your home screen — now build-it-yourself. Create as many dashboards as you want, each a freeform grid of blocks pulling live data from almost any module: tasks, streaks, Home Assistant, Finance, Contacts, Assets, Notes, Calendar, n8n Automation, and more.",
       "howto": [
         "Click the dashboard name at the top to switch between your dashboards — grouped by template if you use them — or create a new one.",
         "Click \"Edit Dashboard\" to drag/resize blocks, add new ones, or remove existing ones — works the same way on desktop and mobile, and each remembers its own arrangement, so a dashboard can be laid out differently on your phone than on your laptop. On a touchscreen, press and hold a block for a moment before it starts moving — a quick swipe scrolls the page as normal instead. Removing a block asks you to confirm first. A block's ✎/✕ edit controls only show up while you're editing.",
@@ -30,7 +30,7 @@
         "Click \"+ Add Block\" and use the search box to find one quickly, or browse the full catalog grouped into live data, record-linked, actions, and freeform (text/links/headings). Record-linked blocks (Single Task, Contact's Deals, Finance Book Report, etc.) let you search for and pick the exact task, contact, asset, event, book, note, or workflow — you never need to know or type an internal ID. The Documents/Files block shows real image previews and lets you click any file to open it.",
         "The Collection block shows a whole list — or a board grouped by status — of records at once from one asset template, optionally narrowed to just the ones linked to the dashboard's own contact. Pick which fields show, and pick one of the template's own status-style fields to get a one-click status control on every item, right from the dashboard. A Count-only layout is also available for a simple \"how many\" tile.",
         "When creating a new dashboard, you can start blank or pick a template to build from a reusable block set instantly — templates are entirely optional. Some templates ask you to pick a contact or asset first (their \"subject\"); any block set up to use \"this dashboard's own contact/asset\" then shows that record's data. A dashboard made from a template keeps its block set in sync with the template automatically, but its own layout stays yours to rearrange — use \"Detach from template\" (in ⚙ Settings) for full independent control over its blocks too.",
-        "Two Action blocks render as a small standalone button with nothing else around it, so you can fit several in a small space: \"Navigate To…\" jumps to any page, a specific section within Finance/Automations/Settings, a specific record, or a specific dashboard; \"Status/Archive Action\" marks a task done/pending/skipped, updates a contact's gender or marital status, or archives/unarchives an asset or sets one of its own fields, with one click. Every option in both is picked from a real list, never typed — including the button's own label and its color, if you want something more specific than the default.",
+        "Two Action blocks render as a small standalone button with nothing else around it, so you can fit several in a small space: \"Navigate To…\" jumps to any page, a specific section within Finance/n8n Automation/Settings, a specific record, or a specific dashboard; \"Status/Archive Action\" marks a task done/pending/skipped, updates a contact's gender or marital status, or archives/unarchives an asset or sets one of its own fields, with one click. Every option in both is picked from a real list, never typed — including the button's own label and its color, if you want something more specific than the default.",
         "While editing, click \"⚙ Settings\" to rename the dashboard, change its icon, share it, set it as your default, or delete it — all in one place, or — if you have both a personal and business workspace — flip on \"Also show in my [other workspace] workspace\" so this one dashboard shows up in both instead of just the one it was created in.",
         "Sharing (inside ⚙ Settings) lets you share a dashboard with another person or your household/team pool at read, contribute, or edit access.",
         "As the owner, you can turn on \"Share underlying data\" (also inside ⚙ Settings) so people you've shared with see the same live data you do, even things they normally couldn't access on their own — off by default, and they never see more than you can see.",
@@ -270,25 +270,6 @@
       ]
     },
     {
-      "id": "automations",
-      "icon": "⚙️",
-      "title": "Automations",
-      "blurb": "Run background workflows with n8n, and review what they surface in a built-in Inbox.",
-      "howto": [
-        "Under Workflows, import an n8n workflow JSON, then run it, activate it, or view its logs.",
-        "Switch to the Inbox to review items your workflows post (e.g. leads to qualify).",
-        "Act on each item — Interested / Pass / Offer Made / Closed — and it's recorded with your name.",
-        "Named inboxes route items from specific workflows and notify the right people."
-      ],
-      "tips": [
-        "Business workflows live in the shared team scope; personal ones are yours alone.",
-        "The bundled n8n only runs when you actually have workflows, keeping things lightweight."
-      ],
-      "modules": [
-        "automations"
-      ]
-    },
-    {
       "id": "workspaces",
       "icon": "🔀",
       "title": "Personal vs Business",
@@ -451,7 +432,7 @@
     },
     {
       "q": "Do I need n8n or Home Assistant to use LogCore?",
-      "a": "No. Automations (n8n) and Home Assistant are optional integrations. Everything else works without them."
+      "a": "No. n8n Automation and Home Assistant are optional integrations. Everything else works without them."
     },
     {
       "q": "I found a bug or have an idea. How do I tell you?",
