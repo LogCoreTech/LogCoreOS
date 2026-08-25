@@ -159,8 +159,8 @@ LogCoreOS/
 │           │   │       ├── Ai.jsx              → AI Provider + Web Search + AI Usage & Limits (month picker, stat cards, defaults, per-user limits) — 3 sections, one page
 │           │   │       ├── General.jsx         → Registration, Workspace visibility, Session Length (single global admin-set value, no per-user override), Updates
 │           │   │       ├── Team.jsx            → Team pool priorities + PoolBankConnections (pool="team")
-│           │   │       ├── Household.jsx       → Household pool priorities + Smart Home (Home Assistant config) + PoolBankConnections (pool="household")
-│           │   │       ├── Hosting.jsx         → Hosting (domain/proxy/tunnel) + Managed Hosting (Infisical, self-hides when unconfigured) + n8n Automation + automation token reveal/rotate
+│           │   │       ├── Household.jsx       → Household pool priorities + PoolBankConnections (pool="household") — Home Assistant's config form moved to Hosting.jsx, 2026-08-24, see docs/MEMORY.md
+│           │   │       ├── Hosting.jsx         → Hosting (domain/proxy/tunnel) + Managed Hosting (Infisical, self-hides when unconfigured) + n8n Automation + automation token reveal/rotate + Home Assistant config (URL+token, gated on the home module's installed state — the first section here with that gate, since Automations/n8n hasn't converted yet)
 │           │   │       ├── ModStore.jsx        → Mod Store (2026-08-24): GET /mod-store/catalog+/installed+/active drive 7 explicit per-row states (rowState()) crossing the `installed` marker with the `active` (really-registered) signal; a page-level "Restart Now" banner appears whenever any row is pending either direction; confirm-before-uninstall + the online-users-before-restart warning both use plain window.confirm() (matches UserDetail.jsx's existing convention, not a custom modal)
 │           │   │       └── ContactFields.jsx   → Contacts custom-field admin authoring screen (mirrors TemplateManager.jsx's add/edit/reorder/delete pattern) — key/label/type/select-options + a Person/Company `applies_to` checkbox pair, guards against unchecking the last remaining value; the only frontend caller of `PUT /contacts/fields` (none existed before this)
 │           │   ├── Login.jsx      → login + register form
@@ -204,7 +204,7 @@ LogCoreOS/
 │   ├── _system/migrations.json    → migration tracking (which schema migrations have run)
 │   ├── _system/vapid_keys.json    → VAPID keypair for web push notifications (auto-generated)
 │   ├── _system/n8n_config.json    → n8n URL + API key (written by Admin → n8n card)
-│   ├── _system/ha_config.json     → Home Assistant URL + long-lived token (written by Admin → Smart Home card)
+│   ├── _system/ha_config.json     → Home Assistant URL + long-lived token (written by Admin → Hosting's Home Assistant card)
 │   ├── _system/automations_index.json → business workflow metadata (n8n IDs + tags)
 │   └── _system/ai_usage.json      → AI usage metering + caps: per-user daily buckets (messages/tokens, personal+business), defaults, mode/period/limits, alert dedup — operational metadata, never in a user's portable Brain folder
 │   ├── ai_settings.json           → AI provider, model, API keys (written by Admin UI; not in git)

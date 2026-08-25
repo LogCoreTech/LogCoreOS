@@ -10,7 +10,7 @@
     },
     {
       "id": "home",
-      "name": "Smart Home",
+      "name": "Home Assistant",
       "description": "Control and monitor Home Assistant devices, scenes, and automations.",
       "category": "personal",
       "icon": "💡",

@@ -170,7 +170,7 @@ Generated across a systematic search→generate→compare→document pass over t
 - Add a server-side confirmation/step-up requirement for physical-security-relevant Home Assistant domains (`lock`, `cover`) — the frontend `confirm()` is trivially bypassable via direct API calls.
 - Consider a higher or NAT-aware login rate limit — a household sharing one IP can have one member's typo lock out the whole family.
 - Scoped/multiple automation tokens instead of one shared instance-wide credential.
-- Smart Home Auto-mode carve-out — require approval for unlock/garage-open actions even in Auto mode, as a permanent exception regardless of how the general AI auto-mode destructive-action fix lands.
+- Home Assistant Auto-mode carve-out — require approval for unlock/garage-open actions even in Auto mode, as a permanent exception regardless of how the general AI auto-mode destructive-action fix lands.
 - Biometric/PIN app-lock on launch — the app opens straight to finance/journal data with no re-auth gate.
 - Self-service "Delete my account" in Settings (right-to-erasure, land alongside the cascade-delete bug fix).
 - Admin "view as"/impersonate a user for support troubleshooting, fully audit-logged and time-boxed.
@@ -219,7 +219,7 @@ Generated across a systematic search→generate→compare→document pass over t
 - Swipe gestures for common list actions (complete, archive).
 - Show/hide password toggle on Login/Register.
 - User avatar/profile picture.
-- Group Smart Home entities by room/area instead of domain-only tabs.
+- Group Home Assistant entities by room/area instead of domain-only tabs.
 - Add standard `autoComplete` attributes to auth forms.
 - Persist list-view filter/sort choices instead of resetting on every navigation.
 - Plain "Duplicate" action on Tasks/Events/Transactions.

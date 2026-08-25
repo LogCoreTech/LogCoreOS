@@ -240,6 +240,13 @@ export default function ModStore() {
                     <p className="text-xs text-red-500 mt-1">{entry.error}</p>
                   )}
                 </div>
+                {/* No action button during either pending state — a badge
+                    plus a button both fighting for room on the same row
+                    was pushing the card wider than the mobile viewport
+                    (owner report, 2026-08-24). The button reappears once
+                    the row lands back on a stable state (active/not_installed);
+                    pending_install still shows "Installing…" via `busy`
+                    below for the brief window before the row transitions. */}
                 {state === 'not_installed' && (
                   <button
                     onClick={() => handleInstall(entry)}
@@ -249,7 +256,7 @@ export default function ModStore() {
                     {busy ? 'Installing…' : 'Install'}
                   </button>
                 )}
-                {(state === 'active' || state === 'pending_install') && (
+                {state === 'active' && (
                   <button
                     onClick={() => handleUninstall(entry)}
                     disabled={busy}

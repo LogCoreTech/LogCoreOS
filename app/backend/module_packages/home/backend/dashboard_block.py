@@ -1,5 +1,5 @@
-"""Smart Home block — favourites, personal workspace only. Reuses ha_service
-as-is; no new backend aggregation."""
+"""Home Assistant block — favourites, personal workspace only. Reuses
+ha_service as-is; no new backend aggregation."""
 
 from services import ha_service
 from services.dashboard_blocks._tasks import _scoped_target
@@ -33,7 +33,7 @@ def resolve_home_favourites(ctx: BlockRenderCtx) -> BlockRenderResult:
 register(
     BlockSpec(
         type="home_favourites",
-        label="Smart Home Favourites",
+        label="Home Assistant Favourites",
         category="live_aggregate",
         resolver=resolve_home_favourites,
         workspace="personal",

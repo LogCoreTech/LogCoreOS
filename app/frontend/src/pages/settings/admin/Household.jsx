@@ -1,133 +1,12 @@
 import { useEffect, useState } from 'react'
 import { priorities as prioritiesApi } from '../../../lib/api'
-import { home as homeApi } from '../../../module_packages/home/frontend/api'
-import { useAuth } from '../../../lib/auth'
-import { isPackageModule } from '../../../lib/moduleRegistry'
 import PriorityList from '../../../components/settings/PriorityList'
 import PoolBankConnections from '../../../components/settings/PoolBankConnections'
 import SettingsPageHeader from '../../../components/settings/SettingsPageHeader'
 
 const POOL_DEFAULT_HOUSEHOLD = ['Cleaning', 'Maintenance', 'Shopping', 'Cooking', 'Yard Work']
 
-function SmartHomeSection() {
-  const [haUrl, setHaUrl]     = useState('')
-  const [token, setToken]     = useState('')
-  const [msg, setMsg]         = useState(null)
-  const [testing, setTesting] = useState(false)
-  const [saving, setSaving]   = useState(false)
-
-  function flash(ok, text) {
-    setMsg({ ok, text })
-    setTimeout(() => setMsg(null), 5000)
-  }
-
-  async function testConn() {
-    setTesting(true)
-    setMsg(null)
-    try {
-      const res = await homeApi.status()
-      flash(res.ok, res.ok ? `Connected to ${res.url}` : (res.error || 'Connection failed'))
-    } catch (e) {
-      flash(false, e.message || 'Connection failed')
-    } finally {
-      setTesting(false)
-    }
-  }
-
-  async function save(e) {
-    e.preventDefault()
-    setSaving(true)
-    setMsg(null)
-    try {
-      await homeApi.saveConfig({ url: haUrl.trim(), token: token.trim() })
-      flash(true, 'Config saved')
-    } catch (e) {
-      flash(false, e.message || 'Save failed')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="card p-5 space-y-3">
-      <div>
-        <h2 className="font-semibold">Smart Home</h2>
-        <p className="text-sm text-charcoal-500 dark:text-charcoal-400">
-          Connect a Home Assistant instance. Members can control devices, scenes, and automations
-          from the Smart Home page.
-        </p>
-      </div>
-
-      <form onSubmit={save} className="space-y-3">
-        <div>
-          <label className="block text-sm font-medium mb-1">Home Assistant URL</label>
-          <input
-            type="url"
-            value={haUrl}
-            onChange={e => setHaUrl(e.target.value)}
-            placeholder="http://homeassistant.local:8123"
-            className="input"
-            autoComplete="off"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Long-Lived Access Token</label>
-          <input
-            type="password"
-            value={token}
-            onChange={e => setToken(e.target.value)}
-            placeholder="HA long-lived access token"
-            className="input"
-            autoComplete="new-password"
-          />
-          <p className="text-xs text-charcoal-400 dark:text-charcoal-500 mt-1">
-            Generate in HA → Profile → Long-Lived Access Tokens
-          </p>
-        </div>
-
-        {msg && (
-          <p className={`text-sm ${msg.ok ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
-            {msg.text}
-          </p>
-        )}
-
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={testConn}
-            disabled={testing}
-            className="btn-ghost text-sm flex-1 disabled:opacity-50"
-          >
-            {testing ? 'Testing…' : 'Test Connection'}
-          </button>
-          <button type="submit" disabled={saving} className="btn-primary text-sm flex-1 disabled:opacity-50">
-            {saving ? 'Saving…' : 'Save Config'}
-          </button>
-        </div>
-      </form>
-    </div>
-  )
-}
-
-function SmartHomeNotInstalled() {
-  return (
-    <div className="card p-5 space-y-1">
-      <h2 className="font-semibold">Smart Home</h2>
-      <p className="text-sm text-charcoal-500 dark:text-charcoal-400">
-        Smart Home isn&apos;t installed — install it from Admin → Mod Store to connect Home Assistant.
-      </p>
-    </div>
-  )
-}
-
 export default function Household() {
-  const { user, activeModuleIds } = useAuth()
-  // Home's own admin config form lives on this page (not a dedicated Home
-  // admin page — see docs/MEMORY.md 2026-08-24), so it needs the same
-  // installed+active stacked gate ModuleRoute applies to Home's own /home
-  // route, just for a section instead of a whole page.
-  const homeInstalled = !user?.disabledModules?.includes('home')
-    && (!isPackageModule('home') || activeModuleIds.includes('home'))
   const [household, setHousehold] = useState([])
   const [loading, setLoading]     = useState(true)
   const [saving, setSaving]       = useState(false)
@@ -199,8 +78,6 @@ export default function Household() {
           {saving ? 'Saving…' : 'Save Pool Priorities'}
         </button>
       </div>
-
-      {homeInstalled ? <SmartHomeSection /> : <SmartHomeNotInstalled />}
 
       <PoolBankConnections pool="household" accountLabel="joint family" />
 

@@ -5,14 +5,14 @@ export default {
   id: 'home',
   to: '/home',
   icon: '💡',
-  label: 'Smart Home',
+  label: 'Home Assistant',
   workspace: 'personal',
   loadPage: () => import('./frontend/Home.jsx'),
   block: {
     type: 'home_favourites',
     loadComponent: () => import('./frontend/HomeFavouritesBlock.jsx'),
     icon: '💡',
-    label: 'Smart Home Favourites',
+    label: 'Home Assistant Favourites',
     defaultLayout: { w: 18, h: 9 },
   },
 }

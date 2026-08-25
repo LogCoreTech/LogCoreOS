@@ -1214,9 +1214,12 @@ Workflow-written reviewable items inside the Automations module (no separate mod
 
 ---
 
-## Smart Home (Home Assistant)
+## Home Assistant
 
-Router mounted at `/api/v1/home`. Requires the `home` module to be enabled (personal workspace only).
+Router mounted at `/api/v1/home` (module id `home`, unchanged by the 2026-08-24 display-name rename
+from "Smart Home"). Requires the `home` module to be enabled (personal workspace only). The admin
+`/status`+`/config` endpoints below are called from Admin → Hosting's own section, not a dedicated
+Home admin page — see docs/MEMORY.md's 2026-08-24 entries.
 
 ### Admin — HA Config
 
@@ -1463,7 +1466,7 @@ time, no stored "protected" flag.
 | `GET` | `/dashboards/roles` | module users | Feature-role names for the share-by-role picker |
 
 **Block catalog** (27 types across `live_aggregate` / `record_linked` / `freeform` categories) —
-Tasks/Goals (`top3_tasks`, `due_today` — both take a `sort_mode: "priority"|"date"|"alpha"` config, default `priority`, 2026-08-15; `streaks`, `goals_progress`, `single_task`), Smart Home
+Tasks/Goals (`top3_tasks`, `due_today` — both take a `sort_mode: "priority"|"date"|"alpha"` config, default `priority`, 2026-08-15; `streaks`, `goals_progress`, `single_task`), Home Assistant
 (`home_favourites`, personal only), Household/Team (`pool_tasks`), Calendar (`upcoming_events`,
 `single_event`), Finance (`finance_activity` — asset/contact/book variants, `finance_book_report`),
 Contacts (`linked_deals`, `custom_fields`, `linked_assets`), Assets (`documents`, `linked_tasks`,

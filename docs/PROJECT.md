@@ -159,7 +159,7 @@ The App currently provides:
 **Phase 3 (partial — shipped early):**
 
 - n8n Automations integration — personal and business workflow cards, import/run/logs via n8n REST API; business workflows auto-synced from `automations_stubs/` on startup
-- Smart Home (Home Assistant) — entity tiles, scene control, HA automation management, per-user starred favourites on dashboard widget; admin config panel
+- Home Assistant — entity tiles, scene control, HA automation management, per-user starred favourites on dashboard widget; admin config panel (renamed from "Smart Home," 2026-08-24)
 - Team module — business-workspace shared task + event pool (`_team`), structurally separate from Household (`_household`); no data can cross between the two
 - Assets module — template-driven nestable object tracking (subdivisions → parcels, vehicles, equipment): admin-curated typed field templates, subtree sharing + per-user hide, pool conversion (survives account deletion), archive-first lifecycle, change history, attachments, task linking, AI tools, and a token-authenticated n8n automation API
 - Finance module — books/accounts/transactions, SimpleFIN bank sync + CSV, budgets/recurring/projection/deviation alerts, invoicing/AR/tax/receipts, asset-style sharing with caps (both workspaces)
@@ -177,7 +177,7 @@ foundational ones (Tasks, Chat, Dashboards-the-feature), which just carry `unins
 rather than being excluded from the system. End state: `main.py` has zero hardcoded per-module
 router registrations. The registry mechanism itself (discovery, install/uninstall state, all four
 enforcement-gap fixes, the admin Mod Store UI) is done and fully tested. Two modules converted so
-far: journal (increment 1) and Smart Home (increment 2, 2026-08-24) — both confirmed working
+far: journal (increment 1) and Home Assistant (increment 2, 2026-08-24) — both confirmed working
 end-to-end, including a real restart, on the owner's live instance. Calendar (increment 3) is next.
 Full design in `docs/MEMORY.md`'s 2026-08-24 entries and
 `/home/logcore/.claude/plans/i-want-you-to-composed-scone.md`; rollout order tracked in

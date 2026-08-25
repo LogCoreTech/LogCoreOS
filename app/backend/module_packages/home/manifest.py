@@ -1,7 +1,9 @@
-"""Home (Smart Home / Home Assistant) module manifest. See
+"""Home (display name "Home Assistant") module manifest. See
 module_registry.py for the ModuleManifest contract and docs/MEMORY.md's
-2026-08-24 Home-conversion entry for the full design, including why
-services/ha_service.py itself stays in core rather than moving here."""
+2026-08-24 Home-conversion entries for the full design, including why
+services/ha_service.py itself stays in core rather than moving here, and
+why the admin config form lives on Admin → Hosting rather than a dedicated
+Home admin page."""
 
 from pathlib import Path
 
@@ -43,7 +45,7 @@ def m016_backfill_home_installed_from_ha_config(brain: Path) -> None:
 
 MODULE = ModuleManifest(
     id="home",
-    display_name="Smart Home",
+    display_name="Home Assistant",
     description="Control and monitor Home Assistant devices, scenes, and automations.",
     icon="💡",  # matches constants.js's existing nav icon
     version="1.0.0",
@@ -69,17 +71,17 @@ MODULE = ModuleManifest(
     help_section={
         "id": "home",
         "icon": "🏡",
-        "title": "Smart Home",
+        "title": "Home Assistant",
         "blurb": "Control your Home Assistant devices from LogCore — lights, switches, sensors, climate, scenes, and automations.",
         "howto": [
-            "An admin connects your Home Assistant URL and token in Admin → Household.",
+            "An admin connects your Home Assistant URL and token in Admin → Hosting.",
             "Browse entities by domain and toggle or adjust them from the tiles.",
             "Activate scenes or trigger HA automations from their panels.",
             "Star your favourites to pin them to the Dashboard widget for quick access.",
         ],
         "tips": [
             "You can also ask the AI to \"turn off the living room lights\" once Home Assistant is connected.",
-            "Smart Home is personal-workspace only.",
+            "Home Assistant is personal-workspace only.",
         ],
         "modules": ["home"],
     },

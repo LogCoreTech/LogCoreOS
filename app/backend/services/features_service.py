@@ -71,8 +71,8 @@ _BUSINESS_MEMBER = {
     # _CORE_MODULE_IDS (converted to module_packages/home/, 2026-08-24) —
     # this dict is hand-authored, not derived, and load_features() defaults
     # any module MISSING from a role map to True. Without this explicit
-    # False, a fresh business-profile instance would default Smart Home to
-    # enabled, which is wrong — it's personal-only.
+    # False, a fresh business-profile instance would default Home Assistant
+    # to enabled, which is wrong — it's personal-only.
     "home": False,
     "team": True,
     "assets": True,

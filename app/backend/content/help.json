@@ -22,7 +22,7 @@
       "id": "dashboard",
       "icon": "🏠",
       "title": "Dashboard",
-      "blurb": "Your home screen — now build-it-yourself. Create as many dashboards as you want, each a freeform grid of blocks pulling live data from almost any module: tasks, streaks, Smart Home, Finance, Contacts, Assets, Notes, Calendar, Automations, and more.",
+      "blurb": "Your home screen — now build-it-yourself. Create as many dashboards as you want, each a freeform grid of blocks pulling live data from almost any module: tasks, streaks, Home Assistant, Finance, Contacts, Assets, Notes, Calendar, Automations, and more.",
       "howto": [
         "Click the dashboard name at the top to switch between your dashboards — grouped by template if you use them — or create a new one.",
         "Click \"Edit Dashboard\" to drag/resize blocks, add new ones, or remove existing ones — works the same way on desktop and mobile, and each remembers its own arrangement, so a dashboard can be laid out differently on your phone than on your laptop. On a touchscreen, press and hold a block for a moment before it starts moving — a quick swipe scrolls the page as normal instead. Removing a block asks you to confirm first. A block's ✎/✕ edit controls only show up while you're editing.",
@@ -296,7 +296,7 @@
       "howto": [
         "If you have both, a toggle pill appears in the sidebar — switch between Personal and Business anytime.",
         "Each workspace has its own tasks, calendar, notes, finance, contacts, and shared pool (Household vs Team).",
-        "Modules can differ per workspace — Journal, Household, and Smart Home are personal; Team is business.",
+        "Modules can differ per workspace — Journal, Household, and Home Assistant are personal; Team is business.",
         "Your AI chat and priorities are scoped to the workspace you're currently in."
       ],
       "tips": [
@@ -405,7 +405,7 @@
         "Open Settings → Admin Settings → Users & Roles to add users, set role (admin/member), workspaces, and per-user module access — tap a user for their own page.",
         "Create feature roles (e.g. cleaner, crew) from Users & Roles → Role Definitions to control which modules groups of users can see.",
         "Configure the AI provider and web search from Admin Settings → AI — AI Usage & Limits (instance/personal/business totals + per-user daily/weekly/monthly caps) is on the same page.",
-        "Configure hosting, managed hosting, and n8n from Admin Settings → Hosting; Smart Home and bank connections live on the Household/Team pages.",
+        "Configure hosting, managed hosting, n8n, and Home Assistant from Admin Settings → Hosting; bank connections live on the Household/Team pages.",
         "Grant \"Can manage\" on Household/Team pools from a user's own page in Users & Roles.",
         "Deleting a user who owns items already shared with someone else opens a review page — choose per item whether it transfers to another user, transfers to the household/team pool, or is deleted, before the account can be removed."
       ],
@@ -435,7 +435,7 @@
     },
     {
       "q": "Why can't I see a module another user has?",
-      "a": "Modules can be turned on or off per user, per workspace, and per feature role by an admin. Some modules are also workspace-specific (Journal, Household, and Smart Home are personal; Team is business)."
+      "a": "Modules can be turned on or off per user, per workspace, and per feature role by an admin. Some modules are also workspace-specific (Journal, Household, and Home Assistant are personal; Team is business)."
     },
     {
       "q": "How does task priority scoring work?",
@@ -451,7 +451,7 @@
     },
     {
       "q": "Do I need n8n or Home Assistant to use LogCore?",
-      "a": "No. Automations (n8n) and Smart Home (Home Assistant) are optional integrations. Everything else works without them."
+      "a": "No. Automations (n8n) and Home Assistant are optional integrations. Everything else works without them."
     },
     {
       "q": "I found a bug or have an idea. How do I tell you?",
