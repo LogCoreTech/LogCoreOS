@@ -6,20 +6,13 @@ from services.dashboard_blocks.registry import (
     BlockRenderResult,
     BlockSpec,
     register,
+    scoped_target,
 )
 from services.profile_service import get_priority_order
 
 
-def _scoped_target(ctx: BlockRenderCtx) -> str | None:
-    """scope='owner' blocks only ever succeed when ctx.viewer IS that target —
-    i.e. on Pass 2 (owner identity) or when the viewer happens to be the owner.
-    scope='viewer' (default) always targets the caller themselves."""
-    target = ctx.dashboard_owner if ctx.config.get("scope") == "owner" else ctx.viewer
-    return target if ctx.viewer == target else None
-
-
 def resolve_top3(ctx: BlockRenderCtx) -> BlockRenderResult:
-    target = _scoped_target(ctx)
+    target = scoped_target(ctx)
     if target is None:
         return BlockRenderResult(ok=False, locked_reason="no_access")
     sort_mode = ctx.config.get("sort_mode", "priority")
@@ -28,7 +21,7 @@ def resolve_top3(ctx: BlockRenderCtx) -> BlockRenderResult:
 
 
 def resolve_due_today(ctx: BlockRenderCtx) -> BlockRenderResult:
-    target = _scoped_target(ctx)
+    target = scoped_target(ctx)
     if target is None:
         return BlockRenderResult(ok=False, locked_reason="no_access")
     from services.auth_service import today_for_user
@@ -49,7 +42,7 @@ def resolve_due_today(ctx: BlockRenderCtx) -> BlockRenderResult:
 
 
 def resolve_streaks(ctx: BlockRenderCtx) -> BlockRenderResult:
-    target = _scoped_target(ctx)
+    target = scoped_target(ctx)
     if target is None:
         return BlockRenderResult(ok=False, locked_reason="no_access")
     all_tasks = task_service.list_tasks(target, ctx.workspace)
@@ -62,7 +55,7 @@ def resolve_streaks(ctx: BlockRenderCtx) -> BlockRenderResult:
 
 
 def resolve_goals_progress(ctx: BlockRenderCtx) -> BlockRenderResult:
-    target = _scoped_target(ctx)
+    target = scoped_target(ctx)
     if target is None:
         return BlockRenderResult(ok=False, locked_reason="no_access")
     all_tasks = task_service.list_tasks(target, ctx.workspace)
@@ -71,7 +64,7 @@ def resolve_goals_progress(ctx: BlockRenderCtx) -> BlockRenderResult:
 
 
 def resolve_single_task(ctx: BlockRenderCtx) -> BlockRenderResult:
-    target = _scoped_target(ctx)
+    target = scoped_target(ctx)
     task_id = ctx.config.get("task_id")
     if target is None or not task_id:
         return BlockRenderResult(ok=False, locked_reason="no_access")
@@ -88,6 +81,7 @@ register(
         category="live_aggregate",
         resolver=resolve_top3,
         scope_configurable=True,
+        module="tasks",
     )
 )
 register(
@@ -97,6 +91,7 @@ register(
         category="live_aggregate",
         resolver=resolve_due_today,
         scope_configurable=True,
+        module="tasks",
     )
 )
 register(
@@ -106,6 +101,7 @@ register(
         category="live_aggregate",
         resolver=resolve_streaks,
         scope_configurable=True,
+        module="tasks",
     )
 )
 register(
@@ -115,6 +111,7 @@ register(
         category="live_aggregate",
         resolver=resolve_goals_progress,
         scope_configurable=True,
+        module="tasks",
     )
 )
 register(
@@ -125,5 +122,6 @@ register(
         resolver=resolve_single_task,
         scope_configurable=True,
         record_ref_fields={"task_id": "tasks"},
+        module="tasks",
     )
 )

@@ -2,12 +2,12 @@
 (cross-pointer), and My Assets Summary (live-aggregate counts by template)."""
 
 from services import assets_service, task_service
-from services.dashboard_blocks._tasks import _scoped_target
 from services.dashboard_blocks.registry import (
     BlockRenderCtx,
     BlockRenderResult,
     BlockSpec,
     register,
+    scoped_target,
 )
 
 
@@ -60,7 +60,7 @@ def resolve_linked_contact(ctx: BlockRenderCtx) -> BlockRenderResult:
 
 
 def resolve_my_assets_summary(ctx: BlockRenderCtx) -> BlockRenderResult:
-    target = _scoped_target(ctx)
+    target = scoped_target(ctx)
     if target is None:
         return BlockRenderResult(ok=False, locked_reason="no_access")
     items = assets_service.list_assets(target, ctx.workspace)

@@ -56,7 +56,11 @@ def test_history_records_install_and_uninstall(brain):
     from services.file_service import read_json
 
     history = read_json(mod_store_service._history_path(), default={"events": []})
-    events = history["events"]
+    # Filtered to field_ops — the brain fixture itself now writes a real
+    # "tasks: install" event too (it marks every locked module installed,
+    # matching what every real boot always does since Tasks converted
+    # 2026-08-25), legitimate background noise this test shouldn't couple to.
+    events = [e for e in history["events"] if e["module_id"] == "field_ops"]
     assert len(events) == 2
     assert events[0]["action"] == "install"
     assert events[0]["by"] == "alice"
@@ -73,7 +77,10 @@ def test_history_survives_reinstall_after_uninstall(brain):
     from services.file_service import read_json
 
     history = read_json(mod_store_service._history_path(), default={"events": []})
-    actions = [(e["action"], e["by"]) for e in history["events"]]
+    # Filtered to field_ops — see comment above.
+    actions = [
+        (e["action"], e["by"]) for e in history["events"] if e["module_id"] == "field_ops"
+    ]
     assert actions == [("install", "alice"), ("uninstall", "alice"), ("install", "bob")]
 
 

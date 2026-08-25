@@ -6,8 +6,7 @@ import { MODULE_PACKAGES, isPackageModule } from './lib/moduleRegistry'
 import ErrorBoundary from './components/ErrorBoundary'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
-import Tasks from './pages/Tasks'
-import Goals from './pages/Goals'
+import Goals from './module_packages/tasks/frontend/Goals'
 import Chat from './pages/Chat'
 import Brain from './pages/Brain'
 import Settings from './pages/Settings'
@@ -87,7 +86,6 @@ export default function App() {
               <Route path="/setup" element={<Protected><Setup /></Protected>} />
               <Route element={<Protected><Layout /></Protected>}>
                 <Route path="/"         element={<Dashboard />} />
-                <Route path="/tasks"     element={<ModuleRoute moduleId="tasks"><Tasks /></ModuleRoute>} />
                 <Route path="/goals"     element={<ModuleRoute moduleId="tasks"><Goals /></ModuleRoute>} />
                 <Route path="/household" element={<ModuleRoute moduleId="household"><Household /></ModuleRoute>} />
                 <Route path="/team"      element={<ModuleRoute moduleId="team"><Team /></ModuleRoute>} />

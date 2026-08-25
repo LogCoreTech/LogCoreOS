@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import HelpButton from '../components/HelpButton'
-import { tasks as tasksApi, priorities as prioritiesApi } from '../lib/api'
-import { useWorkspace } from '../lib/workspace'
-import TaskModal from '../components/TaskModal'
-import { catColor } from '../lib/constants'
+import HelpButton from '../../../components/HelpButton'
+import { tasks as tasksApi } from './api'
+import { priorities as prioritiesApi } from '../../../lib/api'
+import { useWorkspace } from '../../../lib/workspace'
+import TaskModal from '../../../components/TaskModal'
+import { catColor } from '../../../lib/constants'
 
 export default function Goals() {
   const { workspace } = useWorkspace()

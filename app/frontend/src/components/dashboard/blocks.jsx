@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import { fmtMoney } from '../finance/money'
 import { ALL_MODULES, catColor } from '../../lib/constants'
 import { deepLinkUrl } from '../../lib/deepLinks'
-import { assets as assetsApi, contacts as contactsApi, tasks as tasksApi } from '../../lib/api'
+import { assets as assetsApi, contacts as contactsApi } from '../../lib/api'
+import { tasks as tasksApi } from '../../module_packages/tasks/frontend/api'
 import { AttachmentThumb } from '../assetDisplay'
 import { ACTION_MODULE_BY_KIND, buttonColorClasses } from './actionKinds'
 
@@ -98,18 +99,26 @@ export function BlockActionButtons({ actions, recordKind, recordId, onDone }) {
   )
 }
 
-function TaskRow({ task, actions, onAction }) {
-  // `flex-1` here is load-bearing specifically for Top3TasksBlock below,
-  // where this whole row is itself a flex ITEM inside another flex row
-  // (the numbered `<li>`) — without it, a flex item defaults to sizing to
-  // its own content (flex: 0 1 auto), so a short title left the entire row
-  // — buttons included — bunched at the left instead of stretched to the
-  // block's real width; `ml-auto` on BlockActionButtons can only push to
-  // the edge of whatever box it's actually in, not rescue an unstretched
-  // one (owner, 2026-08-18: "regardless if the text reaches all the way
-  // there or not"). A no-op everywhere else TaskRow is used (a direct
-  // child of a plain `space-y-2` div, not a flex container, where
-  // `flex-1`'s flex-context-only properties have no effect).
+// Shared row renderer — Tasks' own block components (Top3TasksBlock,
+// DueTodayBlock, GoalsProgressBlock, SingleTaskBlock, all in
+// module_packages/tasks/frontend/ since 2026-08-25) import this back from
+// core, same direction/pattern BlockActionButtons above already uses; kept
+// here rather than moved into the tasks package because LinkedTasksBlock
+// below (Assets' own block) needs it too, discovered only once ESLint
+// caught the leftover reference — genuinely cross-cutting, not
+// tasks-exclusive, the same reasoning BlockActionButtons itself stays core
+// for. `flex-1` here is load-bearing specifically for Top3TasksBlock, where
+// this whole row is itself a flex ITEM inside another flex row (the
+// numbered `<li>`) — without it, a flex item defaults to sizing to its own
+// content (flex: 0 1 auto), so a short title left the entire row —
+// buttons included — bunched at the left instead of stretched to the
+// block's real width; `ml-auto` on BlockActionButtons can only push to the
+// edge of whatever box it's actually in, not rescue an unstretched one
+// (owner, 2026-08-18: "regardless if the text reaches all the way there or
+// not"). A no-op everywhere else this is used (a direct child of a plain
+// `space-y-2` div, not a flex container, where `flex-1`'s flex-context-only
+// properties have no effect).
+export function TaskRow({ task, actions, onAction }) {
   return (
     <div className="flex items-center gap-2 min-w-0 flex-1">
       <span className={`badge shrink-0 ${catColor(task.category)}`}>{task.category}</span>
@@ -118,55 +127,6 @@ function TaskRow({ task, actions, onAction }) {
       <BlockActionButtons actions={actions} recordKind="task" recordId={task.id} onDone={onAction} />
     </div>
   )
-}
-
-export function Top3TasksBlock({ data, actions, onAction }) {
-  const tasks = data?.tasks || []
-  if (!tasks.length) return <Empty text="No pending tasks." />
-  return (
-    <ol className="space-y-2">
-      {tasks.map((t, i) => (
-        <li key={t.id} className="flex items-center gap-2">
-          <span className="text-orange-500 font-bold text-sm w-4 shrink-0">{i + 1}</span>
-          <TaskRow task={t} actions={actions} onAction={onAction} />
-        </li>
-      ))}
-    </ol>
-  )
-}
-
-export function DueTodayBlock({ data, actions, onAction }) {
-  const tasks = data?.tasks || []
-  if (!tasks.length) return <Empty text="Nothing due today." />
-  return <div className="space-y-2">{tasks.map(t => <TaskRow key={t.id} task={t} actions={actions} onAction={onAction} />)}</div>
-}
-
-export function StreaksBlock({ data, actions, onAction }) {
-  const tasks = data?.tasks || []
-  if (!tasks.length) return <Empty text="No active streaks." />
-  return (
-    <div className="space-y-2">
-      {tasks.map(t => (
-        <div key={t.id} className="flex items-center justify-between text-sm">
-          <span className="truncate">{t.title}</span>
-          <span className="text-orange-500 font-semibold shrink-0 ml-2">{t.streak_count} days</span>
-          <BlockActionButtons actions={actions} recordKind="task" recordId={t.id} onDone={onAction} />
-        </div>
-      ))}
-    </div>
-  )
-}
-
-export function GoalsProgressBlock({ data, actions, onAction }) {
-  const goals = data?.goals || []
-  if (!goals.length) return <Empty text="No goals yet." />
-  return <div className="space-y-2">{goals.map(g => <TaskRow key={g.id} task={g} actions={actions} onAction={onAction} />)}</div>
-}
-
-export function SingleTaskBlock({ data, actions, onAction }) {
-  const task = data?.task
-  if (!task) return <Empty text="Task not found." />
-  return <TaskRow task={task} actions={actions} onAction={onAction} />
 }
 
 export function PoolTasksBlock({ data }) {

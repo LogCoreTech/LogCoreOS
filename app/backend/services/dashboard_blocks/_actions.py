@@ -23,12 +23,12 @@ from services import (
     notes_service,
     task_service,
 )
-from services.dashboard_blocks._tasks import _scoped_target
 from services.dashboard_blocks.registry import (
     BlockRenderCtx,
     BlockRenderResult,
     BlockSpec,
     register,
+    scoped_target,
 )
 
 
@@ -39,7 +39,7 @@ def _resolve_record_title(ctx: BlockRenderCtx, module: str, record_id: str) -> s
     label is shown, it never blocks the button from rendering or working."""
     try:
         if module == "tasks":
-            target = _scoped_target(ctx)
+            target = scoped_target(ctx)
             task = task_service.get_task(target, record_id, ctx.workspace) if target else None
             return task.get("title") if task else None
         if module == "contacts":
@@ -53,7 +53,7 @@ def _resolve_record_title(ctx: BlockRenderCtx, module: str, record_id: str) -> s
             )
             return found["asset"].get("name") if found else None
         if module == "calendar":
-            target = _scoped_target(ctx)
+            target = scoped_target(ctx)
             event = events_service.get_event(target, record_id, ctx.workspace) if target else None
             return event.get("title") if event else None
         if module == "notes":
@@ -67,7 +67,7 @@ def _resolve_record_title(ctx: BlockRenderCtx, module: str, record_id: str) -> s
             )
             return found[1].get("name") if found else None
         if module == "automations":
-            target = _scoped_target(ctx)
+            target = scoped_target(ctx)
             wf = n8n_service.find_workflow(record_id, target) if target else None
             return wf.get("name") if wf else None
         if module == "dashboard":
@@ -103,7 +103,7 @@ def resolve_status_button(ctx: BlockRenderCtx) -> BlockRenderResult:
 
     if record_type == "task":
         task_id = ctx.config.get("task_id")
-        target = _scoped_target(ctx)
+        target = scoped_target(ctx)
         if not task_id or target is None:
             return BlockRenderResult(ok=False, locked_reason="not_found")
         task = task_service.get_task(target, task_id, ctx.workspace)

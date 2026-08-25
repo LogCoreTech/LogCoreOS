@@ -5,17 +5,17 @@ no new endpoint needed."""
 from datetime import date
 
 from services import events_service
-from services.dashboard_blocks._tasks import _scoped_target
 from services.dashboard_blocks.registry import (
     BlockRenderCtx,
     BlockRenderResult,
     BlockSpec,
     register,
+    scoped_target,
 )
 
 
 def resolve_upcoming_events(ctx: BlockRenderCtx) -> BlockRenderResult:
-    target = _scoped_target(ctx)
+    target = scoped_target(ctx)
     if target is None:
         return BlockRenderResult(ok=False, locked_reason="no_access")
     today = date.today().isoformat()
@@ -27,7 +27,7 @@ def resolve_upcoming_events(ctx: BlockRenderCtx) -> BlockRenderResult:
 
 
 def resolve_single_event(ctx: BlockRenderCtx) -> BlockRenderResult:
-    target = _scoped_target(ctx)
+    target = scoped_target(ctx)
     event_id = ctx.config.get("event_id")
     if target is None or not event_id:
         return BlockRenderResult(ok=False, locked_reason="no_access")

@@ -2,17 +2,17 @@
 resolves via the owner/viewer scope mechanic, same as Tasks."""
 
 from module_packages.journal.backend import service as journal_service
-from services.dashboard_blocks._tasks import _scoped_target
 from services.dashboard_blocks.registry import (
     BlockRenderCtx,
     BlockRenderResult,
     BlockSpec,
     register,
+    scoped_target,
 )
 
 
 def resolve_journal_entry(ctx: BlockRenderCtx) -> BlockRenderResult:
-    target = _scoped_target(ctx)
+    target = scoped_target(ctx)
     entry_date = ctx.config.get("date")
     if target is None or not entry_date:
         return BlockRenderResult(ok=False, locked_reason="no_access")

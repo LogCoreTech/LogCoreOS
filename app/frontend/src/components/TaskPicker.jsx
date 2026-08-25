@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { tasks as tasksApi } from '../lib/api'
+import { tasks as tasksApi } from '../module_packages/tasks/frontend/api'
 
 /**
  * Search-autocomplete over the user's own tasks, mirroring ContactPicker's

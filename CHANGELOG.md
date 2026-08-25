@@ -11,12 +11,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - **Mod Store** (Admin → Mod Store): install and uninstall first-party LogCoreOS modules. Journal,
-  Home Assistant, n8n Automation (renamed from "Automations"), and Calendar are the first four
-  converted modules — none is a permanent core feature anymore, and a fresh install now ships without
-  them by default; existing instances that already used one keep it installed automatically.
-  Uninstalling a module never deletes its data — reinstalling picks everything back up untouched.
-  Installing/uninstalling requires an admin-triggered restart to take effect (never automatic), with
-  a warning if other users currently appear online.
+  Home Assistant, n8n Automation (renamed from "Automations"), and Calendar are optional this way —
+  none is a permanent core feature anymore, and a fresh install now ships without them by default;
+  existing instances that already used one keep it installed automatically. Uninstalling a module
+  never deletes its data — reinstalling picks everything back up untouched. Installing/uninstalling
+  requires an admin-triggered restart to take effect (never automatic), with a warning if other users
+  currently appear online. Tasks is also now part of this same system, but shown as "Always active" —
+  it's foundational enough that it can't be uninstalled, the first of a small set of core features
+  that will join the Mod Store this way rather than being excluded from it.
 - Calendar's household/team pool-events toggle (the 🏠/🧑‍🤝‍🧑 pill) now hides itself entirely when
   that pool module isn't installed and active, instead of remaining visible and silently doing
   nothing.
@@ -24,9 +26,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - Every module in the app is being converted into this same self-contained format over time,
-  including foundational ones (which will be marked non-removable, not excluded) — journal, Home
-  Assistant, n8n Automation, and Calendar are the first four, proving the pattern; the rest follow
-  one at a time.
+  including foundational ones like Tasks (marked non-removable, not excluded) — journal, Home
+  Assistant, n8n Automation, Calendar, and Tasks are the first five, proving the pattern; the rest
+  follow one at a time.
 
 ## [0.6.4] — 2026-08-22
 

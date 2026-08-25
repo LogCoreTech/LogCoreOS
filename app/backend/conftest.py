@@ -16,11 +16,36 @@ import pytest
 
 @pytest.fixture()
 def brain(tmp_path, monkeypatch):
-    """Patch settings.brain_path to an isolated temp directory."""
+    """Patch settings.brain_path to an isolated temp directory.
+
+    Every LOCKED (uninstallable=True) module is marked installed here,
+    matching real production behavior exactly: main.py's lifespan() runs
+    pending migrations (which unconditionally mark a locked module
+    installed, no existence-guard the way optional modules' upgrade
+    migrations have) before the app ever serves a single request — so no
+    real, running instance can ever reach a state where a locked module
+    ISN'T installed. A bare test brain that skipped this was testing a state
+    that can't actually occur, invisible until Tasks (2026-08-25) became the
+    first locked module — plenty of pre-existing, module-agnostic tests
+    (e.g. dashboard block scope tests) incidentally exercise tasks' own
+    block types/agent tools as their generic example. Optional modules
+    (journal, home_assistant, automations, calendar) deliberately stay
+    NOT installed by default — a fresh instance genuinely starts without
+    them, and tests that need one call mod_store_service.mark_installed()
+    explicitly, same as before."""
     from config import settings
 
     monkeypatch.setattr(settings, "brain_path", tmp_path / "brain")
     (tmp_path / "brain" / "_system").mkdir(parents=True, exist_ok=True)
+
+    from module_registry import discover_manifests
+    from services import mod_store_service
+
+    manifests, _errors = discover_manifests()
+    for module_id, manifest in manifests.items():
+        if manifest.uninstallable:
+            mod_store_service.mark_installed(module_id, by="test-fixture")
+
     return tmp_path / "brain"
 
 

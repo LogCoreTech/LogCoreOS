@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { tasks as tasksApi, priorities as prioritiesApi } from '../lib/api'
+import { tasks as tasksApi } from '../module_packages/tasks/frontend/api'
+import { priorities as prioritiesApi } from '../lib/api'
 
 const PRIORITIES = ['High', 'Medium', 'Low']
 const TYPES = ['todo', 'recurring', 'goal', 'appointment']

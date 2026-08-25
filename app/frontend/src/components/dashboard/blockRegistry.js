@@ -1,11 +1,11 @@
 import { lazy } from 'react'
 import {
-  AiUsageMeBlock, AiUsageOverviewBlock, CollectionBlock, ContactsListBlock, CustomFieldsBlock, DocumentsBlock, DueTodayBlock,
-  FinanceActivityBlock, FinanceBookReportBlock, GoalsProgressBlock, HeadingDividerBlock,
+  AiUsageMeBlock, AiUsageOverviewBlock, CollectionBlock, ContactsListBlock, CustomFieldsBlock, DocumentsBlock,
+  FinanceActivityBlock, FinanceBookReportBlock, HeadingDividerBlock,
   LinkButtonBlock, LinkedAssetsBlock,
   LinkedContactBlock, LinkedDealsBlock, LinkedTasksBlock, MyAssetsSummaryBlock, NavButtonBlock,
-  NoteEmbedBlock, PoolTasksBlock, RecentAiActionsBlock, SingleTaskBlock,
-  StatusButtonBlock, StreaksBlock, TextBlock, Top3TasksBlock,
+  NoteEmbedBlock, PoolTasksBlock, RecentAiActionsBlock,
+  StatusButtonBlock, TextBlock,
 } from './blocks'
 import { MODULE_PACKAGES } from '../../lib/moduleRegistry'
 
@@ -23,11 +23,6 @@ import { MODULE_PACKAGES } from '../../lib/moduleRegistry'
 // today's bordered card for single-record content. Owner feedback: every
 // block looked like the same box regardless of what was inside it.
 export const BLOCK_REGISTRY = {
-  top3_tasks: { Component: Top3TasksBlock, icon: '🎯', label: 'Top 3 Tasks', defaultLayout: { w: 12, h: 9 }, shape: 'list', recordKind: 'task' },
-  due_today: { Component: DueTodayBlock, icon: '📅', label: 'Due Today', defaultLayout: { w: 12, h: 9 }, shape: 'list', recordKind: 'task' },
-  streaks: { Component: StreaksBlock, icon: '🔥', label: 'Active Streaks', defaultLayout: { w: 12, h: 9 }, shape: 'list', recordKind: 'task' },
-  goals_progress: { Component: GoalsProgressBlock, icon: '🏆', label: 'Goals Progress', defaultLayout: { w: 12, h: 9 }, shape: 'list', recordKind: 'task' },
-  single_task: { Component: SingleTaskBlock, icon: '✅', label: 'Single Task', defaultLayout: { w: 9, h: 6 }, recordKind: 'task' },
   // No recordKind: pool tasks live in the household/team pool store, routed
   // through sharedApi/teamApi (never tasksApi) depending on t._source — and
   // Tasks.jsx's own ?task= deep-link lookup only searches the viewer's own
@@ -99,17 +94,6 @@ for (const pkg of MODULE_PACKAGES) {
 // search/tree picker for anything that references another module's records
 // (never a raw id/path typed by hand). Shared with BlockRenderer.jsx so it can
 // tell whether a block type has anything worth an "edit config" affordance for.
-const TASK_SORT_MODE_FIELD = {
-  key: 'sort_mode',
-  label: 'Sort by',
-  kind: 'select',
-  optional: true,
-  options: [
-    { value: 'priority', label: 'Priority' },
-    { value: 'date', label: 'Date/Time' },
-    { value: 'alpha', label: 'A–Z' },
-  ],
-}
 
 // Every non-chromeless block gets these two (2026-08-18, owner: "a setting
 // in each block that can optionally show the card background for the
@@ -124,9 +108,6 @@ const _CHROME_FIELDS = [
 ]
 
 export const CONFIG_FIELD_SCHEMAS = {
-  single_task: [{ key: 'task_id', label: 'Task', kind: 'task' }],
-  top3_tasks: [TASK_SORT_MODE_FIELD],
-  due_today: [TASK_SORT_MODE_FIELD],
   finance_activity: [
     { key: 'asset_id', label: 'Asset', kind: 'asset', optional: true },
     { key: 'contact_id', label: 'Contact', kind: 'contact', optional: true },

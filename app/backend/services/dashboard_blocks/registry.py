@@ -47,6 +47,21 @@ def register(spec: BlockSpec) -> None:
     REGISTRY[spec.type] = spec
 
 
+def scoped_target(ctx: BlockRenderCtx) -> str | None:
+    """scope='owner' blocks only ever succeed when ctx.viewer IS that target —
+    i.e. on Pass 2 (owner identity) or when the viewer happens to be the owner.
+    scope='viewer' (default) always targets the caller themselves.
+
+    Lives here (not in a single resolver module) since it's generic
+    BlockRenderCtx-scope logic shared across core resolvers (_actions.py,
+    _assets.py, _ai_usage.py) and every converted module's own
+    dashboard_block.py that owns a scope_configurable block — extracted from
+    tasks' old _tasks.py when Tasks converted (2026-08-25), since it was
+    never task-specific to begin with."""
+    target = ctx.dashboard_owner if ctx.config.get("scope") == "owner" else ctx.viewer
+    return target if ctx.viewer == target else None
+
+
 def catalog(is_admin: bool, disabled_modules: set[str] | None = None) -> list[dict]:
     """Metadata for the frontend block picker — admin-only types are simply
     omitted for a non-admin caller (defense in depth on top of the render-time
@@ -89,7 +104,6 @@ def _load_all_resolvers() -> None:
         _freeform,
         _notes,
         _pool,
-        _tasks,
     )
 
     logger = logging.getLogger("logcore.dashboard_blocks")

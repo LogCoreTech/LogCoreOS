@@ -2,19 +2,19 @@
 ha_service as-is; no new backend aggregation."""
 
 from services import ha_service
-from services.dashboard_blocks._tasks import _scoped_target
 from services.dashboard_blocks.registry import (
     BlockRenderCtx,
     BlockRenderResult,
     BlockSpec,
     register,
+    scoped_target,
 )
 
 
 def resolve_home_assistant_favourites(ctx: BlockRenderCtx) -> BlockRenderResult:
     if ctx.workspace != "personal":
         return BlockRenderResult(ok=False, locked_reason="not_found")
-    target = _scoped_target(ctx)
+    target = scoped_target(ctx)
     if target is None:
         return BlockRenderResult(ok=False, locked_reason="no_access")
     if not ha_service.is_configured():

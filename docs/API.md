@@ -349,6 +349,8 @@ decision needed for that. The account + Brain folder are only deleted after ever
 
 ## Tasks
 
+Router mounted at `/api/v1/tasks` (module id `tasks` — converted into `module_packages/tasks/` 2026-08-25; same no-rename treatment as Calendar. The first LOCKED (`uninstallable: True`) module — always shows "Always active" in the Mod Store, with no uninstall action, server-enforced as well as UI-hidden). `task_service.py`, `priority_service.py`, `recurring_service.py`, and `routers/_task_models.py` all stay in core — Household's (`routers/shared.py`) and Team's (`routers/team.py`) own pool-task endpoints import them directly, and none of those routers convert as part of this increment.
+
 ### `GET /tasks`
 List all tasks for the current user.
 

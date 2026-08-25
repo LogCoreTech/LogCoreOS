@@ -4,17 +4,17 @@ automation_inbox_service.load_store — not a new aggregation subsystem)."""
 
 from module_packages.automations.backend import inbox_service as automation_inbox_service
 from services import n8n_service
-from services.dashboard_blocks._tasks import _scoped_target
 from services.dashboard_blocks.registry import (
     BlockRenderCtx,
     BlockRenderResult,
     BlockSpec,
     register,
+    scoped_target,
 )
 
 
 def resolve_workflow_status(ctx: BlockRenderCtx) -> BlockRenderResult:
-    target = _scoped_target(ctx)
+    target = scoped_target(ctx)
     record_id = ctx.config.get("workflow_id")
     if target is None or not record_id:
         return BlockRenderResult(ok=False, locked_reason="no_access")
@@ -25,7 +25,7 @@ def resolve_workflow_status(ctx: BlockRenderCtx) -> BlockRenderResult:
 
 
 def resolve_inbox_summary(ctx: BlockRenderCtx) -> BlockRenderResult:
-    target = _scoped_target(ctx)
+    target = scoped_target(ctx)
     if target is None:
         return BlockRenderResult(ok=False, locked_reason="no_access")
     # Personal scope -> the viewer's own inbox store; business scope -> the

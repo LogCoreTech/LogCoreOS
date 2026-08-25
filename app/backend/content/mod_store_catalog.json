@@ -1,6 +1,14 @@
 {
   "modules": [
     {
+      "id": "tasks",
+      "name": "Tasks",
+      "description": "Day-to-day to-dos, scored by your life priorities so the most important ones rise to the top.",
+      "category": "general",
+      "icon": "✓",
+      "status": "available"
+    },
+    {
       "id": "journal",
       "name": "Journal",
       "description": "A private daily journal — one Markdown entry per day.",

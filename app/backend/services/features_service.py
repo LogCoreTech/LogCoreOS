@@ -28,7 +28,6 @@ from services.file_service import read_json, write_json
 # state. See module_registry.py.
 _CORE_MODULE_IDS = [
     "dashboard",
-    "tasks",
     "goals",
     "household",
     "notes",
@@ -54,7 +53,6 @@ _PERSONAL_MEMBER = {m: True for m in _CORE_MODULE_IDS if m != "team"}
 
 _BUSINESS_MEMBER = {
     "dashboard": True,
-    "tasks": True,
     "goals": True,
     "household": False,
     "notes": True,
@@ -67,6 +65,10 @@ _BUSINESS_MEMBER = {
     # business-profile instance would default Home Assistant to enabled,
     # which is wrong — it's personal-only.
     "home_assistant": False,
+    # "tasks" (converted 2026-08-25, uninstallable=True — always active)
+    # deliberately has NO explicit entry here: default-missing-to-True in
+    # load_features() already matches the desired behavior in both
+    # workspaces, unlike home_assistant's personal-only False above.
     "team": True,
     "assets": True,
     "finance": True,

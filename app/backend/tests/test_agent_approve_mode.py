@@ -126,12 +126,20 @@ async def test_auto_mode_still_executes_writes(admin, monkeypatch):
     assert len(tasks) == 1 and tasks[0]["title"] == "Buy milk"
 
 
-def test_new_tools_are_write_gated_by_default():
-    """Every tool not explicitly allowlisted as read-only must pause in approve mode."""
-    all_names = {t["name"] for t in agent_service._USER_TOOLS} | {
-        t["name"] for t in agent_service._ADMIN_TOOLS
-    }
-    write_names = all_names - agent_service._READ_TOOLS - {"propose_plan"}
+def test_new_tools_are_write_gated_by_default(admin):
+    """Every tool not explicitly allowlisted as read-only must pause in approve mode.
+
+    Uses the real _get_tools()/read_only_agent_tool_names() combination
+    (not just the static core _USER_TOOLS/_ADMIN_TOOLS lists) so this covers
+    module-contributed tools too — add_task/delete_task moved into
+    module_packages/tasks/backend/agent_tools.py when Tasks converted
+    (2026-08-25), same as every other module's own tools already needed
+    this same live-gating check, not a special case for tasks."""
+    from module_registry import read_only_agent_tool_names
+
+    all_names = {t["name"] for t in agent_service._get_tools(admin)}
+    read_names = agent_service._READ_TOOLS | read_only_agent_tool_names()
+    write_names = all_names - read_names - {"propose_plan"}
     # Spot-check known writes are gated
     for name in (
         "add_task",

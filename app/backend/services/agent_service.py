@@ -3,13 +3,12 @@
 import json
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any, Callable
 
 from services import (
     auth_service,
     notes_service,
-    priority_service,
     profile_service,
     push_service,
     task_service,
@@ -48,17 +47,12 @@ def _brain_skip(user: dict) -> set[str]:
 
 # Tools available in research mode — read-only access only
 _RESEARCH_TOOLS = {
-    "list_tasks",
-    "get_top3_tasks",
-    "get_scored_tasks",
     "list_brain_files",
     "read_brain_file",
     "get_profile",
     "list_notes",
     "read_note",
-    "get_task_history",
     "search_brain",
-    "get_week_snapshot",
     "search_web",
     "list_asset_templates",
     "list_assets",
@@ -94,75 +88,6 @@ _READ_TOOLS = _RESEARCH_TOOLS | {"get_home_assistant_state", "ask_user_question"
 # ---------------------------------------------------------------------------
 
 _USER_TOOLS: list[dict] = [
-    {
-        "name": "list_tasks",
-        "description": "List all of the user's pending tasks with their full details.",
-        "input_schema": {"type": "object", "properties": {}, "required": []},
-    },
-    {
-        "name": "add_task",
-        "description": "Add a new task for the user.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "title": {"type": "string", "description": "Task title"},
-                "category": {
-                    "type": "string",
-                    "description": "Category (e.g. Health, Work, Personal)",
-                },
-                "priority": {"type": "string", "enum": ["High", "Medium", "Low"]},
-                "type": {"type": "string", "enum": ["todo", "recurring", "goal", "appointment"]},
-                "recurrence": {"type": "string", "enum": ["daily", "weekly", "monthly"]},
-                "due_date": {"type": "string", "description": "Due date YYYY-MM-DD"},
-                "due_time": {"type": "string", "description": "Due time HH:MM (requires due_date)"},
-                "notes": {"type": "string"},
-                "asset_id": {
-                    "type": "string",
-                    "description": "Optional asset ID to link this task to (see list_assets)",
-                },
-            },
-            "required": ["title", "category"],
-        },
-    },
-    {
-        "name": "update_task",
-        "description": "Update an existing task by its ID.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "task_id": {"type": "string", "description": "Task ID to update"},
-                "title": {"type": "string"},
-                "category": {"type": "string"},
-                "priority": {"type": "string", "enum": ["High", "Medium", "Low"]},
-                "status": {"type": "string", "enum": ["pending", "done", "skipped"]},
-                "due_date": {"type": "string"},
-                "due_time": {"type": "string"},
-                "notes": {"type": "string"},
-            },
-            "required": ["task_id"],
-        },
-    },
-    {
-        "name": "delete_task",
-        "description": "Delete a task by its ID.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "task_id": {"type": "string", "description": "Task ID to delete"},
-            },
-            "required": ["task_id"],
-        },
-    },
-    {
-        "name": "get_top3_tasks",
-        "description": "Get the top 3 highest-priority pending tasks.",
-        "input_schema": {"type": "object", "properties": {}, "required": []},
-    },
-    {
-        "name": "get_scored_tasks",
-        "description": "Get all pending tasks sorted by priority score descending.",
-        "input_schema": {"type": "object", "properties": {}, "required": []},
-    },
     {
         "name": "list_brain_files",
         "description": "List all markdown files in the user's brain (notes, profile, memory, etc.).",
@@ -488,24 +413,6 @@ _USER_TOOLS: list[dict] = [
         },
     },
     {
-        "name": "get_task_history",
-        "description": "Get the user's completed tasks. Useful for weekly reviews, reflection, and tracking progress.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "limit": {
-                    "type": "integer",
-                    "description": "Max number of tasks to return (default 20)",
-                },
-                "since_date": {
-                    "type": "string",
-                    "description": "Only return tasks completed on or after this date (YYYY-MM-DD)",
-                },
-            },
-            "required": [],
-        },
-    },
-    {
         "name": "search_brain",
         "description": (
             "Search across the user's Brain markdown files (notes, journal, memory, profile) for a "
@@ -552,36 +459,6 @@ _USER_TOOLS: list[dict] = [
                 },
             },
             "required": ["path"],
-        },
-    },
-    {
-        "name": "create_tasks",
-        "description": "Create multiple tasks at once. Useful for planning sessions. Each task uses the same schema as add_task.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "tasks": {
-                    "type": "array",
-                    "description": "List of task objects to create",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "title": {"type": "string"},
-                            "category": {"type": "string"},
-                            "priority": {"type": "string", "enum": ["High", "Medium", "Low"]},
-                            "type": {
-                                "type": "string",
-                                "enum": ["todo", "recurring", "goal", "appointment"],
-                            },
-                            "due_date": {"type": "string"},
-                            "due_time": {"type": "string"},
-                            "notes": {"type": "string"},
-                        },
-                        "required": ["title", "category"],
-                    },
-                },
-            },
-            "required": ["tasks"],
         },
     },
     {
@@ -690,11 +567,6 @@ _USER_TOOLS: list[dict] = [
             },
             "required": ["question", "header", "options", "multi_select"],
         },
-    },
-    {
-        "name": "get_week_snapshot",
-        "description": "Get a full overview of the current week — tasks due this week, overdue tasks, and tasks completed this week. Use at the start of any planning or review session.",
-        "input_schema": {"type": "object", "properties": {}, "required": []},
     },
     {
         "name": "run_suggestion",
@@ -1644,30 +1516,6 @@ def _execute_tool(
     """Run one tool; return result or an error dict — never raises."""
     try:
         match name:
-            case "list_tasks":
-                return task_service.list_tasks(user["name"])
-
-            case "add_task":
-                return task_service.add_task(user["name"], inputs)
-
-            case "update_task":
-                task_id = inputs["task_id"]
-                updates = {k: v for k, v in inputs.items() if k != "task_id"}
-                result = task_service.update_task(user["name"], task_id, updates)
-                if result is None:
-                    return {"error": f"Task {task_id!r} not found"}
-                return result
-
-            case "delete_task":
-                ok = task_service.delete_task(user["name"], inputs["task_id"])
-                return {"deleted": ok}
-
-            case "get_top3_tasks":
-                return priority_service.get_top3(user["name"])
-
-            case "get_scored_tasks":
-                return priority_service.get_all_scored(user["name"])
-
             case "list_brain_files":
                 base = ws_path(user["name"], workspace)
                 if not base.exists():
@@ -1947,14 +1795,6 @@ def _execute_tool(
                 write_markdown(mem_path, safe_content)
                 return {"ok": True, "target": fname}
 
-            case "get_task_history":
-                limit = int(inputs.get("limit", 20))
-                since = inputs.get("since_date")
-                history = task_service.list_history(user["name"], limit=limit)
-                if since:
-                    history = [t for t in history if (t.get("completed_at") or "") >= since]
-                return history
-
             case "search_brain":
                 query = inputs["query"].lower()
                 personal_base = user_path(user["name"])
@@ -2039,12 +1879,6 @@ def _execute_tool(
             case "create_note_folder":
                 return notes_service.create_folder(user["name"], inputs["path"], workspace)
 
-            case "create_tasks":
-                created = []
-                for t in inputs.get("tasks", []):
-                    created.append(task_service.add_task(user["name"], t))
-                return created
-
             case "send_notification":
                 sent = push_service.send_push(user["name"], inputs["title"], inputs["body"])
                 return {"sent": sent}
@@ -2069,26 +1903,6 @@ def _execute_tool(
                 # system prompt telling the model to wait, the same shape of gap
                 # the approve-mode replay bug had).
                 return {"status": "approved"}
-
-            case "get_week_snapshot":
-                today = auth_service.today_for_user(user["name"])
-                week_start = today - timedelta(days=today.weekday())
-                week_end = week_start + timedelta(days=6)
-                ws, we, ts = week_start.isoformat(), week_end.isoformat(), today.isoformat()
-                all_tasks = task_service.list_tasks(user["name"])
-                completed = task_service.list_history(user["name"], limit=50)
-                return {
-                    "week_start": ws,
-                    "week_end": we,
-                    "due_this_week": [
-                        t for t in all_tasks if ws <= (t.get("due_date") or "") <= we
-                    ],
-                    "overdue": [t for t in all_tasks if t.get("due_date") and t["due_date"] < ts],
-                    "no_date": [t for t in all_tasks if not t.get("due_date")],
-                    "completed_this_week": [
-                        t for t in completed if ws <= (t.get("completed_at") or "")[:10] <= we
-                    ],
-                }
 
             case "complete_shared_task":
                 task = task_service.get_task("_household", inputs["task_id"])

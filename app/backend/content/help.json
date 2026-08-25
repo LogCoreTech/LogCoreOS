@@ -52,28 +52,6 @@
       ]
     },
     {
-      "id": "tasks",
-      "icon": "✅",
-      "title": "Tasks",
-      "blurb": "Tasks are your day-to-day to-dos. LogCore scores them by your life priorities so the most important ones rise to the top automatically.",
-      "howto": [
-        "Click \"+ New Task\", give it a title, and pick a category and priority (High/Medium/Low).",
-        "Add a due date and time if it matters — overdue and due-today tasks score highest, and a set time shows right next to the date on the card.",
-        "Set Type to \"Recurring\" for repeating tasks; completing them on schedule builds a streak.",
-        "Use the \"Sort by\" control above the list to switch between Priority score (default — ranks every task against every other one, regardless of category), Date/Time, and Alphabetical; your choice is remembered.",
-        "Check a task off to complete it. Non-recurring done tasks move to History during the nightly tidy-up.",
-        "Tasks assigned to you from a shared Household or Team pool show up here with a 🏠 badge."
-      ],
-      "tips": [
-        "Your Dashboard shows the top 3 tasks to focus on right now — a filtered view of this list.",
-        "Reorder your category priorities in Profile; it directly changes which tasks surface first.",
-        "You can also ask the AI in Chat to \"add three tasks for the move\" and approve them in one step."
-      ],
-      "modules": [
-        "tasks"
-      ]
-    },
-    {
       "id": "goals",
       "icon": "🎯",
       "title": "Goals",

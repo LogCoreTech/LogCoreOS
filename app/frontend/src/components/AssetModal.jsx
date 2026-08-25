@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { assets as assetsApi, tasks as tasksApi, finance as financeApi } from '../lib/api'
+import { assets as assetsApi, finance as financeApi } from '../lib/api'
+import { tasks as tasksApi } from '../module_packages/tasks/frontend/api'
 import TaskModal from './TaskModal'
 import TagInput from './TagInput'
 import EmojiPicker from './EmojiPicker'

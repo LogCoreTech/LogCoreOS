@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import HelpButton from '../components/HelpButton'
-import { tasks as tasksApi, priorities as prioritiesApi, shared as sharedApi, team as teamApi, assets as assetsApi } from '../lib/api'
-import { useAuth } from '../lib/auth'
-import { useWorkspace } from '../lib/workspace'
-import TaskModal from '../components/TaskModal'
-import { catColor, scoreTask } from '../lib/constants'
+import HelpButton from '../../../components/HelpButton'
+import { tasks as tasksApi } from './api'
+import { priorities as prioritiesApi, shared as sharedApi, team as teamApi, assets as assetsApi } from '../../../lib/api'
+import { useAuth } from '../../../lib/auth'
+import { useWorkspace } from '../../../lib/workspace'
+import TaskModal from '../../../components/TaskModal'
+import { catColor, scoreTask } from '../../../lib/constants'
 
 const SORT_MODES = [
   { id: 'priority', label: 'Priority' },

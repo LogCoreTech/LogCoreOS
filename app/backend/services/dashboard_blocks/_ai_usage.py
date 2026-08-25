@@ -7,18 +7,18 @@ never get it to render just because an admin edit-shared it onto their
 dashboard)."""
 
 from services import ai_usage_service
-from services.dashboard_blocks._tasks import _scoped_target
 from services.dashboard_blocks.registry import (
     BlockRenderCtx,
     BlockRenderResult,
     BlockSpec,
     register,
+    scoped_target,
 )
 from services.file_service import read_json, user_path
 
 
 def resolve_my_usage(ctx: BlockRenderCtx) -> BlockRenderResult:
-    target = _scoped_target(ctx)
+    target = scoped_target(ctx)
     if target is None:
         return BlockRenderResult(ok=False, locked_reason="no_access")
     usage = ai_usage_service.get_my_usage(target)
@@ -34,7 +34,7 @@ def resolve_usage_overview(ctx: BlockRenderCtx) -> BlockRenderResult:
 
 
 def resolve_recent_ai_actions(ctx: BlockRenderCtx) -> BlockRenderResult:
-    target = _scoped_target(ctx)
+    target = scoped_target(ctx)
     if target is None:
         return BlockRenderResult(ok=False, locked_reason="no_access")
     path = user_path(target) / "agent" / "runs.json"
