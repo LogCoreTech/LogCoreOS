@@ -87,7 +87,7 @@ _RESEARCH_TOOLS = {
 # approve mode. Anything NOT listed here requires approval, so new tools are
 # write-gated by default. ask_user_question has no side effects either — it
 # pauses via its own dedicated mechanism (see run_agent), never the write-gate.
-_READ_TOOLS = _RESEARCH_TOOLS | {"get_home_state", "ask_user_question"}
+_READ_TOOLS = _RESEARCH_TOOLS | {"get_home_assistant_state", "ask_user_question"}
 
 # ---------------------------------------------------------------------------
 # Tool definitions (Anthropic input_schema format — translated for OpenAI by ai_provider)
@@ -1447,10 +1447,10 @@ def _get_tools(user: dict) -> list[dict]:
     from services.ha_service import is_configured as _ha_configured
 
     _HA_TOOL_NAMES = {
-        "get_home_state",
-        "control_home_device",
+        "get_home_assistant_state",
+        "control_home_assistant_device",
         "activate_scene",
-        "trigger_home_automation",
+        "trigger_home_assistant_automation",
     }
     ha_ok = _ha_configured()
     disabled = set(user.get("disabled_modules", []))
@@ -1471,10 +1471,10 @@ def _get_tools(user: dict) -> list[dict]:
             owned_by_disabled.update(manifest.owned_agent_tools)
     tools.extend(t for t in _module_tool_schemas() if t["name"] not in owned_by_disabled)
 
-    # The 4 HA tools (module-contributed via home/ since 2026-08-24) need HA
-    # to actually be *configured*, not just installed+enabled — installed
-    # only means the module's code is wired in; configured means an admin
-    # has set a URL+token in Household admin settings. Applied as a final
+    # The 4 HA tools (module-contributed via home_assistant/ since 2026-08-24)
+    # need HA to actually be *configured*, not just installed+enabled —
+    # installed only means the module's code is wired in; configured means
+    # an admin has set a URL+token in Admin → Hosting. Applied as a final
     # pass over the combined list so it's agnostic to which source a tool's
     # schema came from.
     tools = [t for t in tools if ha_ok or t["name"] not in _HA_TOOL_NAMES]

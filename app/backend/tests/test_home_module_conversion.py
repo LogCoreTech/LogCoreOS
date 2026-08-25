@@ -4,14 +4,21 @@
 but the surrounding machinery: the m016 upgrade migration (deliberately
 keyed on ha_config.json's own existence+completeness, not a blanket "every
 pre-existing instance had it" assumption like journal's m015), the m017
-id-rename migration (added 2026-08-24 when the module id/Brain folder were
-renamed "home"/"Home" -> "home_assistant"/"HomeAssistant" — carries an
+id-rename migration and m018 block-type-rename migration (both added
+2026-08-24 when the module id/Brain folder/dashboard-block-type were
+renamed "home"-flavoured -> "home_assistant"-flavoured — carrying an
 already-upgraded instance's real state across that rename), and a full
 install/uninstall/reinstall round-trip through the real Mod Store service."""
 
 from migrations.runner import run_pending
 from services import mod_store_service
-from services.file_service import read_json, write_json
+from services.file_service import (
+    dashboard_templates_path,
+    dashboards_path,
+    global_dashboard_templates_path,
+    read_json,
+    write_json,
+)
 
 
 def test_m016_marks_home_assistant_installed_when_ha_was_already_configured(brain):
@@ -131,6 +138,88 @@ def test_m017_is_idempotent_and_safe_on_a_fresh_instance(brain):
     run_pending(brain)  # migrations.json already marks it applied; must not re-run or error
 
     assert not mod_store_service.is_installed("home_assistant")
+
+
+def _block(type_: str, block_id: str = "b1") -> dict:
+    return {"id": block_id, "type": type_, "config": {}, "layout": {"lg": {"x": 0, "y": 0, "w": 6, "h": 3}}}
+
+
+def test_m018_renames_block_type_on_a_real_users_dashboard(brain):
+    """The exact scenario this migration exists for: a real user already
+    added the old "Smart Home Favourites" block to a real dashboard before
+    the rename — it must keep resolving, not silently break, on upgrade."""
+    from services import auth_service
+
+    auth_service.create_user("alice@example.com", "password123", "alice")
+    write_json(dashboards_path("alice"), {
+        "dashboards": [{"id": "d1", "name": "Home", "blocks": [_block("home_favourites")]}]
+    })
+
+    run_pending(brain)
+
+    data = read_json(dashboards_path("alice"))
+    assert data["dashboards"][0]["blocks"][0]["type"] == "home_assistant_favourites"
+
+
+def test_m018_renames_block_type_on_a_pool_dashboard(brain):
+    """dashboards_service._all_stores() covers _household/_team too — a
+    migration that only swept real per-user stores would miss pool
+    dashboards entirely, same gap m011's own docstring calls out."""
+    write_json(dashboards_path("_household"), {
+        "dashboards": [{"id": "d1", "name": "Household", "blocks": [_block("home_favourites")]}]
+    })
+
+    run_pending(brain)
+
+    data = read_json(dashboards_path("_household"))
+    assert data["dashboards"][0]["blocks"][0]["type"] == "home_assistant_favourites"
+
+
+def test_m018_leaves_unrelated_block_types_untouched(brain):
+    from services import auth_service
+
+    auth_service.create_user("alice@example.com", "password123", "alice")
+    write_json(dashboards_path("alice"), {
+        "dashboards": [{"id": "d1", "name": "Home", "blocks": [_block("top3_tasks", "b1"), _block("home_favourites", "b2")]}]
+    })
+
+    run_pending(brain)
+
+    blocks = read_json(dashboards_path("alice"))["dashboards"][0]["blocks"]
+    assert blocks[0]["type"] == "top3_tasks"
+    assert blocks[1]["type"] == "home_assistant_favourites"
+
+
+def test_m018_renames_block_type_in_a_per_user_template(brain):
+    from services import auth_service
+
+    auth_service.create_user("alice@example.com", "password123", "alice")
+    write_json(dashboard_templates_path("alice"), {
+        "templates": [{"id": "t1", "name": "My Template", "blocks": [_block("home_favourites")]}]
+    })
+
+    run_pending(brain)
+
+    data = read_json(dashboard_templates_path("alice"))
+    assert data["templates"][0]["blocks"][0]["type"] == "home_assistant_favourites"
+
+
+def test_m018_renames_block_type_in_the_global_template(brain):
+    write_json(global_dashboard_templates_path(), {
+        "templates": [{"id": "t1", "name": "Global Template", "blocks": [_block("home_favourites")]}]
+    })
+
+    run_pending(brain)
+
+    data = read_json(global_dashboard_templates_path())
+    assert data["templates"][0]["blocks"][0]["type"] == "home_assistant_favourites"
+
+
+def test_m018_is_idempotent_on_a_fresh_instance(brain):
+    run_pending(brain)
+    run_pending(brain)  # must not error with nothing to migrate
+
+    assert not dashboards_path("alice").exists()
 
 
 def test_install_uninstall_reinstall_round_trip_preserves_favourites(brain):

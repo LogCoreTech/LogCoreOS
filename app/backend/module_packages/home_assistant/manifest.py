@@ -3,13 +3,10 @@ ModuleManifest contract and docs/MEMORY.md's 2026-08-24 entries for the
 full design, including why services/ha_service.py itself stays in core
 rather than moving here, why the admin config form lives on Admin →
 Hosting rather than a dedicated Home Assistant admin page, and why the
-module id/directory/Brain folder were renamed from "home"/"Home" to
-"home_assistant"/"HomeAssistant" (m017 below carries existing installs'
-state across that rename) while the frontend route (`/home`), the help
-section's own anchor id, the AI tool names, and the `home_favourites`
-dashboard block type were deliberately left unchanged — none of those are
-"the module's id," they're independent, already-accurate identifiers of
-their own that renaming would only add risk to for zero real benefit."""
+module id/directory/Brain folder/route/help-anchor/AI-tool-names/
+dashboard-block-type were all renamed from "home"-flavoured names to
+"home_assistant"-flavoured ones (m017/m018 below carry existing installs'
+state across those renames)."""
 
 from pathlib import Path
 
@@ -130,6 +127,92 @@ def m017_rename_home_id_to_home_assistant(brain: Path) -> None:
                 old.rename(new)
 
 
+def m018_rename_home_favourites_block_type(brain: Path) -> None:
+    """Carry-forward for the block type rename home_favourites ->
+    home_assistant_favourites (alongside the same-day id rename) — without
+    this, any dashboard or template that already had this block added would
+    break the moment this code deploys: the old type string stops matching
+    anything BLOCK_REGISTRY/dashboard_blocks REGISTRY know about, and the
+    block renders as unresolvable.
+
+    Deliberately raw read_json/write_json throughout, never
+    dashboards_service.update_dashboard() or dashboard_templates_service's
+    own update — both validate a block's type against the live
+    dashboard_blocks REGISTRY (_validate_blocks() raises ValueError on an
+    unrecognized type). Confirmed REGISTRY is actually already populated by
+    migration-run time in this app's current boot order (main.py's own
+    top-level `from routers import ... dashboards` transitively imports
+    dashboard_blocks/render.py, whose module-level _load_all_resolvers()
+    call runs before FastAPI's lifespan()/run_migrations() are even
+    reached) — so update_dashboard() would work too, today. Raw read/write
+    is still the more robust choice regardless: it has no dependency on
+    that import chain staying in this exact order, and matches how m016/
+    m017 and every other data-shape migration in this file already work."""
+    from services import dashboards_service
+    from services.auth_service import list_users
+    from services.file_service import (
+        brain_path,
+        dashboard_templates_path,
+        dashboards_path,
+        global_dashboard_templates_path,
+        read_json,
+        write_json,
+    )
+
+    if brain != brain_path():
+        return  # test/alternate brain root — these path helpers always read the live one
+
+    OLD, NEW = "home_favourites", "home_assistant_favourites"
+
+    def _rename(blocks):
+        changed = False
+        out = []
+        for b in blocks or []:
+            if b.get("type") == OLD:
+                b = {**b, "type": NEW}
+                changed = True
+            out.append(b)
+        return out, changed
+
+    # Every real user + pool dashboard, both workspaces.
+    for store_user, workspace in dashboards_service._all_stores():
+        path = dashboards_path(store_user, workspace)
+        data = read_json(path, default={"dashboards": []})
+        file_changed = False
+        for d in data.get("dashboards", []):
+            new_blocks, changed = _rename(d.get("blocks"))
+            if changed:
+                d["blocks"] = new_blocks
+                file_changed = True
+        if file_changed:
+            write_json(path, data)
+
+    # Every real user's own templates.
+    for u in list_users():
+        path = dashboard_templates_path(u["name"])
+        data = read_json(path, default={"templates": []})
+        file_changed = False
+        for t in data.get("templates", []):
+            new_blocks, changed = _rename(t.get("blocks"))
+            if changed:
+                t["blocks"] = new_blocks
+                file_changed = True
+        if file_changed:
+            write_json(path, data)
+
+    # Admin-curated global templates.
+    global_path = global_dashboard_templates_path()
+    data = read_json(global_path, default={"templates": []})
+    file_changed = False
+    for t in data.get("templates", []):
+        new_blocks, changed = _rename(t.get("blocks"))
+        if changed:
+            t["blocks"] = new_blocks
+            file_changed = True
+    if file_changed:
+        write_json(global_path, data)
+
+
 MODULE = ModuleManifest(
     id="home_assistant",
     display_name="Home Assistant",
@@ -141,23 +224,25 @@ MODULE = ModuleManifest(
     get_router=_get_router,
     owned_brain_paths=["HomeAssistant"],
     owned_agent_tools=[
-        "get_home_state",
-        "control_home_device",
+        "get_home_assistant_state",
+        "control_home_assistant_device",
         "activate_scene",
-        "trigger_home_automation",
+        "trigger_home_assistant_automation",
     ],
-    # get_home_state is read-only but deliberately NOT listed here — see
-    # agent_tools.py's module docstring for why it stays a hardcoded name in
-    # agent_service.py's _READ_TOOLS instead of going through this generic
-    # union, which would also (incorrectly) add it to _RESEARCH_TOOLS.
+    # get_home_assistant_state is read-only but deliberately NOT listed here
+    # — see agent_tools.py's module docstring for why it stays a hardcoded
+    # name in agent_service.py's _READ_TOOLS instead of going through this
+    # generic union, which would also (incorrectly) add it to
+    # _RESEARCH_TOOLS.
     read_only_agent_tools=[],
-    owned_block_types=["home_favourites"],
+    owned_block_types=["home_assistant_favourites"],
     migrations=[
         ("home:m016_backfill_home_installed_from_ha_config", m016_backfill_home_installed_from_ha_config),
         ("home_assistant:m017_rename_home_id_to_home_assistant", m017_rename_home_id_to_home_assistant),
+        ("home_assistant:m018_rename_home_favourites_block_type", m018_rename_home_favourites_block_type),
     ],
     help_section={
-        "id": "home",
+        "id": "home-assistant",
         "icon": "🏡",
         "title": "Home Assistant",
         "blurb": "Control your Home Assistant devices from LogCore — lights, switches, sensors, climate, scenes, and automations.",

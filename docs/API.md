@@ -1470,7 +1470,7 @@ time, no stored "protected" flag.
 
 **Block catalog** (27 types across `live_aggregate` / `record_linked` / `freeform` categories) —
 Tasks/Goals (`top3_tasks`, `due_today` — both take a `sort_mode: "priority"|"date"|"alpha"` config, default `priority`, 2026-08-15; `streaks`, `goals_progress`, `single_task`), Home Assistant
-(`home_favourites`, personal only), Household/Team (`pool_tasks`), Calendar (`upcoming_events`,
+(`home_assistant_favourites`, personal only), Household/Team (`pool_tasks`), Calendar (`upcoming_events`,
 `single_event`), Finance (`finance_activity` — asset/contact/book variants, `finance_book_report`),
 Contacts (`linked_deals`, `custom_fields`, `linked_assets`), Assets (`documents`, `linked_tasks`,
 `linked_contact`, `my_assets_summary`), Notes (`note_embed`), Journal (`journal_entry`), Automations

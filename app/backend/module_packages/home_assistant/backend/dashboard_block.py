@@ -11,7 +11,7 @@ from services.dashboard_blocks.registry import (
 )
 
 
-def resolve_home_favourites(ctx: BlockRenderCtx) -> BlockRenderResult:
+def resolve_home_assistant_favourites(ctx: BlockRenderCtx) -> BlockRenderResult:
     if ctx.workspace != "personal":
         return BlockRenderResult(ok=False, locked_reason="not_found")
     target = _scoped_target(ctx)
@@ -32,10 +32,10 @@ def resolve_home_favourites(ctx: BlockRenderCtx) -> BlockRenderResult:
 
 register(
     BlockSpec(
-        type="home_favourites",
+        type="home_assistant_favourites",
         label="Home Assistant Favourites",
         category="live_aggregate",
-        resolver=resolve_home_favourites,
+        resolver=resolve_home_assistant_favourites,
         workspace="personal",
         scope_configurable=True,
         module="home_assistant",

@@ -337,7 +337,7 @@ def m010_seed_home_dashboards(brain: Path) -> None:
                     blocks.append(
                         {
                             "id": str(uuid.uuid4()),
-                            "type": "home_favourites",
+                            "type": "home_assistant_favourites",
                             "config": {"scope": "viewer"},
                             "layout": {"lg": _lg(0, 3, 6, 3), "sm": _sm(9)},
                         }
