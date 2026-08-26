@@ -1,19 +1,24 @@
-"""Tests for agent member-name resolution on shared task assignment."""
+"""Tests for household's own agent tools — member-name resolution on shared
+task assignment (_resolve_member_name) and the tool executor integration
+(_execute_tool, still core — its module-dispatch fallback routes here via
+module_packages/household/backend/agent_tools.py's execute())."""
 
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 import pytest
 
-from services import auth_service, task_service
-from services.agent_service import _execute_tool, _resolve_member_name
+from module_packages.household.backend.agent_tools import _resolve_member_name
+from services import auth_service, mod_store_service, task_service
+from services.agent_service import _execute_tool
 
 
 @pytest.fixture()
 def members(brain):
     """Three users: an admin plus two members whose first names collide on a prefix."""
+    mod_store_service.mark_installed("household", by="tester")
     admin = auth_service.create_user(
         "admin@example.com", "password123", "Alice Smith", role="admin"
     )

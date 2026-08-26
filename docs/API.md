@@ -763,7 +763,9 @@ Clear all notifications.
 
 ## Shared (Household)
 
-Endpoints for the household pool — tasks and events shared across all household members. Router mounted at `/api/v1/shared`.
+Router mounted at `/api/v1/shared` (module id `household` — converted into `module_packages/household/` 2026-08-25; same no-rename treatment as Calendar/Tasks, though the router prefix itself was already "shared," not "household," before the conversion and stays that way — a pre-existing historical mismatch, not something this conversion changed). `task_service.py`/`events_service.py`/`routers/_task_models.py`/`routers/_event_models.py` all stay core — Team's own router imports them directly too, and neither ever converts into owning them.
+
+Endpoints for the household pool — tasks and events shared across all household members.
 
 Any authenticated household member may **read** tasks and events. **All writes** (create/update/delete tasks and events, assign) require pool-management rights: admin role, or the `household` grant in the user's `pool_edit`. See `PATCH /auth/admin/users/{id}/pool-edit`.
 
@@ -816,7 +818,9 @@ Delete a shared event. **Pool managers only** (admin or `household` grant). Retu
 
 ## Team (Business Pool)
 
-Endpoints for the business team pool — tasks and events shared across all business workspace members. Router mounted at `/api/v1/team`. Requires the `team` module to be enabled.
+Router mounted at `/api/v1/team` (module id `team` — converted into `module_packages/team/` 2026-08-25 alongside Household, in the same increment; no rename — the prefix already matched the id). Owns no AI agent tools today (unlike Household's 5 shared-task-management ones) — a real, pre-existing asymmetry, not something this conversion added or fixed.
+
+Endpoints for the business team pool — tasks and events shared across all business workspace members. Requires the `team` module to be enabled.
 
 The team pool is completely isolated from the household pool (`/shared`). They share the same task/event shape but use separate pseudo-user stores (`_team` vs `_household`) and separate router code — there is no code path that can cross-contaminate the two pools.
 
@@ -1470,9 +1474,9 @@ time, no stored "protected" flag.
 | `GET` | `/dashboards/members` | module users | Member display names for the share picker, mirrors `assets.py`'s `/assets/members` |
 | `GET` | `/dashboards/roles` | module users | Feature-role names for the share-by-role picker |
 
-**Block catalog** (27 types across `live_aggregate` / `record_linked` / `freeform` categories) —
+**Block catalog** (28 types across `live_aggregate` / `record_linked` / `freeform` categories) —
 Tasks/Goals (`top3_tasks`, `due_today` — both take a `sort_mode: "priority"|"date"|"alpha"` config, default `priority`, 2026-08-15; `streaks`, `goals_progress`, `single_task`), Home Assistant
-(`home_assistant_favourites`, personal only), Household/Team (`pool_tasks`), Calendar (`upcoming_events`,
+(`home_assistant_favourites`, personal only), Household (`household_tasks`, personal only), Team (`team_tasks`, business only — split from a single shared `pool_tasks` type 2026-08-25 once both pools became real, gated modules), Calendar (`upcoming_events`,
 `single_event`), Finance (`finance_activity` — asset/contact/book variants, `finance_book_report`),
 Contacts (`linked_deals`, `custom_fields`, `linked_assets`), Assets (`documents`, `linked_tasks`,
 `linked_contact`, `my_assets_summary`), Notes (`note_embed`), Journal (`journal_entry`), Automations

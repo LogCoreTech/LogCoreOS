@@ -27,8 +27,6 @@ import AdminTeam from './pages/settings/admin/Team'
 import AdminHousehold from './pages/settings/admin/Household'
 import AdminHosting from './pages/settings/admin/Hosting'
 import AdminModStore from './pages/settings/admin/ModStore'
-import Household from './pages/Household'
-import Team from './pages/Team'
 import Notes from './pages/Notes'
 import Login from './pages/Login'
 import Setup from './pages/Setup'
@@ -87,8 +85,6 @@ export default function App() {
               <Route element={<Protected><Layout /></Protected>}>
                 <Route path="/"         element={<Dashboard />} />
                 <Route path="/goals"     element={<ModuleRoute moduleId="tasks"><Goals /></ModuleRoute>} />
-                <Route path="/household" element={<ModuleRoute moduleId="household"><Household /></ModuleRoute>} />
-                <Route path="/team"      element={<ModuleRoute moduleId="team"><Team /></ModuleRoute>} />
                 <Route path="/notes"     element={<ModuleRoute moduleId="notes"><Notes /></ModuleRoute>} />
                 <Route path="/chat"      element={<ModuleRoute moduleId="chat"><Chat /></ModuleRoute>} />
                 <Route path="/assets"      element={<ModuleRoute moduleId="assets"><Assets /></ModuleRoute>} />

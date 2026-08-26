@@ -71,41 +71,6 @@
       ]
     },
     {
-      "id": "household",
-      "icon": "🏡",
-      "title": "Household",
-      "blurb": "A shared pool of tasks and events for your family or household. Everyone with the module can see it; managing it can be granted per person.",
-      "howto": [
-        "Open Household to see all shared tasks and events in one place.",
-        "Any member can complete or un-complete shared tasks.",
-        "Adding, editing, deleting, or assigning items requires pool-management rights — an admin grants \"Can manage\" per user.",
-        "Assign a task to a member and it shows up on their personal Tasks and Calendar with a 🏠 badge."
-      ],
-      "tips": [
-        "Household is personal-workspace only and completely separate from the business Team pool — data never crosses between them."
-      ],
-      "modules": [
-        "household"
-      ]
-    },
-    {
-      "id": "team",
-      "icon": "🧑‍🤝‍🧑",
-      "title": "Team",
-      "blurb": "The business-workspace equivalent of Household: a shared task and event pool for your team, kept structurally separate from any personal/family data.",
-      "howto": [
-        "Switch to the business workspace, then open Team to see shared tasks and events.",
-        "Members read and complete; adding/editing/assigning needs admin or a \"Can manage\" grant.",
-        "Assign work to a teammate and it appears on their Tasks and Calendar."
-      ],
-      "tips": [
-        "Team lives only in the business workspace. Personal/Household data can never leak into it."
-      ],
-      "modules": [
-        "team"
-      ]
-    },
-    {
       "id": "notes",
       "icon": "📝",
       "title": "Notes",

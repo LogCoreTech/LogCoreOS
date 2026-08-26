@@ -38,6 +38,7 @@ class ModuleManifest:
     owned_brain_paths: list[str] = field(default_factory=list)
     owned_agent_tools: list[str] = field(default_factory=list)
     read_only_agent_tools: list[str] = field(default_factory=list)
+    admin_agent_tools: list[str] = field(default_factory=list)
     owned_block_types: list[str] = field(default_factory=list)
     migrations: list[tuple[str, MigrationFn]] = field(default_factory=list)
     uninstallable: bool = False
@@ -124,6 +125,25 @@ def read_only_agent_tool_names() -> set[str]:
     names: set[str] = set()
     for manifest in active_manifests().values():
         names.update(manifest.read_only_agent_tools)
+    return names
+
+
+def admin_agent_tool_names() -> set[str]:
+    """Union of admin_agent_tools across every ACTIVE module — feeds
+    agent_service.py's _get_tools() so a module's admin-only tools (e.g.
+    household's shared-task management tools) are only OFFERED to admin
+    callers, mirroring how core's own _ADMIN_TOOLS list is only added for
+    an admin caller. A tool NOT listed here is offered to every
+    module-enabled user regardless of role — the executor itself may still
+    enforce a finer-grained check on top (e.g. complete_shared_task's
+    admin-or-assignee check), this field only controls whether the tool's
+    SCHEMA is even offered to the model in the first place. First needed by
+    household's 2026-08-25 conversion — no prior converted module owned an
+    admin-only tool, so offering every owned_agent_tools schema to every
+    module-enabled user (regardless of role) was correct until now."""
+    names: set[str] = set()
+    for manifest in active_manifests().values():
+        names.update(manifest.admin_agent_tools)
     return names
 
 

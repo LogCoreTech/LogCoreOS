@@ -7,8 +7,6 @@ import { MODULE_PACKAGES } from './moduleRegistry'
 
 const _CORE_MODULE_ROUTES = {
   goals: '/goals',
-  household: '/household',
-  team: '/team',
   notes: '/notes',
   chat: '/chat',
   assets: '/assets',

@@ -29,10 +29,8 @@ from services.file_service import read_json, write_json
 _CORE_MODULE_IDS = [
     "dashboard",
     "goals",
-    "household",
     "notes",
     "chat",
-    "team",
     "assets",
     "finance",
     "contacts",
@@ -49,12 +47,11 @@ def all_module_ids() -> list[str]:
     return _CORE_MODULE_IDS + sorted(active_manifests())
 
 
-_PERSONAL_MEMBER = {m: True for m in _CORE_MODULE_IDS if m != "team"}
+_PERSONAL_MEMBER = {m: True for m in _CORE_MODULE_IDS}
 
 _BUSINESS_MEMBER = {
     "dashboard": True,
     "goals": True,
-    "household": False,
     "notes": True,
     "chat": True,
     # "home_assistant" (id renamed from "home" 2026-08-24) stays explicit
@@ -69,6 +66,12 @@ _BUSINESS_MEMBER = {
     # deliberately has NO explicit entry here: default-missing-to-True in
     # load_features() already matches the desired behavior in both
     # workspaces, unlike home_assistant's personal-only False above.
+    # "household"/"team" (converted 2026-08-25) both stay explicit for the
+    # same reason home_assistant does — household's False here is load-
+    # bearing (default-missing-to-True would be wrong, it's personal-only);
+    # team's True is technically redundant with the default but kept
+    # explicit anyway for symmetry and to survive any future default change.
+    "household": False,
     "team": True,
     "assets": True,
     "finance": True,

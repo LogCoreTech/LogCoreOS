@@ -42,9 +42,7 @@ from routers import (
     priorities,
     push,
     setup,
-    shared,
     suggestions,
-    team,
     update,
 )
 from scheduler import start as start_scheduler
@@ -379,7 +377,6 @@ app.include_router(chat.router, prefix="/api/v1/chat", tags=["chat"])
 app.include_router(setup.router, prefix="/api/v1/setup", tags=["setup"])
 app.include_router(brain.router, prefix="/api/v1/brain", tags=["brain"])
 app.include_router(export.router, prefix="/api/v1/user", tags=["export"])
-app.include_router(shared.router, prefix="/api/v1/shared", tags=["shared"])
 app.include_router(push.router, prefix="/api/v1/push", tags=["push"])
 app.include_router(notes.router, prefix="/api/v1/notes", tags=["notes"])
 app.include_router(suggestions.router, prefix="/api/v1/suggestions", tags=["suggestions"])
@@ -393,7 +390,6 @@ app.include_router(finance_sharing.router, prefix="/api/v1/finance", tags=["fina
 app.include_router(finance_transfers.router, prefix="/api/v1/finance", tags=["finance-transfers"])
 app.include_router(assets.router, prefix="/api/v1/assets", tags=["assets"])
 app.include_router(contacts.router, prefix="/api/v1/contacts", tags=["contacts"])
-app.include_router(team.router, prefix="/api/v1/team", tags=["team"])
 app.include_router(update.router, prefix="/api/v1/update", tags=["update"])
 app.include_router(help.router, prefix="/api/v1/help", tags=["help"])
 app.include_router(ai_usage.router, prefix="/api/v1/ai-usage", tags=["ai-usage"])

@@ -41,6 +41,22 @@
       "status": "available"
     },
     {
+      "id": "household",
+      "name": "Household",
+      "description": "A shared pool of tasks and events for your family or household.",
+      "category": "personal",
+      "icon": "🏠",
+      "status": "available"
+    },
+    {
+      "id": "team",
+      "name": "Team",
+      "description": "A shared pool of tasks and events for your business team.",
+      "category": "business",
+      "icon": "🧑‍🤝‍🧑",
+      "status": "available"
+    },
+    {
       "id": "field_ops",
       "name": "Field Ops",
       "description": "Subdivisions, lots, phase scheduling, and mobile SmartForm checklists for residential trade subcontractors.",

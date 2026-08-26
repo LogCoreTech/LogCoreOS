@@ -8,10 +8,6 @@ import { tasks as tasksApi } from '../../module_packages/tasks/frontend/api'
 import { AttachmentThumb } from '../assetDisplay'
 import { ACTION_MODULE_BY_KIND, buttonColorClasses } from './actionKinds'
 
-function priorityDot(p) {
-  return p === 'High' ? 'bg-red-500' : p === 'Medium' ? 'bg-yellow-500' : 'bg-charcoal-400'
-}
-
 function Empty({ text }) {
   return <p className="text-sm text-charcoal-400 dark:text-charcoal-500">{text}</p>
 }
@@ -125,22 +121,6 @@ export function TaskRow({ task, actions, onAction }) {
       <span className="text-sm truncate flex-1">{task.title}</span>
       {task.streak_count > 0 && <span className="text-xs text-orange-500 shrink-0">🔥{task.streak_count}</span>}
       <BlockActionButtons actions={actions} recordKind="task" recordId={task.id} onDone={onAction} />
-    </div>
-  )
-}
-
-export function PoolTasksBlock({ data }) {
-  const tasks = data?.tasks || []
-  if (!tasks.length) return <Empty text="No pending pool tasks." />
-  return (
-    <div className="space-y-2">
-      {tasks.map(t => (
-        <div key={t.id} className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full shrink-0 ${priorityDot(t.priority)}`} />
-          <span className="text-sm truncate flex-1">{t.title}</span>
-          {t.assigned_to && <span className="text-xs text-charcoal-400 shrink-0">{t.assigned_to}</span>}
-        </div>
-      ))}
     </div>
   )
 }

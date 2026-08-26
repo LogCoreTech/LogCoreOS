@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import HelpButton from '../components/HelpButton'
-import { team as teamApi } from '../lib/api'
-import { useAuth } from '../lib/auth'
-import TaskModal from '../components/TaskModal'
-import EventModal from '../components/EventModal'
-import CalendarGrid from '../components/CalendarGrid'
-import { catColor } from '../lib/constants'
+import HelpButton from '../../../components/HelpButton'
+import { shared as sharedApi } from './api'
+import { useAuth } from '../../../lib/auth'
+import TaskModal from '../../../components/TaskModal'
+import EventModal from '../../../components/EventModal'
+import CalendarGrid from '../../../components/CalendarGrid'
+import { catColor } from '../../../lib/constants'
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
@@ -32,11 +32,11 @@ function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-export default function Team() {
+export default function Household() {
   const { user } = useAuth()
   const isAdmin  = user?.role === 'admin'
-  // Pool-manager rights: admins always; others need an explicit team grant.
-  const canEdit  = isAdmin || (user?.poolEdit || []).includes('team')
+  // Pool-manager rights: admins always; others need an explicit household grant.
+  const canEdit  = isAdmin || (user?.poolEdit || []).includes('household')
   const today    = new Date()
 
   const [view, setView]     = useState('calendar')
@@ -54,14 +54,14 @@ export default function Team() {
   const [users, setUsers]                 = useState([])
 
   async function load() {
-    const [t, e] = await Promise.allSettled([teamApi.list(), teamApi.sharedEvents()])
+    const [t, e] = await Promise.allSettled([sharedApi.list(), sharedApi.sharedEvents()])
     if (t.status === 'fulfilled') setTasks(t.value)
     if (e.status === 'fulfilled') setEvents(e.value)
   }
 
   useEffect(() => { load() }, [])
   useEffect(() => {
-    if (canEdit) teamApi.members().then(setUsers).catch(() => {})
+    if (canEdit) sharedApi.members().then(setUsers).catch(() => {})
   }, [canEdit])
 
   function prev() {
@@ -85,7 +85,7 @@ export default function Team() {
   }
   async function toggleDone(task) {
     const newStatus = task.status === 'done' ? 'pending' : 'done'
-    await teamApi.update(task.id, { status: newStatus })
+    await sharedApi.update(task.id, { status: newStatus })
     load()
   }
 
@@ -100,10 +100,10 @@ export default function Team() {
     taskFilter === 'overdue' ? (t.status === 'pending' && t.due_date && t.due_date < _today) : true
   )
 
-  const teamEventApi = {
-    add:    body       => teamApi.addSharedEvent(body),
-    update: (id, body) => teamApi.updateSharedEvent(id, body),
-    remove: id         => teamApi.removeSharedEvent(id),
+  const householdEventApi = {
+    add:    body       => sharedApi.addSharedEvent(body),
+    update: (id, body) => sharedApi.updateSharedEvent(id, body),
+    remove: id         => sharedApi.removeSharedEvent(id),
   }
 
   return (
@@ -111,8 +111,8 @@ export default function Team() {
 
       {/* Header */}
       <div>
-        <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">Team</h1><HelpButton section="team" /></span>
-        <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mt-0.5">Shared space for the business team</p>
+        <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">Household</h1><HelpButton section="household" /></span>
+        <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mt-0.5">Shared space for everyone</p>
       </div>
 
       {/* Tab bar */}
@@ -183,7 +183,7 @@ export default function Team() {
             )}
           </div>
 
-          {/* Calendar grid */}
+          {/* Calendar grid — full-bleed on mobile, card on desktop */}
           <div className="-mx-4 md:mx-0 md:card md:p-4">
             <CalendarGrid
               tasks={pendingTasks}
@@ -242,7 +242,7 @@ export default function Team() {
           ) : (
             <div className="space-y-2">
               {filteredTasks.map(task => (
-                <TeamTaskCard
+                <HouseholdTaskCard
                   key={task.id}
                   task={task}
                   canEdit={canEdit}
@@ -256,11 +256,14 @@ export default function Team() {
         </>
       )}
 
+      {/* Clears the fixed mobile footer nav so the bottom of either tab is never hidden behind it */}
+      <div className="h-20 md:hidden" aria-hidden="true" />
+
       {/* Modals */}
       {showTaskModal && (
         <TaskModal
           task={editTask}
-          saveApi={teamApi}
+          saveApi={sharedApi}
           users={canEdit ? users : undefined}
           onClose={() => { setShowTaskModal(false); setEditTask(null) }}
           onSave={() => { setShowTaskModal(false); setEditTask(null); load() }}
@@ -271,18 +274,16 @@ export default function Team() {
         <EventModal
           event={editEvent}
           defaultDate={selected || undefined}
-          saveApi={teamEventApi}
+          saveApi={householdEventApi}
           onClose={() => { setShowEventModal(false); setEditEvent(null) }}
           onSave={() => { setShowEventModal(false); setEditEvent(null); load() }}
         />
       )}
-
-      <div className="h-20 md:hidden" aria-hidden="true" />
     </div>
   )
 }
 
-function TeamTaskCard({ task, canEdit, today, onDone, onEdit }) {
+function HouseholdTaskCard({ task, canEdit, today, onDone, onEdit }) {
   const overdue = task.status === 'pending' && task.due_date && task.due_date < today
 
   return (

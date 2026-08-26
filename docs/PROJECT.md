@@ -176,7 +176,7 @@ into a self-contained `module_packages/<id>/` format with its own manifest/versi
 foundational ones (Tasks, Chat, Dashboards-the-feature), which just carry `uninstallable: true`
 rather than being excluded from the system. End state: `main.py` has zero hardcoded per-module
 router registrations. The registry mechanism itself (discovery, install/uninstall state, all four
-enforcement-gap fixes, the admin Mod Store UI) is done and fully tested. Five modules converted so
+enforcement-gap fixes, the admin Mod Store UI) is done and fully tested. Seven modules converted so
 far: journal (increment 1) and Home Assistant (increment 2, 2026-08-24, full internal id rename
 too) are both confirmed working end-to-end on the owner's live instance. Automations/n8n Automation
 (2026-08-25, taken out of the original planned order at the owner's request — display name only,
@@ -184,12 +184,18 @@ id/routes/internal names deliberately left unchanged), Calendar (2026-08-25, inc
 rename at all this time — the owner's explicit "keep as calendar" — plus a new feature riding along:
 the personal calendar's household/team pool-events toggle now hides itself entirely when that pool
 module isn't installed/active for the viewer, instead of offering a button that would silently
-no-op), and Tasks (2026-08-25, increment 5, no rename either — the first LOCKED, `uninstallable:
+no-op), Tasks (2026-08-25, increment 5, no rename either — the first LOCKED, `uninstallable:
 true` module conversion, proving that mechanism end-to-end for real for the first time; task_service.py/
-priority_service.py/recurring_service.py all stay core since Household/Team import them directly)
-are all built and fully tested but not yet verified on the live instance. Team+Household is next
-per the rollout order — both ride Tasks'/Calendar's now-converted locations rather than owning any
-service of their own.
+priority_service.py/recurring_service.py all stay core since Household/Team import them directly),
+and Household+Team (2026-08-25, increment 6, converted together in one sitting since neither owns
+its own service file — both ride Tasks'/Calendar's now-core locations; no rename for either) are all
+built and fully tested but not yet verified on the live instance. This last increment surfaced two
+real, generic gaps in the module system itself, both fixed generically rather than as one-offs: a
+shared dashboard block (the old `pool_tasks`, serving both pools) had to split into
+`household_tasks`/`team_tasks` since `BlockSpec.module` can only gate to one real module; and
+`ModuleManifest` gained a new `admin_agent_tools` field (mirroring `read_only_agent_tools`) once
+Household became the first module to own an admin-only AI tool. Chat (locked) is next per the
+rollout order.
 Full design in `docs/MEMORY.md`'s 2026-08-24/25 entries and
 `/home/logcore/.claude/plans/i-want-you-to-composed-scone.md`; rollout order tracked in
 `docs/TASKS.md`.

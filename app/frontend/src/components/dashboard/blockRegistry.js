@@ -4,7 +4,7 @@ import {
   FinanceActivityBlock, FinanceBookReportBlock, HeadingDividerBlock,
   LinkButtonBlock, LinkedAssetsBlock,
   LinkedContactBlock, LinkedDealsBlock, LinkedTasksBlock, MyAssetsSummaryBlock, NavButtonBlock,
-  NoteEmbedBlock, PoolTasksBlock, RecentAiActionsBlock,
+  NoteEmbedBlock, RecentAiActionsBlock,
   StatusButtonBlock, TextBlock,
 } from './blocks'
 import { MODULE_PACKAGES } from '../../lib/moduleRegistry'
@@ -23,12 +23,6 @@ import { MODULE_PACKAGES } from '../../lib/moduleRegistry'
 // today's bordered card for single-record content. Owner feedback: every
 // block looked like the same box regardless of what was inside it.
 export const BLOCK_REGISTRY = {
-  // No recordKind: pool tasks live in the household/team pool store, routed
-  // through sharedApi/teamApi (never tasksApi) depending on t._source — and
-  // Tasks.jsx's own ?task= deep-link lookup only searches the viewer's own
-  // task list, not assigned pool tasks. Wiring actions here would either
-  // write to the wrong store or silently no-op on nav — worse than omitting.
-  pool_tasks: { Component: PoolTasksBlock, icon: '🧑‍🤝‍🧑', label: 'Household/Team Tasks', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
   finance_activity: { Component: FinanceActivityBlock, icon: '💰', label: 'Finance Activity', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
   finance_book_report: { Component: FinanceBookReportBlock, icon: '📊', label: 'Finance Book Report', defaultLayout: { w: 9, h: 9 } },
   // Labels below spell out the data's actual source (a linked Contact or

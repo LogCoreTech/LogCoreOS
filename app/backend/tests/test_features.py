@@ -61,11 +61,19 @@ def test_get_effective_disabled_unknown_role_falls_back_to_member(brain):
 
 
 def test_get_effective_disabled_workspace_keyed_dict(brain):
+    # "finance" (not "team") deliberately — a CORE module id, never a
+    # module_packages/ discovery, so it can never collide with
+    # get_effective_disabled()'s own not-installed union the way a real
+    # converted-but-optional module id like "team" now would (team's own
+    # 2026-08-25 conversion made this assertion start failing for the
+    # wrong reason: "team" showed up disabled in BOTH workspaces simply
+    # because this bare test brain never marks it installed, unrelated to
+    # the per-user override merging this test actually exercises).
     features_service.save_features({"roles": {"member": {}}})
-    per_user = {"personal": ["journal"], "business": ["team"]}
+    per_user = {"personal": ["journal"], "business": ["finance"]}
     assert "journal" in features_service.get_effective_disabled("member", per_user, "personal")
-    assert "team" in features_service.get_effective_disabled("member", per_user, "business")
-    assert "team" not in features_service.get_effective_disabled("member", per_user, "personal")
+    assert "finance" in features_service.get_effective_disabled("member", per_user, "business")
+    assert "finance" not in features_service.get_effective_disabled("member", per_user, "personal")
 
 
 # --- routers/features.py — role CRUD ---------------------------------------
