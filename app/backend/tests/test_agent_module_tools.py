@@ -35,7 +35,7 @@ TOOL_SCHEMAS = [
     }
 ]
 
-def execute(name, inputs, user):
+def execute(name, inputs, user, workspace="personal"):
     if name != "t_ping_tool":
         return None
     return {"pong": True, "for_user": user["name"]}

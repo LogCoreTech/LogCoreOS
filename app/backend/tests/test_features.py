@@ -46,6 +46,15 @@ def test_load_features_seeds_builtin_roles(brain):
 
 
 def test_get_effective_disabled_uses_role_map(brain):
+    # "notes" needs to be explicitly installed here (2026-08-26, once notes/
+    # converted into a real discovered module) — get_effective_disabled's
+    # not-installed union would otherwise mask the role map's own explicit
+    # True and land it in `disabled` for an unrelated reason, defeating the
+    # actual thing this test checks. Same fix shape as household/team's own
+    # placeholder swap during their conversion.
+    from services import mod_store_service
+
+    mod_store_service.mark_installed("notes", by="tester")
     features_service.save_features(
         {"roles": {"member": {"finance": True}, "cleaner": {"finance": False, "notes": True}}}
     )

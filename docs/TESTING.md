@@ -85,7 +85,7 @@ Exception: external HTTP calls (AI provider, n8n, HA, Tavily) should be mocked w
 
 ---
 
-## Current Coverage (916 tests, 56 files + module_packages/{journal,automations,household,team,chat}/tests/)
+## Current Coverage (936 tests, 57 files + module_packages/{journal,automations,household,team,chat,notes}/tests/)
 
 Core-service coverage below (the module suites — finance, contacts, assets, help, etc. — make up the remainder of the files). Since 2026-08-24, `testpaths` (pyproject.toml) covers both `tests/` and `module_packages/` — run bare `pytest`/`pytest -v` for the full suite, or `pytest tests/ -v` to narrow to core-only (an explicit path on the command line overrides `testpaths`).
 
@@ -117,8 +117,12 @@ Core-service coverage below (the module suites — finance, contacts, assets, he
 | `test_help_service_modules.py` | 4 | `get_content()` merges a module's `help_section`; `capabilities_index()` annotates not-installed vs. disabled-but-installed vs. enabled |
 | `test_features.py` | 15 | Role CRUD + name normalization (`features_service.py` + `routers/features.py`), `get_effective_disabled()` (role map, workspace-keyed dict, unknown-role fallback), assign-role-to-user round trip. Imports router functions directly, not just the service — see the file's own docstring for why |
 | `test_file_service.py` | 25 | Atomic reads/writes, path resolution, `user_path`, `ws_path` |
-| `test_notes_service.py` | 21 | Notes CRUD, folder management, move operations |
-| `test_agent_notes_tools.py` | 8 | `agent_service.py`'s note tools only (not full agent orchestration — see Coverage Gaps): sharing-aware `list_notes`/`read_note`/`search_brain` visibility, `update_note`/`delete_note` access-level gating (contribute vs. edit), own-note CRUD unaffected |
+| `test_notes_service.py` | 29 | Notes CRUD, folder management, move operations, archiving |
+| `test_notes_sharing.py` | 6 | Sharing specifically: handshake + folder cascade, contribute/edit access levels, `hidden_from` beats an accepted share, pool contributors, `list_visible_notes` includes shared, path-traversal rejection |
+| `test_agent_notes_tools.py` | 3 | Trimmed to `search_brain`'s note-sharing awareness only (2026-08-26, once notes/ converted) — the one note-adjacent AI tool that stays core, since it also rglobs journal/memory/profile files. The other 6 note tools moved to `module_packages/notes/tests/test_notes_agent_tools.py`. Includes the same-day follow-up gap: `search_brain`'s shared/pool-notes half bypassed `_brain_skip()` entirely, unlike its own-files half — a disabled viewer could still search content shared with them |
+| `module_packages/notes/tests/test_notes_agent_tools.py` | 6 | The 6 CRUD/folder tools that moved into `module_packages/notes/backend/agent_tools.py` — sharing-aware `list_notes`/`read_note` visibility, `update_note`/`delete_note` access-level gating (contribute vs. edit), own-note CRUD unaffected. Calls `agent_service._execute_tool()`, still core; routes here via the module-dispatch fallback |
+| `module_packages/notes/tests/test_notes_router.py` | 13 | First-ever HTTP-layer coverage of `module_packages/notes/backend/router.py` (`notes_service.py`'s own CRUD/sharing logic is covered above) — CRUD, 404/409 handling, pool-note admin gating, archive/unarchive, and the sharing handshake end to end (share → pending → respond → visible; leave; leaving your own note rejected) |
+| `test_notes_module_conversion.py` | 6 | The conversion machinery for notes/ — not notes_service's own CRUD/sharing logic (covered above): `m026`'s guarded (features.json-existence) upgrade migration, install→uninstall→reinstall round-trip, and the three real, pre-existing enforcement gaps this conversion closes: unfiltered AI tools (`_get_tools()`), no `owned_brain_paths` entry, and `note_embed`'s ungated dashboard block |
 | `test_profile_service.py` | 5 | Pool (`_household`/`_team`) priority order only — real-user profile behavior moved to `test_contacts.py` (self-contact) after the Profile/Contacts merge |
 | `test_events_service.py` | 16 | Calendar event CRUD |
 | `test_priority_service.py` | 14 | Scoring formula, top3 logic, category weights, urgency bonus |

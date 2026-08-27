@@ -36,7 +36,6 @@ from routers import (
     help,
     infisical,
     mod_store,
-    notes,
     presence,
     priorities,
     push,
@@ -376,7 +375,6 @@ app.include_router(setup.router, prefix="/api/v1/setup", tags=["setup"])
 app.include_router(brain.router, prefix="/api/v1/brain", tags=["brain"])
 app.include_router(export.router, prefix="/api/v1/user", tags=["export"])
 app.include_router(push.router, prefix="/api/v1/push", tags=["push"])
-app.include_router(notes.router, prefix="/api/v1/notes", tags=["notes"])
 app.include_router(suggestions.router, prefix="/api/v1/suggestions", tags=["suggestions"])
 app.include_router(infisical.router, prefix="/api/v1/auth", tags=["infisical"])
 app.include_router(features.router, prefix="/api/v1/auth", tags=["features"])

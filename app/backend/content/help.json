@@ -71,28 +71,6 @@
       ]
     },
     {
-      "id": "notes",
-      "icon": "📝",
-      "title": "Notes",
-      "blurb": "Markdown notes organized in folders. They save themselves as you type and stay plain, portable files in your Brain.",
-      "howto": [
-        "Create a note or folder from the sidebar; click a note to edit it in Markdown.",
-        "There's no Save button — notes auto-save about a second and a half after you stop typing.",
-        "Drag a note onto a folder to move it, or use the \"Move to folder\" menu.",
-        "Share a note or a whole folder with another user or a pool from the Share menu.",
-        "Archive a note or folder from its ··· menu to tuck it out of the way without deleting it; toggle \"Show archived\" to see archived items again."
-      ],
-      "tips": [
-        "Sharing a folder cascades to everything inside it.",
-        "Shared notes stay plain Markdown — the sharing info is kept separately so your files remain portable.",
-        "Archiving a folder doesn't archive what's inside it — archive each item you want tucked away.",
-        "Admins can rename, move, share, archive, and delete notes shared into the household/team pool, same as any other shared module."
-      ],
-      "modules": [
-        "notes"
-      ]
-    },
-    {
       "id": "assets",
       "icon": "📦",
       "title": "Assets",

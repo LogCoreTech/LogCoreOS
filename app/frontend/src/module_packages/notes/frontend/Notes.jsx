@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import HelpButton from '../components/HelpButton'
-import { notes as notesApi } from '../lib/api'
-import { useWorkspace } from '../lib/workspace'
+import HelpButton from '../../../components/HelpButton'
+import { notes as notesApi } from './api'
+import { useWorkspace } from '../../../lib/workspace'
 
 // ── Tree builder ─────────────────────────────────────────────────────────────
 

@@ -11,8 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - **Mod Store** (Admin → Mod Store): install and uninstall first-party LogCoreOS modules. Journal,
-  Home Assistant, n8n Automation (renamed from "Automations"), Calendar, Household, and Team are
-  optional this way — none is a permanent core feature anymore, and a fresh install now ships
+  Home Assistant, n8n Automation (renamed from "Automations"), Calendar, Household, Team, and Notes
+  are optional this way — none is a permanent core feature anymore, and a fresh install now ships
   without them by default; existing instances that already used one keep it installed automatically.
   Uninstalling a module never deletes its data — reinstalling picks everything back up untouched.
   Installing/uninstalling requires an admin-triggered restart to take effect (never automatic), with
@@ -38,13 +38,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   reserved space for the mobile nav bar, on every page, for any user with Settings → Appearance →
   Density set to Compact — not just AI Chat, though the composer made it visible there first.
   Scoped the rule to only the sides it's meant to tighten.
+- A user with Notes disabled could still list, read, create, update, delete, and move their notes
+  through the AI chat, since none of the 7 note tools were actually gated on the module. Notes'
+  archive folder was also fully readable through the Brain file browser and the AI's own
+  file-reading tools regardless of Notes' module state, and its dashboard block (Note Embed) stayed
+  visible in the block picker regardless of module state too — all three closed. A disabled user
+  could also still search the *content* of notes shared with them (though not their own) via the AI
+  chat's Brain search — closed the same way.
 
 ### Changed
 
 - Every module in the app is being converted into this same self-contained format over time,
   including foundational ones like Tasks and AI Chat (marked non-removable, not excluded) — journal,
-  Home Assistant, n8n Automation, Calendar, Tasks, Household, Team, and AI Chat are the first eight,
-  proving the pattern; the rest follow one at a time.
+  Home Assistant, n8n Automation, Calendar, Tasks, Household, Team, AI Chat, and Notes are the first
+  nine, proving the pattern; the rest follow one at a time.
 
 ## [0.6.4] — 2026-08-22
 

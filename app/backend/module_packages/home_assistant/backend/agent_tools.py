@@ -97,7 +97,11 @@ TOOL_SCHEMAS = [
 ]
 
 
-def execute(name: str, inputs: dict, user: dict):
+def execute(name: str, inputs: dict, user: dict, workspace: str = "personal"):
+    # Home Assistant is an instance-wide integration with no workspace
+    # concept at all — workspace is accepted for signature parity with the
+    # generic dispatch (widened 2026-08-26 for notes/'s own workspace-aware
+    # tools) but deliberately unused here.
     if name == "get_home_assistant_state":
         return [ha_service.get_state(eid) for eid in inputs["entity_ids"]]
 

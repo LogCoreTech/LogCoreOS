@@ -148,7 +148,13 @@ TOOL_SCHEMAS = [
 ]
 
 
-def execute(name: str, inputs: dict, user: dict):
+def execute(name: str, inputs: dict, user: dict, workspace: str = "personal"):
+    # Accepted for signature parity with the generic dispatch (widened
+    # 2026-08-26 for notes/'s own workspace-aware tools) but still
+    # deliberately unused here — see the module docstring above for why
+    # these 9 tools staying implicitly personal-only is a pre-existing,
+    # out-of-scope-for-this-move behavior, not something this signature
+    # change fixes or regresses.
     if name == "list_tasks":
         return task_service.list_tasks(user["name"])
 

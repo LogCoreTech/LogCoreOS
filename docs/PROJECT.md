@@ -176,7 +176,7 @@ into a self-contained `module_packages/<id>/` format with its own manifest/versi
 foundational ones (Tasks, Chat, Dashboards-the-feature), which just carry `uninstallable: true`
 rather than being excluded from the system. End state: `main.py` has zero hardcoded per-module
 router registrations. The registry mechanism itself (discovery, install/uninstall state, all four
-enforcement-gap fixes, the admin Mod Store UI) is done and fully tested. Eight modules converted so
+enforcement-gap fixes, the admin Mod Store UI) is done and fully tested. Nine modules converted so
 far: journal (increment 1) and Home Assistant (increment 2, 2026-08-24, full internal id rename
 too) are both confirmed working end-to-end on the owner's live instance. Automations/n8n Automation
 (2026-08-25, taken out of the original planned order at the owner's request — display name only,
@@ -204,7 +204,21 @@ module-system mechanism gaps: `GET /chat/runs` and `GET /chat/runs/{run_id}` wer
 with chat disabled could still read past agent run history), and chat's own archive folder had no
 `owned_brain_paths` entry at all, leaving a disabled user's past conversations fully readable via
 the Brain browser and the AI's own file-reading tools regardless of module state — both fixed as
-part of the conversion. Notes is next per the rollout order.
+part of the conversion. Notes (2026-08-26, increment 8) is also built and fully tested but not yet
+verified on the live instance — the first conversion to genuinely test the sidecar-share-index
+sharing pattern (`Notes/_shares.json` + `notes_index.py`), the direct precedent Assets/Contacts/
+Finance will need for their own future conversions; `notes_service.py`/`notes_index.py` both stay
+core since `user_deletion_service.py` imports both directly. It surfaced the same shape of gap Chat's
+own conversion found — real pre-existing enforcement holes, not new mechanism gaps: all 7 note AI
+tools lived unfiltered in the static tool list, `note_embed`'s dashboard block had no module gate at
+all (the exact `pool_tasks`-before-Household/Team situation), and the Notes folder had no
+`owned_brain_paths` entry — all three closed the same way prior conversions closed their own. It also
+surfaced a genuine, previously-latent gap in the module-tool-dispatch mechanism itself: the generic
+dispatch never threaded the caller's active workspace through to a module's own AI tools, harmless
+for every prior module (all workspace-blind by construction or already documented as such) but a real
+regression risk for notes, whose tools are genuinely workspace-aware — fixed by widening the dispatch
+signature, with every other module picking up the unused parameter for signature parity. Dashboards
+(locked) is next per the rollout order.
 Full design in `docs/MEMORY.md`'s 2026-08-24/25/26 entries and
 `/home/logcore/.claude/plans/i-want-you-to-composed-scone.md`; rollout order tracked in
 `docs/TASKS.md`.

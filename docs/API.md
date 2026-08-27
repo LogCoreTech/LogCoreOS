@@ -622,7 +622,7 @@ Download the current user's entire brain folder as a `.zip` file.
 
 ## Notes
 
-All endpoints require the `notes` module to be enabled.
+Router mounted at `/api/v1/notes` (module id `notes` — converted into `module_packages/notes/` 2026-08-26; same no-rename treatment as Calendar/Tasks). `notes_service.py`/`notes_index.py` both stay core — `services/user_deletion_service.py` imports both directly, alongside the equivalent assets/contacts/finance pairs, and `main.py`'s `_warm_share_index()` rebuilds `notes_index` at every boot the same way it does for those three. All endpoints require the `notes` module to be enabled.
 
 Notes support **asset-style sharing**: the response of `GET /notes` includes the viewer's own notes plus **pool** (household/team) and **shared-to-me** notes/folders, each annotated `_owner`/`_access`. Share metadata lives in a sidecar `Notes/_shares.json` (content stays plain `.md`). A share on a folder cascades to its subtree. Every read/write resolves access server-side (`read` < `contribute` (edit content) < `edit` (move/delete/reshare)).
 
@@ -680,7 +680,7 @@ Move or rename a file or folder.
 
 **Body** `{ "from": "old/path.md", "to": "new/path.md" }`
 
-**Agent tools**: `list_notes`/`read_note`/`search_brain` (read; `search_brain` also walks pool/shared notes, not just the caller's own) + `create_note`/`update_note`/`delete_note`/`move_note`/`create_note_folder` (approval-gated). All resolve through the same sharing-aware access check the HTTP API uses (`read` < `contribute` < `edit`) — the agent can see and use anything shared with the caller, not just their own notes, and returns a plain-language error rather than silently failing if the caller's access level is too low for the requested action. `read_note`/`update_note`/`delete_note`/`move_note` accept an optional `owner` hint (from a prior `list_notes`/`search_brain` result's `_owner` field) to disambiguate when the same relative path could exist in more than one store the caller can reach.
+**Agent tools**: `list_notes`/`read_note`/`search_brain` (read; `search_brain` also walks pool/shared notes, not just the caller's own) + `create_note`/`update_note`/`delete_note`/`move_note`/`create_note_folder` (approval-gated). All resolve through the same sharing-aware access check the HTTP API uses (`read` < `contribute` < `edit`) — the agent can see and use anything shared with the caller, not just their own notes, and returns a plain-language error rather than silently failing if the caller's access level is too low for the requested action. `read_note`/`update_note`/`delete_note`/`move_note` accept an optional `owner` hint (from a prior `list_notes`/`search_brain` result's `_owner` field) to disambiguate when the same relative path could exist in more than one store the caller can reach. All but `search_brain` moved to `module_packages/notes/backend/agent_tools.py` when notes/ converted (2026-08-26) — closing a real gap where they were previously unfiltered by `disabled_modules`; `search_brain` stays core since it isn't notes-owned (also walks journal/memory/profile files).
 
 ---
 

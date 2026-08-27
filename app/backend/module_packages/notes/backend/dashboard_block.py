@@ -34,5 +34,6 @@ register(
         category="record_linked",
         resolver=resolve_note_embed,
         record_ref_fields={"path": "notes"},
+        module="notes",
     )
 )

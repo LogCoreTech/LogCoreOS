@@ -4,7 +4,7 @@ import {
   FinanceActivityBlock, FinanceBookReportBlock, HeadingDividerBlock,
   LinkButtonBlock, LinkedAssetsBlock,
   LinkedContactBlock, LinkedDealsBlock, LinkedTasksBlock, MyAssetsSummaryBlock, NavButtonBlock,
-  NoteEmbedBlock, RecentAiActionsBlock,
+  RecentAiActionsBlock,
   StatusButtonBlock, TextBlock,
 } from './blocks'
 import { MODULE_PACKAGES } from '../../lib/moduleRegistry'
@@ -44,7 +44,6 @@ export const BLOCK_REGISTRY = {
   // dashboard_blocks/_collections.py for the resolver.
   collection: { Component: CollectionBlock, icon: '📋', label: 'Collection (List/Board)', defaultLayout: { w: 18, h: 12 }, recordKind: 'asset' },
   contacts_list: { Component: ContactsListBlock, icon: '👥', label: 'Contacts List', defaultLayout: { w: 12, h: 9 }, shape: 'list', recordKind: 'contact' },
-  note_embed: { Component: NoteEmbedBlock, icon: '📝', label: 'Note Embed', defaultLayout: { w: 12, h: 9 }, recordKind: 'note' },
   ai_usage_me: { Component: AiUsageMeBlock, icon: '🤖', label: 'AI Usage — My Usage', defaultLayout: { w: 9, h: 6 } },
   ai_usage_overview: { Component: AiUsageOverviewBlock, icon: '🛡️', label: 'AI Usage — All Users', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
   recent_ai_actions: { Component: RecentAiActionsBlock, icon: '🕘', label: 'Recent AI Actions', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
@@ -133,7 +132,6 @@ export const CONFIG_FIELD_SCHEMAS = {
   documents: [{ key: 'asset_id', label: 'Asset', kind: 'asset' }],
   linked_tasks: [{ key: 'asset_id', label: 'Asset', kind: 'asset' }],
   linked_contact: [{ key: 'asset_id', label: 'Asset (shows its linked contact)', kind: 'asset' }],
-  note_embed: [{ key: 'path', label: 'Note', kind: 'note' }],
   text_block: [{ key: 'text', label: 'Text', kind: 'textarea' }],
   link_button: [
     { key: 'label', label: 'Button label', kind: 'text' },

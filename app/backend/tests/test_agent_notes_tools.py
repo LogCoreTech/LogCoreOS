@@ -1,8 +1,19 @@
-"""Agent notes tools become sharing-aware (2026-08-14): list_notes/read_note/
-update_note/delete_note/move_note/search_brain now resolve through the same
-sharing-aware notes_service functions routers/notes.py already used, instead
-of a separate own-store-only path that made shared/pool notes invisible to
-the chat agent."""
+"""search_brain's note-sharing awareness — the only note-adjacent AI tool
+that stays core (it also rglobs journal/memory/profile files, so it isn't
+notes-owned). The other 6 note CRUD/folder tools moved to
+module_packages/notes/tests/test_notes_agent_tools.py when notes/ converted
+(2026-08-26).
+
+search_brain's own-files half (a plain rglob) was already correctly gated by
+_brain_skip() before this conversion — Notes just wasn't in that skip set
+yet. Its SECOND half (shared/pool notes, reached directly via
+notes_service.list_visible_notes rather than the rglob walk) was NOT gated
+at all until a follow-up fix the same day, found while answering a real
+question about whether uninstalling notes could affect other modules' data
+— it doesn't, but this loop's own gap was real: a user with notes disabled
+could still search content from notes shared *with* them or in the
+household/team pool, even though their own Notes/ folder was correctly
+hidden by the first half. Both halves now key off the same `skip` set."""
 
 import sys
 from pathlib import Path
@@ -29,77 +40,6 @@ def _share(owner, path, target, access):
     notes_service.respond_share(target, owner, "personal", path, accept=True)
 
 
-def test_list_notes_tool_includes_shared_and_pool_notes(users):
-    notes_service.create_note("Alice", "Recipe", "eggs", "personal")
-    _share("Alice", "Recipe", "Bob", "read")
-    notes_service.create_note("_household", "Chores", "trash", "personal")
-
-    result = agent_service._execute_tool("list_notes", {}, users["bob"], workspace="personal")
-    paths = {(r["path"], r.get("_owner")) for r in result}
-    assert ("Recipe", "Alice") in paths
-    assert ("Chores", "household") in paths
-
-
-def test_read_note_tool_respects_read_only_share(users):
-    notes_service.create_note("Alice", "Recipe", "two eggs", "personal")
-    _share("Alice", "Recipe", "Bob", "read")
-
-    result = agent_service._execute_tool(
-        "read_note", {"path": "Recipe", "owner": "Alice"}, users["bob"], workspace="personal"
-    )
-    assert result["content"] == "two eggs"
-
-
-def test_read_note_tool_denied_without_a_share(users):
-    notes_service.create_note("Alice", "Private", "secret", "personal")
-
-    result = agent_service._execute_tool(
-        "read_note", {"path": "Private"}, users["bob"], workspace="personal"
-    )
-    assert "error" in result
-
-
-def test_update_note_tool_requires_contribute_not_just_read(users):
-    notes_service.create_note("Alice", "Recipe", "one egg", "personal")
-    _share("Alice", "Recipe", "Bob", "read")
-
-    denied = agent_service._execute_tool(
-        "update_note",
-        {"path": "Recipe", "content": "two eggs", "owner": "Alice"},
-        users["bob"],
-        workspace="personal",
-    )
-    assert "error" in denied
-    assert notes_service.get_note("Alice", "Recipe", "personal")["content"] == "one egg"
-
-    _share("Alice", "Recipe", "Bob", "contribute")
-    allowed = agent_service._execute_tool(
-        "update_note",
-        {"path": "Recipe", "content": "two eggs", "owner": "Alice"},
-        users["bob"],
-        workspace="personal",
-    )
-    assert allowed["content"] == "two eggs"
-    assert notes_service.get_note("Alice", "Recipe", "personal")["content"] == "two eggs"
-
-
-def test_delete_note_tool_requires_edit_not_contribute(users):
-    notes_service.create_note("Alice", "Recipe", "eggs", "personal")
-    _share("Alice", "Recipe", "Bob", "contribute")
-
-    denied = agent_service._execute_tool(
-        "delete_note", {"path": "Recipe", "owner": "Alice"}, users["bob"], workspace="personal"
-    )
-    assert "error" in denied
-    assert notes_service.get_note("Alice", "Recipe", "personal") is not None
-
-    _share("Alice", "Recipe", "Bob", "edit")
-    allowed = agent_service._execute_tool(
-        "delete_note", {"path": "Recipe", "owner": "Alice"}, users["bob"], workspace="personal"
-    )
-    assert allowed["deleted"] is True
-
-
 def test_search_brain_finds_content_inside_a_shared_note(users):
     notes_service.create_note("Alice", "Recipe", "the secret ingredient is nutmeg", "personal")
     _share("Alice", "Recipe", "Bob", "read")
@@ -123,23 +63,16 @@ def test_search_brain_still_finds_own_notes(users):
     assert hits[0]["owner"] is None
 
 
-def test_own_note_crud_unaffected_by_the_sharing_aware_resolution(users):
-    created = agent_service._execute_tool(
-        "create_note", {"path": "Mine", "content": "hi"}, users["alice"], workspace="personal"
-    )
-    assert created["path"] == "Mine"
+def test_search_brain_hides_shared_note_content_when_notes_disabled_for_viewer(users):
+    """The gap found and fixed 2026-08-26: shared/pool note content reached
+    via notes_service.list_visible_notes bypassed the rglob walk's own
+    _brain_skip() gate entirely — a disabled viewer could still search
+    content shared with them even though their own notes were hidden."""
+    notes_service.create_note("Alice", "Recipe", "the secret ingredient is nutmeg", "personal")
+    _share("Alice", "Recipe", "Bob", "read")
 
-    updated = agent_service._execute_tool(
-        "update_note", {"path": "Mine", "content": "bye"}, users["alice"], workspace="personal"
+    disabled_bob = {**users["bob"], "disabled_modules": ["notes"]}
+    result = agent_service._execute_tool(
+        "search_brain", {"query": "nutmeg"}, disabled_bob, workspace="personal"
     )
-    assert updated["content"] == "bye"
-
-    moved = agent_service._execute_tool(
-        "move_note", {"from_path": "Mine", "to_path": "Moved"}, users["alice"], workspace="personal"
-    )
-    assert moved["to_path"] == "Moved"
-
-    deleted = agent_service._execute_tool(
-        "delete_note", {"path": "Moved"}, users["alice"], workspace="personal"
-    )
-    assert deleted["deleted"] is True
+    assert not any(r["path"] == "Notes/Recipe.md" for r in result)

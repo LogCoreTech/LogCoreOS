@@ -50,8 +50,6 @@ _RESEARCH_TOOLS = {
     "list_brain_files",
     "read_brain_file",
     "get_profile",
-    "list_notes",
-    "read_note",
     "search_brain",
     "search_web",
     "list_asset_templates",
@@ -128,94 +126,6 @@ _USER_TOOLS: list[dict] = [
                     "description": "Relative path for the new .md file, e.g. 'Notes/MyNote.md'",
                 },
                 "content": {"type": "string", "description": "Initial content (defaults to empty)"},
-            },
-            "required": ["path"],
-        },
-    },
-    {
-        "name": "list_notes",
-        "description": (
-            "List all notes and folders visible to the user: their own, the household/team pool's, "
-            "and any shared with them by another user. A note from someone else carries an `_owner` "
-            "field (a username, or 'household'/'team' for a pool note) and an `_access` field "
-            "(read|contribute|edit) — own notes have neither. Pass the `_owner` you got back here into "
-            "read_note/update_note/delete_note/move_note's own `owner` param so they resolve to the "
-            "right store even if the same note name exists in more than one place."
-        ),
-        "input_schema": {"type": "object", "properties": {}, "required": []},
-    },
-    {
-        "name": "read_note",
-        "description": "Read an existing note's content, including one shared with the user or in the household/team pool.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Relative note path, e.g. 'Work/Meeting Notes'",
-                },
-                "owner": {
-                    "type": "string",
-                    "description": "Optional — the note's `_owner` field from list_notes, if it has one. Disambiguates when the same path could exist in more than one visible store.",
-                },
-            },
-            "required": ["path"],
-        },
-    },
-    {
-        "name": "create_note",
-        "description": "Create a new note in the user's own Notes folder. Path is relative to Notes/ without the .md extension, e.g. 'Work/Meeting Notes' or 'Ideas'.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Relative note path, e.g. 'Work/Meeting Notes'",
-                },
-                "content": {
-                    "type": "string",
-                    "description": "Initial markdown content (defaults to empty)",
-                },
-            },
-            "required": ["path"],
-        },
-    },
-    {
-        "name": "update_note",
-        "description": (
-            "Overwrite an existing note's content — the user's own, or one shared with them at "
-            "contribute/edit level. Use list_notes or read_note first if you need to see what's there."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Relative note path, e.g. 'Work/Meeting Notes'",
-                },
-                "content": {"type": "string", "description": "New full markdown content"},
-                "owner": {
-                    "type": "string",
-                    "description": "Optional — the note's `_owner` field from list_notes, if it has one. Disambiguates when the same path could exist in more than one visible store.",
-                },
-            },
-            "required": ["path", "content"],
-        },
-    },
-    {
-        "name": "delete_note",
-        "description": "Permanently delete a note by path — the user's own, or one shared with them at edit level.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Relative note path, e.g. 'Work/Meeting Notes'",
-                },
-                "owner": {
-                    "type": "string",
-                    "description": "Optional — the note's `_owner` field from list_notes, if it has one. Disambiguates when the same path could exist in more than one visible store.",
-                },
             },
             "required": ["path"],
         },
@@ -424,39 +334,6 @@ _USER_TOOLS: list[dict] = [
                 "query": {"type": "string", "description": "Case-insensitive search term"},
             },
             "required": ["query"],
-        },
-    },
-    {
-        "name": "move_note",
-        "description": "Move or rename a note — the user's own, or one shared with them at edit level. Paths are relative to Notes/ without .md extension.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "from_path": {"type": "string", "description": "Current note path, e.g. 'Ideas'"},
-                "to_path": {
-                    "type": "string",
-                    "description": "New note path, e.g. 'Brainstorms/Ideas'",
-                },
-                "owner": {
-                    "type": "string",
-                    "description": "Optional — the note's `_owner` field from list_notes, if it has one. Disambiguates when the same path could exist in more than one visible store.",
-                },
-            },
-            "required": ["from_path", "to_path"],
-        },
-    },
-    {
-        "name": "create_note_folder",
-        "description": "Create a folder inside the user's Notes directory.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Folder path relative to Notes/, e.g. 'Projects' or 'Projects/Work'",
-                },
-            },
-            "required": ["path"],
         },
     },
     {
@@ -1298,29 +1175,6 @@ def _get_tools(user: dict) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def _resolve_note_or_error(user: dict, workspace: str, path: str, owner: str | None, need: str):
-    """Resolve a note/folder path the agent's caller can reach at >= `need`
-    access, the same way routers/notes.py's own _resolve() does for real
-    users. Returns (store_user, None) on success or (None, error_dict)."""
-    try:
-        found = notes_service.find_note_store(
-            user["name"],
-            user.get("feature_role", "member"),
-            user.get("role") == "admin",
-            workspace,
-            path,
-            owner=owner,
-        )
-    except ValueError as e:
-        return None, {"error": str(e)}
-    if not found:
-        return None, {"error": f"Note not found: {path!r}"}
-    store_user, access = found
-    if not notes_service.meets(access, need):
-        return None, {"error": f"You only have {access} access to {path!r} — that's not enough."}
-    return store_user, None
-
-
 _LG_COLS = 36  # DashboardGrid.jsx's COLS.lg — desktop grid width
 _MAX_ROWS = 60  # generous cap (24px/row = 1440px tall) against a garbage/huge value
 _MAX_Y = 500  # generous cap against a garbage/huge stacking position
@@ -1451,48 +1305,6 @@ def _execute_tool(
                     }
                 write_markdown(path, inputs.get("content", ""))
                 return {"ok": True, "created": inputs["path"]}
-
-            case "list_notes":
-                return notes_service.list_visible_notes(
-                    user["name"],
-                    user.get("feature_role", "member"),
-                    user.get("role") == "admin",
-                    workspace,
-                )
-
-            case "read_note":
-                store_user, err = _resolve_note_or_error(
-                    user, workspace, inputs["path"], inputs.get("owner"), "read"
-                )
-                if err:
-                    return err
-                note = notes_service.get_note(store_user, inputs["path"], workspace)
-                return note or {"error": f"Note not found: {inputs['path']!r}"}
-
-            case "create_note":
-                return notes_service.create_note(
-                    user["name"], inputs["path"], inputs.get("content", ""), workspace
-                )
-
-            case "update_note":
-                store_user, err = _resolve_note_or_error(
-                    user, workspace, inputs["path"], inputs.get("owner"), "contribute"
-                )
-                if err:
-                    return err
-                result = notes_service.update_note(
-                    store_user, inputs["path"], inputs["content"], workspace
-                )
-                return result or {"error": f"Note not found: {inputs['path']!r}"}
-
-            case "delete_note":
-                store_user, err = _resolve_note_or_error(
-                    user, workspace, inputs["path"], inputs.get("owner"), "edit"
-                )
-                if err:
-                    return err
-                ok = notes_service.delete_note(store_user, inputs["path"], workspace)
-                return {"deleted": ok}
 
             case "get_profile":
                 from services import contacts_service
@@ -1728,9 +1540,15 @@ def _execute_tool(
                         results.append({"path": path_label, "snippet": snippet, "owner": None})
 
                 # Shared/pool notes — own files above are covered by the rglob
-                # walk; journal/memory/profile stay own-files-only since none
-                # of those are shareable.
-                for ws_label, _base in search_roots:
+                # walk (and already gated by `skip`, since Notes is in it when
+                # the module's disabled for this user); journal/memory/profile
+                # stay own-files-only since none of those are shareable. This
+                # loop reaches OTHER stores' notes directly via notes_service,
+                # bypassing the rglob walk's own gate entirely — skip it here
+                # too, using the same `skip` set, or a disabled user could
+                # still search shared-to-them/pool note content even though
+                # their own Notes/ folder is correctly hidden above.
+                for ws_label, _base in ([] if "Notes" in skip else search_roots):
                     visible = notes_service.list_visible_notes(
                         user["name"],
                         user.get("feature_role", "member"),
@@ -1758,19 +1576,6 @@ def _execute_tool(
                         path_label = f"{ws_label}/{note_rel}" if cross_workspace else note_rel
                         results.append({"path": path_label, "snippet": snippet, "owner": owner})
                 return results
-
-            case "move_note":
-                store_user, err = _resolve_note_or_error(
-                    user, workspace, inputs["from_path"], inputs.get("owner"), "edit"
-                )
-                if err:
-                    return err
-                return notes_service.move_item(
-                    store_user, inputs["from_path"], inputs["to_path"], "note", workspace
-                )
-
-            case "create_note_folder":
-                return notes_service.create_folder(user["name"], inputs["path"], workspace)
 
             case "send_notification":
                 sent = push_service.send_push(user["name"], inputs["title"], inputs["body"])
@@ -2575,7 +2380,7 @@ def _execute_tool(
                 entry = dispatch.get(name)
                 if entry is not None:
                     _module_id, execute_fn = entry
-                    result = execute_fn(name, inputs, user)
+                    result = execute_fn(name, inputs, user, workspace)
                     if result is not None:
                         return result
                 return {"error": f"Unknown tool: {name!r}"}

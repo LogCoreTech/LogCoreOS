@@ -52,7 +52,11 @@ TOOL_SCHEMAS = [
 ]
 
 
-def execute(name: str, inputs: dict, user: dict):
+def execute(name: str, inputs: dict, user: dict, workspace: str = "personal"):
+    # journal_service has no workspace concept at all (journal is always
+    # per-user, not per-workspace) — workspace is accepted for signature
+    # parity with the generic dispatch (widened 2026-08-26 for notes/'s own
+    # workspace-aware tools) but deliberately unused here.
     if name == "read_journal_entry":
         entry = journal_service.get_entry(user["name"], inputs["date"])
         if entry is None:

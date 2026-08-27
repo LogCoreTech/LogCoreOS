@@ -29,7 +29,6 @@ from services.file_service import read_json, write_json
 _CORE_MODULE_IDS = [
     "dashboard",
     "goals",
-    "notes",
     "assets",
     "finance",
     "contacts",
@@ -51,7 +50,10 @@ _PERSONAL_MEMBER = {m: True for m in _CORE_MODULE_IDS}
 _BUSINESS_MEMBER = {
     "dashboard": True,
     "goals": True,
-    "notes": True,
+    # "notes" (converted 2026-08-26) deliberately has NO explicit entry
+    # here anymore — default-missing-to-True in load_features() already
+    # gives the correct answer for a workspace-general module, same
+    # reasoning as tasks/chat below.
     # "home_assistant" (id renamed from "home" 2026-08-24) stays explicit
     # here even though it's no longer in _CORE_MODULE_IDS (converted to
     # module_packages/home_assistant/, 2026-08-24) — this dict is

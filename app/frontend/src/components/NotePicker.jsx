@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { notes as notesApi } from '../lib/api'
+import { notes as notesApi } from '../module_packages/notes/frontend/api'
 
 /**
  * Search-autocomplete over the user's notes, mirroring ContactPicker's

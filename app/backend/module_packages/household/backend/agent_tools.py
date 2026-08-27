@@ -131,7 +131,12 @@ def _resolve_member_name(raw: str) -> tuple[str | None, str | None]:
     )
 
 
-def execute(name: str, inputs: dict, user: dict):
+def execute(name: str, inputs: dict, user: dict, workspace: str = "personal"):
+    # Household is personal-workspace only by construction (_household is a
+    # personal-only pseudo-user) — workspace is accepted for signature
+    # parity with the generic dispatch (module_tool_dispatch() in
+    # agent_service.py, widened for notes/'s own workspace-aware tools) but
+    # deliberately unused here.
     if name == "complete_shared_task":
         task = task_service.get_task("_household", inputs["task_id"])
         if task is None:

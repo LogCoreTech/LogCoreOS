@@ -7,7 +7,6 @@ import { MODULE_PACKAGES } from './moduleRegistry'
 
 const _CORE_MODULE_ROUTES = {
   goals: '/goals',
-  notes: '/notes',
   assets: '/assets',
   finance: '/finance',
   contacts: '/contacts',
@@ -28,7 +27,6 @@ export const MODULE_ROUTES = {
 // from `to`, above). automations has no per-workflow detail view to land on
 // yet, so it declares no recordParam and is absent from both halves.
 const _CORE_RECORD_PARAM = {
-  notes: 'path',
   assets: 'asset',
   finance: 'book',
   contacts: 'contact',

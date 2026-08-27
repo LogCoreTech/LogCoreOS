@@ -204,10 +204,6 @@ export const push = {
   test:        ()       => post('/push/test', {}),
 }
 
-function encodePath(path) {
-  return path.split('/').map(encodeURIComponent).join('/')
-}
-
 export const assets = {
   list:           (opts = {}) => {
     const params = new URLSearchParams()
@@ -437,23 +433,6 @@ export const contacts = {
     a.click()
     URL.revokeObjectURL(url)
   },
-}
-
-export const notes = {
-  list:         (includeArchived = false)     => get(`/notes${includeArchived ? '?include_archived=true' : ''}`),
-  setArchived:  (path, archived = true)       => post('/notes/archive', { path, archived }),
-  get:          (path)                        => get(`/notes/file/${encodePath(path)}`),
-  create:       (path, content = '')          => post('/notes/file', { path, content }),
-  update:       (path, content)               => request('PUT', `/notes/file/${encodePath(path)}`, { content }),
-  remove:       (path)                        => del(`/notes/file/${encodePath(path)}`),
-  createFolder: (path)                        => post('/notes/folder', { path }),
-  removeFolder: (path)                        => del(`/notes/folder/${encodePath(path)}`),
-  move:         (from_path, to_path, type)    => post('/notes/move', { from_path, to_path, type }),
-  updateAccess: (data)                        => request('PUT', '/notes/access', data),
-  respondShare: (notifId, accept)            => post('/notes/shares/respond', { notif_id: notifId, accept }),
-  leave:        (path)                        => post('/notes/leave', { path }),
-  members:      ()                            => get('/notes/members'),
-  roles:        ()                            => get('/notes/roles'),
 }
 
 export const suggestions = {

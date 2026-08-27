@@ -26,7 +26,6 @@ import AdminTeam from './pages/settings/admin/Team'
 import AdminHousehold from './pages/settings/admin/Household'
 import AdminHosting from './pages/settings/admin/Hosting'
 import AdminModStore from './pages/settings/admin/ModStore'
-import Notes from './pages/Notes'
 import Login from './pages/Login'
 import Setup from './pages/Setup'
 import Profile from './pages/Profile'
@@ -84,7 +83,6 @@ export default function App() {
               <Route element={<Protected><Layout /></Protected>}>
                 <Route path="/"         element={<Dashboard />} />
                 <Route path="/goals"     element={<ModuleRoute moduleId="tasks"><Goals /></ModuleRoute>} />
-                <Route path="/notes"     element={<ModuleRoute moduleId="notes"><Notes /></ModuleRoute>} />
                 <Route path="/assets"      element={<ModuleRoute moduleId="assets"><Assets /></ModuleRoute>} />
                 <Route path="/finance"     element={<ModuleRoute moduleId="finance"><Finance /></ModuleRoute>} />
                 <Route path="/contacts"    element={<ModuleRoute moduleId="contacts"><Contacts /></ModuleRoute>} />

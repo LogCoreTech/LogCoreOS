@@ -102,7 +102,6 @@ def _load_all_resolvers() -> None:
         _contacts,
         _finance,
         _freeform,
-        _notes,
     )
 
     logger = logging.getLogger("logcore.dashboard_blocks")

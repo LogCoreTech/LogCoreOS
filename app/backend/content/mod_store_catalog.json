@@ -65,6 +65,14 @@
       "status": "available"
     },
     {
+      "id": "notes",
+      "name": "Notes",
+      "description": "Markdown notes organized in folders, shareable with people or a household/team pool.",
+      "category": "general",
+      "icon": "📝",
+      "status": "available"
+    },
+    {
       "id": "field_ops",
       "name": "Field Ops",
       "description": "Subdivisions, lots, phase scheduling, and mobile SmartForm checklists for residential trade subcontractors.",
