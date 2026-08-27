@@ -150,7 +150,12 @@
 
 /* Compact density overrides */
 html.compact .card        { @apply p-3; }
-html.compact main         { @apply p-3 md:p-4; }
+/* pt/px only, never the padding shorthand -- main's own pb-[calc(4.5rem+env(safe-area-inset-bottom))]
+   (Layout.jsx) reserves room for the fixed mobile bottom nav, and this selector's specificity
+   (element + class + element) beats that single utility class, so a shorthand `p-3` here silently
+   overrode padding-bottom down to 12px and buried the AI Chat composer behind the nav bar -- but
+   only for compact-density users, so it looked "already fixed" everywhere else. */
+html.compact main         { @apply pt-3 px-3 md:pt-4 md:px-4; }
 html.compact h1           { @apply text-xl; }
 html.compact h2           { @apply text-base; }
 html.compact .btn-primary { @apply px-3 py-1.5 text-sm; }

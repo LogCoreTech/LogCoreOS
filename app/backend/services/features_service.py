@@ -30,7 +30,6 @@ _CORE_MODULE_IDS = [
     "dashboard",
     "goals",
     "notes",
-    "chat",
     "assets",
     "finance",
     "contacts",
@@ -53,7 +52,6 @@ _BUSINESS_MEMBER = {
     "dashboard": True,
     "goals": True,
     "notes": True,
-    "chat": True,
     # "home_assistant" (id renamed from "home" 2026-08-24) stays explicit
     # here even though it's no longer in _CORE_MODULE_IDS (converted to
     # module_packages/home_assistant/, 2026-08-24) — this dict is
@@ -73,6 +71,9 @@ _BUSINESS_MEMBER = {
     # explicit anyway for symmetry and to survive any future default change.
     "household": False,
     "team": True,
+    # "chat" (converted 2026-08-26, uninstallable=True — always active, the
+    # second locked module after tasks) also has no explicit entry here for
+    # the same reason tasks doesn't — default-missing-to-True already matches.
     "assets": True,
     "finance": True,
     "contacts": True,

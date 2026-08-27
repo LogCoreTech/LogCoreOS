@@ -8,7 +8,6 @@ import { MODULE_PACKAGES } from './moduleRegistry'
 const _CORE_MODULE_ROUTES = {
   goals: '/goals',
   notes: '/notes',
-  chat: '/chat',
   assets: '/assets',
   finance: '/finance',
   contacts: '/contacts',
@@ -34,7 +33,6 @@ const _CORE_RECORD_PARAM = {
   finance: 'book',
   contacts: 'contact',
   dashboard: 'id',
-  chat: 'chat_id',
 }
 
 const RECORD_PARAM = {

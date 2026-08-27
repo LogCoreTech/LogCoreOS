@@ -7,7 +7,6 @@ import ErrorBoundary from './components/ErrorBoundary'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import Goals from './module_packages/tasks/frontend/Goals'
-import Chat from './pages/Chat'
 import Brain from './pages/Brain'
 import Settings from './pages/Settings'
 import SettingsAppearance from './pages/settings/Appearance'
@@ -86,7 +85,6 @@ export default function App() {
                 <Route path="/"         element={<Dashboard />} />
                 <Route path="/goals"     element={<ModuleRoute moduleId="tasks"><Goals /></ModuleRoute>} />
                 <Route path="/notes"     element={<ModuleRoute moduleId="notes"><Notes /></ModuleRoute>} />
-                <Route path="/chat"      element={<ModuleRoute moduleId="chat"><Chat /></ModuleRoute>} />
                 <Route path="/assets"      element={<ModuleRoute moduleId="assets"><Assets /></ModuleRoute>} />
                 <Route path="/finance"     element={<ModuleRoute moduleId="finance"><Finance /></ModuleRoute>} />
                 <Route path="/contacts"    element={<ModuleRoute moduleId="contacts"><Contacts /></ModuleRoute>} />

@@ -16,9 +16,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   without them by default; existing instances that already used one keep it installed automatically.
   Uninstalling a module never deletes its data — reinstalling picks everything back up untouched.
   Installing/uninstalling requires an admin-triggered restart to take effect (never automatic), with
-  a warning if other users currently appear online. Tasks is also now part of this same system, but
-  shown as "Always active" — it's foundational enough that it can't be uninstalled, the first of a
-  small set of core features that will join the Mod Store this way rather than being excluded from it.
+  a warning if other users currently appear online. Tasks and AI Chat are also now part of this same
+  system, but shown as "Always active" — they're foundational enough that they can't be uninstalled,
+  the first of a small set of core features that will join the Mod Store this way rather than being
+  excluded from it.
 - Calendar's household/team pool-events toggle (the 🏠/🧑‍🤝‍🧑 pill) now hides itself entirely when
   that pool module isn't installed and active, instead of remaining visible and silently doing
   nothing.
@@ -28,13 +29,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A dashboard's Household/Team pool-tasks block could show the wrong pool's data with no warning if
   the dashboard's own workspace was stale or mixed — closed by splitting the shared block into two
   workspace-specific ones that can no longer read the wrong pool at all.
+- A user with AI Chat disabled could still read their own past agent tool-use run history through
+  two endpoints (`GET /chat/runs`, `GET /chat/runs/{run_id}`) that weren't actually gated on the
+  module. Chat's own conversation archives were also fully readable through the Brain file browser
+  and the AI's own file-reading tools regardless of Chat's module state — both closed.
+- **Compact density mode buried the AI Chat composer behind the fixed mobile bottom nav.** The
+  compact-mode CSS rule for `<main>` used a shorthand `padding` that unintentionally overrode the
+  reserved space for the mobile nav bar, on every page, for any user with Settings → Appearance →
+  Density set to Compact — not just AI Chat, though the composer made it visible there first.
+  Scoped the rule to only the sides it's meant to tighten.
 
 ### Changed
 
 - Every module in the app is being converted into this same self-contained format over time,
-  including foundational ones like Tasks (marked non-removable, not excluded) — journal, Home
-  Assistant, n8n Automation, Calendar, Tasks, Household, and Team are the first seven, proving the
-  pattern; the rest follow one at a time.
+  including foundational ones like Tasks and AI Chat (marked non-removable, not excluded) — journal,
+  Home Assistant, n8n Automation, Calendar, Tasks, Household, Team, and AI Chat are the first eight,
+  proving the pattern; the rest follow one at a time.
 
 ## [0.6.4] — 2026-08-22
 

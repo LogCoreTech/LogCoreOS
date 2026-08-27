@@ -176,7 +176,7 @@ into a self-contained `module_packages/<id>/` format with its own manifest/versi
 foundational ones (Tasks, Chat, Dashboards-the-feature), which just carry `uninstallable: true`
 rather than being excluded from the system. End state: `main.py` has zero hardcoded per-module
 router registrations. The registry mechanism itself (discovery, install/uninstall state, all four
-enforcement-gap fixes, the admin Mod Store UI) is done and fully tested. Seven modules converted so
+enforcement-gap fixes, the admin Mod Store UI) is done and fully tested. Eight modules converted so
 far: journal (increment 1) and Home Assistant (increment 2, 2026-08-24, full internal id rename
 too) are both confirmed working end-to-end on the owner's live instance. Automations/n8n Automation
 (2026-08-25, taken out of the original planned order at the owner's request — display name only,
@@ -194,9 +194,18 @@ real, generic gaps in the module system itself, both fixed generically rather th
 shared dashboard block (the old `pool_tasks`, serving both pools) had to split into
 `household_tasks`/`team_tasks` since `BlockSpec.module` can only gate to one real module; and
 `ModuleManifest` gained a new `admin_agent_tools` field (mirroring `read_only_agent_tools`) once
-Household became the first module to own an admin-only AI tool. Chat (locked) is next per the
-rollout order.
-Full design in `docs/MEMORY.md`'s 2026-08-24/25 entries and
+Household became the first module to own an admin-only AI tool. Chat (2026-08-26, increment 7, the
+second LOCKED module after Tasks) is also built and fully tested but not yet verified on the live
+instance; unlike Tasks, `agent_service.py`'s own session/orchestration engine needed zero changes
+(confirmed permanent core infrastructure — `module_registry.py`'s own docstring had already named
+Chat alongside Tasks/Dashboards before this conversion existed), so this increment's router-move
+was comparatively small. It surfaced two real, pre-existing enforcement gaps rather than new
+module-system mechanism gaps: `GET /chat/runs` and `GET /chat/runs/{run_id}` were ungated (a user
+with chat disabled could still read past agent run history), and chat's own archive folder had no
+`owned_brain_paths` entry at all, leaving a disabled user's past conversations fully readable via
+the Brain browser and the AI's own file-reading tools regardless of module state — both fixed as
+part of the conversion. Notes is next per the rollout order.
+Full design in `docs/MEMORY.md`'s 2026-08-24/25/26 entries and
 `/home/logcore/.claude/plans/i-want-you-to-composed-scone.md`; rollout order tracked in
 `docs/TASKS.md`.
 

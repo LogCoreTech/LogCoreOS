@@ -2,12 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 import services.suggestions_service as svc
-from routers.auth import get_current_user, require_module
+from routers.auth import get_current_user
 from services.rate_limiter import rate_limit
 
 router = APIRouter()
 
-_require_chat = require_module("chat")
 _run_limit = rate_limit(10, 60)
 
 

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
 from config import settings
-from routers.auth import get_current_user, get_workspace, require_module
+from routers.auth import get_workspace, require_module
 from services import agent_service, ai_usage_service
 from services.agent_service import run_agent
 from services.ai_provider import chat_completion, is_ai_configured
@@ -658,7 +658,7 @@ def ping_presence(
 
 
 @router.get("/runs")
-def list_runs(current_user: dict = Depends(get_current_user)):
+def list_runs(current_user: dict = Depends(_require_chat)):
     """Return recent agent runs for the current user (tool-using runs only)."""
     path = user_path(current_user["name"]) / "agent" / "runs.json"
     data = read_json(path, default={"runs": []})
@@ -666,7 +666,7 @@ def list_runs(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/runs/{run_id}")
-def get_run(run_id: str, current_user: dict = Depends(get_current_user)):
+def get_run(run_id: str, current_user: dict = Depends(_require_chat)):
     path = user_path(current_user["name"]) / "agent" / "runs.json"
     data = read_json(path, default={"runs": []})
     for run in data["runs"]:

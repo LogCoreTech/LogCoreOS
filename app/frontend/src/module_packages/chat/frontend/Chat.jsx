@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
-import HelpButton from '../components/HelpButton'
+import HelpButton from '../../../components/HelpButton'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { chat as chatApi, suggestions as sugApi, brain as brainApi, aiUsage as aiUsageApi, dashboards as dashboardsApi } from '../lib/api'
-import { useAuth } from '../lib/auth'
-import { useWorkspace } from '../lib/workspace'
-import DashboardGrid from '../components/dashboard/DashboardGrid'
-import { BLOCK_REGISTRY } from '../components/dashboard/blockRegistry'
+import { chat as chatApi } from './api'
+import { suggestions as sugApi, brain as brainApi, aiUsage as aiUsageApi, dashboards as dashboardsApi } from '../../../lib/api'
+import { useAuth } from '../../../lib/auth'
+import { useWorkspace } from '../../../lib/workspace'
+import DashboardGrid from '../../../components/dashboard/DashboardGrid'
+import { BLOCK_REGISTRY } from '../../../components/dashboard/blockRegistry'
 
 const _DASHBOARD_PREVIEW_TOOLS = new Set(['add_dashboard_block', 'update_dashboard_block'])
 

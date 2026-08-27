@@ -32,7 +32,6 @@ const CORE_MODULES = [
   // manifest.js for the full reasoning.
   { id: 'goals',                to: '/goals',        icon: '🎯',          label: 'Goals'                 },
   { id: 'notes',                to: '/notes',        icon: '📝',          label: 'Notes'                 },
-  { id: 'chat',                 to: '/chat',         icon: '◈',           label: 'AI Chat'               },
   { id: 'assets',               to: '/assets',       icon: '🗂️',         label: 'Assets'                },
   { id: 'finance',              to: '/finance',      icon: '💵',          label: 'Finance'               },
   { id: 'contacts',             to: '/contacts',     icon: '👥',          label: 'Contacts'              },

@@ -467,7 +467,7 @@ export default function Layout() {
           to={to}
           end={to === '/'}
           className={({ isActive }) =>
-            `flex-1 flex flex-col items-center py-2 text-xs gap-0.5 transition-colors ${
+            `flex-1 min-w-0 flex flex-col items-center py-2 text-xs gap-0.5 transition-colors ${
               isActive
                 ? 'text-orange-500'
                 : 'text-charcoal-500 dark:text-charcoal-400'
@@ -475,7 +475,7 @@ export default function Layout() {
           }
         >
           <span className="text-lg leading-none">{icon}</span>
-          {navLabel || label}
+          <span className="w-full text-center truncate">{navLabel || label}</span>
         </NavLink>
       ))}
 

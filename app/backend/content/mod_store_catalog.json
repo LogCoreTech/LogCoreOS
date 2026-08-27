@@ -1,6 +1,14 @@
 {
   "modules": [
     {
+      "id": "chat",
+      "name": "AI Chat",
+      "description": "Talk to your LogCore AI — it reads your Brain and, with your approval, can make changes for you.",
+      "category": "general",
+      "icon": "◈",
+      "status": "available"
+    },
+    {
       "id": "tasks",
       "name": "Tasks",
       "description": "Day-to-day to-dos, scored by your life priorities so the most important ones rise to the top.",

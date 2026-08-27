@@ -464,6 +464,8 @@ here that never matched the actual route.)
 
 ## Chat
 
+Router mounted at `/api/v1/chat` (module id `chat` — converted into `module_packages/chat/` 2026-08-26; the second LOCKED (`uninstallable: True`) module, after Tasks — always shows "Always active" in the Mod Store, with no uninstall action, server-enforced as well as UI-hidden). `services/agent_service.py`'s session/pending-turn/presence/tool-orchestration engine stays core infrastructure, never converts — see `docs/AGENTS.md`'s Chat System section. `GET /chat/runs` and `GET /chat/runs/{run_id}` (below) were the only 2 of 11 endpoints not actually gated on the module during this conversion's research — both fixed to require `chat` enabled, same as every other endpoint here.
+
 ### `POST /chat`
 Send a message to the AI, or resume a paused turn. Returns a streaming response with step trace.
 
