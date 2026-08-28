@@ -30,7 +30,6 @@ const CORE_MODULES = [
   // here even after Tasks converted (2026-08-25) — see that module's own
   // manifest.js for the full reasoning.
   { id: 'goals',                to: '/goals',        icon: '🎯',          label: 'Goals'                 },
-  { id: 'assets',               to: '/assets',       icon: '🗂️',         label: 'Assets'                },
   { id: 'finance',              to: '/finance',      icon: '💵',          label: 'Finance'               },
   { id: 'contacts',             to: '/contacts',     icon: '👥',          label: 'Contacts'              },
 ]

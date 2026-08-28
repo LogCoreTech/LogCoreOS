@@ -343,19 +343,6 @@ def _automation_store(user: str, workspace: str, read_only: bool = False) -> tup
     return user, workspace
 
 
-@router.get("/automation/token")
-def get_automation_token(current_user: dict = Depends(require_admin)):
-    return {"token": automations_config.get_api_token()}
-
-
-@router.post("/automation/token/rotate")
-def rotate_automation_token(
-    current_user: dict = Depends(require_admin),
-    _rl: None = Depends(_write_limit),
-):
-    return {"token": automations_config.rotate_api_token()}
-
-
 @router.get("/automation/assets")
 def automation_list_assets(
     user: str,

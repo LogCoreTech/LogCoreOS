@@ -232,9 +232,29 @@ existed here since Dashboards data is JSON not markdown, the same structural cat
 conditional per-user one). One genuinely new problem no prior conversion needed to solve: `App.jsx`'s
 root route (`to: '/'`) had to stay hardcoded and `ModuleRoute`-unwrapped, since a user with
 `dashboard` disabled would otherwise hit a self-targeting redirect loop at the app's own home page —
-solved by filtering the generic route-generation loop to skip any package claiming `/`. Assets is next
-per the rollout order — the first of the three largest remaining modules (Assets, Contacts, Finance),
-deliberately last since the pattern has now been proven against everything smaller.
+solved by filtering the generic route-generation loop to skip any package claiming `/`. Assets
+(2026-08-27, increment 10) is also built and fully tested but not yet verified on the live instance —
+the 11th converted module, first of the three largest/most structurally complex remaining (Assets,
+Contacts, Finance, deliberately last), and the first NORMAL optional-module conversion since Notes
+(not `uninstallable`, unlike Tasks/Chat/Dashboards in between). `services/assets_service.py`/
+`assets_index.py` both stay core, the strongest "stays core" case yet: `module_packages/dashboard/
+backend/router.py`, an already-converted SIBLING module package rather than just another core router,
+imports `assets_service` directly for its own Dashboard Hero subject resolver. The Collection dashboard
+block (`dashboard_blocks/_collections.py`, previously filed separately since its own docstring
+anticipated future generalization to non-Assets record types) folded into the same
+`dashboard_block.py` as Assets' other 4 blocks and was deleted outright — it was 100%
+Assets-data-dependent today and, unlike every other block type, had no `module=` gate at all, the
+exact `pool_tasks`-before-Household/Team situation. The real, previously undocumented enforcement gap
+this conversion found and closed: all 10 asset AI tools lived in `agent_service.py`'s unfiltered
+static tool lists exactly like Chat's/Notes'/Dashboards' own tools had before their conversions — a
+user with Assets disabled/uninstalled could still use every one of them via chat, closed the same way
+by making them module-owned. The one genuinely new problem: two endpoints (`GET`/
+`POST /assets/automation/token[/rotate]`) were gated only by `require_admin`, not `require_module`,
+inside this optional module's own router — uninstalling Assets would have silently taken away the
+admin's only way to view/rotate a token Contacts' own automation API still depends on
+(`automations_config.py` itself stays core, unowned by either module) — relocated to
+`routers/auth.py`'s admin section instead. Contacts is next per the rollout order — the second of the
+three largest remaining modules; Finance stays last, deliberately, as the most structurally complex.
 Full design in `docs/MEMORY.md`'s 2026-08-24/25/26/27 entries and
 `/home/logcore/.claude/plans/i-want-you-to-composed-scone.md`; rollout order tracked in
 `docs/TASKS.md`.

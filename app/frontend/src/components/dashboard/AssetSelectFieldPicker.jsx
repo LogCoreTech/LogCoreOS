@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { assets as assetsApi } from '../../lib/api'
+import { assets as assetsApi } from '../../module_packages/assets/frontend/api'
 
 /**
  * Two-stage picker: pick one of a source's own select-type template fields,

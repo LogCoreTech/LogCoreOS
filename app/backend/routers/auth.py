@@ -20,7 +20,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from config import settings
-from services import auth_service, user_deletion_service
+from services import auth_service, automations_config, user_deletion_service
 from services.features_service import get_effective_disabled
 from services.file_service import brain_path, read_json, user_path, write_json
 from services.hosting_service import effective_cookie_secure
@@ -796,6 +796,38 @@ def update_search_settings(
     write_json(_AI_SETTINGS_PATH, stored)
     key_set = bool(stored.get("tavily_api_key") or settings.tavily_api_key)
     return {"tavily_key_set": key_set}
+
+
+# ---------------------------------------------------------------------------
+# Admin — automation token (n8n -> LogCore write API)
+#
+# Deliberately lives here, not inside module_packages/assets/backend/router.py
+# (where these two endpoints originally lived, before assets/ converted
+# 2026-08-27) — the token itself (automations_config.py) is core and shared
+# by BOTH Assets' and Contacts' own automation APIs, and this is the ONLY
+# admin-facing way to view/rotate it (Hosting.jsx's n8n card calls it
+# directly). Leaving it inside Assets' own router would mean uninstalling
+# Assets (optional, not locked) silently took away the admin's only way to
+# manage a token Contacts' automation API still depends on — found during
+# Assets' own conversion research, fixed as part of it rather than carried
+# forward silently, matching this project's own standing rule for exactly
+# this class of gap.
+# ---------------------------------------------------------------------------
+
+_automation_token_limit = rate_limit(30, 60)
+
+
+@router.get("/admin/automation-token")
+def get_automation_token(current_user: dict = Depends(require_admin)):
+    return {"token": automations_config.get_api_token()}
+
+
+@router.post("/admin/automation-token/rotate")
+def rotate_automation_token(
+    current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_automation_token_limit),
+):
+    return {"token": automations_config.rotate_api_token()}
 
 
 # ---------------------------------------------------------------------------

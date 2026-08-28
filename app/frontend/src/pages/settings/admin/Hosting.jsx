@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { admin as adminApi, infisical as infisicalApi, assets as assetsApi } from '../../../lib/api'
+import { admin as adminApi, infisical as infisicalApi } from '../../../lib/api'
 import { home as homeApi } from '../../../module_packages/home_assistant/frontend/api'
 import { automations as automationsApi } from '../../../module_packages/automations/frontend/api'
 import { useAuth } from '../../../lib/auth'
@@ -338,7 +338,7 @@ function AutomationTokenRow() {
   async function reveal() {
     setBusy(true)
     try {
-      const res = await assetsApi.automationToken()
+      const res = await adminApi.automationToken()
       setToken(res.token)
     } catch { /* admin-only; ignore */ } finally {
       setBusy(false)
@@ -349,7 +349,7 @@ function AutomationTokenRow() {
     if (!confirm('Rotate the automation API token? Existing n8n workflows using it will stop working until updated.')) return
     setBusy(true)
     try {
-      const res = await assetsApi.rotateAutomationToken()
+      const res = await adminApi.rotateAutomationToken()
       setToken(res.token)
     } catch { /* ignore */ } finally {
       setBusy(false)

@@ -166,6 +166,11 @@ export const admin = {
   getHostingSettings:    ()    => get('/auth/admin/hosting-settings'),
   updateHostingSettings: (s)   => patch('/auth/admin/hosting-settings', s),
   applyHostingSettings:  ()    => post('/auth/admin/hosting-settings/apply', {}),
+  // Automation token (n8n -> LogCore write API) — core-owned since admins
+  // must keep token access regardless of whether Assets (or any other
+  // module the token authenticates writes into) is installed.
+  automationToken:       ()    => get('/auth/admin/automation-token'),
+  rotateAutomationToken: ()    => post('/auth/admin/automation-token/rotate', {}),
 }
 
 export const aiUsage = {
@@ -202,47 +207,6 @@ export const push = {
   subscribe:   (sub)    => post('/push/subscribe', sub),
   unsubscribe: ()       => request('DELETE', '/push/subscribe'),
   test:        ()       => post('/push/test', {}),
-}
-
-export const assets = {
-  list:           (opts = {}) => {
-    const params = new URLSearchParams()
-    if (opts.template) params.set('template', opts.template)
-    if (opts.includeArchived) params.set('include_archived', 'true')
-    const qs = params.toString()
-    return get(`/assets${qs ? `?${qs}` : ''}`)
-  },
-  get:            (id)              => get(`/assets/${id}`),
-  create:         (data)            => post('/assets', data),
-  update:         (id, data)        => patch(`/assets/${id}`, data),
-  remove:         (id)              => del(`/assets/${id}`),
-  archive:        (id, cascade = false) => post(`/assets/${id}/archive${cascade ? '?cascade=true' : ''}`, {}),
-  unarchive:      (id, cascade = false) => post(`/assets/${id}/unarchive${cascade ? '?cascade=true' : ''}`, {}),
-  members:        ()               => get('/assets/members'),
-  convertToPool:  (id)              => post(`/assets/${id}/convert`, { target: 'pool' }),
-  attachTemplate: (id, templateId)  => post(`/assets/${id}/attach-template`, { template_id: templateId }),
-  updateAccess:   (id, data)        => request('PUT', `/assets/${id}/access`, data),
-  leave:          (id)              => post(`/assets/${id}/leave`, {}),
-  respondShare:   (notifId, accept) => post('/assets/shares/respond', { notif_id: notifId, accept }),
-  roles:          ()               => get('/assets/roles'),
-  listTemplates:  ()                => get('/assets/templates'),
-  createTemplate: (data)            => post('/assets/templates', data),
-  updateTemplate: (id, data)        => patch(`/assets/templates/${id}`, data),
-  removeTemplate: (id)              => del(`/assets/templates/${id}`),
-  templateAccess: (id, data)        => request('PUT', `/assets/templates/${id}/access`, data),
-  leaveTemplate:  (id)              => post(`/assets/templates/${id}/leave`, {}),
-  insertExample:  (owner = 'me')    => post(`/assets/templates/example?owner=${owner}`, {}),
-  uploadFile:     (id, file)        => requestFile('POST', `/assets/${id}/files`, file),
-  fileBlob:       (id, fileId)      => requestBlob(`/assets/${id}/files/${fileId}`),
-  removeFile:     (id, fileId)      => del(`/assets/${id}/files/${fileId}`),
-  addComment:     (id, text)        => post(`/assets/${id}/comments`, { text }),
-  removeComment:  (id, commentId)   => del(`/assets/${id}/comments/${commentId}`),
-  setCommentsHidden: (id, hidden)   => request('PUT', `/assets/${id}/comments/visibility`, { hidden }),
-  muteState:      (id)              => get(`/assets/${id}/mute`),
-  setMute:        (id, muted)       => request('PUT', `/assets/${id}/mute`, { muted }),
-  byContact:      (contactId)       => get(`/assets/by-contact/${contactId}`),
-  automationToken:       ()         => get('/assets/automation/token'),
-  rotateAutomationToken: ()         => post('/assets/automation/token/rotate', {}),
 }
 
 export const finance = {

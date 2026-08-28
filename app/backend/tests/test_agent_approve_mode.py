@@ -135,14 +135,15 @@ def test_new_tools_are_write_gated_by_default(admin):
     module_packages/tasks/backend/agent_tools.py when Tasks converted
     (2026-08-25), same as every other module's own tools already needed
     this same live-gating check, not a special case for tasks. household
-    is NOT locked (unlike tasks), so it needs an explicit mark_installed
-    here for add_shared_task's schema to appear in _get_tools() at all —
-    also exercises admin_agent_tools' own gate for real, since the `admin`
-    fixture really is an admin."""
+    and assets are NOT locked (unlike tasks), so they need an explicit
+    mark_installed here for add_shared_task's/create_asset's schemas to
+    appear in _get_tools() at all — also exercises admin_agent_tools' own
+    gate for real, since the `admin` fixture really is an admin."""
     from module_registry import read_only_agent_tool_names
     from services import mod_store_service
 
     mod_store_service.mark_installed("household", by="tester")
+    mod_store_service.mark_installed("assets", by="tester")
     all_names = {t["name"] for t in agent_service._get_tools(admin)}
     read_names = agent_service._READ_TOOLS | read_only_agent_tool_names()
     write_names = all_names - read_names - {"propose_plan"}

@@ -236,6 +236,16 @@ Update hosting configuration. Takes effect immediately without a restart.
 
 **Body** `{ "cookie_secure": true, "trust_proxy_headers": true, "domain_url": "https://logcore.example.com" }`
 
+### `GET /auth/admin/automation-token`
+Get the instance-wide n8n automation token (admin only). Relocated here from `GET /assets/automation/token` when assets/ converted 2026-08-27 — see `## Assets` → Automation API above for why. `automations_config.py` itself stays core, unowned by either Assets or Contacts, both of whose own automation APIs verify against this same token.
+
+**Response** `{ "token": "..." }`
+
+### `POST /auth/admin/automation-token/rotate`
+Rotate the instance-wide n8n automation token (admin only, rate-limited 30/min). Relocated here from `POST /assets/automation/token/rotate` the same day, same reasoning.
+
+**Response** `{ "token": "..." }` (the new token)
+
 ### `POST /auth/admin/users`
 Create a new user (admin only).
 
@@ -873,7 +883,7 @@ Delete a team event. **Pool managers only** (admin or `team` grant). Returns `20
 
 ## Assets
 
-Router mounted at `/api/v1/assets`. Requires the `assets` module (both workspaces; workspace-scoped via `X-Workspace`). Assets form a tree via `parent_id`; every object is built from an admin-curated **template** (ordered typed fields).
+Router mounted at `/api/v1/assets` (module id `assets` — converted into `module_packages/assets/` 2026-08-27; the 11th converted module, first of the three largest remaining, NOT locked — a normal optional module like Notes, unlike Tasks/Chat/Dashboards in between). Requires the `assets` module (both workspaces; workspace-scoped via `X-Workspace`). Assets form a tree via `parent_id`; every object is built from an admin-curated **template** (ordered typed fields). `services/assets_service.py`/`assets_index.py` both stay core — `module_packages/dashboard/backend/router.py` imports `assets_service` directly for its own Dashboard Hero subject resolver, the strongest "stays core" evidence of any conversion so far.
 
 ### Templates
 
@@ -916,7 +926,7 @@ Router mounted at `/api/v1/assets`. Requires the `assets` module (both workspace
 
 ### Automation API (n8n)
 
-Token auth via `X-Automation-Token` header — no JWT. Token lives in `brain/_system/automations_config.json`; admins reveal/rotate it in Admin → n8n or via `GET /assets/automation/token` / `POST /assets/automation/token/rotate` (admin JWT).
+Token auth via `X-Automation-Token` header — no JWT. Token lives in `brain/_system/automations_config.json`; admins reveal/rotate it in Admin → n8n or via **`GET`/`POST /auth/admin/automation-token[/rotate]`** (admin JWT) — see the Auth section above. These two endpoints used to live here, as `GET /assets/automation/token` / `POST /assets/automation/token/rotate`, but relocated to `routers/auth.py` when assets/ converted (2026-08-27): they were gated only by `require_admin`, not `require_module`, so leaving them inside this optional module's router meant uninstalling Assets would have silently taken away the admin's only way to view/rotate a token Contacts' own automation API (below) also depends on. The token itself and the endpoints below stay exactly where they were.
 
 | Method | Path | Notes |
 |--------|------|-------|

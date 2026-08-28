@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
-import HelpButton from '../components/HelpButton'
+import HelpButton from '../../../components/HelpButton'
 import { useSearchParams } from 'react-router-dom'
-import { assets as assetsApi } from '../lib/api'
-import { useAuth } from '../lib/auth'
-import { useWorkspace } from '../lib/workspace'
-import AssetModal from '../components/AssetModal'
-import TemplateManager from '../components/TemplateManager'
-import AssetTreePicker from '../components/AssetTreePicker'
+import { assets as assetsApi } from './api'
+import { useAuth } from '../../../lib/auth'
+import { useWorkspace } from '../../../lib/workspace'
+import AssetModal from './AssetModal'
+import TemplateManager from './TemplateManager'
+import AssetTreePicker from '../../../components/AssetTreePicker'
 
 const OWNER_CHIP = {
   team: '🧑‍🤝‍🧑 Team',

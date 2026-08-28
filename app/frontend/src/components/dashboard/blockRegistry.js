@@ -1,9 +1,9 @@
 import { lazy } from 'react'
 import {
-  AiUsageMeBlock, AiUsageOverviewBlock, CollectionBlock, ContactsListBlock, CustomFieldsBlock, DocumentsBlock,
+  AiUsageMeBlock, AiUsageOverviewBlock, ContactsListBlock, CustomFieldsBlock,
   FinanceActivityBlock, FinanceBookReportBlock, HeadingDividerBlock,
   LinkButtonBlock, LinkedAssetsBlock,
-  LinkedContactBlock, LinkedDealsBlock, LinkedTasksBlock, MyAssetsSummaryBlock, NavButtonBlock,
+  LinkedDealsBlock, NavButtonBlock,
   RecentAiActionsBlock,
   StatusButtonBlock, TextBlock,
 } from './blocks'
@@ -33,16 +33,6 @@ export const BLOCK_REGISTRY = {
   linked_deals: { Component: LinkedDealsBlock, icon: '🤝', label: "Contact's Deals", defaultLayout: { w: 12, h: 9 }, shape: 'list' },
   custom_fields: { Component: CustomFieldsBlock, icon: '🗂️', label: 'Custom Fields (Contact/Asset)', defaultLayout: { w: 9, h: 9 } },
   linked_assets: { Component: LinkedAssetsBlock, icon: '🔗', label: "Contact's Linked Assets", defaultLayout: { w: 9, h: 9 }, shape: 'list', recordKind: 'asset' },
-  documents: { Component: DocumentsBlock, icon: '📎', label: 'Asset Documents/Files', defaultLayout: { w: 9, h: 9 } },
-  linked_tasks: { Component: LinkedTasksBlock, icon: '✅', label: "Asset's Linked Tasks", defaultLayout: { w: 12, h: 9 }, shape: 'list', recordKind: 'task' },
-  linked_contact: { Component: LinkedContactBlock, icon: '👤', label: "Asset's Linked Contact", defaultLayout: { w: 9, h: 6 } },
-  my_assets_summary: { Component: MyAssetsSummaryBlock, icon: '🗃️', label: 'My Assets Summary', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
-  // The generic block: pick a template, optionally link it to this
-  // dashboard's own contact ($subject-aware like any other contact field),
-  // pick which fields to show and which select field is the status — no
-  // new code needed for a new use case, just configuration. See
-  // dashboard_blocks/_collections.py for the resolver.
-  collection: { Component: CollectionBlock, icon: '📋', label: 'Collection (List/Board)', defaultLayout: { w: 18, h: 12 }, recordKind: 'asset' },
   contacts_list: { Component: ContactsListBlock, icon: '👥', label: 'Contacts List', defaultLayout: { w: 12, h: 9 }, shape: 'list', recordKind: 'contact' },
   ai_usage_me: { Component: AiUsageMeBlock, icon: '🤖', label: 'AI Usage — My Usage', defaultLayout: { w: 9, h: 6 } },
   ai_usage_overview: { Component: AiUsageOverviewBlock, icon: '🛡️', label: 'AI Usage — All Users', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
@@ -113,25 +103,6 @@ export const CONFIG_FIELD_SCHEMAS = {
     { key: 'asset_id', label: 'Asset', kind: 'asset', optional: true },
   ],
   linked_assets: [{ key: 'contact_id', label: 'Contact (shows the assets linked to them)', kind: 'contact' }],
-  collection: [
-    { key: 'template_id', label: 'Show records from', kind: 'assetTemplate' },
-    { key: 'link_contact_id', label: 'Only ones linked to a contact', kind: 'contact', optional: true },
-    { key: 'display_fields', label: 'Fields to show', kind: 'templateFields', dependsOn: 'template_id' },
-    { key: 'status_field', label: 'Status field (optional — adds a one-click status control)', kind: 'templateSelectField', dependsOn: 'template_id', optional: true },
-    {
-      key: 'view',
-      label: 'Layout',
-      kind: 'select',
-      options: [
-        { value: 'list', label: 'List' },
-        { value: 'kanban', label: 'Kanban (grouped by status)' },
-        { value: 'count', label: 'Count only' },
-      ],
-    },
-  ],
-  documents: [{ key: 'asset_id', label: 'Asset', kind: 'asset' }],
-  linked_tasks: [{ key: 'asset_id', label: 'Asset', kind: 'asset' }],
-  linked_contact: [{ key: 'asset_id', label: 'Asset (shows its linked contact)', kind: 'asset' }],
   text_block: [{ key: 'text', label: 'Text', kind: 'textarea' }],
   link_button: [
     { key: 'label', label: 'Button label', kind: 'text' },

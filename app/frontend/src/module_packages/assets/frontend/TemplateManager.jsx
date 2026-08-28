@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { assets as assetsApi } from '../lib/api'
-import EmojiPicker from './EmojiPicker'
-import TagInput from './TagInput'
+import { assets as assetsApi } from './api'
+import EmojiPicker from '../../../components/EmojiPicker'
+import TagInput from '../../../components/TagInput'
 
 const FIELD_TYPES = ['text', 'number', 'date', 'boolean', 'select', 'contact']
 const BLANK_FIELD = { key: '', label: '', type: 'text', options: [], default: '' }

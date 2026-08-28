@@ -19,7 +19,6 @@ from migrations.runner import run_pending as run_migrations
 from module_registry import register_routers
 from routers import (
     ai_usage,
-    assets,
     auth,
     brain,
     contacts,
@@ -383,7 +382,6 @@ app.include_router(finance_planning.router, prefix="/api/v1/finance", tags=["fin
 app.include_router(finance_invoicing.router, prefix="/api/v1/finance", tags=["finance-invoicing"])
 app.include_router(finance_sharing.router, prefix="/api/v1/finance", tags=["finance-sharing"])
 app.include_router(finance_transfers.router, prefix="/api/v1/finance", tags=["finance-transfers"])
-app.include_router(assets.router, prefix="/api/v1/assets", tags=["assets"])
 app.include_router(contacts.router, prefix="/api/v1/contacts", tags=["contacts"])
 app.include_router(update.router, prefix="/api/v1/update", tags=["update"])
 app.include_router(help.router, prefix="/api/v1/help", tags=["help"])

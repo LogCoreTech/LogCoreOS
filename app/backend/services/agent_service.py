@@ -38,11 +38,12 @@ def _brain_skip(user: dict) -> set[str]:
     only while that module is disabled for THIS user (conditional, per-user,
     matching every module's own dual-access pattern — not just "never
     installed instance-wide"), unioned with the always-skipped Tasks/
-    Dashboards folders (structurally different shape, JSON not markdown)."""
+    Dashboards/Assets folders (structurally different shape, JSON+binary
+    files, not markdown)."""
     from module_registry import brain_paths_for_disabled
 
     disabled = set(user.get("disabled_modules", []))
-    return {"Tasks", "Dashboards"} | brain_paths_for_disabled(disabled)
+    return {"Tasks", "Dashboards", "Assets"} | brain_paths_for_disabled(disabled)
 
 
 # Tools available in research mode — read-only access only
@@ -52,9 +53,6 @@ _RESEARCH_TOOLS = {
     "get_profile",
     "search_brain",
     "search_web",
-    "list_asset_templates",
-    "list_assets",
-    "search_assets",
     "list_finance_books",
     "list_finance_transactions",
     "get_finance_report",
@@ -524,107 +522,6 @@ _USER_TOOLS: list[dict] = [
         },
     },
     {
-        "name": "list_asset_templates",
-        "description": "List asset templates (the premade field structures, e.g. 'parcel'). Call this BEFORE creating or updating assets to learn valid template keys and field keys/types/options.",
-        "input_schema": {"type": "object", "properties": {}, "required": []},
-    },
-    {
-        "name": "list_assets",
-        "description": "List assets visible to the user in the current workspace: their own, pool (team/household) assets, and assets shared with them. Assets form a tree via parent_id.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "template": {"type": "string", "description": "Filter by template key"},
-                "include_archived": {"type": "boolean", "description": "Include archived assets"},
-            },
-            "required": [],
-        },
-    },
-    {
-        "name": "create_asset",
-        "description": "Create an asset in the user's own store. Call list_asset_templates first — 'fields' keys must match the template's field keys exactly.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "template": {"type": "string", "description": "Template key, e.g. 'parcel'"},
-                "name": {"type": "string", "description": "Asset name, e.g. 'Lot 12'"},
-                "parent_id": {
-                    "type": "string",
-                    "description": "Optional parent asset ID for nesting",
-                },
-                "fields": {
-                    "type": "object",
-                    "description": "Field values keyed by the template's field keys",
-                },
-                "notes": {"type": "string"},
-            },
-            "required": ["template", "name"],
-        },
-    },
-    {
-        "name": "update_asset",
-        "description": "Update an asset's name, notes, or field values by ID. Respects the user's access (read-only shares cannot be updated).",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "asset_id": {"type": "string"},
-                "name": {"type": "string"},
-                "fields": {
-                    "type": "object",
-                    "description": "Field values to merge; null deletes a key",
-                },
-                "notes": {"type": "string"},
-            },
-            "required": ["asset_id"],
-        },
-    },
-    {
-        "name": "archive_asset",
-        "description": "Archive (or unarchive) an asset. Archiving hides the asset and its whole subtree from default views without deleting anything.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "asset_id": {"type": "string"},
-                "archived": {
-                    "type": "boolean",
-                    "description": "true to archive (default), false to unarchive",
-                },
-                "cascade": {
-                    "type": "boolean",
-                    "description": "true to also (un)archive all descendants",
-                },
-            },
-            "required": ["asset_id"],
-        },
-    },
-    {
-        "name": "search_assets",
-        "description": "Search the assets visible to the user by a text query — matches asset name and field values. Use this instead of list_assets when looking for specific assets in a large collection.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "Text to match in name or field values"},
-                "template": {"type": "string", "description": "Optional template key filter"},
-            },
-            "required": ["query"],
-        },
-    },
-    {
-        "name": "move_asset",
-        "description": "Move an asset to a new parent (or to the top level with parent_id null). Same owner only. Respects the user's edit access.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "asset_id": {"type": "string"},
-                "parent_id": {
-                    "type": "string",
-                    "description": "New parent asset ID, or null for top level",
-                },
-            },
-            "required": ["asset_id"],
-        },
-    },
-    {
         "name": "list_finance_books",
         "description": "List the finance books visible to the user in the active workspace, with their accounts, computed balances (integer cents) and categories. Call this first to get book/account IDs for other finance tools.",
         "input_schema": {"type": "object", "properties": {}, "required": []},
@@ -813,51 +710,6 @@ _ADMIN_TOOLS: list[dict] = [
         "name": "run_tests",
         "description": "Run the backend test suite (pytest) and return the output. Admin only. Use to check that the codebase is healthy after making changes.",
         "input_schema": {"type": "object", "properties": {}, "required": []},
-    },
-    {
-        "name": "delete_asset",
-        "description": "Permanently delete an asset by ID (admin only). Fails if the asset has children. Prefer archive_asset unless the user explicitly wants permanent deletion.",
-        "input_schema": {
-            "type": "object",
-            "properties": {"asset_id": {"type": "string"}},
-            "required": ["asset_id"],
-        },
-    },
-    {
-        "name": "create_asset_template",
-        "description": "Create an asset template (admin only). Fields are an ordered list of {key, label, type, options?, default?}; types: text, number, date, boolean, select.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "key": {"type": "string", "description": "Slug key, e.g. 'parcel' (immutable)"},
-                "label": {"type": "string"},
-                "icon": {"type": "string", "description": "Optional emoji"},
-                "fields": {
-                    "type": "array",
-                    "items": {"type": "object"},
-                    "description": "Ordered field definitions: {key, label, type, options?, default?}",
-                },
-            },
-            "required": ["key"],
-        },
-    },
-    {
-        "name": "update_asset_template",
-        "description": "Update an asset template's label, icon, or full field list (admin only). The key is immutable. Changing fields affects every asset using this template — confirm with the user first.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "key": {"type": "string"},
-                "label": {"type": "string"},
-                "icon": {"type": "string"},
-                "fields": {
-                    "type": "array",
-                    "items": {"type": "object"},
-                    "description": "Full replacement list of field definitions",
-                },
-            },
-            "required": ["key"],
-        },
     },
 ]
 
@@ -1327,134 +1179,6 @@ def _execute_tool(
                 safe = {"id", "name", "email", "role", "timezone"}
                 return [{k: v for k, v in u.items() if k in safe} for u in _load_auth()["users"]]
 
-            case "list_asset_templates":
-                from services import assets_service
-
-                return assets_service.visible_templates(
-                    user["name"],
-                    is_admin=user.get("role") == "admin",
-                    feature_role=user.get("feature_role", "member"),
-                )
-
-            case "list_assets":
-                from services import assets_service
-
-                items = assets_service.list_visible(
-                    user["name"],
-                    workspace,
-                    include_archived=bool(inputs.get("include_archived")),
-                    is_admin=user.get("role") == "admin",
-                    pool_edit=user.get("pool_edit") or [],
-                    viewer_role=user.get("feature_role") or "",
-                )
-                if inputs.get("template"):
-                    items = [a for a in items if a.get("template") == inputs["template"]]
-                # History is noise for the model — drop it from tool output
-                return [{k: v for k, v in a.items() if k != "history"} for a in items]
-
-            case "create_asset":
-                from services import assets_service
-
-                return assets_service.create_asset(
-                    user["name"], inputs, workspace=workspace, created_by=user["name"]
-                )
-
-            case "update_asset":
-                from services import assets_service
-
-                found = assets_service.find_asset(
-                    user["name"],
-                    workspace,
-                    inputs["asset_id"],
-                    is_admin=user.get("role") == "admin",
-                    pool_edit=user.get("pool_edit") or [],
-                    viewer_role=user.get("feature_role") or "",
-                )
-                if found is None:
-                    return {"error": f"Asset {inputs['asset_id']!r} not found"}
-                if not found["can_edit"]:
-                    return {"error": "Read-only access — you cannot update this asset"}
-                updates = {k: v for k, v in inputs.items() if k != "asset_id"}
-                result = assets_service.update_asset(
-                    found["store"],
-                    inputs["asset_id"],
-                    updates,
-                    workspace=found["store_workspace"],
-                    by=user["name"],
-                )
-                return result or {"error": "Asset not found"}
-
-            case "archive_asset":
-                from services import assets_service
-
-                found = assets_service.find_asset(
-                    user["name"],
-                    workspace,
-                    inputs["asset_id"],
-                    is_admin=user.get("role") == "admin",
-                    pool_edit=user.get("pool_edit") or [],
-                    viewer_role=user.get("feature_role") or "",
-                )
-                if found is None:
-                    return {"error": f"Asset {inputs['asset_id']!r} not found"}
-                if not found["can_manage"]:
-                    return {"error": "Only the owner or a pool manager can archive this asset"}
-                result = assets_service.set_archived(
-                    found["store"],
-                    inputs["asset_id"],
-                    bool(inputs.get("archived", True)),
-                    workspace=found["store_workspace"],
-                    by=user["name"],
-                    cascade=bool(inputs.get("cascade", False)),
-                )
-                return result or {"error": "Asset not found"}
-
-            case "search_assets":
-                from services import assets_service
-
-                items = assets_service.list_visible(
-                    user["name"],
-                    workspace,
-                    is_admin=user.get("role") == "admin",
-                    pool_edit=user.get("pool_edit") or [],
-                    viewer_role=user.get("feature_role") or "",
-                )
-                if inputs.get("template"):
-                    items = [a for a in items if a.get("template") == inputs["template"]]
-                q = str(inputs.get("query", "")).strip().lower()
-                if q:
-
-                    def _match(a: dict) -> bool:
-                        if q in (a.get("name") or "").lower():
-                            return True
-                        return any(q in str(v).lower() for v in (a.get("fields") or {}).values())
-
-                    items = [a for a in items if _match(a)]
-                return [{k: v for k, v in a.items() if k != "history"} for a in items]
-
-            case "move_asset":
-                from services import assets_service
-
-                found = assets_service.find_asset(
-                    user["name"],
-                    workspace,
-                    inputs["asset_id"],
-                    is_admin=user.get("role") == "admin",
-                    pool_edit=user.get("pool_edit") or [],
-                    viewer_role=user.get("feature_role") or "",
-                )
-                if found is None:
-                    return {"error": f"Asset {inputs['asset_id']!r} not found"}
-                if not found["can_edit"]:
-                    return {"error": "Read-only access — you cannot move this asset"}
-                result = assets_service.update_asset(
-                    found["store"],
-                    inputs["asset_id"],
-                    {"parent_id": inputs.get("parent_id")},
-                    workspace=found["store_workspace"],
-                    by=user["name"],
-                )
-                return result or {"error": "Asset not found"}
 
             case "list_finance_books":
                 from services import finance_service
@@ -1698,40 +1422,6 @@ def _execute_tool(
                     created_by=user["name"],
                 )
 
-            case "delete_asset":
-                from services import assets_service
-
-                if user.get("role") != "admin":
-                    return {"error": "Admin access required"}
-                found = assets_service.find_asset(
-                    user["name"], workspace, inputs["asset_id"], is_admin=True
-                )
-                if found is None:
-                    return {"error": f"Asset {inputs['asset_id']!r} not found"}
-                ok = assets_service.delete_asset(
-                    found["store"], inputs["asset_id"], workspace=found["store_workspace"]
-                )
-                return {"deleted": ok}
-
-            case "create_asset_template":
-                from services import assets_service
-
-                if user.get("role") != "admin":
-                    return {"error": "Admin access required"}
-                # Admin chat manages GLOBAL templates.
-                return assets_service.create_template(inputs, owner=assets_service.GLOBAL_OWNER)
-
-            case "update_asset_template":
-                from services import assets_service
-
-                if user.get("role") != "admin":
-                    return {"error": "Admin access required"}
-                tmpl = assets_service.get_global_template(inputs["key"])
-                if tmpl is None:
-                    return {"error": f"Global template {inputs['key']!r} not found"}
-                updates = {k: v for k, v in inputs.items() if k != "key"}
-                result = assets_service.update_template(tmpl["id"], updates)
-                return result or {"error": f"Template {inputs['key']!r} not found"}
 
             case "read_system_file":
                 if user.get("role") != "admin":

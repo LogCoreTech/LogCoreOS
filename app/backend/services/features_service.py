@@ -28,7 +28,6 @@ from services.file_service import read_json, write_json
 # state. See module_registry.py.
 _CORE_MODULE_IDS = [
     "goals",
-    "assets",
     "finance",
     "contacts",
 ]
@@ -74,7 +73,8 @@ _BUSINESS_MEMBER = {
     # "chat" (converted 2026-08-26, uninstallable=True — always active, the
     # second locked module after tasks) also has no explicit entry here for
     # the same reason tasks doesn't — default-missing-to-True already matches.
-    "assets": True,
+    # "assets" (converted 2026-08-27) deliberately has no explicit entry
+    # here either now, same reasoning as dashboard/notes above.
     "finance": True,
     "contacts": True,
 }

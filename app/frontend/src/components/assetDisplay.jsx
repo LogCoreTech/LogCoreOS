@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { assets as assetsApi, contacts as contactsApi } from '../lib/api'
+import { contacts as contactsApi } from '../lib/api'
+import { assets as assetsApi } from '../module_packages/assets/frontend/api'
 import ContactPicker from './contacts/ContactPicker'
 
 // Shared asset display helpers used by both the read-only AssetView and the

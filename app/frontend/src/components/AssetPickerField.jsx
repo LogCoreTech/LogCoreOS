@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { assets as assetsApi } from '../lib/api'
+import { assets as assetsApi } from '../module_packages/assets/frontend/api'
 import AssetTreePicker from './AssetTreePicker'
 
 /**

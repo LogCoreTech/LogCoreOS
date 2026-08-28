@@ -29,7 +29,6 @@ import AdminModStore from './pages/settings/admin/ModStore'
 import Login from './pages/Login'
 import Setup from './pages/Setup'
 import Profile from './pages/Profile'
-import Assets from './pages/Assets'
 import Finance from './pages/Finance'
 import Contacts from './pages/Contacts'
 import Help from './pages/Help'
@@ -92,7 +91,6 @@ export default function App() {
                     this exact problem never came up before. */}
                 <Route path="/"         element={<Dashboard />} />
                 <Route path="/goals"     element={<ModuleRoute moduleId="tasks"><Goals /></ModuleRoute>} />
-                <Route path="/assets"      element={<ModuleRoute moduleId="assets"><Assets /></ModuleRoute>} />
                 <Route path="/finance"     element={<ModuleRoute moduleId="finance"><Finance /></ModuleRoute>} />
                 <Route path="/contacts"    element={<ModuleRoute moduleId="contacts"><Contacts /></ModuleRoute>} />
                 {MODULE_PACKAGES.filter(pkg => pkg.to !== '/').map(pkg => {

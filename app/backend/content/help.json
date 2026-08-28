@@ -38,27 +38,6 @@
       ]
     },
     {
-      "id": "assets",
-      "icon": "📦",
-      "title": "Assets",
-      "blurb": "Track anything you own — property, vehicles, equipment — as flexible, nestable objects built from templates. Great for organizing and for handing employees limited access.",
-      "howto": [
-        "Pick a template (an admin sets up the field structure, e.g. a Vehicle or Folder) and create an asset — or start blank if nothing needs to be tracked in structured fields. A blank asset can still have its own custom fields, picked from the same field types templates use (text, number, date, yes/no, dropdown, contact) — no template required.",
-        "Built out a blank asset's custom fields and want to reuse that structure? Click \"Save as template\" on it — it becomes a real, reusable template, and the asset itself switches over to using it.",
-        "Nest assets under each other (a parcel under a subdivision, equipment under a building) to build a tree.",
-        "Attach images or PDFs, add notes, and link related tasks.",
-        "Click an asset to read it first; hit ✎ Edit to change it. Share a subtree with a user, your team, or your household.",
-        "Give a contributor limited \"contribute\" access — pick exactly which fields they can change and whether they can add comments, files, or child assets."
-      ],
-      "tips": [
-        "Comments on an asset are an attributed log — a good way for a crew to leave notes that notify the owner.",
-        "Archiving hides an asset without deleting it; hard delete is admin-only and blocked while it still has children."
-      ],
-      "modules": [
-        "assets"
-      ]
-    },
-    {
       "id": "finance",
       "icon": "💰",
       "title": "Finance",

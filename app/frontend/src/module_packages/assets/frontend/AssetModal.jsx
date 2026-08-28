@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
-import { assets as assetsApi, finance as financeApi } from '../lib/api'
-import { tasks as tasksApi } from '../module_packages/tasks/frontend/api'
-import TaskModal from './TaskModal'
-import TagInput from './TagInput'
-import EmojiPicker from './EmojiPicker'
-import AssetTreePicker from './AssetTreePicker'
+import { finance as financeApi } from '../../../lib/api'
+import { assets as assetsApi } from './api'
+import { tasks as tasksApi } from '../../tasks/frontend/api'
+import TaskModal from '../../../components/TaskModal'
+import TagInput from '../../../components/TagInput'
+import EmojiPicker from '../../../components/EmojiPicker'
+import AssetTreePicker from '../../../components/AssetTreePicker'
 import AssetView from './AssetView'
-import { AttachmentThumb, formatChanges, FieldInput, CapsSelector } from './assetDisplay'
+import { AttachmentThumb, formatChanges, FieldInput, CapsSelector } from '../../../components/assetDisplay'
 
 // Same 6 types (and same backend validation, assets_service._validate_field_defs/
 // _validate_value) TemplateManager.jsx's admin template editor offers — not

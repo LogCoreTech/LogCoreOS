@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { assets as assetsApi, contacts as contactsApi } from '../lib/api'
-import { AttachmentThumb, formatChanges, fieldDisplay, FieldInput } from './assetDisplay'
-import { fmtMoney } from './finance/money'
+import { contacts as contactsApi } from '../../../lib/api'
+import { assets as assetsApi } from './api'
+import { AttachmentThumb, formatChanges, fieldDisplay, FieldInput } from '../../../components/assetDisplay'
+import { fmtMoney } from '../../../components/finance/money'
 
 const OWNER_CHIP = { team: '🧑‍🤝‍🧑 Team', household: '🏠 Household' }
 
