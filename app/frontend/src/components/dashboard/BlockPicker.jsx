@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { dashboards as dashboardsApi } from '../../lib/api'
+import { dashboards as dashboardsApi } from '../../module_packages/dashboard/frontend/api'
 import { BLOCK_REGISTRY, getConfigFields } from './blockRegistry'
 import { ACTION_PRESETS_BY_KIND, BUTTON_COLORS } from './actionKinds'
 import ContactPicker from '../contacts/ContactPicker'

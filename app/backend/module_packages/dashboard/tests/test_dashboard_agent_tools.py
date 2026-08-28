@@ -1,12 +1,20 @@
 """Tests for the agent's Dashboard tools (2026-08-09) — access-tier gating,
 templated-dashboard block-mutation rejection, the global-template admin gate,
 the block catalog's merged config_fields, and the y:Infinity->null bug class
-staying fixed on this server-side path too (see Dashboard.jsx's nextY())."""
+staying fixed on this server-side path too (see Dashboard.jsx's nextY()).
+
+Moved from tests/test_agent_dashboard_tools.py when dashboard/ converted
+(2026-08-27) — all 10 tools moved (unlike notes', no core-staying exception
+tool exists here), so this file moved in full rather than being split.
+Needs no explicit mark_installed call — dashboard is the third LOCKED
+module, and conftest.py's own brain fixture already auto-installs every
+discovered uninstallable=True module (a fix from Tasks' own conversion),
+same as Chat's own moved tests needed zero explicit calls either."""
 
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 import pytest
 

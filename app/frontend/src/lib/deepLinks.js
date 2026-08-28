@@ -10,7 +10,6 @@ const _CORE_MODULE_ROUTES = {
   assets: '/assets',
   finance: '/finance',
   contacts: '/contacts',
-  dashboard: '/',
 }
 
 // A converted module needs no entry here — its route is discovered from its
@@ -30,7 +29,6 @@ const _CORE_RECORD_PARAM = {
   assets: 'asset',
   finance: 'book',
   contacts: 'contact',
-  dashboard: 'id',
 }
 
 const RECORD_PARAM = {

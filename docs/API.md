@@ -1413,8 +1413,13 @@ admins are also notified when a user hits a **hard** cap.
 
 ## Custom Dashboards
 
-Router mounted at `/api/v1/dashboards`. Requires the existing `dashboard` module (both workspaces,
-`X-Workspace`-scoped — no new `require_module` registry entry). A dashboard is a **standalone,
+Router mounted at `/api/v1/dashboards` (module id `dashboard` — converted into `module_packages/dashboard/`
+2026-08-27; the third LOCKED (`uninstallable: True`) module, after Tasks and Chat — always shows
+"Always active" in the Mod Store, with no uninstall action, server-enforced as well as UI-hidden.
+Keeps the pre-existing singular id, no rename). `dashboards_service.py`/`dashboard_templates_service.py`/
+`dashboard_index.py` all stay core — `migrations/runner.py`'s own core migrations call
+`dashboards_service` directly, and migrations run before module registration exists at all in boot
+order. Both workspaces, `X-Workspace`-scoped. A dashboard is a **standalone,
 unlimited, user-created object** — like Notes/Assets, never owned by a Contact/Asset record —
 storing an ordered list of typed **blocks** on a freeform grid. Storage: `ws_path/Dashboards/dashboards.json`;
 pool dashboards live under `_household`/`_team` the same way pool Assets/Finance/Contacts do.

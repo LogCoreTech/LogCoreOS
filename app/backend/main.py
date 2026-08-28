@@ -23,7 +23,6 @@ from routers import (
     auth,
     brain,
     contacts,
-    dashboards,
     export,
     features,
     finance,
@@ -389,7 +388,6 @@ app.include_router(contacts.router, prefix="/api/v1/contacts", tags=["contacts"]
 app.include_router(update.router, prefix="/api/v1/update", tags=["update"])
 app.include_router(help.router, prefix="/api/v1/help", tags=["help"])
 app.include_router(ai_usage.router, prefix="/api/v1/ai-usage", tags=["ai-usage"])
-app.include_router(dashboards.router, prefix="/api/v1/dashboards", tags=["dashboards"])
 app.include_router(presence.router, prefix="/api/v1/presence", tags=["presence"])
 app.include_router(mod_store.router, prefix="/api/v1/mod-store", tags=["mod-store"])
 

@@ -73,6 +73,14 @@
       "status": "available"
     },
     {
+      "id": "dashboard",
+      "name": "Dashboards",
+      "description": "Build-it-yourself dashboards — a freeform grid of blocks pulling live data from almost any module.",
+      "category": "general",
+      "icon": "⊞",
+      "status": "available"
+    },
+    {
       "id": "field_ops",
       "name": "Field Ops",
       "description": "Subdivisions, lots, phase scheduling, and mobile SmartForm checklists for residential trade subcontractors.",

@@ -176,7 +176,7 @@ into a self-contained `module_packages/<id>/` format with its own manifest/versi
 foundational ones (Tasks, Chat, Dashboards-the-feature), which just carry `uninstallable: true`
 rather than being excluded from the system. End state: `main.py` has zero hardcoded per-module
 router registrations. The registry mechanism itself (discovery, install/uninstall state, all four
-enforcement-gap fixes, the admin Mod Store UI) is done and fully tested. Nine modules converted so
+enforcement-gap fixes, the admin Mod Store UI) is done and fully tested. Ten modules converted so
 far: journal (increment 1) and Home Assistant (increment 2, 2026-08-24, full internal id rename
 too) are both confirmed working end-to-end on the owner's live instance. Automations/n8n Automation
 (2026-08-25, taken out of the original planned order at the owner's request — display name only,
@@ -218,8 +218,24 @@ dispatch never threaded the caller's active workspace through to a module's own 
 for every prior module (all workspace-blind by construction or already documented as such) but a real
 regression risk for notes, whose tools are genuinely workspace-aware — fixed by widening the dispatch
 signature, with every other module picking up the unused parameter for signature parity. Dashboards
-(locked) is next per the rollout order.
-Full design in `docs/MEMORY.md`'s 2026-08-24/25/26 entries and
+(2026-08-27, increment 9, the third LOCKED module after Tasks and Chat) is also built and fully
+tested but not yet verified on the live instance — structurally the most-depended-upon module
+converted so far, since every other module's own dashboard blocks read/write through it.
+`dashboards_service.py`/`dashboard_templates_service.py`/`dashboard_index.py` all stay core, the
+strongest "stays core" case yet: `migrations/runner.py`'s own core migrations call `dashboards_service`
+directly, and migrations run before module registration exists at all in boot order, not just
+"another router imports it." Owns zero block types (it's the container, never a `REGISTRY` entry).
+Surfaced the same enforcement-gap shape as Chat's/Notes' own conversions — all 10 dashboard AI tools
+lived unfiltered in the static tool list, closed by making them module-owned; no brain-path gap
+existed here since Dashboards data is JSON not markdown, the same structural category as Tasks
+(`"Dashboards"` added to the unconditional structural skip set alongside `"Tasks"`, not the
+conditional per-user one). One genuinely new problem no prior conversion needed to solve: `App.jsx`'s
+root route (`to: '/'`) had to stay hardcoded and `ModuleRoute`-unwrapped, since a user with
+`dashboard` disabled would otherwise hit a self-targeting redirect loop at the app's own home page —
+solved by filtering the generic route-generation loop to skip any package claiming `/`. Assets is next
+per the rollout order — the first of the three largest remaining modules (Assets, Contacts, Finance),
+deliberately last since the pattern has now been proven against everything smaller.
+Full design in `docs/MEMORY.md`'s 2026-08-24/25/26/27 entries and
 `/home/logcore/.claude/plans/i-want-you-to-composed-scone.md`; rollout order tracked in
 `docs/TASKS.md`.
 

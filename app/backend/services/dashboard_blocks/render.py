@@ -139,8 +139,9 @@ def render_dashboard(
     dash_access: str | None,
     viewer_disabled_modules: set[str] | None = None,
 ) -> list[dict]:
-    """Resolves dash_access is passed in ONCE by the caller (routers/dashboards.py
-    already called find_dashboard) — never re-resolved per block."""
+    """Resolves dash_access is passed in ONCE by the caller
+    (module_packages/dashboard/backend/router.py already called
+    find_dashboard) — never re-resolved per block."""
     out = []
     for block in dashboard.get("blocks") or []:
         result = render_block(

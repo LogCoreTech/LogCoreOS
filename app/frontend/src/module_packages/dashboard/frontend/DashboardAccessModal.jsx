@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { dashboards as dashboardsApi } from '../../lib/api'
-import { useAuth } from '../../lib/auth'
-import TagInput from '../TagInput'
+import { dashboards as dashboardsApi } from './api'
+import { useAuth } from '../../../lib/auth'
+import TagInput from '../../../components/TagInput'
 
 export default function DashboardAccessModal({ dashboard, isPool, isOwner, onClose, onSaved }) {
   const { user } = useAuth()

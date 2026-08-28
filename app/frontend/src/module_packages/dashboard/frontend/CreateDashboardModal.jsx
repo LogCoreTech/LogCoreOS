@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { dashboardTemplates as templatesApi, dashboards as dashboardsApi } from '../../lib/api'
-import EmojiPicker from '../EmojiPicker'
-import ContactPicker from '../contacts/ContactPicker'
-import AssetPickerField from '../AssetPickerField'
+import { dashboardTemplates as templatesApi, dashboards as dashboardsApi } from './api'
+import EmojiPicker from '../../../components/EmojiPicker'
+import ContactPicker from '../../../components/contacts/ContactPicker'
+import AssetPickerField from '../../../components/AssetPickerField'
 
 /**
  * Blank dashboard, or one seeded from a template — replaces the old direct

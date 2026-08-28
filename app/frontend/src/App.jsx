@@ -5,7 +5,7 @@ import { WorkspaceProvider } from './lib/workspace'
 import { MODULE_PACKAGES, isPackageModule } from './lib/moduleRegistry'
 import ErrorBoundary from './components/ErrorBoundary'
 import Layout from './components/Layout'
-import Dashboard from './pages/Dashboard'
+import Dashboard from './module_packages/dashboard/frontend/Dashboard'
 import Goals from './module_packages/tasks/frontend/Goals'
 import Brain from './pages/Brain'
 import Settings from './pages/Settings'
@@ -81,12 +81,21 @@ export default function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/setup" element={<Protected><Setup /></Protected>} />
               <Route element={<Protected><Layout /></Protected>}>
+                {/* Dashboards' own manifest.js declares to: '/' (it's the app's home page,
+                    the one route every user can always reach regardless of role/disabled-
+                    modules state) — deliberately hardcoded and UNWRAPPED by ModuleRoute here,
+                    same as before this module converted. Feeding it through the generic loop
+                    below would double-register '/' wrapped in ModuleRoute, and a user with
+                    `dashboard` in their disabled set would hit ModuleRoute's own
+                    `<Navigate to="/" replace>` while already AT "/" — a self-targeting
+                    redirect loop. No prior converted module ever claimed the root path, so
+                    this exact problem never came up before. */}
                 <Route path="/"         element={<Dashboard />} />
                 <Route path="/goals"     element={<ModuleRoute moduleId="tasks"><Goals /></ModuleRoute>} />
                 <Route path="/assets"      element={<ModuleRoute moduleId="assets"><Assets /></ModuleRoute>} />
                 <Route path="/finance"     element={<ModuleRoute moduleId="finance"><Finance /></ModuleRoute>} />
                 <Route path="/contacts"    element={<ModuleRoute moduleId="contacts"><Contacts /></ModuleRoute>} />
-                {MODULE_PACKAGES.map(pkg => {
+                {MODULE_PACKAGES.filter(pkg => pkg.to !== '/').map(pkg => {
                   const Page = lazy(pkg.loadPage)
                   return (
                     <Route

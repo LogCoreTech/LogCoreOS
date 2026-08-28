@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { dashboardTemplates as templatesApi, dashboards as dashboardsApi } from '../../lib/api'
-import EmojiPicker from '../EmojiPicker'
-import TagInput from '../TagInput'
-import BlockPicker from './BlockPicker'
-import { BLOCK_REGISTRY } from './blockRegistry'
+import { dashboardTemplates as templatesApi, dashboards as dashboardsApi } from './api'
+import EmojiPicker from '../../../components/EmojiPicker'
+import TagInput from '../../../components/TagInput'
+import BlockPicker from '../../../components/dashboard/BlockPicker'
+import { BLOCK_REGISTRY } from '../../../components/dashboard/blockRegistry'
 
 const SUBJECT_TYPES = [
   { value: '', label: 'None — just a reusable block set' },

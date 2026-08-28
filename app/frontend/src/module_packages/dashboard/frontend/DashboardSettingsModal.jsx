@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { dashboards as dashboardsApi } from '../../lib/api'
-import EmojiPicker from '../EmojiPicker'
-import ContactPicker from '../contacts/ContactPicker'
-import AssetPickerField from '../AssetPickerField'
+import { dashboards as dashboardsApi } from './api'
+import EmojiPicker from '../../../components/EmojiPicker'
+import ContactPicker from '../../../components/contacts/ContactPicker'
+import AssetPickerField from '../../../components/AssetPickerField'
 
 /**
  * Per-dashboard options menu — rename, change icon, and the actions that

@@ -16,10 +16,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   without them by default; existing instances that already used one keep it installed automatically.
   Uninstalling a module never deletes its data — reinstalling picks everything back up untouched.
   Installing/uninstalling requires an admin-triggered restart to take effect (never automatic), with
-  a warning if other users currently appear online. Tasks and AI Chat are also now part of this same
-  system, but shown as "Always active" — they're foundational enough that they can't be uninstalled,
-  the first of a small set of core features that will join the Mod Store this way rather than being
-  excluded from it.
+  a warning if other users currently appear online. Tasks, AI Chat, and Dashboards are also now part
+  of this same system, but shown as "Always active" — they're foundational enough that they can't be
+  uninstalled, the first of a small set of core features that will join the Mod Store this way rather
+  than being excluded from it.
 - Calendar's household/team pool-events toggle (the 🏠/🧑‍🤝‍🧑 pill) now hides itself entirely when
   that pool module isn't installed and active, instead of remaining visible and silently doing
   nothing.
@@ -45,13 +45,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   visible in the block picker regardless of module state too — all three closed. A disabled user
   could also still search the *content* of notes shared with them (though not their own) via the AI
   chat's Brain search — closed the same way.
+- A user with Dashboards disabled could still list, view, create, and edit dashboards (including
+  adding/removing blocks and managing templates) through the AI chat, since none of the 10 dashboard
+  tools were actually gated on the module — closed the same way as Chat's/Notes' own tool-gating gaps.
 
 ### Changed
 
 - Every module in the app is being converted into this same self-contained format over time,
-  including foundational ones like Tasks and AI Chat (marked non-removable, not excluded) — journal,
-  Home Assistant, n8n Automation, Calendar, Tasks, Household, Team, AI Chat, and Notes are the first
-  nine, proving the pattern; the rest follow one at a time.
+  including foundational ones like Tasks, AI Chat, and Dashboards (marked non-removable, not
+  excluded) — journal, Home Assistant, n8n Automation, Calendar, Tasks, Household, Team, AI Chat,
+  Notes, and Dashboards are the first ten, proving the pattern; the rest follow one at a time.
 
 ## [0.6.4] — 2026-08-22
 

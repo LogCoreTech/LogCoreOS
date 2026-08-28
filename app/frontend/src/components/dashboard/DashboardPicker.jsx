@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { dashboards as dashboardsApi } from '../../lib/api'
+import { dashboards as dashboardsApi } from '../../module_packages/dashboard/frontend/api'
 
 /**
  * Dashboard selector for a nav_button's "specific record" mode — lets a

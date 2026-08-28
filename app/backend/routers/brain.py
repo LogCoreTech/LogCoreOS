@@ -17,6 +17,7 @@ router = APIRouter()
 _MAX_CONTENT_BYTES = 512_000  # 500 KB — more than enough for any markdown file
 _ALWAYS_SKIP = {
     "Tasks",  # managed by tasks module, not editable here
+    "Dashboards",  # managed by dashboard module, JSON not markdown, not editable here
     # ws_path()'s "business" base is a literal subfolder of the "personal" base
     # (brain/USERS/{name}/Business/), not a sibling — so a plain recursive walk
     # or path resolution against the personal base would otherwise reach straight
@@ -39,10 +40,10 @@ def _skip_dirs(disabled_modules: set[str]) -> set[str]:
     "never installed at all" case. This matches how every other module
     (Notes, Contacts, etc.) already works: dual-accessible (dedicated UI +
     this raw browser) when enabled, hidden here only when disabled. Tasks/
-    Business are the one pre-existing exception, skipped regardless of any
-    toggle because they're structurally different (Tasks is JSON not
-    markdown; Business is a nested workspace root), not module-disabled
-    semantics.
+    Dashboards/Business are the pre-existing exceptions, skipped regardless
+    of any toggle because they're structurally different (Tasks/Dashboards
+    are JSON not markdown; Business is a nested workspace root), not
+    module-disabled semantics.
     """
     from module_registry import brain_paths_for_disabled
 

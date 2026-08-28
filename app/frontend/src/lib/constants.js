@@ -23,7 +23,6 @@ export function catColor(cat) {
 // needs no entry here at all — it's discovered automatically via
 // moduleRegistry.js's import.meta.glob and merged into ALL_MODULES below.
 const CORE_MODULES = [
-  { id: 'dashboard',            to: '/',             icon: '⊞',          label: 'Dashboard'             },
   // 'goals' deliberately has no matching module_packages/ entry — it's a
   // purely frontend nav id gated on the SAME backend permission as 'tasks'
   // (App.jsx's /goals route uses moduleId="tasks", not "goals"; no
