@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { admin as adminApi, contacts as contactsApi, features as featuresApi } from '../../../lib/api'
+import { admin as adminApi, features as featuresApi } from '../../../lib/api'
+import { contacts as contactsApi } from '../../../module_packages/contacts/frontend/api'
 import SettingsPageHeader from '../../../components/settings/SettingsPageHeader'
 
 const BLANK_NEW_USER = { email: '', name: '', password: '', role: 'member', feature_role: 'guest', workspaces: ['personal'] }

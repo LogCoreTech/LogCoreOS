@@ -31,7 +31,6 @@ const CORE_MODULES = [
   // manifest.js for the full reasoning.
   { id: 'goals',                to: '/goals',        icon: '🎯',          label: 'Goals'                 },
   { id: 'finance',              to: '/finance',      icon: '💵',          label: 'Finance'               },
-  { id: 'contacts',             to: '/contacts',     icon: '👥',          label: 'Contacts'              },
 ]
 
 // `navLabel` is optional (undefined for every CORE_MODULES entry and most

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { contacts as contactsApi } from '../lib/api'
+import { contacts as contactsApi } from '../module_packages/contacts/frontend/api'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
-import ContactDetail from '../components/contacts/ContactDetail'
-import ContactModal from '../components/contacts/ContactModal'
+import ContactDetail from '../module_packages/contacts/frontend/ContactDetail'
+import ContactModal from '../module_packages/contacts/frontend/ContactModal'
 
 // Profile is the user's own self-contact — a Contact record IS their profile
 // now. This is a thin page: fetch it via /contacts/me (gated by login only,

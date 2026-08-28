@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { contacts as contactsApi } from '../../lib/api'
+import { contacts as contactsApi } from './api'
 
 // Bulk "convert personal contacts into the shared pool" (owner ask,
 // 2026-08-17: "have so many" to move one at a time via ContactModal's own

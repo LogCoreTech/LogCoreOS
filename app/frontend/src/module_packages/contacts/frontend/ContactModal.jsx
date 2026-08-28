@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { contacts as contactsApi } from '../../lib/api'
-import { useWorkspace } from '../../lib/workspace'
-import ContactPicker from './ContactPicker'
+import { contacts as contactsApi } from './api'
+import { useWorkspace } from '../../../lib/workspace'
+import ContactPicker from '../../../components/contacts/ContactPicker'
 import { useContactPhotoUrl } from './ContactAvatar'
-import TagInput from '../TagInput'
+import TagInput from '../../../components/TagInput'
 import SectionHeader from './SectionHeader'
 
 const DEFAULT_PRIORITY_ORDER = ['Religion', 'Family', 'Job', 'Personal Growth', 'Hobbies']

@@ -21,7 +21,6 @@ from routers import (
     ai_usage,
     auth,
     brain,
-    contacts,
     export,
     features,
     finance,
@@ -382,7 +381,6 @@ app.include_router(finance_planning.router, prefix="/api/v1/finance", tags=["fin
 app.include_router(finance_invoicing.router, prefix="/api/v1/finance", tags=["finance-invoicing"])
 app.include_router(finance_sharing.router, prefix="/api/v1/finance", tags=["finance-sharing"])
 app.include_router(finance_transfers.router, prefix="/api/v1/finance", tags=["finance-transfers"])
-app.include_router(contacts.router, prefix="/api/v1/contacts", tags=["contacts"])
 app.include_router(update.router, prefix="/api/v1/update", tags=["update"])
 app.include_router(help.router, prefix="/api/v1/help", tags=["help"])
 app.include_router(ai_usage.router, prefix="/api/v1/ai-usage", tags=["ai-usage"])

@@ -89,6 +89,14 @@
       "status": "available"
     },
     {
+      "id": "contacts",
+      "name": "Contacts",
+      "description": "Your address book and light CRM — contacts, interactions, deals, and your own Profile.",
+      "category": "general",
+      "icon": "👥",
+      "status": "available"
+    },
+    {
       "id": "field_ops",
       "name": "Field Ops",
       "description": "Subdivisions, lots, phase scheduling, and mobile SmartForm checklists for residential trade subcontractors.",

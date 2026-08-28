@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { contacts as contactsApi } from '../../lib/api'
+import { contacts as contactsApi } from '../../module_packages/contacts/frontend/api'
 
 /**
  * Autocomplete over CRM contacts. Sets both a display name and a contact id.

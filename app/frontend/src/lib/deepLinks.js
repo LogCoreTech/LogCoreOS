@@ -8,7 +8,6 @@ import { MODULE_PACKAGES } from './moduleRegistry'
 const _CORE_MODULE_ROUTES = {
   goals: '/goals',
   finance: '/finance',
-  contacts: '/contacts',
 }
 
 // A converted module needs no entry here — its route is discovered from its
@@ -26,7 +25,6 @@ export const MODULE_ROUTES = {
 // yet, so it declares no recordParam and is absent from both halves.
 const _CORE_RECORD_PARAM = {
   finance: 'book',
-  contacts: 'contact',
 }
 
 const RECORD_PARAM = {

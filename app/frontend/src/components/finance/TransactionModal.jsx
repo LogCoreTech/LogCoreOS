@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { finance as financeApi, contacts as contactsApi } from '../../lib/api'
+import { finance as financeApi } from '../../lib/api'
+import { contacts as contactsApi } from '../../module_packages/contacts/frontend/api'
 import { toCents, centsToInput, todayStr } from './money'
 import ContactPicker from '../contacts/ContactPicker'
 

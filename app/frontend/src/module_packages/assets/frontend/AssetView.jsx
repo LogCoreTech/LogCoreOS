@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { contacts as contactsApi } from '../../../lib/api'
+import { contacts as contactsApi } from '../../contacts/frontend/api'
 import { assets as assetsApi } from './api'
 import { AttachmentThumb, formatChanges, fieldDisplay, FieldInput } from '../../../components/assetDisplay'
 import { fmtMoney } from '../../../components/finance/money'

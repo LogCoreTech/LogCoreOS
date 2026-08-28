@@ -176,7 +176,7 @@ into a self-contained `module_packages/<id>/` format with its own manifest/versi
 foundational ones (Tasks, Chat, Dashboards-the-feature), which just carry `uninstallable: true`
 rather than being excluded from the system. End state: `main.py` has zero hardcoded per-module
 router registrations. The registry mechanism itself (discovery, install/uninstall state, all four
-enforcement-gap fixes, the admin Mod Store UI) is done and fully tested. Ten modules converted so
+enforcement-gap fixes, the admin Mod Store UI) is done and fully tested. Twelve modules converted so
 far: journal (increment 1) and Home Assistant (increment 2, 2026-08-24, full internal id rename
 too) are both confirmed working end-to-end on the owner's live instance. Automations/n8n Automation
 (2026-08-25, taken out of the original planned order at the owner's request — display name only,
@@ -253,9 +253,31 @@ by making them module-owned. The one genuinely new problem: two endpoints (`GET`
 inside this optional module's own router — uninstalling Assets would have silently taken away the
 admin's only way to view/rotate a token Contacts' own automation API still depends on
 (`automations_config.py` itself stays core, unowned by either module) — relocated to
-`routers/auth.py`'s admin section instead. Contacts is next per the rollout order — the second of the
-three largest remaining modules; Finance stays last, deliberately, as the most structurally complex.
-Full design in `docs/MEMORY.md`'s 2026-08-24/25/26/27 entries and
+`routers/auth.py`'s admin section instead. Contacts (2026-08-28, increment 11, converted the same day
+as Assets) is also built and fully tested but not yet verified on the live instance — the 12th
+converted module, second of the three largest/most structurally complex remaining. `routers/
+contacts.py` moved to `module_packages/contacts/backend/router.py`; unlike Assets, no endpoints moved
+out this time — Contacts' own automation endpoints were already correctly gated only by the shared
+n8n token, the same accepted pattern Assets' own automation endpoints use.
+`services/contacts_service.py`/`contacts_index.py` both stay core — the most-depended-on "stays core"
+service of any conversion yet, with a SECOND already-converted sibling module package
+(`module_packages/chat/backend/router.py`'s AI system-prompt profile context) joining
+`module_packages/dashboard/backend/router.py`'s Dashboard Hero resolver as direct importers, on top of
+`agent_service.py`'s own core `get_profile`/`update_profile` tools, deliberately left core rather than
+moved into Contacts' own `agent_tools.py` since Profile is a generic concept independent of Contacts'
+module state. The real, structurally new problem this conversion had to solve, the mirror of Assets'
+own Collection-block decision: `dashboard_blocks/_contacts.py`'s `custom_fields` block reads from
+EITHER Contacts or Assets data depending on config, spanning both modules and owned by neither — it
+was extracted into a new core file (`_custom_fields.py`) rather than folded into either module package,
+while the other 3 blocks moved and gained a `module="contacts"` gate for the first time. The frontend
+mirrors this exactly: `ContactPicker.jsx` stays core (7 external importers, including an
+already-converted sibling module's own component), the only file left in `components/contacts/`.
+Two admin-gated-but-not-module-gated endpoints were found and judged independently rather than fixed
+uniformly: `PUT /contacts/fields` was missing `require_module("contacts")` — fixed; `GET
+/contacts/available-for-linking` was deliberately left ungated, matching `/contacts/me`'s own
+always-available precedent for account-creation infrastructure. Finance is next per the rollout order —
+the last and most structurally complex of the three largest remaining modules.
+Full design in `docs/MEMORY.md`'s 2026-08-24/25/26/27/28 entries and
 `/home/logcore/.claude/plans/i-want-you-to-composed-scone.md`; rollout order tracked in
 `docs/TASKS.md`.
 

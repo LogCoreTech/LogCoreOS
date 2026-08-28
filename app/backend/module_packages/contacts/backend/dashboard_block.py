@@ -1,5 +1,13 @@
-"""Contact blocks — Linked Deals, Custom Fields, Linked Assets (cross-pointer).
-Reuses contacts_service.find_contact — the SAME gate the Contacts router uses."""
+"""Contact blocks — Linked Deals, Contacts List, Linked Assets (cross-pointer).
+Reuses contacts_service.find_contact — the SAME gate the Contacts router uses.
+
+The fourth contact-adjacent block, Custom Fields, does NOT live here — it
+genuinely reads from either contacts_service OR assets_service depending on
+which config field is set (record_ref_fields declares both), the same
+"spans more than one module, owned by none" shape as _actions.py's
+nav_button/status_button. It stays in core dashboard_blocks/_custom_fields.py,
+ungated by module=, rather than becoming exclusively Contacts-owned by
+virtue of which package file it happens to live in."""
 
 from services import assets_service, contacts_service
 from services.dashboard_blocks.registry import (
@@ -23,38 +31,6 @@ def resolve_linked_deals(ctx: BlockRenderCtx) -> BlockRenderResult:
     ws = contacts_service.effective_workspace(store_user, contact, ctx.workspace)
     deals = contacts_service.list_deals(store_user, ws, contact_id)
     return BlockRenderResult(ok=True, data={"deals": deals, "contact_name": contact.get("name")})
-
-
-def resolve_custom_fields(ctx: BlockRenderCtx) -> BlockRenderResult:
-    contact_id = ctx.config.get("contact_id")
-    asset_id = ctx.config.get("asset_id")
-    if contact_id:
-        found = contacts_service.find_contact(
-            ctx.viewer, ctx.viewer_role, ctx.is_admin, ctx.workspace, contact_id
-        )
-        if found is None:
-            return BlockRenderResult(ok=False, locked_reason="no_access")
-        _store_user, contact, _access = found
-        return BlockRenderResult(
-            ok=True, data={"fields": contact.get("custom", {}), "name": contact.get("name")}
-        )
-    if asset_id:
-        found = assets_service.find_asset(
-            ctx.viewer, ctx.workspace, asset_id, ctx.is_admin, viewer_role=ctx.viewer_role
-        )
-        if found is None:
-            return BlockRenderResult(ok=False, locked_reason="no_access")
-        asset = found["asset"]
-        template = assets_service.resolve_template(asset)
-        return BlockRenderResult(
-            ok=True,
-            data={
-                "fields": asset.get("fields", {}),
-                "template": template,
-                "name": asset.get("name"),
-            },
-        )
-    return BlockRenderResult(ok=False, locked_reason="not_found")
 
 
 def resolve_contacts_list(ctx: BlockRenderCtx) -> BlockRenderResult:
@@ -101,15 +77,7 @@ register(
         category="record_linked",
         resolver=resolve_linked_deals,
         record_ref_fields={"contact_id": "contacts"},
-    )
-)
-register(
-    BlockSpec(
-        type="custom_fields",
-        label="Custom Fields",
-        category="record_linked",
-        resolver=resolve_custom_fields,
-        record_ref_fields={"contact_id": "contacts", "asset_id": "assets"},
+        module="contacts",
     )
 )
 register(
@@ -118,6 +86,7 @@ register(
         label="Contacts List",
         category="live_aggregate",
         resolver=resolve_contacts_list,
+        module="contacts",
     )
 )
 register(
@@ -127,5 +96,6 @@ register(
         category="record_linked",
         resolver=resolve_linked_assets,
         record_ref_fields={"contact_id": "contacts"},
+        module="contacts",
     )
 )

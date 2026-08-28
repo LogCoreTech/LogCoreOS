@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { contacts as contactsApi } from '../lib/api'
+import { contacts as contactsApi } from '../module_packages/contacts/frontend/api'
 import { assets as assetsApi } from '../module_packages/assets/frontend/api'
 import ContactPicker from './contacts/ContactPicker'
 

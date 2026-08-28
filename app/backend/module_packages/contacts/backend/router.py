@@ -410,7 +410,12 @@ def list_contacts_available_for_linking(
     (always reads the household pool regardless of the admin's own currently
     active workspace tab) — account creation is a household-pool concept,
     not something that should silently go empty just because the admin
-    happens to be on the business tab right now."""
+    happens to be on the business tab right now. Deliberately NOT gated on
+    require_module("contacts") either, on top of that — same reasoning as
+    GET/PATCH /contacts/me: self-contact linking is account-creation
+    infrastructure that must keep working even if Contacts is disabled for
+    the admin performing it or uninstalled instance-wide, exactly like a
+    self-contact itself always resolves regardless of module state."""
     return [
         {"id": c["id"], "name": c.get("name"), "type": c.get("type")}
         for c in contacts_service.list_contacts(contacts_service.POOL_HOUSEHOLD, "personal")
@@ -430,6 +435,7 @@ def get_fields(
 def set_fields(
     req: FieldsUpdate,
     current_user: dict = Depends(require_admin),
+    _module: dict = Depends(_require_contacts),
     _rl: None = Depends(_write_limit),
 ):
     return contacts_service.set_custom_fields(req.fields)

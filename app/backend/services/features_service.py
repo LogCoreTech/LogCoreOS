@@ -29,7 +29,6 @@ from services.file_service import read_json, write_json
 _CORE_MODULE_IDS = [
     "goals",
     "finance",
-    "contacts",
 ]
 
 
@@ -73,10 +72,14 @@ _BUSINESS_MEMBER = {
     # "chat" (converted 2026-08-26, uninstallable=True — always active, the
     # second locked module after tasks) also has no explicit entry here for
     # the same reason tasks doesn't — default-missing-to-True already matches.
-    # "assets" (converted 2026-08-27) deliberately has no explicit entry
-    # here either now, same reasoning as dashboard/notes above.
+    # "assets" (converted 2026-08-27) and "contacts" (converted 2026-08-28)
+    # both deliberately have no explicit entry here either now, same
+    # reasoning as dashboard/notes above. Contacts' guest-off default (see
+    # _guest_map() below) is untouched by this removal — that override is
+    # unconditional (applied after copying this base map, not conditional
+    # on "contacts" already being a key in it), so it keeps working
+    # identically regardless of whether contacts is installed yet.
     "finance": True,
-    "contacts": True,
 }
 
 

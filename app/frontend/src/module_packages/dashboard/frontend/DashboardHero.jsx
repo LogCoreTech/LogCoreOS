@@ -1,4 +1,4 @@
-import ContactAvatar from '../../../components/contacts/ContactAvatar'
+import ContactAvatar from '../../contacts/frontend/ContactAvatar'
 
 /**
  * Identity banner for a dashboard made from a template with a subject — the

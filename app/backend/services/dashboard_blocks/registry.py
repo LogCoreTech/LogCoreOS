@@ -97,7 +97,7 @@ def _load_all_resolvers() -> None:
     from services.dashboard_blocks import (  # noqa: F401
         _actions,
         _ai_usage,
-        _contacts,
+        _custom_fields,
         _finance,
         _freeform,
     )

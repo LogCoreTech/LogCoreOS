@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { fmtMoney } from '../finance/money'
 import { ALL_MODULES, catColor } from '../../lib/constants'
 import { deepLinkUrl } from '../../lib/deepLinks'
-import { contacts as contactsApi } from '../../lib/api'
+import { contacts as contactsApi } from '../../module_packages/contacts/frontend/api'
 import { assets as assetsApi } from '../../module_packages/assets/frontend/api'
 import { tasks as tasksApi } from '../../module_packages/tasks/frontend/api'
 import { ACTION_MODULE_BY_KIND, buttonColorClasses } from './actionKinds'
@@ -155,21 +155,6 @@ export function FinanceBookReportBlock({ data }) {
   )
 }
 
-export function LinkedDealsBlock({ data }) {
-  const deals = data?.deals || []
-  if (!deals.length) return <Empty text="No deals." />
-  return (
-    <div className="space-y-1.5">
-      {deals.map(d => (
-        <div key={d.id} className="flex items-center justify-between text-sm">
-          <span className="truncate">{d.title}</span>
-          <span className="badge shrink-0 ml-2">{d.stage}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
 export function CustomFieldsBlock({ data }) {
   const fields = data?.fields || {}
   const entries = Object.entries(fields)
@@ -183,41 +168,6 @@ export function CustomFieldsBlock({ data }) {
         </div>
       ))}
     </dl>
-  )
-}
-
-export function LinkedAssetsBlock({ data, actions, onAction }) {
-  const assets = data?.assets || []
-  if (!assets.length) return <Empty text="No linked assets." />
-  return (
-    <div className="space-y-1.5">
-      {assets.map(a => (
-        <div key={a.id} className="flex items-center gap-2 text-sm">
-          <span className="shrink-0">{a.icon}</span>
-          <span className="truncate flex-1">{a.name}</span>
-          <BlockActionButtons actions={actions} recordKind="asset" recordId={a.id} onDone={onAction} />
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// New block type (2026-08-15) — the dashboard had no general "list of
-// contacts" block before this; linked_deals/linked_assets are scoped to one
-// contact/asset's own related records, not a standalone contacts list.
-export function ContactsListBlock({ data, actions, onAction }) {
-  const contacts = data?.contacts || []
-  if (!contacts.length) return <Empty text="No contacts." />
-  return (
-    <div className="space-y-1.5">
-      {contacts.map(c => (
-        <div key={c.id} className="flex items-center gap-2 text-sm">
-          <span className="shrink-0">{c.type === 'company' ? '🏢' : '🧑'}</span>
-          <span className="truncate flex-1">{c.name}</span>
-          <BlockActionButtons actions={actions} recordKind="contact" recordId={c.id} onDone={onAction} />
-        </div>
-      ))}
-    </div>
   )
 }
 

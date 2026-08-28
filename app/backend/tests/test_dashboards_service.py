@@ -13,7 +13,6 @@ from services import assets_service as assets_svc
 from services import auth_service, contacts_service
 from services import dashboard_templates_service as tmpl_svc
 from services import dashboards_service as svc
-from services.dashboard_blocks._contacts import resolve_contacts_list
 from services.dashboard_blocks.registry import REGISTRY, BlockRenderCtx, _load_all_resolvers
 from services.dashboard_blocks.render import render_block
 
@@ -606,41 +605,9 @@ def test_asset_links_contact_helper(users):
 # dashboard_blocks/_collections.py into module_packages/assets/backend/
 # dashboard_block.py, gaining module="assets" gating for the first time.
 
-# ---------------------------------------------------------------------------
-# Contacts List block — new block type (2026-08-15), for block-embedded
-# action buttons ("Assets... update statuses" / "Notes... open" examples)
-# ---------------------------------------------------------------------------
-
-
-def test_contacts_list_returns_visible_contacts_alphabetically(users):
-    contacts_service.create_contact(
-        "Alice", "personal", {"type": "person", "name": "Zeb"}, created_by="Alice"
-    )
-    contacts_service.create_contact(
-        "Alice", "personal", {"type": "company", "name": "Acme Co"}, created_by="Alice"
-    )
-    result = resolve_contacts_list(_ctx())
-    assert result.ok is True
-    names = [c["name"] for c in result.data["contacts"]]
-    assert names == sorted(names, key=str.lower)
-    assert "Acme Co" in names and "Zeb" in names
-
-
-def test_contacts_list_scoped_to_viewer_visibility(users):
-    contacts_service.create_contact(
-        "Alice", "personal", {"type": "person", "name": "Alice-only"}, created_by="Alice"
-    )
-    result = resolve_contacts_list(_ctx(viewer="Bob"))
-    assert result.ok is True
-    # Bob sees his own (auto-created) self-contact, never Alice's unshared one.
-    names = [c["name"] for c in result.data["contacts"]]
-    assert "Alice-only" not in names
-
-
-def test_contacts_list_caps_at_ten(users):
-    for i in range(15):
-        contacts_service.create_contact(
-            "Alice", "personal", {"type": "person", "name": f"Contact {i:02d}"}, created_by="Alice"
-        )
-    result = resolve_contacts_list(_ctx())
-    assert len(result.data["contacts"]) == 10
+# Contacts List block's own tests moved to
+# module_packages/contacts/tests/test_contacts_dashboard_block.py when
+# contacts/ converted (2026-08-28) — resolve_contacts_list() itself moved
+# out of the old, shared dashboard_blocks/_contacts.py into
+# module_packages/contacts/backend/dashboard_block.py, gaining
+# module="contacts" gating for the first time.

@@ -1,14 +1,14 @@
 import { useEffect, useState, useCallback } from 'react'
-import HelpButton from '../components/HelpButton'
+import HelpButton from '../../../components/HelpButton'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { contacts as contactsApi } from '../lib/api'
-import { useAuth } from '../lib/auth'
-import { useWorkspace } from '../lib/workspace'
-import ContactDetail from '../components/contacts/ContactDetail'
-import ContactModal from '../components/contacts/ContactModal'
-import ContactAvatar from '../components/contacts/ContactAvatar'
-import BulkConvertContactsModal from '../components/contacts/BulkConvertContactsModal'
-import { formatPhone } from '../components/contacts/phone'
+import { contacts as contactsApi } from './api'
+import { useAuth } from '../../../lib/auth'
+import { useWorkspace } from '../../../lib/workspace'
+import ContactDetail from './ContactDetail'
+import ContactModal from './ContactModal'
+import ContactAvatar from './ContactAvatar'
+import BulkConvertContactsModal from './BulkConvertContactsModal'
+import { formatPhone } from './phone'
 
 const TYPE_FILTERS = [
   { id: 'all', label: 'All' },

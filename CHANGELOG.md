@@ -11,8 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - **Mod Store** (Admin → Mod Store): install and uninstall first-party LogCoreOS modules. Journal,
-  Home Assistant, n8n Automation (renamed from "Automations"), Calendar, Household, Team, Notes, and
-  Assets are optional this way — none is a permanent core feature anymore, and a fresh install now ships
+  Home Assistant, n8n Automation (renamed from "Automations"), Calendar, Household, Team, Notes,
+  Assets, and Contacts are optional this way — none is a permanent core feature anymore, and a fresh install now ships
   without them by default; existing instances that already used one keep it installed automatically.
   Uninstalling a module never deletes its data — reinstalling picks everything back up untouched.
   Installing/uninstalling requires an admin-triggered restart to take effect (never automatic), with
@@ -51,14 +51,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A user with Assets disabled could still list, create, update, archive, move, search, and delete
   their assets and templates through the AI chat, since none of the 10 asset tools were actually
   gated on the module — closed the same way as Chat's/Notes'/Dashboards' own tool-gating gaps.
+- A user with Contacts disabled could still list, create, and update contacts, log interactions, and
+  create deals through the AI chat, since none of the 6 contact tools were actually gated on the
+  module — closed the same way as Chat's/Notes'/Dashboards'/Assets' own tool-gating gaps.
+- An admin with Contacts disabled for their own account could still edit Contacts' own custom-field
+  definitions, since that endpoint (`PUT /contacts/fields`) was missing the module gate its own `GET`
+  counterpart already had — closed.
 
 ### Changed
 
 - Every module in the app is being converted into this same self-contained format over time,
   including foundational ones like Tasks, AI Chat, and Dashboards (marked non-removable, not
   excluded) — journal, Home Assistant, n8n Automation, Calendar, Tasks, Household, Team, AI Chat,
-  Notes, Dashboards, and Assets are the first eleven, proving the pattern; the rest follow one at a
-  time.
+  Notes, Dashboards, Assets, and Contacts are the first twelve, proving the pattern; the rest follow
+  one at a time.
 - Assets' admin-only n8n automation token reveal/rotate moved from inside the Assets module itself
   to Admin → n8n (now backed by `/auth/admin/automation-token`), so admins keep the ability to
   view/rotate it regardless of whether Assets is installed — Contacts' own separate automation API

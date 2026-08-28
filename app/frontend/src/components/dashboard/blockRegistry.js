@@ -1,9 +1,8 @@
 import { lazy } from 'react'
 import {
-  AiUsageMeBlock, AiUsageOverviewBlock, ContactsListBlock, CustomFieldsBlock,
+  AiUsageMeBlock, AiUsageOverviewBlock, CustomFieldsBlock,
   FinanceActivityBlock, FinanceBookReportBlock, HeadingDividerBlock,
-  LinkButtonBlock, LinkedAssetsBlock,
-  LinkedDealsBlock, NavButtonBlock,
+  LinkButtonBlock, NavButtonBlock,
   RecentAiActionsBlock,
   StatusButtonBlock, TextBlock,
 } from './blocks'
@@ -30,10 +29,7 @@ export const BLOCK_REGISTRY = {
   // these "record widget" names were confusing without that context. Kept
   // short since both the catalog grid and the (edit-mode-only) block header
   // truncate long labels.
-  linked_deals: { Component: LinkedDealsBlock, icon: '🤝', label: "Contact's Deals", defaultLayout: { w: 12, h: 9 }, shape: 'list' },
   custom_fields: { Component: CustomFieldsBlock, icon: '🗂️', label: 'Custom Fields (Contact/Asset)', defaultLayout: { w: 9, h: 9 } },
-  linked_assets: { Component: LinkedAssetsBlock, icon: '🔗', label: "Contact's Linked Assets", defaultLayout: { w: 9, h: 9 }, shape: 'list', recordKind: 'asset' },
-  contacts_list: { Component: ContactsListBlock, icon: '👥', label: 'Contacts List', defaultLayout: { w: 12, h: 9 }, shape: 'list', recordKind: 'contact' },
   ai_usage_me: { Component: AiUsageMeBlock, icon: '🤖', label: 'AI Usage — My Usage', defaultLayout: { w: 9, h: 6 } },
   ai_usage_overview: { Component: AiUsageOverviewBlock, icon: '🛡️', label: 'AI Usage — All Users', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
   recent_ai_actions: { Component: RecentAiActionsBlock, icon: '🕘', label: 'Recent AI Actions', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
@@ -97,12 +93,10 @@ export const CONFIG_FIELD_SCHEMAS = {
     { key: 'book_id', label: 'Finance Book', kind: 'financeBook', optional: true },
   ],
   finance_book_report: [{ key: 'book_id', label: 'Finance Book', kind: 'financeBook' }],
-  linked_deals: [{ key: 'contact_id', label: 'Contact', kind: 'contact' }],
   custom_fields: [
     { key: 'contact_id', label: 'Contact', kind: 'contact', optional: true },
     { key: 'asset_id', label: 'Asset', kind: 'asset', optional: true },
   ],
-  linked_assets: [{ key: 'contact_id', label: 'Contact (shows the assets linked to them)', kind: 'contact' }],
   text_block: [{ key: 'text', label: 'Text', kind: 'textarea' }],
   link_button: [
     { key: 'label', label: 'Button label', kind: 'text' },

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { contacts as contactsApi } from '../../lib/api'
+import { contacts as contactsApi } from './api'
 import { formatLastSeen } from './presence'
 
 // Shared by the Contacts list, ContactDetail's header, and ContactModal's

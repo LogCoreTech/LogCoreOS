@@ -345,60 +345,6 @@ export const finance = {
   },
 }
 
-export const contacts = {
-  list:         (includeArchived = false) => get(`/contacts${includeArchived ? '?include_archived=true' : ''}`),
-  availableForLinking: ()            => get('/contacts/available-for-linking'),
-  me:           ()                  => get('/contacts/me'),
-  updateMe:     (data)               => request('PATCH', '/contacts/me', data),
-  linkAffiliation:   (id, otherId)  => post(`/contacts/${id}/affiliations/${otherId}`, {}),
-  unlinkAffiliation: (id, otherId)  => del(`/contacts/${id}/affiliations/${otherId}`),
-  uploadPhoto:  (id, file)          => requestFile('POST', `/contacts/${id}/photo`, file),
-  photoBlob:    (id)                => requestBlob(`/contacts/${id}/photo`),
-  removePhoto:  (id)                => del(`/contacts/${id}/photo`),
-  get:          (id)                => get(`/contacts/${id}`),
-  create:       (data)              => post('/contacts', data),
-  update:       (id, data)          => patch(`/contacts/${id}`, data),
-  remove:       (id)                => del(`/contacts/${id}`),
-  archive:      (id)                => post(`/contacts/${id}/archive`, {}),
-  unarchive:    (id)                => post(`/contacts/${id}/unarchive`, {}),
-  convert:      (id)                => post(`/contacts/${id}/convert`, {}),
-  convertBulk:  (contactIds = null) => post('/contacts/convert-bulk', { contact_ids: contactIds }),
-  interactions: (id)                => get(`/contacts/${id}/interactions`),
-  addInteraction:    (id, data)     => post(`/contacts/${id}/interactions`, data),
-  updateInteraction: (id, iid, data) => patch(`/contacts/${id}/interactions/${iid}`, data),
-  removeInteraction: (id, iid)      => del(`/contacts/${id}/interactions/${iid}`),
-  deals:        (id)                => get(`/contacts/${id}/deals`),
-  addDeal:      (id, data)          => post(`/contacts/${id}/deals`, data),
-  updateDeal:   (id, did, data)     => patch(`/contacts/${id}/deals/${did}`, data),
-  removeDeal:   (id, did)           => del(`/contacts/${id}/deals/${did}`),
-  linkAsset:    (id, did, assetId)  => post(`/contacts/${id}/deals/${did}/assets`, { asset_id: assetId }),
-  unlinkAsset:  (id, did, assetId)  => del(`/contacts/${id}/deals/${did}/assets/${assetId}`),
-  getDeal:      (dealId)            => get(`/contacts/deals/${dealId}`),
-  finance:      (id)                => get(`/contacts/${id}/finance`),
-  pipeline:     ()                  => get('/contacts/pipeline'),
-  setPipeline:  (stages)            => request('PUT', '/contacts/pipeline', { stages }),
-  fields:       ()                  => get('/contacts/fields'),
-  setFields:    (fields)            => request('PUT', '/contacts/fields', { fields }),
-  updateAccess: (id, data)          => request('PUT', `/contacts/${id}/access`, data),
-  respondShare: (notifId, accept)   => post('/contacts/shares/respond', { notif_id: notifId, accept }),
-  leave:        (id)                => post(`/contacts/${id}/leave`, {}),
-  members:      ()                  => get('/contacts/members'),
-  roles:        ()                  => get('/contacts/roles'),
-  csvPreview:   (file)              => requestFile('POST', '/contacts/import/csv', file),
-  csvCommit:    (rows)              => post('/contacts/import/csv/commit', { rows }),
-  exportCsv:    async () => {
-    const res = await fetch(`${BASE}/contacts/export/csv`, { credentials: 'include', headers: headers() })
-    if (!res.ok) throw new Error('Export failed')
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'contacts.csv'
-    a.click()
-    URL.revokeObjectURL(url)
-  },
-}
-
 export const suggestions = {
   list:              ()    => get('/suggestions'),
   update:            (id, data) => request('PUT', `/suggestions/${id}`, data),
