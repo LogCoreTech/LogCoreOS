@@ -29,7 +29,6 @@ import AdminModStore from './pages/settings/admin/ModStore'
 import Login from './pages/Login'
 import Setup from './pages/Setup'
 import Profile from './pages/Profile'
-import Finance from './pages/Finance'
 import Help from './pages/Help'
 
 function Protected({ children }) {
@@ -90,7 +89,6 @@ export default function App() {
                     this exact problem never came up before. */}
                 <Route path="/"         element={<Dashboard />} />
                 <Route path="/goals"     element={<ModuleRoute moduleId="tasks"><Goals /></ModuleRoute>} />
-                <Route path="/finance"     element={<ModuleRoute moduleId="finance"><Finance /></ModuleRoute>} />
                 {MODULE_PACKAGES.filter(pkg => pkg.to !== '/').map(pkg => {
                   const Page = lazy(pkg.loadPage)
                   return (

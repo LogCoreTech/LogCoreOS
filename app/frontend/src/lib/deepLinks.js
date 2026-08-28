@@ -7,7 +7,6 @@ import { MODULE_PACKAGES } from './moduleRegistry'
 
 const _CORE_MODULE_ROUTES = {
   goals: '/goals',
-  finance: '/finance',
 }
 
 // A converted module needs no entry here — its route is discovered from its
@@ -23,9 +22,7 @@ export const MODULE_ROUTES = {
 // manifest.js's `recordParam` field instead (same merge MODULE_ROUTES gets
 // from `to`, above). automations has no per-workflow detail view to land on
 // yet, so it declares no recordParam and is absent from both halves.
-const _CORE_RECORD_PARAM = {
-  finance: 'book',
-}
+const _CORE_RECORD_PARAM = {}
 
 const RECORD_PARAM = {
   ..._CORE_RECORD_PARAM,

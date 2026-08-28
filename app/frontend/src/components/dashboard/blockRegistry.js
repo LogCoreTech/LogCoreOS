@@ -1,7 +1,7 @@
 import { lazy } from 'react'
 import {
   AiUsageMeBlock, AiUsageOverviewBlock, CustomFieldsBlock,
-  FinanceActivityBlock, FinanceBookReportBlock, HeadingDividerBlock,
+  HeadingDividerBlock,
   LinkButtonBlock, NavButtonBlock,
   RecentAiActionsBlock,
   StatusButtonBlock, TextBlock,
@@ -22,8 +22,6 @@ import { MODULE_PACKAGES } from '../../lib/moduleRegistry'
 // today's bordered card for single-record content. Owner feedback: every
 // block looked like the same box regardless of what was inside it.
 export const BLOCK_REGISTRY = {
-  finance_activity: { Component: FinanceActivityBlock, icon: '💰', label: 'Finance Activity', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
-  finance_book_report: { Component: FinanceBookReportBlock, icon: '📊', label: 'Finance Book Report', defaultLayout: { w: 9, h: 9 } },
   // Labels below spell out the data's actual source (a linked Contact or
   // Asset) rather than just the shape of what's shown — owner feedback:
   // these "record widget" names were confusing without that context. Kept
@@ -87,12 +85,6 @@ const _CHROME_FIELDS = [
 ]
 
 export const CONFIG_FIELD_SCHEMAS = {
-  finance_activity: [
-    { key: 'asset_id', label: 'Asset', kind: 'asset', optional: true },
-    { key: 'contact_id', label: 'Contact', kind: 'contact', optional: true },
-    { key: 'book_id', label: 'Finance Book', kind: 'financeBook', optional: true },
-  ],
-  finance_book_report: [{ key: 'book_id', label: 'Finance Book', kind: 'financeBook' }],
   custom_fields: [
     { key: 'contact_id', label: 'Contact', kind: 'contact', optional: true },
     { key: 'asset_id', label: 'Asset', kind: 'asset', optional: true },

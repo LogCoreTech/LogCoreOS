@@ -30,7 +30,6 @@ const CORE_MODULES = [
   // here even after Tasks converted (2026-08-25) — see that module's own
   // manifest.js for the full reasoning.
   { id: 'goals',                to: '/goals',        icon: '🎯',          label: 'Goals'                 },
-  { id: 'finance',              to: '/finance',      icon: '💵',          label: 'Finance'               },
 ]
 
 // `navLabel` is optional (undefined for every CORE_MODULES entry and most

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { finance as financeApi } from '../../lib/api'
-import { fmtMoney, toCents } from './money'
+import { finance as financeApi } from './api'
+import { fmtMoney, toCents } from '../../../components/finance/money'
 
 const ACCOUNT_TYPES = ['checking', 'savings', 'credit', 'cash', 'other']
 const CAP_LABELS = [

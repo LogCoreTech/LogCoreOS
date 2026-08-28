@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { finance as financeApi } from '../../lib/api'
+import { finance as financeApi } from '../../module_packages/finance/frontend/api'
 import { fmtMoney } from '../finance/money'
 
 const POOL_WORKSPACE = { household: 'personal', team: 'business' }

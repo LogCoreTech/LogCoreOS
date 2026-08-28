@@ -70,19 +70,21 @@ def test_get_effective_disabled_unknown_role_falls_back_to_member(brain):
 
 
 def test_get_effective_disabled_workspace_keyed_dict(brain):
-    # "finance" (not "team") deliberately — a CORE module id, never a
-    # module_packages/ discovery, so it can never collide with
-    # get_effective_disabled()'s own not-installed union the way a real
-    # converted-but-optional module id like "team" now would (team's own
-    # 2026-08-25 conversion made this assertion start failing for the
-    # wrong reason: "team" showed up disabled in BOTH workspaces simply
-    # because this bare test brain never marks it installed, unrelated to
-    # the per-user override merging this test actually exercises).
+    # "goals" (not "finance"/"team") deliberately — the one remaining
+    # hardcoded CORE module id, never a module_packages/ discovery, so it
+    # can never collide with get_effective_disabled()'s own not-installed
+    # union the way a real converted-but-optional module id would (team's
+    # own 2026-08-25 conversion made this assertion start failing for the
+    # wrong reason the first time: "team" showed up disabled in BOTH
+    # workspaces simply because this bare test brain never marks it
+    # installed, unrelated to the per-user override merging this test
+    # actually exercises — "finance" itself hit the identical issue when
+    # IT converted 2026-08-28, forcing this same swap a second time).
     features_service.save_features({"roles": {"member": {}}})
-    per_user = {"personal": ["journal"], "business": ["finance"]}
+    per_user = {"personal": ["journal"], "business": ["goals"]}
     assert "journal" in features_service.get_effective_disabled("member", per_user, "personal")
-    assert "finance" in features_service.get_effective_disabled("member", per_user, "business")
-    assert "finance" not in features_service.get_effective_disabled("member", per_user, "personal")
+    assert "goals" in features_service.get_effective_disabled("member", per_user, "business")
+    assert "goals" not in features_service.get_effective_disabled("member", per_user, "personal")
 
 
 # --- routers/features.py — role CRUD ---------------------------------------
@@ -112,9 +114,9 @@ def test_update_role_accepts_mismatched_case(brain):
     """The actual reported bug: a role created as 'Cleaner' is stored as 'cleaner';
     editing it moments later using the as-typed case must not 404."""
     admin = _admin(brain)
-    create_role(CreateRoleRequest(name="Cleaner", modules={"finance": True}), admin)
-    result = update_role("Cleaner", RoleModulesRequest(modules={"finance": False}), admin)
-    assert result["modules"]["finance"] is False
+    create_role(CreateRoleRequest(name="Cleaner", modules={"goals": True}), admin)
+    result = update_role("Cleaner", RoleModulesRequest(modules={"goals": False}), admin)
+    assert result["modules"]["goals"] is False
 
 
 def test_delete_role_accepts_mismatched_case(brain):

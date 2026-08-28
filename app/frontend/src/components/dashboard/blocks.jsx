@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { fmtMoney } from '../finance/money'
 import { ALL_MODULES, catColor } from '../../lib/constants'
 import { deepLinkUrl } from '../../lib/deepLinks'
 import { contacts as contactsApi } from '../../module_packages/contacts/frontend/api'
@@ -121,36 +120,6 @@ export function TaskRow({ task, actions, onAction }) {
       <span className="text-sm truncate flex-1">{task.title}</span>
       {task.streak_count > 0 && <span className="text-xs text-orange-500 shrink-0">🔥{task.streak_count}</span>}
       <BlockActionButtons actions={actions} recordKind="task" recordId={task.id} onDone={onAction} />
-    </div>
-  )
-}
-
-export function FinanceActivityBlock({ data }) {
-  const txs = data?.transactions || []
-  if (!txs.length) return <Empty text="No transactions." />
-  return (
-    <div className="space-y-1.5">
-      {txs.map(tx => (
-        <div key={tx.id} className="flex items-center justify-between text-sm">
-          <span className="truncate">{tx.payee || tx.category || '(uncategorized)'}</span>
-          <span className={`shrink-0 ml-2 font-medium ${tx.amount_cents < 0 ? 'text-charcoal-600 dark:text-charcoal-300' : 'text-green-600 dark:text-green-400'}`}>
-            {fmtMoney(tx.amount_cents)}
-          </span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-export function FinanceBookReportBlock({ data }) {
-  const r = data?.report
-  if (!r) return <Empty text="No report data." />
-  return (
-    <div className="space-y-1 text-sm">
-      <p className="font-medium">{data.book_name}</p>
-      <div className="flex justify-between"><span>Income</span><span className="text-green-600 dark:text-green-400">{fmtMoney(r.income_cents)}</span></div>
-      <div className="flex justify-between"><span>Expenses</span><span>{fmtMoney(r.expense_cents)}</span></div>
-      <div className="flex justify-between font-semibold border-t border-charcoal-100 dark:border-charcoal-700 pt-1"><span>Net</span><span>{fmtMoney(r.net_cents)}</span></div>
     </div>
   )
 }

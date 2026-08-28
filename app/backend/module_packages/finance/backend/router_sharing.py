@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from routers.auth import get_workspace, require_module
-from routers.finance import _find_or_404, _validate_id
+from module_packages.finance.backend.router import _find_or_404, _validate_id
 from services import auth_service, finance_service
 from services.rate_limiter import rate_limit
 

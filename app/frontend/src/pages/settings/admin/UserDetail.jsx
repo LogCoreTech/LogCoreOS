@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { admin as adminApi, features as featuresApi, finance as financeApi } from '../../../lib/api'
+import { admin as adminApi, features as featuresApi } from '../../../lib/api'
+import { finance as financeApi } from '../../../module_packages/finance/frontend/api'
 import { useAuth } from '../../../lib/auth'
 import { ALL_MODULES } from '../../../lib/constants'
 import SettingsPageHeader from '../../../components/settings/SettingsPageHeader'

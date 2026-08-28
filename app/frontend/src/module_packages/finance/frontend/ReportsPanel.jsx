@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { finance as financeApi } from '../../lib/api'
-import { fmtMoney } from './money'
+import { finance as financeApi } from './api'
+import { fmtMoney } from '../../../components/finance/money'
 
 export default function ReportsPanel({ book }) {
   const year = new Date().getFullYear()

@@ -38,27 +38,6 @@
       ]
     },
     {
-      "id": "finance",
-      "icon": "💰",
-      "title": "Finance",
-      "blurb": "Personal and business finances: books with accounts and transactions, bank sync, budgets, recurring bills, invoicing, and sharing with tight controls.",
-      "howto": [
-        "Create a Book, then add accounts (checking, savings, credit, cash) and customize its categories.",
-        "Add transactions by hand, import a CSV, or have an admin connect your bank via SimpleFIN (read-only).",
-        "Moving money between two of your own books (even across personal and business)? Use Transfer instead of Expense/Income — pick the destination book and account and both sides are created and linked automatically, and never show up as income or expense in your reports or budgets.",
-        "Set budgets and recurring bills to get alerts and a projected balance; deviations from your bank balance flag early.",
-        "Invoice clients, record partial payments, and see who's behind under Invoices → AR.",
-        "Share a book or a single account with someone — \"contribute\" access can be limited to submitting expenses with no visibility into balances."
-      ],
-      "tips": [
-        "Your personal books are private — even admins can't see them unless you share them.",
-        "Everything derived (balances, reports, AR) is computed live; you never have to reconcile stored totals."
-      ],
-      "modules": [
-        "finance"
-      ]
-    },
-    {
       "id": "workspaces",
       "icon": "🔀",
       "title": "Personal vs Business",

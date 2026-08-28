@@ -3,7 +3,8 @@ Book Report. Every resolver goes through finance_service.find_book /
 list_transactions_for_asset, the SAME access gate the Finance router itself
 uses — a viewer who can't see a book independently gets locked here too."""
 
-from services import finance_reports, finance_service
+from services import finance_service
+from module_packages.finance.backend import reports as finance_reports
 from services.dashboard_blocks.registry import (
     BlockRenderCtx,
     BlockRenderResult,
@@ -88,6 +89,7 @@ register(
             "contact_id": "contacts",
             "book_id": "finance_books",
         },
+        module="finance",
     )
 )
 register(
@@ -97,5 +99,6 @@ register(
         category="record_linked",
         resolver=resolve_finance_book_report,
         record_ref_fields={"book_id": "finance_books"},
+        module="finance",
     )
 )

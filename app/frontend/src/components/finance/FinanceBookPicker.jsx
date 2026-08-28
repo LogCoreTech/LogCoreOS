@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { finance as financeApi } from '../../lib/api'
+import { finance as financeApi } from '../../module_packages/finance/frontend/api'
 
 /**
  * Finance book selector for dashboard block config. A plain <select> rather

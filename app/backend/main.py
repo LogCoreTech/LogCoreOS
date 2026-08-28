@@ -23,12 +23,6 @@ from routers import (
     brain,
     export,
     features,
-    finance,
-    finance_banking,
-    finance_invoicing,
-    finance_planning,
-    finance_sharing,
-    finance_transfers,
     health,
     help,
     infisical,
@@ -375,12 +369,6 @@ app.include_router(push.router, prefix="/api/v1/push", tags=["push"])
 app.include_router(suggestions.router, prefix="/api/v1/suggestions", tags=["suggestions"])
 app.include_router(infisical.router, prefix="/api/v1/auth", tags=["infisical"])
 app.include_router(features.router, prefix="/api/v1/auth", tags=["features"])
-app.include_router(finance.router, prefix="/api/v1/finance", tags=["finance"])
-app.include_router(finance_banking.router, prefix="/api/v1/finance", tags=["finance-banking"])
-app.include_router(finance_planning.router, prefix="/api/v1/finance", tags=["finance-planning"])
-app.include_router(finance_invoicing.router, prefix="/api/v1/finance", tags=["finance-invoicing"])
-app.include_router(finance_sharing.router, prefix="/api/v1/finance", tags=["finance-sharing"])
-app.include_router(finance_transfers.router, prefix="/api/v1/finance", tags=["finance-transfers"])
 app.include_router(update.router, prefix="/api/v1/update", tags=["update"])
 app.include_router(help.router, prefix="/api/v1/help", tags=["help"])
 app.include_router(ai_usage.router, prefix="/api/v1/ai-usage", tags=["ai-usage"])

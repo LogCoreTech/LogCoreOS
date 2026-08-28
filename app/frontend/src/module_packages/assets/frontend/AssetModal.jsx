@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { finance as financeApi } from '../../../lib/api'
+import { finance as financeApi } from '../../finance/frontend/api'
 import { assets as assetsApi } from './api'
 import { tasks as tasksApi } from '../../tasks/frontend/api'
 import TaskModal from '../../../components/TaskModal'

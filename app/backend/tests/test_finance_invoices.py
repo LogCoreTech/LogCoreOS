@@ -5,7 +5,7 @@ from datetime import date, timedelta
 import pytest
 
 from services import finance_invoice_service as inv
-from services import finance_reports as reports
+from module_packages.finance.backend import reports
 from services import finance_service as fin
 
 

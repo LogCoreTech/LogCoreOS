@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { finance as financeApi } from '../../lib/api'
-import { fmtMoney, toCents, centsToInput, todayStr } from './money'
+import { finance as financeApi } from './api'
+import { fmtMoney, toCents, centsToInput, todayStr } from '../../../components/finance/money'
 
 const EMPTY_FORM = { name: '', amount: '', kind: 'expense', account_id: '', category: '', cadence: 'monthly', next_due: '', autopay: false, deductible: false, tax_category: '' }
 

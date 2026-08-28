@@ -945,7 +945,7 @@ Token auth via `X-Automation-Token` header — no JWT. Token lives in `brain/_sy
 
 ## Finance
 
-Router mounted at `/api/v1/finance`. Requires the `finance` module (disabled for the `guest` feature role by default; both workspaces, workspace-scoped via `X-Workspace`). All amounts are **signed integer cents**: positive = income, negative = expense.
+Router mounted at `/api/v1/finance` (module id `finance` — converted into `module_packages/finance/` 2026-08-28; the 13th and FINAL module in the entire Mod Store rollout. Split across SIX separate router files — `router.py`/`router_banking.py`/`router_planning.py`/`router_invoicing.py`/`router_sharing.py`/`router_transfers.py`, 78 endpoints total — composed into one parent router by `manifest.py`'s `_get_router()` since `ModuleManifest.get_router()` only supports returning one; each sub-router keeps its own original tag, so the OpenAPI grouping below is byte-identical to before this conversion). Requires the `finance` module (disabled for the `guest` feature role by default; both workspaces, workspace-scoped via `X-Workspace`). All amounts are **signed integer cents**: positive = income, negative = expense.
 
 **Books** are the top-level unit — each holds its own accounts, customizable categories (name + kind `expense|income`), and transactions (stored per-book per-year). Personal/business books are private to their owner (invisible to admins). **Pool books** (`_household` in personal ws, `_team` in business ws) are visible to every workspace member; writes are admin-only until per-book contributors ship. Book responses are annotated `_owner` (`household`/`team`; absent = own) and `_access` (`edit`/`read`); list/detail responses include computed `balances` (per account) and `total_cents` (active accounts).
 
@@ -974,12 +974,14 @@ Bank connections use SimpleFIN Bridge **read-only** tokens. Members never enter 
 | `GET` | `/finance/simplefin/status` | module users | own sanitized status — never includes the access URL |
 | `GET` | `/finance/simplefin/accounts` | module users | live list of connected bank accounts (for the mapping UI) |
 | `PUT` | `/finance/simplefin/mapping` | module users | `{entries: [{simplefin_account_id, bank_name?, account_name?, target: {store: self\|household\|team, workspace, book_id, account_id}, enabled}]}` — pool targets **admin-only** |
-| `GET` | `/finance/simplefin/connections` | **admin** | per-user connection status, used to populate each user's own Bank Connection section |
-| `GET` | `/finance/simplefin/pool-summary?pool=household\|team` | **admin** | read-only, derived from every user's `account_map`: which members have accounts mapped into that pool's books (`[{user_id, name, mapped_accounts}]`). Distinct from — and unaffected by — the pool's own connection below; a pool can receive money both ways at once |
-| `POST` | `/finance/simplefin/claim` | **admin** | `{user_id, setup_token}` → claims + stores the access URL for that user; notifies them (rate 5/hour) |
-| `POST` | `/finance/simplefin/reveal` | **admin** | `{user_id}` → the stored access URL (rate 3/hour — the only endpoint that outputs it) |
-| `DELETE` | `/finance/simplefin/{user_id}` | **admin** | disconnect (deletes the stored token; imported data stays) |
-| `POST` | `/finance/simplefin/sync` | **admin** | `{user_id}` → run a sync now; returns `{created, skipped, errors?}` |
+| `GET` | `/finance/simplefin/connections` | **admin + finance module** | per-user connection status, used to populate each user's own Bank Connection section |
+| `GET` | `/finance/simplefin/pool-summary?pool=household\|team` | **admin + finance module** | read-only, derived from every user's `account_map`: which members have accounts mapped into that pool's books (`[{user_id, name, mapped_accounts}]`). Distinct from — and unaffected by — the pool's own connection below; a pool can receive money both ways at once |
+| `POST` | `/finance/simplefin/claim` | **admin + finance module** | `{user_id, setup_token}` → claims + stores the access URL for that user; notifies them (rate 5/hour) |
+| `POST` | `/finance/simplefin/reveal` | **admin + finance module** | `{user_id}` → the stored access URL (rate 3/hour — the only endpoint that outputs it) |
+| `DELETE` | `/finance/simplefin/{user_id}` | **admin + finance module** | disconnect (deletes the stored token; imported data stays) |
+| `POST` | `/finance/simplefin/sync` | **admin + finance module** | `{user_id}` → run a sync now; returns `{created, skipped, errors?}` |
+
+All 6 endpoints above gained `require_module("finance")` alongside their pre-existing `require_admin` during the 2026-08-28 conversion — previously admin-gated ALONE, meaning an admin whose own account had Finance disabled could still manage every user's bank connections. The same narrow-inconsistency shape as Contacts' own `PUT /contacts/fields` finding, not Assets' own "another module depends on this" shape — see `docs/MEMORY.md`'s 2026-08-28 entry (Finance).
 
 **Pool-owned connections** (added 2026-08-12): a joint/family bank account connected directly to the
 `_household`/`_team` pseudo-user itself, independent of any one member's own SimpleFIN connection —
@@ -991,13 +993,15 @@ first. Included in the same nightly/boot sync sweep as user connections.
 
 | Method | Path | Access | Notes |
 |--------|------|--------|-------|
-| `GET` | `/finance/simplefin/pool/{pool}/status` | **admin** | sanitized status for the pool's own connection (`pool`: `household`\|`team`) |
-| `GET` | `/finance/simplefin/pool/{pool}/accounts` | **admin** | live bank accounts on the pool's connection, for its mapping UI |
-| `PUT` | `/finance/simplefin/pool/{pool}/mapping` | **admin** | same entry shape as the member mapping endpoint above |
-| `POST` | `/finance/simplefin/pool/{pool}/claim` | **admin** | `{setup_token}` → claims + stores the access URL for the pool (rate 5/hour) |
-| `POST` | `/finance/simplefin/pool/{pool}/reveal` | **admin** | the stored access URL (rate 3/hour) |
-| `DELETE` | `/finance/simplefin/pool/{pool}` | **admin** | disconnect |
-| `POST` | `/finance/simplefin/pool/{pool}/sync` | **admin** | run a sync now |
+| `GET` | `/finance/simplefin/pool/{pool}/status` | **admin + finance module** | sanitized status for the pool's own connection (`pool`: `household`\|`team`) |
+| `GET` | `/finance/simplefin/pool/{pool}/accounts` | **admin + finance module** | live bank accounts on the pool's connection, for its mapping UI |
+| `PUT` | `/finance/simplefin/pool/{pool}/mapping` | **admin + finance module** | same entry shape as the member mapping endpoint above |
+| `POST` | `/finance/simplefin/pool/{pool}/claim` | **admin + finance module** | `{setup_token}` → claims + stores the access URL for the pool (rate 5/hour) |
+| `POST` | `/finance/simplefin/pool/{pool}/reveal` | **admin + finance module** | the stored access URL (rate 3/hour) |
+| `DELETE` | `/finance/simplefin/pool/{pool}` | **admin + finance module** | disconnect |
+| `POST` | `/finance/simplefin/pool/{pool}/sync` | **admin + finance module** | run a sync now |
+
+These 7 pool endpoints complete the set of 13 admin-lifecycle SimpleFIN endpoints that gained `require_module("finance")` on 2026-08-28 (see the 6 member-connection endpoints above) — every OTHER `finance_banking.py` endpoint (member-facing SimpleFIN actions, CSV import, payee rules below) was already correctly gated on `require_module` before this conversion.
 
 | `POST` | `/finance/books/{id}/import/csv` | edit | multipart `file` (≤5 MB) → `{headers, rows, total_rows}` preview |
 | `POST` | `/finance/books/{id}/import/csv/commit` | edit | multipart `file` + form fields `account_id, date_col, amount_col, payee_col?, notes_col?, date_format?, invert_amounts?` → `{created, skipped, errors?}`; dedup by `import_hash` |
@@ -1540,9 +1544,13 @@ ever meant to surface embedded in an already access-controlled read (e.g. a cont
 
 Router mounted at `/api/v1/mod-store` (2026-08-24). First-party module catalog + install state for
 the universal module system (`module_registry.py`) — see `docs/MEMORY.md`'s 2026-08-24 entry for
-the full design. Phase 1 only: the mechanism exists, but no real module has converted into
-`module_packages/` yet, so every endpoint below is live but the catalog only ever lists
-`coming_soon` entries for now.
+the full design, and its 2026-08-28 entry (Finance) for the rollout's completion. **The rollout
+itself finished 2026-08-28**: all 13 modules the plan ever targeted — journal, home_assistant,
+automations, calendar, tasks, household, team, chat, notes, dashboard, assets, contacts, finance —
+have converted into `module_packages/` (3 locked/`uninstallable`: tasks/chat/dashboard; the other 10
+optional), so the catalog now lists all of them as `available`/installed rather than `coming_soon`.
+No further module conversions are planned; what remains is real-world verification of the more
+recently converted modules on a live instance (see `docs/TASKS.md`'s Mod Store tracking item).
 
 ### `GET /mod-store/catalog`
 Admin only. Every catalog entry (`content/mod_store_catalog.json`) merged with live state:

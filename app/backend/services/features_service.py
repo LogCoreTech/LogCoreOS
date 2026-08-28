@@ -28,7 +28,6 @@ from services.file_service import read_json, write_json
 # state. See module_registry.py.
 _CORE_MODULE_IDS = [
     "goals",
-    "finance",
 ]
 
 
@@ -72,14 +71,14 @@ _BUSINESS_MEMBER = {
     # "chat" (converted 2026-08-26, uninstallable=True — always active, the
     # second locked module after tasks) also has no explicit entry here for
     # the same reason tasks doesn't — default-missing-to-True already matches.
-    # "assets" (converted 2026-08-27) and "contacts" (converted 2026-08-28)
-    # both deliberately have no explicit entry here either now, same
-    # reasoning as dashboard/notes above. Contacts' guest-off default (see
-    # _guest_map() below) is untouched by this removal — that override is
-    # unconditional (applied after copying this base map, not conditional
-    # on "contacts" already being a key in it), so it keeps working
-    # identically regardless of whether contacts is installed yet.
-    "finance": True,
+    # "assets" (converted 2026-08-27), "contacts" (converted 2026-08-28), and
+    # "finance" (converted 2026-08-28) all deliberately have no explicit
+    # entry here either now, same reasoning as dashboard/notes above.
+    # Contacts'/Finance's own guest-off defaults (see _guest_map() below)
+    # are untouched by this removal — those overrides are unconditional
+    # (applied after copying this base map, not conditional on the key
+    # already being present in it), so they keep working identically
+    # regardless of whether either module is installed yet.
 }
 
 

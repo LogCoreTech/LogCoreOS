@@ -169,15 +169,19 @@ The App currently provides:
 
 - Workspace switching — personal / business dual-workspace support; per-workspace data paths, module visibility, and feature role defaults; workspace toggle pill in sidebar for dual-access users; admin UI for granting and per-workspace module control
 
-**In progress — Mod Store / universal module system (started 2026-08-24):**
+**Complete — Mod Store / universal module system (2026-08-24 through 2026-08-28):**
 
-A real architectural shift, not just a feature: every module above is converting, one at a time,
+A real architectural shift, not just a feature: every module has now converted, one at a time,
 into a self-contained `module_packages/<id>/` format with its own manifest/version — including
 foundational ones (Tasks, Chat, Dashboards-the-feature), which just carry `uninstallable: true`
-rather than being excluded from the system. End state: `main.py` has zero hardcoded per-module
-router registrations. The registry mechanism itself (discovery, install/uninstall state, all four
-enforcement-gap fixes, the admin Mod Store UI) is done and fully tested. Twelve modules converted so
-far: journal (increment 1) and Home Assistant (increment 2, 2026-08-24, full internal id rename
+rather than being excluded from the system. End state reached: `main.py` has zero hardcoded
+per-module router registrations. The registry mechanism itself (discovery, install/uninstall state,
+all enforcement-gap fixes, the admin Mod Store UI) is done and fully tested, and — as of Finance's
+own conversion below, the 13th and final one — every module the rollout plan ever targeted has
+converted. What remains is real-world verification on the live instance of the more recently
+converted modules, not further conversions (see `docs/TASKS.md`'s Mod Store tracking item for the
+exact confirmed-live vs. built-but-unverified split). Thirteen modules converted in total: journal
+(increment 1) and Home Assistant (increment 2, 2026-08-24, full internal id rename
 too) are both confirmed working end-to-end on the owner's live instance. Automations/n8n Automation
 (2026-08-25, taken out of the original planned order at the owner's request — display name only,
 id/routes/internal names deliberately left unchanged), Calendar (2026-08-25, increment 4, no
@@ -275,8 +279,32 @@ already-converted sibling module's own component), the only file left in `compon
 Two admin-gated-but-not-module-gated endpoints were found and judged independently rather than fixed
 uniformly: `PUT /contacts/fields` was missing `require_module("contacts")` — fixed; `GET
 /contacts/available-for-linking` was deliberately left ungated, matching `/contacts/me`'s own
-always-available precedent for account-creation infrastructure. Finance is next per the rollout order —
-the last and most structurally complex of the three largest remaining modules.
+always-available precedent for account-creation infrastructure. Finance (2026-08-28, converted the
+same day as Assets and Contacts) is the 13th and FINAL module in the entire rollout plan — the
+largest and most structurally complex module in the app, and the only one split across SIX separate
+router files (2,196 lines / 78 endpoints) rather than one, composed into a single router at the
+manifest level via nested `include_router()` calls since `ModuleManifest.get_router()` only supports
+returning one. `finance_service.py`/`finance_invoice_service.py`/`finance_index.py` all stay
+core — the strongest "stays core" case yet, since Contacts' own `GET /contacts/{id}/finance`
+endpoint makes deep, multi-function calls into both. `finance_planning_service.py`/
+`simplefin_service.py` ALSO stay core, for a genuinely new reason: both are imported directly by
+`scheduler.py`'s own boot/cron job functions, a scheduler dependency treated exactly like a
+sibling-module dependency for the "stays core" test, mirroring `n8n_service.py`'s own precedent from
+Automations. 13 admin-lifecycle SimpleFIN endpoints were found gated by `require_admin` alone, never
+`require_module("finance")` — fixed, the same narrow-inconsistency shape as Contacts' own `PUT
+/contacts/fields` finding. Full backend suite: 1030 passed (up from 996), `eslint`/`vite build`
+clean. See `docs/MEMORY.md`'s 2026-08-28 entry (Finance) for the full writeup.
+
+**The Mod Store migration is now complete.** All 13 modules the rollout plan ever targeted —
+journal, home_assistant, automations, calendar, tasks, household, team, chat, notes, dashboard,
+assets, contacts, finance — have converted into `module_packages/`. The only things that remain
+permanently core/unconverted are `goals` (never a real backend module, rides Tasks' own permission
+gate) and the plan's own explicitly-designated cross-cutting infrastructure that was never meant to
+convert: `dashboard_blocks/` (registry.py, render.py, every block resolver), `agent_service.py`'s
+tool-orchestration/session engine, and `module_registry.py` itself. No further module conversions
+are planned. What's left is real-world verification on the live instance of the modules built since
+journal/Home Assistant/Automations were last confirmed working there — see `docs/TASKS.md`'s Mod
+Store tracking item for exactly which modules are confirmed-live vs. still pending.
 Full design in `docs/MEMORY.md`'s 2026-08-24/25/26/27/28 entries and
 `/home/logcore/.claude/plans/i-want-you-to-composed-scone.md`; rollout order tracked in
 `docs/TASKS.md`.

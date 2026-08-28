@@ -10,8 +10,9 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from routers.auth import get_workspace, require_admin, require_module
-from routers.finance import _find_or_404, _require_edit
-from services import auth_service, finance_import_service, finance_service, simplefin_service
+from module_packages.finance.backend.router import _find_or_404, _require_edit
+from module_packages.finance.backend import import_service as finance_import_service
+from services import auth_service, finance_service, simplefin_service
 from services.file_service import simplefin_path
 from services.rate_limiter import rate_limit
 
@@ -146,6 +147,7 @@ def set_mapping(
 @router.get("/simplefin/connections")
 def list_connections(
     current_user: dict = Depends(require_admin),
+    _module: dict = Depends(_require_finance),
     _rl: None = Depends(_read_limit),
 ):
     out = []
@@ -168,6 +170,7 @@ def list_connections(
 def pool_bank_summary(
     pool: str,
     current_user: dict = Depends(require_admin),
+    _module: dict = Depends(_require_finance),
     _rl: None = Depends(_read_limit),
 ):
     """Read-only: which members have accounts mapped into this pool's books."""
@@ -180,6 +183,7 @@ def pool_bank_summary(
 def claim_for_user(
     req: ClaimRequest,
     current_user: dict = Depends(require_admin),
+    _module: dict = Depends(_require_finance),
     _rl: None = Depends(_claim_limit),
 ):
     target = _resolve_user(req.user_id)
@@ -204,6 +208,7 @@ def claim_for_user(
 def reveal_access_url(
     req: UserRef,
     current_user: dict = Depends(require_admin),
+    _module: dict = Depends(_require_finance),
     _rl: None = Depends(_reveal_limit),
 ):
     """Return the stored access URL so the user can take their token elsewhere.
@@ -219,6 +224,7 @@ def reveal_access_url(
 def disconnect_user(
     user_id: str,
     current_user: dict = Depends(require_admin),
+    _module: dict = Depends(_require_finance),
     _rl: None = Depends(_write_limit),
 ):
     target = _resolve_user(user_id)
@@ -231,6 +237,7 @@ def disconnect_user(
 def sync_now(
     req: UserRef,
     current_user: dict = Depends(require_admin),
+    _module: dict = Depends(_require_finance),
     _rl: None = Depends(_sync_limit),
 ):
     target = _resolve_user(req.user_id)
@@ -259,6 +266,7 @@ def sync_now(
 def pool_status(
     pool: str,
     current_user: dict = Depends(require_admin),
+    _module: dict = Depends(_require_finance),
     _rl: None = Depends(_read_limit),
 ):
     return simplefin_service.connection_status(_pool_user(pool))
@@ -268,6 +276,7 @@ def pool_status(
 def pool_bank_accounts(
     pool: str,
     current_user: dict = Depends(require_admin),
+    _module: dict = Depends(_require_finance),
     _rl: None = Depends(_read_limit),
 ):
     try:
@@ -281,6 +290,7 @@ def pool_set_mapping(
     pool: str,
     req: MappingRequest,
     current_user: dict = Depends(require_admin),
+    _module: dict = Depends(_require_finance),
     _rl: None = Depends(_write_limit),
 ):
     try:
@@ -296,6 +306,7 @@ def pool_claim(
     pool: str,
     req: PoolClaimRequest,
     current_user: dict = Depends(require_admin),
+    _module: dict = Depends(_require_finance),
     _rl: None = Depends(_claim_limit),
 ):
     try:
@@ -308,6 +319,7 @@ def pool_claim(
 def pool_reveal(
     pool: str,
     current_user: dict = Depends(require_admin),
+    _module: dict = Depends(_require_finance),
     _rl: None = Depends(_reveal_limit),
 ):
     """Admin-only + tightly rate limited, mirrors the per-user reveal endpoint."""
@@ -321,6 +333,7 @@ def pool_reveal(
 def pool_disconnect(
     pool: str,
     current_user: dict = Depends(require_admin),
+    _module: dict = Depends(_require_finance),
     _rl: None = Depends(_write_limit),
 ):
     if not simplefin_service.disconnect(_pool_user(pool)):
@@ -332,6 +345,7 @@ def pool_disconnect(
 def pool_sync_now(
     pool: str,
     current_user: dict = Depends(require_admin),
+    _module: dict = Depends(_require_finance),
     _rl: None = Depends(_sync_limit),
 ):
     user_name = _pool_user(pool)

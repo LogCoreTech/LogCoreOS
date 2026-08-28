@@ -97,6 +97,14 @@
       "status": "available"
     },
     {
+      "id": "finance",
+      "name": "Finance",
+      "description": "Personal and business finances: books, accounts, transactions, bank sync, budgets, and invoicing.",
+      "category": "general",
+      "icon": "💵",
+      "status": "available"
+    },
+    {
       "id": "field_ops",
       "name": "Field Ops",
       "description": "Subdivisions, lots, phase scheduling, and mobile SmartForm checklists for residential trade subcontractors.",

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { finance as financeApi } from '../../../lib/api'
+import { finance as financeApi } from '../../finance/frontend/api'
 import { contacts as contactsApi } from './api'
 import { assets as assetsApi } from '../../assets/frontend/api'
 import { useWorkspace } from '../../../lib/workspace'

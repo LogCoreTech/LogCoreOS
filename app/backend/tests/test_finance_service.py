@@ -2,7 +2,7 @@
 
 import pytest
 
-from services import finance_reports
+from module_packages.finance.backend import reports as finance_reports
 from services import finance_service as svc
 from services.file_service import finance_books_path, finance_tx_path
 
@@ -331,7 +331,16 @@ def test_monthly_report_math(brain, book, checking):
 
 
 def test_guest_role_finance_disabled_by_default(brain):
+    from services import mod_store_service
     from services.features_service import get_effective_disabled
+
+    # finance is now an optional module (converted 2026-08-28) — without
+    # marking it installed, get_effective_disabled()'s own not-installed
+    # union would disable it for member too, for the wrong reason (same
+    # issue "team"'s own conversion first surfaced in test_features.py).
+    # This test is specifically about the guest-off default (_guest_map()'s
+    # unconditional override), which install state doesn't affect either way.
+    mod_store_service.mark_installed("finance", by="tester")
 
     assert "finance" in get_effective_disabled("guest", [])
     assert "finance" not in get_effective_disabled("member", [])

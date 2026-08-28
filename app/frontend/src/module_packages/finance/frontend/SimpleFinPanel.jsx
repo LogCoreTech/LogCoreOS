@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { finance as financeApi } from '../../lib/api'
-import { fmtMoney } from './money'
+import { finance as financeApi } from './api'
+import { fmtMoney } from '../../../components/finance/money'
 
 // Bank sync panel — connections are admin-managed: members REQUEST a
 // connection (admins get notified and enter the SimpleFIN setup token in

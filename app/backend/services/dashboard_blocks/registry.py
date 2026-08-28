@@ -98,7 +98,6 @@ def _load_all_resolvers() -> None:
         _actions,
         _ai_usage,
         _custom_fields,
-        _finance,
         _freeform,
     )
 

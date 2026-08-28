@@ -31,6 +31,17 @@ _MISSED_AFTER_DAYS = 3
 _MAX_PROJECTION_ITEMS = 500
 
 
+def month_end(year: int, month: int) -> str:
+    """Last day of a month as ISO date — never fabricate day 31. Defined
+    here (not in module_packages/finance/backend/reports.py, which imports
+    it back) because this file must stay core (scheduler.py's job_finance_nightly
+    imports it directly, the same "real external consumer" bar that keeps
+    n8n_service.py core) — a pure calendar helper with no Finance-specific
+    logic has no reason to force a core-file dependency on the module
+    package it would otherwise sit in."""
+    return f"{year}-{month:02d}-{calendar.monthrange(year, month)[1]:02d}"
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -113,7 +124,6 @@ def budget_status(store_user: str, workspace: str, book: dict, month: str) -> li
     budgets = get_budgets(store_user, workspace, book["id"]).get("budgets", [])
     if not budgets:
         return []
-    from services.finance_reports import month_end
 
     items, _total = finance_service.list_transactions(
         store_user,

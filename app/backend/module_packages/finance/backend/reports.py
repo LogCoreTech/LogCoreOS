@@ -4,15 +4,15 @@ Phase A ships the monthly report and net worth; P&L, trends and the tax
 summary build on the same helpers in the invoicing phase.
 """
 
-import calendar
 import re
 
 from services import finance_service
+from services.finance_planning_service import month_end
 
-
-def month_end(year: int, month: int) -> str:
-    """Last day of a month as ISO date — never fabricate day 31."""
-    return f"{year}-{month:02d}-{calendar.monthrange(year, month)[1]:02d}"
+# month_end() itself lives in services/finance_planning_service.py, not here
+# — that file must stay core (scheduler.py's job_finance_nightly imports it
+# directly), and this pure calendar helper had no reason to force a
+# core-file dependency on this module package.
 
 
 def _month_transactions(store_user: str, workspace: str, book: dict, month: str) -> list[dict]:

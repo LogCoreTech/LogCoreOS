@@ -264,7 +264,7 @@ def test_default_caps_are_expense_submission(brain):
 
 
 def test_net_worth_skips_capped_books(brain, book, checking):
-    from services import finance_reports
+    from module_packages.finance.backend import reports as finance_reports
 
     _share(book["id"], [{"target": "Worker", "access": "contribute"}])
     fin.respond_share("Worker", "Owner", "personal", book["id"], accept=True)

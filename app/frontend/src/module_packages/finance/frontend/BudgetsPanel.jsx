@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { finance as financeApi } from '../../lib/api'
-import { fmtMoney, toCents, centsToInput, monthStr } from './money'
+import { finance as financeApi } from './api'
+import { fmtMoney, toCents, centsToInput, monthStr } from '../../../components/finance/money'
 
 export default function BudgetsPanel({ book, canEdit }) {
   const [status, setStatus] = useState([])

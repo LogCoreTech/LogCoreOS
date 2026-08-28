@@ -1,10 +1,9 @@
-"""Finance Phase B: SimpleFIN claim/mapping/sync + payee rules + CSV import."""
+"""Finance Phase B: SimpleFIN claim/mapping/sync + payee rules."""
 
 import base64
 
 import pytest
 
-from services import finance_import_service as csv_svc
 from services import finance_service as fin
 from services import simplefin_service as sf
 
@@ -275,74 +274,6 @@ def test_sync_error_notifies_once_per_day(brain, book, checking, monkeypatch):
     assert sf.get_connection("Alice")["last_error"]
 
 
-# ---------------------------------------------------------------------------
-# CSV import
-# ---------------------------------------------------------------------------
-
-CSV_CONTENT = b"""Date,Description,Amount
-2026-07-01,KROGER #123,-45.99
-2026-07-02,ACME PAYROLL,"2,500.00"
-2026-07-03,COFFEE SHOP,(4.50)
-"""
-
-
-def test_csv_preview():
-    preview = csv_svc.preview_csv(CSV_CONTENT)
-    assert preview["headers"] == ["Date", "Description", "Amount"]
-    assert preview["total_rows"] == 3
-    assert len(preview["rows"]) == 3
-
-
-def test_csv_amount_and_date_parsing():
-    assert csv_svc.parse_amount("-45.99") == -4599
-    assert csv_svc.parse_amount("(4.50)") == -450
-    assert csv_svc.parse_amount("$2,500.00") == 250000
-    assert csv_svc.parse_date("07/03/2026") == "2026-07-03"
-    assert csv_svc.parse_date("2026-07-03") == "2026-07-03"
-    with pytest.raises(ValueError):
-        csv_svc.parse_date("yesterday")
-
-
-def test_csv_commit_and_reimport_skips(brain, book, checking):
-    fresh = fin.get_book("Alice", "personal", book["id"])
-    mapping = {
-        "account_id": checking["id"],
-        "date_col": "Date",
-        "amount_col": "Amount",
-        "payee_col": "Description",
-    }
-    result = csv_svc.commit_csv("Alice", "personal", fresh, CSV_CONTENT, mapping, "Alice")
-    assert result["created"] == 3
-    items, total = fin.list_transactions("Alice", "personal", book["id"])
-    assert total == 3
-    assert {t["source"] for t in items} == {"csv"}
-    paren = next(t for t in items if t["payee"] == "COFFEE SHOP")
-    assert paren["amount_cents"] == -450
-
-    # Re-import the exact same file → everything skipped by import_hash
-    result = csv_svc.commit_csv("Alice", "personal", fresh, CSV_CONTENT, mapping, "Alice")
-    assert result["created"] == 0
-    assert result["skipped"] == 3
-
-
-def test_csv_invert_amounts(brain, book, checking):
-    fresh = fin.get_book("Alice", "personal", book["id"])
-    content = b"Date,Amount\n2026-07-05,45.99\n"
-    mapping = {
-        "account_id": checking["id"],
-        "date_col": "Date",
-        "amount_col": "Amount",
-        "invert_amounts": True,
-    }
-    csv_svc.commit_csv("Alice", "personal", fresh, content, mapping, "Alice")
-    items, _ = fin.list_transactions("Alice", "personal", book["id"])
-    assert items[0]["amount_cents"] == -4599
-
-
-def test_csv_bad_rows_reported_not_fatal(brain, book, checking):
-    fresh = fin.get_book("Alice", "personal", book["id"])
-    content = b"Date,Amount\n2026-07-05,45.99\nnot-a-date,1.00\n2026-07-06,oops\n"
-    mapping = {"account_id": checking["id"], "date_col": "Date", "amount_col": "Amount"}
-    result = csv_svc.commit_csv("Alice", "personal", fresh, content, mapping, "Alice")
-    assert result["created"] == 1
-    assert len(result["errors"]) == 2
+# CSV import tests moved to module_packages/finance/tests/test_finance_import.py
+# when finance/ converted (2026-08-28) — finance_import_service.py moved into
+# that package (as import_service.py); simplefin_service.py stayed core.

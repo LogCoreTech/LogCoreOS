@@ -12,14 +12,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Mod Store** (Admin → Mod Store): install and uninstall first-party LogCoreOS modules. Journal,
   Home Assistant, n8n Automation (renamed from "Automations"), Calendar, Household, Team, Notes,
-  Assets, and Contacts are optional this way — none is a permanent core feature anymore, and a fresh install now ships
+  Assets, Contacts, and Finance are optional this way — none is a permanent core feature anymore, and a fresh install now ships
   without them by default; existing instances that already used one keep it installed automatically.
   Uninstalling a module never deletes its data — reinstalling picks everything back up untouched.
   Installing/uninstalling requires an admin-triggered restart to take effect (never automatic), with
   a warning if other users currently appear online. Tasks, AI Chat, and Dashboards are also now part
   of this same system, but shown as "Always active" — they're foundational enough that they can't be
-  uninstalled, the first of a small set of core features that will join the Mod Store this way rather
-  than being excluded from it.
+  uninstalled. **Finance completes this list** — every module the Mod Store was ever meant to convert
+  now has, and this is the last entry this bullet will ever gain.
 - Calendar's household/team pool-events toggle (the 🏠/🧑‍🤝‍🧑 pill) now hides itself entirely when
   that pool module isn't installed and active, instead of remaining visible and silently doing
   nothing.
@@ -57,14 +57,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - An admin with Contacts disabled for their own account could still edit Contacts' own custom-field
   definitions, since that endpoint (`PUT /contacts/fields`) was missing the module gate its own `GET`
   counterpart already had — closed.
+- A user with Finance disabled could still list books/transactions, run reports, check budget
+  status and balance projections, create invoices, add transactions, categorize transactions, and
+  mark invoices paid through the AI chat, since none of the 9 finance tools were actually gated on
+  the module — closed the same way as Chat's/Notes'/Dashboards'/Assets'/Contacts' own tool-gating
+  gaps.
+- An admin with Finance disabled for their own account could still manage every user's bank
+  connections — claim, reveal, sync, disconnect, and the pool-level equivalents (13 endpoints in
+  total) were gated by admin status alone, never the module itself — closed.
 
 ### Changed
 
-- Every module in the app is being converted into this same self-contained format over time,
-  including foundational ones like Tasks, AI Chat, and Dashboards (marked non-removable, not
-  excluded) — journal, Home Assistant, n8n Automation, Calendar, Tasks, Household, Team, AI Chat,
-  Notes, Dashboards, Assets, and Contacts are the first twelve, proving the pattern; the rest follow
-  one at a time.
+- Every module in the app has now been converted into this same self-contained format, including
+  foundational ones like Tasks, AI Chat, and Dashboards (marked non-removable, not excluded) —
+  journal, Home Assistant, n8n Automation, Calendar, Tasks, Household, Team, AI Chat, Notes,
+  Dashboards, Assets, Contacts, and Finance are the first thirteen, and — as of Finance — also the
+  last thirteen: no further modules are planned for conversion. Finance's own conversion is the
+  first with more than one router file backing a single module (six, composed into one at the
+  manifest level, since the module system's `get_router()` only ever supports returning a single
+  router per module) — everything else about how a module plugs in stays exactly as it's always
+  worked.
 - Assets' admin-only n8n automation token reveal/rotate moved from inside the Assets module itself
   to Admin → n8n (now backed by `/auth/admin/automation-token`), so admins keep the ability to
   view/rotate it regardless of whether Assets is installed — Contacts' own separate automation API

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { finance as financeApi } from '../../lib/api'
-import { toCents, centsToInput, fmtMoney } from './money'
+import { finance as financeApi } from './api'
+import { toCents, centsToInput, fmtMoney } from '../../../components/finance/money'
 
 // Edits or deletes both legs of a Transfer together. `book`/`workspace` are
 // the side the row was clicked from; the peer side comes denormalized on the

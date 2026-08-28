@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { finance as financeApi } from '../../lib/api'
-import { contacts as contactsApi } from '../../module_packages/contacts/frontend/api'
-import { toCents, centsToInput, todayStr } from './money'
-import ContactPicker from '../contacts/ContactPicker'
+import { finance as financeApi } from './api'
+import { contacts as contactsApi } from '../../contacts/frontend/api'
+import { toCents, centsToInput, todayStr } from '../../../components/finance/money'
+import ContactPicker from '../../../components/contacts/ContactPicker'
 
 const KIND_LABELS = { expense: '− Expense', income: '+ Income', transfer: '⇄ Transfer' }
 
