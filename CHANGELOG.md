@@ -23,6 +23,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Calendar's household/team pool-events toggle (the 🏠/🧑‍🤝‍🧑 pill) now hides itself entirely when
   that pool module isn't installed and active, instead of remaining visible and silently doing
   nothing.
+- **Goals is now a real, independent module** (previously just a special kind of Task) — install or
+  uninstall it in Admin → Mod Store like anything else. Goals can now nest inside each other to any
+  depth, link to as many tasks as you want, and track completion with a real progress bar instead of
+  only ever being marked done by hand: pull a goal's percentage live from a Finance budget, from a
+  number you track on your own Contacts profile (weight, or any other number), or from a running,
+  dated log of manually-entered values against a target — subgoals and linked tasks still list
+  underneath for organization even when a metric is driving the number. Due dates are optional now,
+  no longer required. Deleting a goal with subgoals or
+  linked tasks now asks what should happen to them (keep them, or take them with it) instead of one
+  fixed behavior. You'll get notified the moment a goal's progress actually crosses 100%, and a
+  goal that's stalled or running out of time now surfaces as its own distinct suggestion. Household
+  and Team pool goals are supported the same way pool Finance books/Contacts/Assets already are.
+- Goals can now be tagged, sharing the same tag vocabulary as Tasks — add a tag while creating or
+  editing a goal or task, click any tag to filter the current list down to it, and pick from tags
+  you've used before as you type a new one.
+- Goals now has a dedicated Household/Team tab instead of merging pool goals invisibly into your own
+  list — "ME" shows everything you personally own at any depth, and the pool tab shows your
+  household's or team's goals, appearing only when that module is active for you.
+- You can now link an existing goal as a subgoal, not just create a new one — search for a goal and
+  move it under another, including re-parenting one that's already nested somewhere else.
+- Track a weight goal against your own Contacts profile, with an Increase/Decrease toggle so a
+  weight-loss goal actually reads as more complete as your weight goes down, not less.
+- A goal linked to a recurring task now tracks real completion history instead of a simple done/not
+  done check — its progress reflects how consistently you've completed that task over the last 30
+  days.
+- Linking a recurring task to a goal now lets you choose whether it counts toward the goal's own
+  progress percentage or only shows its own completion rate for visibility — new links start as
+  visibility-only until you turn tracking on, so you can link a task to a goal just to see how
+  consistently you're doing it without moving the goal's percentage. Goals with recurring tasks
+  linked before this change keep counting exactly as they always did.
 
 ### Fixed
 
@@ -65,6 +95,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - An admin with Finance disabled for their own account could still manage every user's bank
   connections — claim, reveal, sync, disconnect, and the pool-level equivalents (13 endpoints in
   total) were gated by admin status alone, never the module itself — closed.
+- A goal's own "+ Subgoal"/"+ Task"/delete-confirmation popups, and an asset's own linked-task
+  quick-create popup, could render clipped or undersized when opened from inside another already-open
+  modal — both now open correctly at full size regardless of nesting.
+- Linking or creating a task from a household/team goal's detail view now correctly adds it to that
+  pool's own tasks instead of silently creating a personal one.
+- Searching for a task in the goal-linking picker could hide an exact-title match entirely once you
+  had enough older tasks sharing a word with it — a fixed 8-result limit, applied before ranking
+  results by relevance, could bury the one you were looking for. Results are now ranked so exact
+  and best matches come first, and neither a search nor browsing the full unfiltered list cuts off
+  at 8 anymore — scroll to see the rest either way.
 
 ### Changed
 
@@ -81,6 +121,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   to Admin → n8n (now backed by `/auth/admin/automation-token`), so admins keep the ability to
   view/rotate it regardless of whether Assets is installed — Contacts' own separate automation API
   depends on the same token.
+- Goals was the last feature in the entire app that couldn't be turned off — with it now a real
+  module in its own right, there is no longer any single feature anywhere that can't be disabled per
+  role or per user.
 
 ## [0.6.4] — 2026-08-22
 

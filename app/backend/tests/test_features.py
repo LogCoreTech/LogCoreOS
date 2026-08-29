@@ -70,16 +70,20 @@ def test_get_effective_disabled_unknown_role_falls_back_to_member(brain):
 
 
 def test_get_effective_disabled_workspace_keyed_dict(brain):
-    # "goals" (not "finance"/"team") deliberately — the one remaining
-    # hardcoded CORE module id, never a module_packages/ discovery, so it
-    # can never collide with get_effective_disabled()'s own not-installed
-    # union the way a real converted-but-optional module id would (team's
-    # own 2026-08-25 conversion made this assertion start failing for the
-    # wrong reason the first time: "team" showed up disabled in BOTH
-    # workspaces simply because this bare test brain never marks it
-    # installed, unrelated to the per-user override merging this test
-    # actually exercises — "finance" itself hit the identical issue when
-    # IT converted 2026-08-28, forcing this same swap a second time).
+    # "goals" needs to be explicitly installed here too, now that it's a
+    # real module_packages/ discovery (2026-08-28) rather than the last
+    # permanently-hardcoded core id — the same fix shape this test's own
+    # history already went through twice before ("team" on its 2026-08-25
+    # conversion, "finance" on its 2026-08-28 one): without this, the
+    # not-installed union masks "journal"/"goals" for the wrong reason,
+    # defeating the actual per-workspace-override merging this test checks.
+    # _CORE_MODULE_IDS is now empty, so there is no longer any id immune to
+    # this — every module id used in a bare test fixture needs an explicit
+    # mark_installed() from here on.
+    from services import mod_store_service
+
+    mod_store_service.mark_installed("journal", by="tester")
+    mod_store_service.mark_installed("goals", by="tester")
     features_service.save_features({"roles": {"member": {}}})
     per_user = {"personal": ["journal"], "business": ["goals"]}
     assert "journal" in features_service.get_effective_disabled("member", per_user, "personal")
@@ -113,6 +117,9 @@ def test_create_role_rejects_duplicate(brain):
 def test_update_role_accepts_mismatched_case(brain):
     """The actual reported bug: a role created as 'Cleaner' is stored as 'cleaner';
     editing it moments later using the as-typed case must not 404."""
+    from services import mod_store_service
+
+    mod_store_service.mark_installed("goals", by="tester")
     admin = _admin(brain)
     create_role(CreateRoleRequest(name="Cleaner", modules={"goals": True}), admin)
     result = update_role("Cleaner", RoleModulesRequest(modules={"goals": False}), admin)

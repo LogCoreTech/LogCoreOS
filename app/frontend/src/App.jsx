@@ -6,7 +6,6 @@ import { MODULE_PACKAGES, isPackageModule } from './lib/moduleRegistry'
 import ErrorBoundary from './components/ErrorBoundary'
 import Layout from './components/Layout'
 import Dashboard from './module_packages/dashboard/frontend/Dashboard'
-import Goals from './module_packages/tasks/frontend/Goals'
 import Brain from './pages/Brain'
 import Settings from './pages/Settings'
 import SettingsAppearance from './pages/settings/Appearance'
@@ -88,7 +87,6 @@ export default function App() {
                     redirect loop. No prior converted module ever claimed the root path, so
                     this exact problem never came up before. */}
                 <Route path="/"         element={<Dashboard />} />
-                <Route path="/goals"     element={<ModuleRoute moduleId="tasks"><Goals /></ModuleRoute>} />
                 {MODULE_PACKAGES.filter(pkg => pkg.to !== '/').map(pkg => {
                   const Page = lazy(pkg.loadPage)
                   return (

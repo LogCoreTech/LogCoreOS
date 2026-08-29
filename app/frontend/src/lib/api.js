@@ -130,6 +130,12 @@ export const priorities = {
   setPool:      (data)    => request('PUT', '/priorities/pool', data),
 }
 
+// Shared tag vocabulary for Goals + Tasks (2026-08-29) — see
+// services/tags_service.py's own docstring for why this stays core.
+export const tags = {
+  list: (pool = false) => get(`/tags?pool=${pool}`),
+}
+
 export const admin = {
   // User management
   users:             ()                          => get('/auth/users'),

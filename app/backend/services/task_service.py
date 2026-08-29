@@ -8,6 +8,8 @@ from zoneinfo import ZoneInfo
 from services.auth_service import get_user_timezone, today_for_user
 from services.file_service import history_path, read_json, tasks_path, update_json
 
+_COMPLETION_LOG_CAP = 90  # comfortably more than the 30-day rate window goals_service reads
+
 
 def list_tasks(user_name: str, workspace: str = "personal") -> list[dict]:
     return read_json(tasks_path(user_name, workspace), default={"tasks": []}).get("tasks", [])
@@ -34,11 +36,27 @@ def add_task(user_name: str, task_data: dict, workspace: str = "personal") -> di
         "notes": task_data.get("notes"),
         "streak_count": 0,
         "last_completed_date": None,
+        "completion_log": [],
+        "tags": task_data.get("tags") or [],
     }
     # Pass through optional attribution/assignment/linking fields
-    for extra in ("created_by", "assigned_to", "asset_id"):
+    for extra in ("created_by", "assigned_to", "asset_id", "goal_id"):
         if extra in task_data:
             task[extra] = task_data[extra]
+
+    if task_data.get("counts_toward_goal") is not None:
+        task["counts_toward_goal"] = task_data["counts_toward_goal"]
+    elif task.get("type") == "recurring" and task.get("goal_id"):
+        # A recurring task created already-linked to a goal (the "+ Task"
+        # flow inside a goal) opts out of the rollup by default — owner
+        # chose opt-in (2026-08-29): linking a recurring task shouldn't
+        # silently move a goal's percentage until asked to.
+        task["counts_toward_goal"] = False
+
+    if task["tags"]:
+        from services.tags_service import register_tags
+
+        register_tags(user_name, workspace, task["tags"])
 
     def _add(data: dict) -> dict:
         data["tasks"].append(task)
@@ -61,16 +79,39 @@ def update_task(
             if task["id"] != task_id:
                 continue
 
+            if (
+                updates.get("goal_id")
+                and updates["goal_id"] != task.get("goal_id")
+                and task.get("type") == "recurring"
+                and "counts_toward_goal" not in updates
+            ):
+                # Newly linking a recurring task to a goal — opt-in default
+                # (see add_task's own comment for why).
+                updates["counts_toward_goal"] = False
+
             if updates.get("status") == "done" and task.get("status") != "done":
                 updates["completed_at"] = datetime.now(tz).isoformat()
                 if task.get("type") == "recurring":
-                    updates["last_completed_date"] = today_for_user(user_name).isoformat()
+                    today_str = today_for_user(user_name).isoformat()
+                    updates["last_completed_date"] = today_str
                     updates["streak_count"] = task.get("streak_count", 0) + 1
+                    log = [e for e in (task.get("completion_log") or []) if e.get("date") != today_str]
+                    log.append({"date": today_str})
+                    updates["completion_log"] = log[-_COMPLETION_LOG_CAP:]
             elif updates.get("status") == "pending" and task.get("status") == "done":
                 updates["completed_at"] = None
                 if task.get("type") == "recurring":
                     updates["last_completed_date"] = None
                     updates["streak_count"] = max(0, task.get("streak_count", 0) - 1)
+                    undone_date = (task.get("last_completed_date") or "")
+                    updates["completion_log"] = [
+                        e for e in (task.get("completion_log") or []) if e.get("date") != undone_date
+                    ]
+
+            if updates.get("tags"):
+                from services.tags_service import register_tags
+
+                register_tags(user_name, workspace, updates["tags"])
 
             tasks[i] = {**task, **updates}
             found = tasks[i]
@@ -93,42 +134,6 @@ def delete_task(user_name: str, task_id: str, workspace: str = "personal") -> bo
 
     update_json(tasks_path(user_name, workspace), _delete, default={"tasks": []})
     return deleted
-
-
-def cleanup_done_goals(user_name: str, workspace: str = "personal") -> int:
-    """Archive all completed goals to history (the Goals 'Clear completed' action).
-
-    Goals are excluded from the nightly sweep, so they accumulate in the Done view
-    until the user clears them here. Returns the number archived.
-    """
-    # Unlocked peek to decide what to archive and as an early-return — the
-    # actual removal below re-validates against fresh data under lock, so a
-    # concurrent change to one of these exact tasks in between isn't clobbered.
-    data = read_json(tasks_path(user_name, workspace), default={"tasks": []})
-    to_archive = [t for t in data["tasks"] if t.get("type") == "goal" and t.get("status") == "done"]
-    if not to_archive:
-        return 0
-    archive_ids = {t["id"] for t in to_archive}
-
-    def _append_history(hist: dict) -> dict:
-        hist["tasks"].extend(to_archive)
-        return hist
-
-    def _remove_archived(data: dict) -> dict:
-        still_archivable = {
-            t["id"]
-            for t in data["tasks"]
-            if t["id"] in archive_ids and t.get("type") == "goal" and t.get("status") == "done"
-        }
-        data["tasks"] = [t for t in data["tasks"] if t["id"] not in still_archivable]
-        return data
-
-    # History first, then remove from active — a crash between the two
-    # leaves a goal duplicated (recoverable/visible) rather than silently
-    # lost, matching the original ordering.
-    update_json(history_path(user_name, workspace), _append_history, default={"tasks": []})
-    update_json(tasks_path(user_name, workspace), _remove_archived, default={"tasks": []})
-    return len(to_archive)
 
 
 def list_history(

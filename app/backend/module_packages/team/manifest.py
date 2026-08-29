@@ -51,7 +51,7 @@ MODULE = ModuleManifest(
     get_router=_get_router,
     owned_brain_paths=[],
     owned_agent_tools=[],
-    owned_block_types=["team_tasks"],
+    owned_block_types=["team_tasks", "team_goals"],
     migrations=[
         (
             "team:m024_backfill_team_installed_from_existing_data",

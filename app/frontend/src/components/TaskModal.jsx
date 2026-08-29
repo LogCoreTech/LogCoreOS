@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { tasks as tasksApi } from '../module_packages/tasks/frontend/api'
-import { priorities as prioritiesApi } from '../lib/api'
+import { priorities as prioritiesApi, tags as tagsApi } from '../lib/api'
+import TagInput from './TagInput'
 
 const PRIORITIES = ['High', 'Medium', 'Low']
-const TYPES = ['todo', 'recurring', 'goal', 'appointment']
+const TYPES = ['todo', 'recurring', 'appointment']
 const RECURRENCES = ['daily', 'weekly', 'monthly']
 
-export default function TaskModal({ task, categories: propCategories, defaultType, saveApi, users, assets, defaultAssetId, onClose, onSave, onDelete }) {
+export default function TaskModal({ task, categories: propCategories, defaultType, saveApi, users, assets, defaultAssetId, defaultGoalId, onClose, onSave, onDelete }) {
   const editing = !!task
   // Assigned pool tasks (household/team) live in another store — open them view-only.
   // Tasks page tags them with `_source`; Calendar tags them with `_household`.
@@ -23,9 +24,20 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
     notes:       task?.notes       || '',
     assigned_to: task?.assigned_to || '',
     asset_id:    task?.asset_id    || defaultAssetId || '',
+    goal_id:     task?.goal_id     || defaultGoalId || '',
+    tags:        task?.tags        || [],
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [tagSuggestions, setTagSuggestions] = useState([])
+
+  // A pool context is identified by a saveApi override (household's/team's
+  // own client) being passed in — mirrors how goal_id linking already tells
+  // pool vs. personal apart elsewhere in this same round's changes.
+  useEffect(() => {
+    tagsApi.list(!!saveApi).then(r => setTagSuggestions(r.tags || [])).catch(() => setTagSuggestions([]))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Mount-only: pick an initial category once. Deliberately not re-run on
   // form.category/propCategories changes — both are written by this same
@@ -67,7 +79,6 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
   async function submit(e) {
     e.preventDefault()
     if (!form.title.trim()) { setError('Title is required'); return }
-    if (form.type === 'goal' && !form.due_date) { setError('A goal needs a target date'); return }
     setLoading(true)
     setError('')
     try {
@@ -79,6 +90,8 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
         notes:       form.notes      || null,
         assigned_to: form.assigned_to || null,
         asset_id:    form.asset_id   || null,
+        goal_id:     form.goal_id    || null,
+        tags:        form.tags,
       }
       const api = saveApi || tasksApi
       if (editing) {
@@ -185,10 +198,7 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
           {/* Due date + optional time */}
           <div>
             <label className="block text-sm font-medium mb-1">
-              {form.type === 'goal' ? 'Target Date' : 'Due Date'}{' '}
-              <span className="text-charcoal-400 font-normal">
-                ({form.type === 'goal' ? 'required' : 'optional'})
-              </span>
+              Due Date <span className="text-charcoal-400 font-normal">(optional)</span>
             </label>
             <div className="space-y-2">
               <input
@@ -199,7 +209,6 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
                   if (!e.target.value) set('due_time', '')
                 }}
                 className="input"
-                required={form.type === 'goal'}
               />
               {form.due_date && (
                 <div className="flex items-center gap-1.5">
@@ -247,6 +256,14 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Tags */}
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Tags <span className="text-charcoal-400 font-normal">(optional)</span>
+            </label>
+            <TagInput value={form.tags} onChange={t => set('tags', t)} suggestions={tagSuggestions} placeholder="Add a tag…" />
           </div>
 
           {/* Notes */}

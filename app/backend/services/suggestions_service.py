@@ -2,7 +2,7 @@
 
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from config import settings
@@ -37,6 +37,11 @@ _BUILTIN_DEFAULTS: dict[str, dict] = {
     "goal_drift": {
         "enabled": True,
         "days_threshold": 14,
+        "delivery": ["push", "in_app"],
+    },
+    "goal_due_urgency": {
+        "enabled": True,
+        "days_threshold": 3,
         "delivery": ["push", "in_app"],
     },
 }
@@ -362,32 +367,93 @@ def _run_weekly_review(user_name: str, cfg: dict, workspace: str = "personal") -
 
 
 def _run_goal_drift(user_name: str, cfg: dict, workspace: str = "personal") -> dict:
+    """Reworked 2026-08-28 when Goals became a real module: compares each
+    pending goal's CURRENT computed percent against its own snapshot from
+    days_threshold days ago (goals_service.snapshot_progress/
+    progress_snapshot_days_ago) — genuinely stalled PROGRESS, not just
+    elapsed time since creation like the old Task-staleness version. A goal
+    with no snapshot old enough yet (too new) is skipped, not flagged."""
+    from module_packages.goals.backend import service as goals_service
+
     days_threshold = cfg.get("days_threshold", 14)
-    today = today_for_user(user_name)
-    cutoff = (today - timedelta(days=days_threshold)).isoformat()
-    data = read_json(tasks_path(user_name, workspace), default={"tasks": []})
-    drifting = [
-        t
-        for t in data.get("tasks", [])
-        if t.get("type") == "goal"
-        and t.get("status") == "pending"
-        and (
-            (not t.get("last_completed_date") and (t.get("created_at") or "")[:10] <= cutoff)
-            or (t.get("last_completed_date") and t["last_completed_date"] <= cutoff)
+    user = {"name": user_name}
+    goals = goals_service.list_goals(user_name, workspace)
+    pending = [g for g in goals if g.get("status") != "done"]
+
+    drifting = []
+    for g in pending:
+        progress = goals_service.compute_progress(user_name, g, workspace, user, goals)
+        if progress["pct"] >= 100:
+            continue
+        past_pct = goals_service.progress_snapshot_days_ago(
+            user_name, g["id"], days_threshold, workspace
         )
-    ]
+        if past_pct is None:
+            continue
+        if progress["pct"] <= past_pct:
+            drifting.append(g)
+
     if not drifting:
         return {"ok": False, "reason": "no drifting goals"}
-    names = ", ".join(t["title"] for t in drifting[:3])
+    names = ", ".join(g["title"] for g in drifting[:3])
     if len(drifting) > 3:
         names += f" and {len(drifting) - 3} more"
     ws_label = f" [{workspace}]" if workspace != "personal" else ""
     title = f"{len(drifting)} goal{'s' if len(drifting) > 1 else ''}{ws_label} need{'s' if len(drifting) == 1 else ''} attention"
-    body = f"You haven't made progress on: {names}"
+    body = f"No real progress on: {names}"
     _deliver(
-        user_name, title, body, "goal_drift", cfg.get("delivery", ["push", "in_app"]), url="/tasks"
+        user_name, title, body, "goal_drift", cfg.get("delivery", ["push", "in_app"]), url="/goals"
     )
     return {"ok": True, "fired": "goal_drift", "count": len(drifting)}
+
+
+def _run_goal_due_urgency(user_name: str, cfg: dict, workspace: str = "personal") -> dict:
+    """New signal (2026-08-28), distinct from goal_drift — watches the
+    approaching DUE DATE regardless of whether progress has stalled,
+    mirroring overdue_alert's own shape for tasks. A goal can be actively
+    making progress and still be running out of time; drift alone would
+    never catch that."""
+    from module_packages.goals.backend import service as goals_service
+
+    days_threshold = cfg.get("days_threshold", 3)
+    today = today_for_user(user_name)
+    user = {"name": user_name}
+    goals = goals_service.list_goals(user_name, workspace)
+
+    urgent: list[tuple[dict, int, int]] = []
+    for g in goals:
+        if g.get("status") == "done" or not g.get("due_date"):
+            continue
+        try:
+            due = date.fromisoformat(g["due_date"])
+        except ValueError:
+            continue
+        days_left = (due - today).days
+        if days_left < 0 or days_left > days_threshold:
+            continue
+        progress = goals_service.compute_progress(user_name, g, workspace, user, goals)
+        if progress["pct"] >= 100:
+            continue
+        urgent.append((g, days_left, progress["pct"]))
+
+    if not urgent:
+        return {"ok": False, "reason": "no urgent goals"}
+    if len(urgent) == 1:
+        g0, days0, pct0 = urgent[0]
+        title = f"{g0['title']} is due in {days0} day{'s' if days0 != 1 else ''}"
+        body = f"Only {pct0}% there so far."
+    else:
+        title = f"{len(urgent)} goals are running out of time"
+        body = ", ".join(f"{g['title']} ({d}d, {p}%)" for g, d, p in urgent[:3])
+    _deliver(
+        user_name,
+        title,
+        body,
+        "goal_due_urgency",
+        cfg.get("delivery", ["push", "in_app"]),
+        url="/goals",
+    )
+    return {"ok": True, "fired": "goal_due_urgency", "count": len(urgent)}
 
 
 def _run_custom_sync(user_name: str, suggestion: dict) -> dict:
@@ -468,6 +534,11 @@ def run_suggestion_sync(user_name: str, suggestion_id: str, workspace: str = "pe
         if not c.get("enabled", True):
             return {"ok": False, "reason": "disabled"}
         return _run_goal_drift(user_name, c, workspace)
+    if suggestion_id == "goal_due_urgency":
+        c = cfg["goal_due_urgency"]
+        if not c.get("enabled", True):
+            return {"ok": False, "reason": "disabled"}
+        return _run_goal_due_urgency(user_name, c, workspace)
     for c in cfg.get("custom", []):
         if c["id"] == suggestion_id:
             if not c.get("enabled", True):
@@ -501,6 +572,11 @@ async def run_suggestion_async(
         if not c.get("enabled", True):
             return {"ok": False, "reason": "disabled"}
         return _run_goal_drift(user_name, c, workspace)
+    if suggestion_id == "goal_due_urgency":
+        c = cfg["goal_due_urgency"]
+        if not c.get("enabled", True):
+            return {"ok": False, "reason": "disabled"}
+        return _run_goal_due_urgency(user_name, c, workspace)
     for c in cfg.get("custom", []):
         if c["id"] == suggestion_id:
             if not c.get("enabled", True):

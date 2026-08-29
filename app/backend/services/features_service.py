@@ -26,9 +26,15 @@ from services.file_service import read_json, write_json
 # as always. As each one converts, it's removed from this list and supplied
 # dynamically by all_module_ids() instead, via its own manifest's install
 # state. See module_registry.py.
-_CORE_MODULE_IDS = [
-    "goals",
-]
+#
+# Empty as of 2026-08-28's Goals conversion — "goals" was the last id here.
+# Every module in the app is now either a converted module_packages/ entry
+# or permanent cross-cutting infrastructure (dashboard_blocks/,
+# agent_service.py's orchestration engine, module_registry.py itself) that
+# was never meant to have its own id at all. Kept as a list (not deleted)
+# since it's still the mechanism a genuinely new not-yet-converted module
+# would use if one is ever added ahead of its own conversion.
+_CORE_MODULE_IDS: list[str] = []
 
 
 def all_module_ids() -> list[str]:
@@ -44,7 +50,10 @@ def all_module_ids() -> list[str]:
 _PERSONAL_MEMBER = {m: True for m in _CORE_MODULE_IDS}
 
 _BUSINESS_MEMBER = {
-    "goals": True,
+    # "goals" (converted 2026-08-28) deliberately has NO explicit entry here
+    # anymore, same reasoning as dashboard/notes right below — a
+    # workspace-general module correctly defaults to True via
+    # load_features()'s missing-key fill-in.
     # "dashboard" (converted 2026-08-27) and "notes" (converted 2026-08-26)
     # deliberately have NO explicit entry here anymore — default-missing-
     # to-True in load_features() already gives the correct answer for a

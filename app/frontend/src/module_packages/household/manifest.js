@@ -25,5 +25,13 @@ export default {
       defaultLayout: { w: 12, h: 9 },
       shape: 'list',
     },
+    {
+      type: 'household_goals',
+      loadComponent: () => import('./frontend/HouseholdGoalsBlock.jsx'),
+      icon: '🎯',
+      label: 'Household Pool Goals',
+      defaultLayout: { w: 12, h: 9 },
+      shape: 'list',
+    },
   ],
 }

@@ -101,6 +101,51 @@ def job_goal_drift():
             logger.exception("goal drift check failed for %s/%s", user, workspace)
 
 
+def job_goal_due_urgency():
+    from services.suggestions_service import get_config, run_suggestion_sync
+
+    for user, workspace in _all_user_workspace_pairs():
+        try:
+            cfg = get_config(user)
+            if not cfg["goal_due_urgency"].get("enabled", True):
+                continue
+            run_suggestion_sync(user, "goal_due_urgency", workspace)
+        except Exception:
+            logger.exception("goal due-urgency check failed for %s/%s", user, workspace)
+
+
+def job_goal_progress_snapshot():
+    """Runs BEFORE job_goal_drift (see start()'s scheduling) so today's
+    snapshot exists by the time drift compares against it. Also fires the
+    completion-celebration notification for any goal that crossed from
+    <100% to >=100% since the prior snapshot — see
+    module_packages/goals/backend/service.py's snapshot_progress() docstring
+    for why this is checked once daily here rather than on every write."""
+    from module_packages.goals.backend import service as goals_service
+    from services.suggestions_service import notify_user
+
+    stores: list[tuple[str, str]] = list(_all_user_workspace_pairs())
+    stores += [("_household", "personal"), ("_team", "personal")]
+
+    for store_user, workspace in stores:
+        try:
+            user = {"name": store_user}
+            newly_complete = goals_service.snapshot_progress(store_user, workspace, user)
+            if store_user.startswith("_"):
+                continue  # pool completions don't have one single person to notify
+            for goal in newly_complete:
+                notify_user(
+                    store_user,
+                    f"🎉 You hit 100% on \"{goal['title']}\"!",
+                    "Nice work — that goal is complete.",
+                    source="goal_complete",
+                    action={"type": "open_goal", "goal_id": goal["id"]},
+                    url="/goals",
+                )
+        except Exception:
+            logger.exception("goal progress snapshot failed for %s/%s", store_user, workspace)
+
+
 def job_custom_suggestion(user_name: str, suggestion: dict):
     from services.suggestions_service import run_suggestion_sync
 
@@ -305,7 +350,17 @@ def start():
         id="weekly",
     )
     scheduler.add_job(
+        job_goal_progress_snapshot,
+        CronTrigger(hour=settings.overdue_check_hour, minute=15),
+        id="goal_progress_snapshot",
+    )
+    scheduler.add_job(
         job_goal_drift, CronTrigger(hour=settings.overdue_check_hour, minute=30), id="goal_drift"
+    )
+    scheduler.add_job(
+        job_goal_due_urgency,
+        CronTrigger(hour=settings.overdue_check_hour, minute=35),
+        id="goal_due_urgency",
     )
     scheduler.add_job(job_cleanup_revoked_jtis, CronTrigger(hour=3, minute=0), id="jti_cleanup")
     # Workflow sync: 90s after boot (wait for n8n), then every 6 hours
@@ -338,8 +393,11 @@ def start():
     scheduler.start()
     _load_custom_jobs()
     logger.info(
-        "scheduler started — recurring@00:01, morning@%02d:00, overdue@%02d:00, weekly@Sun %02d:00, goal_drift@%02d:30 (%s)",
+        "scheduler started — recurring@00:01, morning@%02d:00, overdue@%02d:00, weekly@Sun %02d:00, "
+        "goal_progress_snapshot@%02d:15, goal_drift@%02d:30, goal_due_urgency@%02d:35 (%s)",
         settings.morning_digest_hour,
+        settings.overdue_check_hour,
+        settings.overdue_check_hour,
         settings.overdue_check_hour,
         settings.overdue_check_hour,
         settings.overdue_check_hour,

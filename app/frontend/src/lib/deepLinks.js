@@ -5,9 +5,10 @@
 
 import { MODULE_PACKAGES } from './moduleRegistry'
 
-const _CORE_MODULE_ROUTES = {
-  goals: '/goals',
-}
+// Empty as of 2026-08-28's Goals conversion — 'goals' was the last entry
+// here, now discovered from its own manifest.js like every other
+// converted module.
+const _CORE_MODULE_ROUTES = {}
 
 // A converted module needs no entry here — its route is discovered from its
 // own manifest.js (moduleRegistry.js), same as constants.js's ALL_MODULES.

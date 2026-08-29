@@ -12,5 +12,4 @@ export const tasks = {
   add:      (task)                         => post('/tasks', task),
   update:   (id, updates)                  => patch(`/tasks/${id}`, updates),
   remove:   (id)                           => del(`/tasks/${id}`),
-  cleanupGoals: ()                         => post('/tasks/goals/cleanup', {}),
 }

@@ -21,6 +21,7 @@ _ALWAYS_SKIP = {
     "Assets",  # managed by assets module, JSON + binary attachment files, not editable here
     "Contacts",  # managed by contacts module, JSON + binary photo files, not editable here
     "Finance",  # managed by finance module, JSON + binary receipt files, not editable here
+    "Goals",  # managed by goals module, JSON not markdown, not editable here
     # ws_path()'s "business" base is a literal subfolder of the "personal" base
     # (brain/USERS/{name}/Business/), not a sibling — so a plain recursive walk
     # or path resolution against the personal base would otherwise reach straight
@@ -43,11 +44,12 @@ def _skip_dirs(disabled_modules: set[str]) -> set[str]:
     "never installed at all" case. This matches how every other real
     markdown module (Notes, etc.) already works: dual-accessible (dedicated
     UI + this raw browser) when enabled, hidden here only when disabled.
-    Tasks/Dashboards/Assets/Contacts/Finance/Business are the pre-existing
-    exceptions, skipped regardless of any toggle because they're
-    structurally different (Tasks/Dashboards/Assets/Contacts/Finance are
-    JSON (+ binary files for Assets/Contacts/Finance), not markdown;
-    Business is a nested workspace root), not module-disabled semantics.
+    Tasks/Dashboards/Assets/Contacts/Finance/Goals/Business are the
+    pre-existing exceptions, skipped regardless of any toggle because
+    they're structurally different (Tasks/Dashboards/Assets/Contacts/
+    Finance/Goals are JSON (+ binary files for Assets/Contacts/Finance),
+    not markdown; Business is a nested workspace root), not
+    module-disabled semantics.
     """
     from module_registry import brain_paths_for_disabled
 

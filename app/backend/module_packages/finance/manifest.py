@@ -104,7 +104,47 @@ exists, so this manifest declares no admin_agent_tools."""
 
 from pathlib import Path
 
-from module_registry import ModuleManifest
+from module_registry import ModuleManifest, MetricProviderSpec
+
+
+def _resolve_budget_pct(config: dict, user: dict, workspace: str) -> dict:
+    """Goals metric provider (2026-08-28) — a budget category's spent/limit
+    percent, reusing finance_planning_service.budget_status()'s own
+    spent*100/limit computation directly rather than re-deriving it. Looks
+    the book up through the same visibility rules any other Finance read
+    uses; defaults to a plain member view when the caller (e.g. a pool
+    goal, or a dashboard-block context with no real role) doesn't carry
+    role/is_admin — the safe minimum-privilege default, never
+    over-granting. Never raises — module_registry.MetricProviderSpec's own
+    contract requires this to degrade to 0% on any lookup failure, not
+    crash the goal that's using it."""
+    from datetime import date
+
+    from services import finance_service
+    from services.finance_planning_service import budget_status
+
+    book_id = config.get("book_id")
+    category = config.get("category")
+    if not book_id or not category:
+        return {"current": 0, "target": None, "pct": 0}
+
+    viewer = user.get("name", "")
+    viewer_role = user.get("role", "member")
+    is_admin = user.get("role") == "admin"
+    books = finance_service.list_visible_books(viewer, viewer_role, is_admin, workspace)
+    book = next((b for b in books if b["id"] == book_id), None)
+    if book is None:
+        return {"current": 0, "target": None, "pct": 0}
+
+    month = date.today().isoformat()[:7]
+    for status in budget_status(book.get("_owner", viewer), workspace, book, month):
+        if status["category"] == category:
+            return {
+                "current": status["spent_cents"] / 100,
+                "target": status["monthly_limit_cents"] / 100,
+                "pct": status["pct"],
+            }
+    return {"current": 0, "target": None, "pct": 0}
 
 
 def _get_router():
@@ -176,6 +216,17 @@ MODULE = ModuleManifest(
         "get_balance_projection",
     ],
     owned_block_types=["finance_activity", "finance_book_report"],
+    owned_metric_providers=[
+        MetricProviderSpec(
+            key="budget_pct",
+            label="Finance: Budget Category %",
+            config_schema=[
+                {"key": "book_id", "label": "Finance Book", "kind": "financeBook"},
+                {"key": "category", "label": "Budget Category", "kind": "text"},
+            ],
+            resolve=_resolve_budget_pct,
+        ),
+    ],
     migrations=[
         (
             "finance:m030_backfill_finance_installed_from_existing_data",

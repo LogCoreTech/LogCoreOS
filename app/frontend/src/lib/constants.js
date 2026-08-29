@@ -22,15 +22,13 @@ export function catColor(cat) {
 // and Settings automatically. A CONVERTED module (module_packages/<id>/)
 // needs no entry here at all — it's discovered automatically via
 // moduleRegistry.js's import.meta.glob and merged into ALL_MODULES below.
-const CORE_MODULES = [
-  // 'goals' deliberately has no matching module_packages/ entry — it's a
-  // purely frontend nav id gated on the SAME backend permission as 'tasks'
-  // (App.jsx's /goals route uses moduleId="tasks", not "goals"; no
-  // require_module("goals") exists on the backend). Stays hand-maintained
-  // here even after Tasks converted (2026-08-25) — see that module's own
-  // manifest.js for the full reasoning.
-  { id: 'goals',                to: '/goals',        icon: '🎯',          label: 'Goals'                 },
-]
+// Empty as of 2026-08-28's Goals conversion — 'goals' was the last entry
+// here, now supplied by module_packages/goals/manifest.js via the
+// MODULE_PACKAGES merge below like every other converted module. Kept as
+// an array (not deleted) since it's still the mechanism a genuinely new
+// not-yet-converted module would use if one is ever added ahead of its
+// own conversion.
+const CORE_MODULES = []
 
 // `navLabel` is optional (undefined for every CORE_MODULES entry and most
 // converted modules) — a shorter name for the one space-constrained surface

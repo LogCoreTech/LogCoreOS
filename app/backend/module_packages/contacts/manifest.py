@@ -89,7 +89,103 @@ each found and closed in their turn. No admin-only Contacts tool exists
 
 from pathlib import Path
 
-from module_registry import ModuleManifest
+from module_registry import ModuleManifest, MetricProviderSpec
+
+
+# Shared by both metric providers below — same shape as Goals' own "manual"
+# provider's config_schema entries (module_packages/goals/backend/router.py)
+# so the picker UI behaves identically regardless of which provider it's
+# configuring.
+_DIRECTION_FIELD = {
+    "key": "direction",
+    "label": "Direction",
+    "kind": "select",
+    "options": [
+        {"value": "increase", "label": "Increase to target (e.g. pages read, savings)"},
+        {"value": "decrease", "label": "Decrease to target (e.g. weight, debt)"},
+    ],
+}
+# Weight gets its OWN direction field with "decrease" listed first — the
+# frontend picker (MetricPicker.jsx) pre-selects options[0] whenever the
+# config doesn't have an explicit value yet, and _resolve_weight's own
+# default is "decrease" (weight LOSS being the more common goal framing).
+# Reusing _DIRECTION_FIELD as-is here would show "Increase" pre-selected in
+# the UI while the backend was actually already computing "decrease" behind
+# the scenes the moment target_value was set without touching this field —
+# a real visual/effective mismatch caught before shipping, not after.
+_WEIGHT_DIRECTION_FIELD = {
+    **_DIRECTION_FIELD,
+    "options": [
+        {"value": "decrease", "label": "Decrease to target (e.g. weight loss)"},
+        {"value": "increase", "label": "Increase to target (e.g. bulking)"},
+    ],
+}
+_START_VALUE_FIELD = {
+    "key": "start_value",
+    "label": "Starting value (required for \"decrease\")",
+    "kind": "number",
+    "optional": True,
+}
+
+
+def _resolve_number_field(config: dict, user: dict, workspace: str) -> dict:
+    """Goals metric provider (2026-08-28) — a number-type custom field's
+    current value vs. a target_value, defaulting to the caller's own
+    self-contact when no contact_id is given (this is what "track a health
+    metric on my own profile" turned out to mean — Contacts already has the
+    number-type custom field this needs, no new field system required).
+    Never raises, same contract as every MetricProviderSpec.resolve."""
+    from module_registry import directional_pct
+    from services import contacts_service
+
+    contact_id = config.get("contact_id")
+    viewer = user.get("name", "")
+    if contact_id:
+        found = contacts_service.find_contact(
+            viewer, user.get("role", "member"), user.get("role") == "admin", workspace, contact_id
+        )
+        if found is None:
+            return {"current": 0, "target": None, "pct": 0}
+        _store_user, contact, _access = found
+    else:
+        contact = contacts_service.get_self_contact(viewer)
+        if contact is None:
+            return {"current": 0, "target": None, "pct": 0}
+
+    field_key = config.get("field_key")
+    target = config.get("target_value")
+    current = (contact.get("custom") or {}).get(field_key)
+    if not isinstance(current, (int, float)):
+        return {"current": 0, "target": target, "pct": 0}
+    pct = directional_pct(current, target, config.get("direction", "increase"), config.get("start_value"))
+    return {"current": current, "target": target, "pct": pct}
+
+
+def _resolve_weight(config: dict, user: dict, workspace: str) -> dict:
+    """Goals metric provider (2026-08-29, owner ask: "the metrics for users
+    personal contact data needs to be accessible for their personal goals...
+    weight") — weight_kg is a built-in, always-private Contact field (see
+    services/contacts_service.py's _PRIVATE_SHORT_FIELDS), NOT part of the
+    admin-defined custom-fields system _resolve_number_field reads — hence
+    its own dedicated provider rather than folding it into that one. Always
+    the caller's own self-contact (no contact_id override — the field is
+    private by design, only ever readable by its own owner). Defaults
+    direction to "decrease" (weight LOSS is the more common goal framing)
+    but the config exposes the same direction toggle as the manual metric
+    so a bulking goal isn't stuck with backwards math."""
+    from module_registry import directional_pct
+    from services import contacts_service
+
+    contact = contacts_service.get_self_contact(user.get("name", ""))
+    if contact is None:
+        return {"current": 0, "target": None, "pct": 0}
+
+    current = contact.get("weight_kg")
+    target = config.get("target_value")
+    if not isinstance(current, (int, float)):
+        return {"current": 0, "target": target, "pct": 0}
+    pct = directional_pct(current, target, config.get("direction", "decrease"), config.get("start_value"))
+    return {"current": current, "target": target, "pct": pct}
 
 
 def _get_router():
@@ -138,6 +234,31 @@ MODULE = ModuleManifest(
     ],
     read_only_agent_tools=["list_contacts", "get_contact"],
     owned_block_types=["linked_deals", "contacts_list", "linked_assets"],
+    owned_metric_providers=[
+        MetricProviderSpec(
+            key="number_field",
+            label="Contacts: Number Field",
+            config_schema=[
+                {
+                    "key": "contact_id",
+                    "label": "Contact (leave blank for your own profile)",
+                    "kind": "contact",
+                    "optional": True,
+                },
+                {"key": "field_key", "label": "Field", "kind": "contactNumberField"},
+                _DIRECTION_FIELD,
+                _START_VALUE_FIELD,
+                {"key": "target_value", "label": "Target value", "kind": "number"},
+            ],
+            resolve=_resolve_number_field,
+        ),
+        MetricProviderSpec(
+            key="weight",
+            label="Contacts: My Weight",
+            config_schema=[_WEIGHT_DIRECTION_FIELD, _START_VALUE_FIELD, {"key": "target_value", "label": "Target weight", "kind": "number"}],
+            resolve=_resolve_weight,
+        ),
+    ],
     migrations=[
         (
             "contacts:m029_backfill_contacts_installed_from_existing_data",

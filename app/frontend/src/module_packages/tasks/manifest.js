@@ -11,16 +11,11 @@
 // module just always resolves both true, by construction (its own upgrade
 // migration marks it installed unconditionally, no existence guard).
 //
-// Goals (/goals) is deliberately NOT declared here — it was never a real
-// backend-gated module (no require_module("goals") exists; App.jsx has
-// always gated /goals on moduleId="tasks", the same permission as /tasks
-// itself) and stays exactly the hand-maintained CORE_MODULES nav entry it
-// already was. Only the FILE moved into this package's frontend/ folder;
-// its own content/help.json section and its lib/constants.js nav entry
-// both stay untouched. See docs/MEMORY.md's 2026-08-25 entry for the full
-// reasoning against generalizing the manifest schema to support multiple
-// pages per module — Goals sharing Tasks' permission gate never actually
-// required that.
+// Goals (/goals) rode this module's own permission gate from 2026-08-25
+// until 2026-08-28, when it converted into its own real module,
+// module_packages/goals/ — own manifest, own require_module("goals") gate,
+// own route. Goals.jsx and GoalsProgressBlock.jsx both moved out of this
+// package's frontend/ folder to goals/'s own.
 export default {
   id: 'tasks',
   to: '/tasks',
@@ -78,15 +73,6 @@ export default {
       loadComponent: () => import('./frontend/StreaksBlock.jsx'),
       icon: '🔥',
       label: 'Active Streaks',
-      defaultLayout: { w: 12, h: 9 },
-      shape: 'list',
-      recordKind: 'task',
-    },
-    {
-      type: 'goals_progress',
-      loadComponent: () => import('./frontend/GoalsProgressBlock.jsx'),
-      icon: '🏆',
-      label: 'Goals Progress',
       defaultLayout: { w: 12, h: 9 },
       shape: 'list',
       recordKind: 'task',

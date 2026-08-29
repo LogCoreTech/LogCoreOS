@@ -38,12 +38,14 @@ def _brain_skip(user: dict) -> set[str]:
     only while that module is disabled for THIS user (conditional, per-user,
     matching every module's own dual-access pattern — not just "never
     installed instance-wide"), unioned with the always-skipped Tasks/
-    Dashboards/Assets/Contacts/Finance folders (structurally different
+    Dashboards/Assets/Contacts/Finance/Goals folders (structurally different
     shape, JSON+binary files, not markdown)."""
     from module_registry import brain_paths_for_disabled
 
     disabled = set(user.get("disabled_modules", []))
-    return {"Tasks", "Dashboards", "Assets", "Contacts", "Finance"} | brain_paths_for_disabled(disabled)
+    return {"Tasks", "Dashboards", "Assets", "Contacts", "Finance", "Goals"} | brain_paths_for_disabled(
+        disabled
+    )
 
 
 # Tools available in research mode — read-only access only
@@ -174,7 +176,8 @@ _USER_TOOLS: list[dict] = [
         "description": (
             "Update one or more profile fields on the user's own Contact record. Pass only the fields you "
             "want to change — existing fields are preserved. "
-            "Goals and completable items belong in tasks (type='goal'), not here. "
+            "Concrete goals belong in the Goals module (create_goal) and day-to-day to-dos in "
+            "Tasks (add_task), not here. "
             "This is for biographical/aspirational context: life mission, values, health, family, work, AI preferences."
         ),
         "input_schema": {
@@ -334,7 +337,7 @@ _USER_TOOLS: list[dict] = [
     },
     {
         "name": "run_suggestion",
-        "description": "Immediately trigger a proactive suggestion by ID. Built-in IDs: 'daily_digest', 'overdue_alert', 'weekly_review', 'goal_drift'. Custom suggestions use their UUID.",
+        "description": "Immediately trigger a proactive suggestion by ID. Built-in IDs: 'daily_digest', 'overdue_alert', 'weekly_review', 'goal_drift', 'goal_due_urgency'. Custom suggestions use their UUID.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -348,7 +351,7 @@ _USER_TOOLS: list[dict] = [
     },
     {
         "name": "update_suggestion",
-        "description": "Enable/disable a suggestion or change its delivery settings. Built-in IDs: 'daily_digest', 'overdue_alert', 'weekly_review', 'goal_drift'. Custom suggestions use their UUID.",
+        "description": "Enable/disable a suggestion or change its delivery settings. Built-in IDs: 'daily_digest', 'overdue_alert', 'weekly_review', 'goal_drift', 'goal_due_urgency'. Custom suggestions use their UUID.",
         "input_schema": {
             "type": "object",
             "properties": {

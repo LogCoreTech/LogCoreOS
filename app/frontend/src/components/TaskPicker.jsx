@@ -1,14 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
 import { tasks as tasksApi } from '../module_packages/tasks/frontend/api'
 
+function _matchRank(title, q) {
+  const t = (title || '').toLowerCase()
+  if (t === q) return 0
+  if (t.startsWith(q)) return 1
+  return 2
+}
+
 /**
  * Search-autocomplete over the user's own tasks, mirroring ContactPicker's
  * established pattern. Single-value contract (id in, id out) since dashboard
  * block config only ever stores the id, never a display name.
  *
- * Props: value (taskId|null), onChange(taskId|null), label, placeholder
+ * Props: value (taskId|null), onChange(taskId|null), label, placeholder,
+ * listFn (optional — override the task source, e.g. a household/team pool
+ * client's own .list(), defaults to the caller's personal tasks)
  */
-export default function TaskPicker({ value, onChange, label, placeholder }) {
+export default function TaskPicker({ value, onChange, label, placeholder, listFn }) {
   const [available, setAvailable] = useState(true)
   const [all, setAll] = useState([])
   const [text, setText] = useState('')
@@ -16,9 +25,10 @@ export default function TaskPicker({ value, onChange, label, placeholder }) {
   const boxRef = useRef(null)
 
   useEffect(() => {
-    tasksApi.list()
+    (listFn || tasksApi.list)()
       .then(r => setAll(Array.isArray(r) ? r : []))
       .catch(() => setAvailable(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -44,7 +54,20 @@ export default function TaskPicker({ value, onChange, label, placeholder }) {
   }
 
   const q = text.trim().toLowerCase()
-  const matches = (q ? all.filter(t => (t.title || '').toLowerCase().includes(q)) : all).slice(0, 8)
+  // No cap at all, filtered or not — the dropdown is already a scroll
+  // container (max-h-56 overflow-y-auto below), so browsing the full
+  // unfiltered list is just a scroll away instead of hiding everything
+  // past the first 8 (owner ask, 2026-08-29: "convenience factor for
+  // users"). A search query still ranks exact/prefix matches first so the
+  // most relevant ones sit at the top of that same scroll (owner-reported,
+  // 2026-08-29: a recurring task "didn't appear" while searching its own
+  // exact title, because a flat 8-item cap buried it under unrelated
+  // matches created earlier).
+  const matches = q
+    ? all
+        .filter(t => (t.title || '').toLowerCase().includes(q))
+        .sort((a, b) => _matchRank(a.title, q) - _matchRank(b.title, q))
+    : all
 
   function pick(t) {
     onChange(t.id)

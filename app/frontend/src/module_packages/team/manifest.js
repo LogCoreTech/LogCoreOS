@@ -21,5 +21,13 @@ export default {
       defaultLayout: { w: 12, h: 9 },
       shape: 'list',
     },
+    {
+      type: 'team_goals',
+      loadComponent: () => import('./frontend/TeamGoalsBlock.jsx'),
+      icon: '🎯',
+      label: 'Team Pool Goals',
+      defaultLayout: { w: 12, h: 9 },
+      shape: 'list',
+    },
   ],
 }

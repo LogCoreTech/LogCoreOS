@@ -1,4 +1,7 @@
-"""Tasks/Goals blocks — pure reuse of priority_service/task_service."""
+"""Tasks blocks — pure reuse of priority_service/task_service. Goals'
+goals_progress block moved to module_packages/goals/ when Goals converted
+into its own module (2026-08-28) — real Goal records live in their own
+store now, not type=="goal" Task rows."""
 
 from services import priority_service, task_service
 from services.dashboard_blocks.registry import (
@@ -31,9 +34,7 @@ def resolve_due_today(ctx: BlockRenderCtx) -> BlockRenderResult:
     due = [
         t
         for t in all_tasks
-        if t.get("status") == "pending"
-        and t.get("due_date") == today_str
-        and t.get("type") != "goal"
+        if t.get("status") == "pending" and t.get("due_date") == today_str
     ]
     sort_mode = ctx.config.get("sort_mode", "priority")
     order = get_priority_order(target, ctx.workspace)
@@ -52,15 +53,6 @@ def resolve_streaks(ctx: BlockRenderCtx) -> BlockRenderResult:
         reverse=True,
     )[:5]
     return BlockRenderResult(ok=True, data={"tasks": streaks})
-
-
-def resolve_goals_progress(ctx: BlockRenderCtx) -> BlockRenderResult:
-    target = scoped_target(ctx)
-    if target is None:
-        return BlockRenderResult(ok=False, locked_reason="no_access")
-    all_tasks = task_service.list_tasks(target, ctx.workspace)
-    goals = [t for t in all_tasks if t.get("type") == "goal"]
-    return BlockRenderResult(ok=True, data={"goals": goals})
 
 
 def resolve_single_task(ctx: BlockRenderCtx) -> BlockRenderResult:
@@ -100,16 +92,6 @@ register(
         label="Active Streaks",
         category="live_aggregate",
         resolver=resolve_streaks,
-        scope_configurable=True,
-        module="tasks",
-    )
-)
-register(
-    BlockSpec(
-        type="goals_progress",
-        label="Goals Progress",
-        category="live_aggregate",
-        resolver=resolve_goals_progress,
         scope_configurable=True,
         module="tasks",
     )

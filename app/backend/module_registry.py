@@ -26,6 +26,41 @@ _PACKAGES_DIR = Path(__file__).parent / "module_packages"
 
 
 @dataclass
+class MetricProviderSpec:
+    """A source of live "current value vs. target -> percent" data another
+    module can register for Goals' metric picker, WITHOUT Goals containing
+    any module-specific logic of its own — the same generic-registry shape
+    as owned_agent_tools/owned_block_types, applied to metrics. Declared on
+    the OWNING module's own manifest (e.g. Finance declares its own budget
+    provider), never on Goals'.
+
+    `key` only needs to be unique within the owning module — Goals'
+    metric_providers() below namespaces it as f"{module_id}:{key}" the same
+    way migration names are namespaced, so two modules can each have their
+    own "manual"-ish key without colliding.
+
+    `config_schema` is a list of {key, label, kind, ...} field descriptors —
+    the same shape blockRegistry.js's CONFIG_FIELD_SCHEMAS already uses on
+    the frontend, so the existing kind-based picker dispatch
+    (BlockPicker.jsx's renderField) can render this provider's config form
+    with zero new frontend picker-dispatch mechanism, only new `kind`
+    entries where a genuinely new picker is needed (e.g. a number-type
+    field picker).
+
+    `resolve(config, user, workspace)` returns {"current": float,
+    "target": float | None, "pct": int} — computed live on every call, same
+    as finance_planning_service.budget_status()'s own "no persisted
+    percent" precedent. Must never raise for ordinary "no data yet" cases
+    (return current=0/target=None/pct=0 instead) — a broken provider should
+    degrade one goal's display, never crash Goals' own list/get endpoints."""
+
+    key: str
+    label: str
+    config_schema: list[dict]
+    resolve: Callable[[dict, dict, str], dict]
+
+
+@dataclass
 class ModuleManifest:
     id: str
     display_name: str
@@ -40,6 +75,7 @@ class ModuleManifest:
     read_only_agent_tools: list[str] = field(default_factory=list)
     admin_agent_tools: list[str] = field(default_factory=list)
     owned_block_types: list[str] = field(default_factory=list)
+    owned_metric_providers: list[MetricProviderSpec] = field(default_factory=list)
     migrations: list[tuple[str, MigrationFn]] = field(default_factory=list)
     uninstallable: bool = False
     on_install: Callable[[Path], None] | None = None
@@ -145,6 +181,60 @@ def admin_agent_tool_names() -> set[str]:
     for manifest in active_manifests().values():
         names.update(manifest.admin_agent_tools)
     return names
+
+
+def directional_pct(
+    current: float, target: float | None, direction: str = "increase", start_value: float | None = None
+) -> int:
+    """0-100 progress toward `target`, aware of which way progress moves —
+    shared by every MetricProviderSpec.resolve() that needs it (Goals' own
+    "manual" provider, Contacts' "weight" provider) rather than defined
+    per-module, since it's pure math with no module-specific logic at all.
+    Lives here (not inside module_packages/goals/) so a module registering
+    its OWN metric provider (e.g. Contacts) doesn't have to import from a
+    sibling module's package just for this formula.
+
+    "increase" (default, e.g. pages read, savings): progress = how far
+    `current` has moved UP from `start_value` (default 0) toward `target`.
+    "decrease" (e.g. weight loss, debt payoff, screen time reduction):
+    progress = how far `current` has moved DOWN from `start_value` toward
+    `target` — get this backwards (plain current/target) and a weight-loss
+    goal shows WORSE as you actually lose weight, which is why this exists
+    as its own shared helper rather than being inlined per-provider.
+
+    `start_value` unset defaults to 0 for "increase" (matches the original,
+    pre-direction behavior) and to `current` for "decrease" (a goal just
+    configured with no explicit starting point reads as 0% until the value
+    actually moves, rather than crashing or guessing)."""
+    if target is None:
+        return 0
+    if direction == "decrease":
+        start = start_value if start_value is not None else current
+        denom = start - target
+        pct = (start - current) * 100 / denom if denom else 0
+    else:
+        start = start_value if start_value is not None else 0
+        denom = target - start
+        pct = (current - start) * 100 / denom if denom else 0
+    return max(0, min(100, round(pct)))
+
+
+def metric_providers() -> dict[str, MetricProviderSpec]:
+    """Every metric provider registered by an ACTIVE module, keyed by
+    f"{module_id}:{provider.key}" — the mechanism Goals' own metric picker
+    discovers providers through. Goals has zero module-specific code here;
+    it just calls this and lists whatever comes back, the same discovery
+    shape as read_only_agent_tool_names()/admin_agent_tool_names() above.
+    A provider whose owning module gets disabled/uninstalled simply stops
+    appearing — any goal still configured to use it keeps its stored
+    config, but resolve() is never called for a provider that isn't
+    currently active (the caller is expected to treat a missing key the
+    same as "no data available" rather than erroring)."""
+    providers: dict[str, MetricProviderSpec] = {}
+    for module_id, manifest in active_manifests().items():
+        for spec in manifest.owned_metric_providers:
+            providers[f"{module_id}:{spec.key}"] = spec
+    return providers
 
 
 def brain_paths_for_disabled(disabled_modules: set[str]) -> set[str]:

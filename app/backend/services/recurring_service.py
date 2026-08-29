@@ -32,11 +32,9 @@ def process_user(user_name: str) -> dict:
     broken = 0
 
     # Archive done non-recurring tasks completed before today.
-    # Goals are intentionally excluded — they stay in the Goals "Done" view until
-    # the user clicks "Clear completed" (see task_service.cleanup_done_goals).
     tasks_to_archive = []
     for t in data["tasks"]:
-        if t.get("type") in ("recurring", "goal") or t.get("status") != "done":
+        if t.get("type") == "recurring" or t.get("status") != "done":
             continue
         completed_date = (t.get("completed_at") or "")[:10]
         if completed_date and completed_date < today:

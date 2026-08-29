@@ -30,13 +30,16 @@ class TaskCreateBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     category: str = Field(..., min_length=1, max_length=50)
     priority: Literal["High", "Medium", "Low"] = "Medium"
-    type: Literal["todo", "recurring", "goal", "appointment"] = "todo"
+    type: Literal["todo", "recurring", "appointment"] = "todo"
     recurrence: Literal["daily", "weekly", "monthly"] | None = None
     due_date: str | None = None
     due_time: str | None = None
     notes: str | None = Field(None, max_length=5000)
     assigned_to: str | None = None
     asset_id: str | None = Field(None, max_length=64)
+    goal_id: str | None = Field(None, max_length=64)
+    tags: list[str] | None = None
+    counts_toward_goal: bool | None = None
 
     @field_validator("due_date")
     @classmethod
@@ -54,12 +57,6 @@ class TaskCreateBase(BaseModel):
             raise ValueError("due_time can only be set when due_date is also provided")
         return self
 
-    @model_validator(mode="after")
-    def goal_requires_due_date(self):
-        if self.type == "goal" and not self.due_date:
-            raise ValueError("A goal must have a target date (due_date)")
-        return self
-
 
 class TaskUpdateBase(BaseModel):
     title: str | None = Field(None, max_length=255)
@@ -71,6 +68,9 @@ class TaskUpdateBase(BaseModel):
     notes: str | None = Field(None, max_length=5000)
     assigned_to: str | None = None
     asset_id: str | None = Field(None, max_length=64)
+    goal_id: str | None = Field(None, max_length=64)
+    tags: list[str] | None = None
+    counts_toward_goal: bool | None = None
 
     @field_validator("due_date")
     @classmethod

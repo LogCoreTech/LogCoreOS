@@ -167,7 +167,7 @@ MODULE = ModuleManifest(
         "update_shared_task",
         "delete_shared_task",
     ],
-    owned_block_types=["household_tasks"],
+    owned_block_types=["household_tasks", "household_goals"],
     migrations=[
         (
             "household:m022_backfill_household_installed_from_existing_data",

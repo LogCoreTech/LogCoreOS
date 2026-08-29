@@ -370,7 +370,7 @@ List all tasks for the current user.
 Return the top 3 scored pending tasks.
 
 ### `GET /tasks/scored`
-Return all pending tasks sorted by score descending. Scoped to the caller's own pending, non-goal tasks — doesn't cover household/team assigned tasks or the All/Done/Overdue filter tabs, so the Tasks page's own "Sort by: Priority" mode instead ports the same formula to a client-side `scoreTask()` (`lib/constants.js`) that can rank whatever's currently on screen.
+Return all pending tasks sorted by score descending. Scoped to the caller's own pending tasks — doesn't cover household/team assigned tasks or the All/Done/Overdue filter tabs, so the Tasks page's own "Sort by: Priority" mode instead ports the same formula to a client-side `scoreTask()` (`lib/constants.js`) that can rank whatever's currently on screen. (Before 2026-08-28 this also excluded `type=="goal"` tasks; that carve-out is gone now that Goals is its own module and `"goal"` is no longer a possible Task `type` at all.)
 
 ### `GET /tasks/history`
 Return completed tasks (most recent first).
@@ -413,6 +413,12 @@ Fields `due_date`, `due_time`, `notes`, `recurrence` are optional. `due_time` re
 
 **Un-marking done:** Send `{ "status": "pending" }` to revert a completed task. `completed_at` is cleared automatically; recurring tasks also have `streak_count` decremented and `last_completed_date` cleared.
 
+**Recurring completion log (2026-08-29):** completing a recurring task also appends a dated entry to `completion_log` (`{"date": "YYYY-MM-DD"}`, capped at 90 entries); un-marking the same day's completion removes that same entry. Not user-facing on its own — it feeds `goals_service.compute_progress`'s rollup for any goal this task is linked to via `goal_id` (see the `## Goals` section below), turning a linked recurring task's contribution into a real 30-day completion rate instead of a binary done/not-done value.
+
+**Tags (2026-08-29):** `POST`/`PATCH /tasks` also accept `tags: list[str] | null` — union-registered into that store's shared tag vocabulary the same way Goals' own `tags` field is (see `## Tags` below).
+
+**Optional recurring-task rollup contribution (2026-08-29):** `POST`/`PATCH /tasks` also accept `counts_toward_goal: bool | null` on a recurring task — whether this task's completion rate (see above) counts toward its linked goal's rollup percentage, or only displays for its own sake (see the `## Goals` section below for the rollup side of this). Newly linking a recurring task to a goal — at creation with `goal_id` already set, or via a later `PATCH` that sets a new `goal_id` — defaults this to `false` unless the same request explicitly includes the field. A task linked before this field existed simply has no `counts_toward_goal` key at all, which is treated as "counts" (`true`) everywhere this is read.
+
 ### `PATCH /tasks/{task_id}`
 Update a task. Only send fields you want to change. Pass `null` to clear optional fields.
 
@@ -429,6 +435,28 @@ Update a task. Only send fields you want to change. Pass `null` to clear optiona
 Delete a task permanently.
 
 **Response** `{ "ok": true }`
+
+---
+
+## Goals
+
+Router mounted at `/api/v1/goals` (module id `goals` — a real module_packages/goals/ entry only since 2026-08-28; before that "Goals" was just Task records with `type=="goal"`, filtered client-side, riding on Tasks' own `require_module("tasks")` gate). Requires the `goals` module. NOT locked — an ordinary optional module, install/uninstall it like Assets/Contacts/Finance. Goals form a tree via `parent_id` (unbounded depth, cycle-guarded), the same pattern Assets' own tree uses. Serves BOTH personal and household/team pool goals from this one router (the same "single owning module serves personal + pool" shape Finance/Contacts/Assets/Notes already use) — every non-list endpoint below takes an explicit `pool: bool` body/query flag (default `false`) rather than inferring the store from the id, mirroring `POST /notes/file`'s own `pool: true` precedent. Pool writes additionally require `pool_edit` for that workspace's pool (`PATCH /auth/admin/users/{id}/pool-edit`), exactly like Household's/Team's own task/event endpoints — no new permission model. `goals_service.py` stays fully inside this package; nothing outside it needs Goals data directly.
+
+| Method | Path | Access | Notes |
+|--------|------|--------|-------|
+| `GET` | `/goals` | module users | Caller's own goals + the workspace's pool goals if that pool module is installed (visible to all pool members by default — Tasks/Notes' pattern, not Dashboards' contributors-gated one). Each entry is annotated with a live-computed `progress` (`{current, target, pct}`) |
+| `GET` | `/goals/metric-providers` | module users | Every metric source currently configurable on a goal: the built-in `"manual"` entry plus whatever `module_registry.metric_providers()` discovers from active modules — as of 2026-08-29, 3 total: `"manual"`, `finance:budget_pct`, `contacts:number_field`, and `contacts:weight` (added 2026-08-29 — reads the caller's own self-contact's private `weight_kg` field, no `contact_id` override). Each carries a `config_schema` driving the frontend `MetricPicker.jsx` the same way `blockRegistry.js`'s `CONFIG_FIELD_SCHEMAS` already does for dashboard blocks. The manual provider and both Contacts providers each now include a `direction` (`"increase"`\|`"decrease"`, select) and an optional `start_value` (number) config field alongside `target_value` (2026-08-29) — see `module_registry.directional_pct()`: "increase" (default) is the original current/target behavior; "decrease" (weight's own default) computes `(start_value - current) / (start_value - target)`, since a decreasing metric has no natural zero baseline to measure progress from the way an increasing one does |
+| `POST` | `/goals` | module users (pool: `pool_edit`/admin) | `{title, notes?, category?, parent_id?, due_date?, metric?, tags?, pool?}` — `due_date` is fully optional (no `goal_requires_due_date` validator exists anymore); `metric` is `null` or a provider config object; `tags` (added 2026-08-29) is a list of strings, union-registered into that store's shared tag vocabulary (see `## Tags` below) via `services/tags_service.py` |
+| `GET` | `/goals/{id}?pool=` | module users | Returns `{goal, subgoals, linked_tasks, progress, on_pace}` in one call — `on_pace` (`"on_pace"`/`"behind_pace"`/`null`) is only computed when the goal has both a metric `target_value` and a `due_date` |
+| `PATCH` | `/goals/{id}` | module users (pool: `pool_edit`/admin) | Body accepts any subset of the `POST` fields (including `tags`) plus `status: "pending"\|"done"` (the manual fallback when no metric/children drive the percent); `pool` in the body selects which store to resolve `{id}` against |
+| `DELETE` | `/goals/{id}?pool=&cascade=&delete_linked_tasks=` | module users (pool: `pool_edit`/admin) | Query params, not a body (the shared `lib/api.js` `del()` helper doesn't support one). `cascade` (default `false`) re-parents subgoals to the deleted goal's own parent instead of deleting them; `delete_linked_tasks` (default `false`) just clears `goal_id` on affected tasks instead of deleting them — both independent, real choices surfaced to the caller, not a fixed behavior |
+| `POST` | `/goals/{id}/metric/log` | module users (pool: `pool_edit`/admin) | `{value, date?, pool?}` — appends a dated entry to a manual-metric goal's logged value history (capped, oldest trimmed); `date` defaults to today |
+
+**Linking a task to a goal** is done through Tasks' own `goal_id` field (see the Task linking note in the Assets section above), not a dedicated Goals endpoint — `POST`/`PATCH /tasks` accept it directly, and the AI's `link_task_to_goal`/`unlink_task_from_goal` tools just set/clear it under the hood. Reading/unlinking already-linked tasks off a goal (`GET /goals/{id}`'s own `linked_tasks`) correctly reads from whichever store the goal itself lives in, including pool stores; creating a NEW linked task or linking an EXISTING one from a pool goal's own detail view previously always hit the caller's PERSONAL task store regardless — fixed 2026-08-29 (`GoalModal.jsx`'s new `poolTaskApi()` helper resolves the correct household/team client first) — no API surface change on this side, the fix was frontend-only.
+
+**A linked recurring task now contributes a real completion RATE to its parent goal's rollup, not a binary done/not-done value (2026-08-29).** `goals_service.compute_progress`'s rollup loop checks a linked task's own `type`; a `"recurring"` task contributes `min(100, (completions in the trailing 30 days) / 30 * 100)`, reading `completion_log` (a capped, dated entry appended by `PATCH /tasks/{id}` whenever a recurring task's completion state changes — see the Tasks section above). A non-recurring linked task is unaffected, still binary. **Contribution is now optional per link, not automatic (2026-08-29, same day):** a recurring Task's `counts_toward_goal: bool | null` field (see `## Tasks` above) gates whether it's included — explicitly `false` skips it from the rollup entirely; a missing/`null` value (including every task linked before this option existed) still counts, matching the original behavior exactly. Each `type: "recurring"` entry in `GET /goals/{id}`'s `linked_tasks` also now carries a `recurring_rate` field (0-100, rounded), computed the same way regardless of whether it currently counts toward the rollup — so the UI can always show a recurring task's own 30-day rate even when it's excluded from the goal's percentage.
+
+**A pool pseudo-user's (`_household`/`_team`) own storage always lives at `workspace="personal"` internally**, regardless of which real workspace the calling user is currently in — see `docs/MEMORY.md`'s 2026-08-28 entry (Goals) for the full reasoning; every `pool: true` call above resolves through this correctly.
 
 ---
 
@@ -469,6 +497,25 @@ send only the pool(s) you're updating. (Corrected from an earlier `{pool, order}
 here that never matched the actual route.)
 
 **Response** `{ "ok": true }`
+
+---
+
+## Tags
+
+Router mounted at `/api/v1/tags` (2026-08-29, `routers/tags.py`) — the shared tag vocabulary behind Goals' and Tasks' own `tags` fields (see the `## Goals` and `## Tasks` sections above). Deliberately core, not owned by either module — both Goals' package and core `task_service.py` write into it — and login-required only, no `require_module` gate, the same shape as `## Priorities` immediately above (a tag means the same thing regardless of which module's record it's attached to, so it can't sensibly be tied to one module's own install state).
+
+### `GET /tags`
+The caller's own tag vocabulary, or their workspace's pool vocabulary when `pool=true`.
+
+**Query params**
+- `pool` — boolean, default `false`. When `true`, resolves to the caller's workspace pool (`_household` in the personal workspace, `_team` in business) — mirrors `module_packages/goals/backend/router.py`'s own personal-vs-pool store resolution, including the pool-always-resolves-to-`workspace="personal"`-internally rule (see that router's own module docstring).
+
+**Response**
+```json
+{ "tags": ["Health", "Home Improvement", "Q3 Goals"] }
+```
+
+There is no `POST`/`PUT` here — a tag is added to the vocabulary implicitly, as a side effect of using it: `POST`/`PATCH /goals` and `POST`/`PATCH /tasks` each union-register any new tag they see into that store's own vocabulary via `services/tags_service.py`'s `register_tags()` (case-insensitive dedup, case-preserving, first-seen casing wins). There's no delete either — the vocabulary only grows, by design (the owner wanted autocomplete driven by a real accumulating list, not one live-scanned off currently-existing records).
 
 ---
 
@@ -939,7 +986,7 @@ Token auth via `X-Automation-Token` header — no JWT. Token lives in `brain/_sy
 
 ### Task linking
 
-`POST /tasks` and `PATCH /tasks/{id}` accept an optional `asset_id` field linking the task to an asset.
+`POST /tasks` and `PATCH /tasks/{id}` accept an optional `asset_id` field linking the task to an asset, and (2026-08-28, mirrors `asset_id` exactly) an optional `goal_id` field linking the task to a Goal — see the Goals section below.
 
 ---
 
@@ -1495,9 +1542,9 @@ time, no stored "protected" flag.
 | `GET` | `/dashboards/members` | module users | Member display names for the share picker, mirrors `assets.py`'s `/assets/members` |
 | `GET` | `/dashboards/roles` | module users | Feature-role names for the share-by-role picker |
 
-**Block catalog** (28 types across `live_aggregate` / `record_linked` / `freeform` categories) —
-Tasks/Goals (`top3_tasks`, `due_today` — both take a `sort_mode: "priority"|"date"|"alpha"` config, default `priority`, 2026-08-15; `streaks`, `goals_progress`, `single_task`), Home Assistant
-(`home_assistant_favourites`, personal only), Household (`household_tasks`, personal only), Team (`team_tasks`, business only — split from a single shared `pool_tasks` type 2026-08-25 once both pools became real, gated modules), Calendar (`upcoming_events`,
+**Block catalog** (35 types across `live_aggregate` / `record_linked` / `freeform` categories) —
+Tasks (`top3_tasks`, `due_today` — both take a `sort_mode: "priority"|"date"|"alpha"` config, default `priority`, 2026-08-15; `streaks`, `single_task`), Goals (`goals_progress`, personal only — owned by Tasks' own package until 2026-08-28, when Goals became a real module and it moved into `module_packages/goals/` and was rebuilt to show real computed progress instead of a bare task list), Home Assistant
+(`home_assistant_favourites`, personal only), Household (`household_tasks`, `household_goals` — both personal only, `household_goals` added 2026-08-28 alongside `household_tasks`' own established `module="household"`-gates-on-pool-membership precedent), Team (`team_tasks`, `team_goals` — both business only, `team_goals` added the same day mirroring `household_goals`; `*_tasks` split from a single shared `pool_tasks` type 2026-08-25 once both pools became real, gated modules), Calendar (`upcoming_events`,
 `single_event`), Finance (`finance_activity` — asset/contact/book variants, `finance_book_report`),
 Contacts (`linked_deals`, `contacts_list`, `linked_assets` — module-gated since contacts/ converted 2026-08-28; `custom_fields` reads from either Contacts or Assets data depending on config and stays core/ungated, unowned by either module, same shape as `nav_button`/`status_button` below), Assets (`documents`, `linked_tasks`,
 `linked_contact`, `my_assets_summary`), Notes (`note_embed`), Journal (`journal_entry`), Automations

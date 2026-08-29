@@ -1334,18 +1334,6 @@ def test_comment_mute_silences_subtree_notifications(parcel, users):
 # ---------------------------------------------------------------------------
 
 
-def test_goals_excluded_from_top3_and_scored(users):
-    from services import priority_service, task_service
-
-    task_service.add_task("Alice", {"title": "Do dishes", "category": "Home"})
-    task_service.add_task("Alice", {"title": "Buy 100 acres", "category": "Home", "type": "goal"})
-    top3 = priority_service.get_top3("Alice")
-    scored = priority_service.get_all_scored("Alice")
-    assert all(t.get("type") != "goal" for t in top3)
-    assert all(t.get("type") != "goal" for t in scored)
-    assert any(t["title"] == "Do dishes" for t in top3)
-
-
 # ---------------------------------------------------------------------------
 # By-name contributor entries downgrade pool_edit managers (owner bug #2)
 # ---------------------------------------------------------------------------

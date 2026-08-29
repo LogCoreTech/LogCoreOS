@@ -60,6 +60,24 @@ def events_path(user_name: str, workspace: str = "personal") -> Path:
     return ws_path(user_name, workspace) / "Calendar" / "events.json"
 
 
+def goals_path(user_name: str, workspace: str = "personal") -> Path:
+    return ws_path(user_name, workspace) / "Goals" / "goals.json"
+
+
+def tags_path(user_name: str, workspace: str = "personal") -> Path:
+    """Shared tag vocabulary for Goals + Tasks — one list per store (personal
+    or pool), since a tag means the same thing on a goal or a task."""
+    return ws_path(user_name, workspace) / "Tags" / "tags.json"
+
+
+def goal_progress_history_path(user_name: str, workspace: str = "personal") -> Path:
+    """Daily percent-complete snapshots, one small rolling log per store —
+    feeds goal_drift's stalled-progress comparison. Separate from goals.json
+    itself so a high-frequency system write never contends with user edits
+    to the goals themselves."""
+    return ws_path(user_name, workspace) / "Goals" / "goal_progress_history.json"
+
+
 def assets_path(user_name: str, workspace: str = "personal") -> Path:
     return ws_path(user_name, workspace) / "Assets" / "assets.json"
 

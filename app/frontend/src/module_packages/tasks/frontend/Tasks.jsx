@@ -31,6 +31,7 @@ export default function Tasks() {
   const [assignedPoolTasks, setAssignedPoolTasks] = useState([])
   const [priorityOrder, setPriorityOrder] = useState([])
   const [filter, setFilter] = useState('pending')
+  const [tagFilter, setTagFilter] = useState(null)
   const [sortMode, setSortMode] = useState(() => localStorage.getItem('lc_tasks_sort') || 'priority')
   const [editTask, setEditTask] = useState(null)
   const [showModal, setShowModal] = useState(false)
@@ -126,18 +127,19 @@ export default function Tasks() {
   const _todayStr = `${_today.getFullYear()}-${String(_today.getMonth() + 1).padStart(2, '0')}-${String(_today.getDate()).padStart(2, '0')}`
 
   // Merge personal tasks + assigned pool tasks (tagged with _source from backend).
-  // Goal-type tasks live on the Goals page only — they'd double up here.
   const allTasks = [
     ...taskList,
     ...assignedPoolTasks,
-  ].filter(t => t.type !== 'goal')
+  ]
 
-  const filtered = allTasks.filter(t =>
-    filter === 'all'     ? true :
-    filter === 'pending' ? t.status === 'pending' :
-    filter === 'done'    ? t.status === 'done' :
-    filter === 'overdue' ? (t.status === 'pending' && t.due_date && t.due_date < _todayStr) : true
-  )
+  const filtered = allTasks
+    .filter(t =>
+      filter === 'all'     ? true :
+      filter === 'pending' ? t.status === 'pending' :
+      filter === 'done'    ? t.status === 'done' :
+      filter === 'overdue' ? (t.status === 'pending' && t.due_date && t.due_date < _todayStr) : true
+    )
+    .filter(t => !tagFilter || (t.tags || []).includes(tagFilter))
 
   // One flat list, no category grouping — sort mode picks the ordering.
   // 'priority' mirrors the backend's own score_task() formula (ported to JS
@@ -195,6 +197,15 @@ export default function Tasks() {
         ))}
       </div>
 
+      {tagFilter && (
+        <button
+          onClick={() => setTagFilter(null)}
+          className="inline-flex items-center gap-1.5 bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 text-xs px-2.5 py-1 rounded-full"
+        >
+          Tag: {tagFilter} <span className="font-bold">✕</span>
+        </button>
+      )}
+
       {/* Sort mode */}
       <div className="flex items-center gap-2 text-xs text-charcoal-500 dark:text-charcoal-400">
         <span className="shrink-0">Sort by</span>
@@ -234,6 +245,7 @@ export default function Tasks() {
               today={_todayStr}
               onDone={() => toggleDone(task)}
               onEdit={() => { setEditTask(task); setShowModal(true) }}
+              onTagClick={t => setTagFilter(t)}
             />
           ))}
         </div>
@@ -306,7 +318,7 @@ export default function Tasks() {
   )
 }
 
-function TaskCard({ task, catColor, today, onDone, onEdit }) {
+function TaskCard({ task, catColor, today, onDone, onEdit, onTagClick }) {
   const overdue = task.due_date && task.due_date < today && task.status === 'pending'
 
   return (
@@ -345,6 +357,19 @@ function TaskCard({ task, catColor, today, onDone, onEdit }) {
         )}
         {task.notes && (
           <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mt-0.5 truncate">{task.notes}</p>
+        )}
+        {task.tags?.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {task.tags.map(t => (
+              <span
+                key={t}
+                onClick={() => onTagClick(t)}
+                className="inline-flex items-center bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 text-[11px] px-1.5 py-0.5 rounded-full hover:bg-orange-200 dark:hover:bg-orange-900/70 cursor-pointer"
+              >
+                {t}
+              </span>
+            ))}
+          </div>
         )}
       </div>
 

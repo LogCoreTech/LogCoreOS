@@ -13,15 +13,17 @@ docs/MEMORY.md's 2026-08-25 entry for the full design, including:
   as dashboard_blocks/_pool.py's PoolTasksBlock staying core and unowned
   until Household/Team's own future conversion: conceptually Household's
   domain, just implemented via task_service against "_household";
-- why Goals (/goals) is NOT part of this conversion's manifest — it's a
-  purely frontend nav-only pseudo-module (no require_module("goals") exists
-  anywhere in the backend; App.jsx gates /goals on moduleId="tasks", the
-  same real permission as /tasks) that was never manifest-driven to begin
-  with. Goals.jsx itself DOES move into this package's frontend/ folder, but
-  its CORE_MODULES nav entry and its own content/help.json section both stay
-  exactly where they already were — no new multi-page manifest mechanism
-  needed, since the existing 1-manifest-1-primary-route shape was never
-  actually violated by Goals sharing Tasks' permission gate.
+- Goals (/goals) rode this module's own permission gate from 2026-08-25
+  (when Tasks itself converted) until 2026-08-28, when it converted into
+  its own real module, module_packages/goals/ — its own require_module
+  ("goals") gate, own Goals/goals.json store, own manifest. Goals.jsx moved
+  out of this package's frontend/ folder to goals/'s own; type=="goal" is
+  no longer a valid Task type at all (routers/_task_models.py's Literal
+  dropped it, an upgrade migration on goals/'s own manifest converts every
+  existing type=="goal" Task into a real Goal record and removes it from
+  tasks.json). Tasks gained a new goal_id field (mirrors the existing
+  asset_id field exactly) so a Task can still link to a Goal without
+  Goals needing to own any part of Tasks' own storage.
 """
 
 from pathlib import Path
@@ -91,7 +93,7 @@ MODULE = ModuleManifest(
         "get_task_history",
         "get_week_snapshot",
     ],
-    owned_block_types=["top3_tasks", "due_today", "streaks", "goals_progress", "single_task"],
+    owned_block_types=["top3_tasks", "due_today", "streaks", "single_task"],
     migrations=[
         (
             "tasks:m021_mark_tasks_installed_unconditionally",
@@ -110,11 +112,13 @@ MODULE = ModuleManifest(
             "Use the \"Sort by\" control above the list to switch between Priority score (default — ranks every task against every other one, regardless of category), Date/Time, and Alphabetical; your choice is remembered.",
             "Check a task off to complete it. Non-recurring done tasks move to History during the nightly tidy-up.",
             "Tasks assigned to you from a shared Household or Team pool show up here with a 🏠 badge.",
+            "Add tags to group tasks beyond category — click a tag anywhere to filter the list down to just that tag.",
         ],
         "tips": [
             "Your Dashboard shows the top 3 tasks to focus on right now — a filtered view of this list.",
             "Reorder your category priorities in Profile; it directly changes which tasks surface first.",
             "You can also ask the AI in Chat to \"add three tasks for the move\" and approve them in one step.",
+            "Tags are shared with Goals — tag something \"urgent\" in either place and it means the same thing in both, and you can link a recurring task to a goal to feed it real completion-rate data.",
         ],
         "modules": ["tasks"],
     },

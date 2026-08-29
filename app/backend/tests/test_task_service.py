@@ -169,48 +169,87 @@ def test_recurring_task_increments_streak(user_brain):
     assert updated["streak_count"] == 1
 
 
+def test_recurring_completion_logs_todays_date(user_brain):
+    task = task_service.add_task(
+        USER, {**_make_task("Log"), "type": "recurring", "recurrence": "daily"}
+    )
+    assert task["completion_log"] == []
+    updated = task_service.update_task(USER, task["id"], {"status": "done"})
+    assert len(updated["completion_log"]) == 1
+    assert "date" in updated["completion_log"][0]
+
+
+def test_undoing_recurring_completion_removes_todays_log_entry(user_brain):
+    task = task_service.add_task(
+        USER, {**_make_task("Undo"), "type": "recurring", "recurrence": "daily"}
+    )
+    task_service.update_task(USER, task["id"], {"status": "done"})
+    undone = task_service.update_task(USER, task["id"], {"status": "pending"})
+    assert undone["completion_log"] == []
+
+
+def test_non_recurring_task_never_logs_completions(user_brain):
+    task = task_service.add_task(USER, _make_task("Todo"))
+    updated = task_service.update_task(USER, task["id"], {"status": "done"})
+    assert updated["completion_log"] == []
+
+
+def test_task_tags_default_empty_and_register_vocabulary(user_brain):
+    from services import tags_service
+
+    task = task_service.add_task(USER, {**_make_task("Tagged"), "tags": ["urgent", "family"]})
+    assert task["tags"] == ["urgent", "family"]
+    assert tags_service.get_tags(USER, "personal") == ["urgent", "family"]
+
+
+def test_update_task_tags_registers_new_vocabulary_entries(user_brain):
+    from services import tags_service
+
+    task = task_service.add_task(USER, _make_task("Plain"))
+    task_service.update_task(USER, task["id"], {"tags": ["new-tag"]})
+    assert "new-tag" in tags_service.get_tags(USER, "personal")
+
+
+def test_recurring_task_created_already_linked_defaults_to_not_counting(user_brain):
+    task = task_service.add_task(
+        USER, {**_make_task("Linked"), "type": "recurring", "recurrence": "daily", "goal_id": "g1"}
+    )
+    assert task["counts_toward_goal"] is False
+
+
+def test_recurring_task_created_unlinked_has_no_counts_toward_goal_field(user_brain):
+    task = task_service.add_task(USER, {**_make_task("Solo"), "type": "recurring", "recurrence": "daily"})
+    assert "counts_toward_goal" not in task
+
+
+def test_non_recurring_task_created_linked_has_no_counts_toward_goal_field(user_brain):
+    task = task_service.add_task(USER, {**_make_task("Todo"), "goal_id": "g1"})
+    assert "counts_toward_goal" not in task
+
+
+def test_newly_linking_recurring_task_via_update_defaults_to_not_counting(user_brain):
+    task = task_service.add_task(USER, {**_make_task("Later"), "type": "recurring", "recurrence": "daily"})
+    updated = task_service.update_task(USER, task["id"], {"goal_id": "g1"})
+    assert updated["counts_toward_goal"] is False
+
+
+def test_relinking_same_goal_does_not_reset_explicit_counts_toward_goal(user_brain):
+    task = task_service.add_task(
+        USER,
+        {**_make_task("Kept"), "type": "recurring", "recurrence": "daily", "goal_id": "g1", "counts_toward_goal": True},
+    )
+    updated = task_service.update_task(USER, task["id"], {"title": "Kept renamed"})
+    assert updated["counts_toward_goal"] is True
+
+
+def test_explicit_counts_toward_goal_respected_on_link(user_brain):
+    task = task_service.add_task(USER, {**_make_task("Explicit"), "type": "recurring", "recurrence": "daily"})
+    updated = task_service.update_task(USER, task["id"], {"goal_id": "g1", "counts_toward_goal": True})
+    assert updated["counts_toward_goal"] is True
+
+
 def test_skipped_task_stays_in_active_list(user_brain):
     task = task_service.add_task(USER, _make_task())
     task_service.update_task(USER, task["id"], {"status": "skipped"})
     active_ids = [t["id"] for t in task_service.list_tasks(USER)]
     assert task["id"] in active_ids
-
-
-def _make_goal(title="Ship v1", category="Work", due_date="2026-12-31"):
-    return {
-        "title": title,
-        "category": category,
-        "priority": "High",
-        "type": "goal",
-        "recurrence": None,
-        "due_date": due_date,
-        "due_time": None,
-        "notes": None,
-    }
-
-
-def test_completed_goals_survive_nightly_sweep(user_brain):
-    goal = task_service.add_task(USER, _make_goal())
-    task_service.update_task(USER, goal["id"], {"status": "done"})
-    _backdate_completed(goal["id"])  # completed "yesterday"
-    process_user(USER)  # nightly job runs
-    # Goal must still be in tasks.json (Goals "Done" view), NOT swept to history
-    active = task_service.list_tasks(USER)
-    assert any(t["id"] == goal["id"] for t in active)
-    assert task_service.list_history(USER) == []
-
-
-def test_cleanup_done_goals_archives_only_done_goals(user_brain):
-    done_goal = task_service.add_task(USER, _make_goal("Done goal"))
-    task_service.update_task(USER, done_goal["id"], {"status": "done"})
-    pending_goal = task_service.add_task(USER, _make_goal("Pending goal"))
-    done_todo = task_service.add_task(USER, _make_task("Done todo"))
-    task_service.update_task(USER, done_todo["id"], {"status": "done"})
-
-    archived = task_service.cleanup_done_goals(USER)
-    assert archived == 1
-    ids = {t["id"] for t in task_service.list_tasks(USER)}
-    assert done_goal["id"] not in ids  # archived
-    assert pending_goal["id"] in ids  # untouched
-    assert done_todo["id"] in ids  # not a goal — untouched
-    assert any(t["id"] == done_goal["id"] for t in task_service.list_history(USER))

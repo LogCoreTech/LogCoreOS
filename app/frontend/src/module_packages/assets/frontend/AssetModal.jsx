@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { finance as financeApi } from '../../finance/frontend/api'
 import { assets as assetsApi } from './api'
 import { tasks as tasksApi } from '../../tasks/frontend/api'
@@ -923,7 +924,12 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
           </div>
         </form>
 
-        {showTaskModal && (
+        {showTaskModal && createPortal(
+          // Portal to document.body — .modal-card's own backdrop-blur creates
+          // a new containing block for position:fixed descendants, so
+          // without this the nested TaskModal sizes/clips against THIS
+          // modal's own box instead of the real viewport (found + fixed
+          // 2026-08-29 alongside the identical bug in Goals' own GoalModal).
           <TaskModal
             defaultAssetId={asset.id}
             assets={[asset]}
@@ -932,7 +938,8 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
               setShowTaskModal(false)
               tasksApi.list().then(all => setLinkedTasks((all || []).filter(t => t.asset_id === asset.id))).catch(() => {})
             }}
-          />
+          />,
+          document.body
         )}
 
         {archivePrompt && (

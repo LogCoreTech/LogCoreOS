@@ -105,6 +105,14 @@
       "status": "available"
     },
     {
+      "id": "goals",
+      "name": "Goals",
+      "description": "Bigger outcomes broken into subgoals and linked tasks, with an optional live metric to track real progress.",
+      "category": "general",
+      "icon": "🎯",
+      "status": "available"
+    },
+    {
       "id": "field_ops",
       "name": "Field Ops",
       "description": "Subdivisions, lots, phase scheduling, and mobile SmartForm checklists for residential trade subcontractors.",

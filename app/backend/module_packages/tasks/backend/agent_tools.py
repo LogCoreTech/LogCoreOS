@@ -40,7 +40,7 @@ TOOL_SCHEMAS = [
                     "description": "Category (e.g. Health, Work, Personal)",
                 },
                 "priority": {"type": "string", "enum": ["High", "Medium", "Low"]},
-                "type": {"type": "string", "enum": ["todo", "recurring", "goal", "appointment"]},
+                "type": {"type": "string", "enum": ["todo", "recurring", "appointment"]},
                 "recurrence": {"type": "string", "enum": ["daily", "weekly", "monthly"]},
                 "due_date": {"type": "string", "description": "Due date YYYY-MM-DD"},
                 "due_time": {"type": "string", "description": "Due time HH:MM (requires due_date)"},
@@ -48,6 +48,10 @@ TOOL_SCHEMAS = [
                 "asset_id": {
                     "type": "string",
                     "description": "Optional asset ID to link this task to (see list_assets)",
+                },
+                "goal_id": {
+                    "type": "string",
+                    "description": "Optional goal ID to link this task to (see list_goals) — the task then shows up under that goal's Linked Tasks",
                 },
             },
             "required": ["title", "category"],
@@ -67,6 +71,10 @@ TOOL_SCHEMAS = [
                 "due_date": {"type": "string"},
                 "due_time": {"type": "string"},
                 "notes": {"type": "string"},
+                "goal_id": {
+                    "type": "string",
+                    "description": "Optional goal ID to link this task to, or empty string to unlink",
+                },
             },
             "required": ["task_id"],
         },
@@ -112,7 +120,7 @@ TOOL_SCHEMAS = [
     },
     {
         "name": "create_tasks",
-        "description": "Create multiple tasks at once. Useful for planning sessions. Each task uses the same schema as add_task.",
+        "description": "Create multiple tasks at once. Useful for planning sessions, and for breaking a goal into concrete tasks — pass goal_id on each one (from list_goals/get_goal) so they show up under that goal automatically. Each task uses the same schema as add_task.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -127,11 +135,15 @@ TOOL_SCHEMAS = [
                             "priority": {"type": "string", "enum": ["High", "Medium", "Low"]},
                             "type": {
                                 "type": "string",
-                                "enum": ["todo", "recurring", "goal", "appointment"],
+                                "enum": ["todo", "recurring", "appointment"],
                             },
                             "due_date": {"type": "string"},
                             "due_time": {"type": "string"},
                             "notes": {"type": "string"},
+                            "goal_id": {
+                                "type": "string",
+                                "description": "Optional goal ID to link this task to (see list_goals) — the task then shows up under that goal's Linked Tasks",
+                            },
                         },
                         "required": ["title", "category"],
                     },

@@ -175,3 +175,41 @@ MODULE = ModuleManifest(
 
     assert module_registry.brain_paths_for_disabled(set()) == set()
     assert module_registry.brain_paths_for_disabled({"t_brainpaths"}) == {"TestFolder"}
+
+
+# ---------------------------------------------------------------------------
+# directional_pct (2026-08-29) — shared "increase to target" vs "decrease to
+# target" progress math for Goals metric providers (Goals' own "manual"
+# provider, Contacts' "weight" provider).
+# ---------------------------------------------------------------------------
+
+
+def test_directional_pct_increase_from_zero_default():
+    assert module_registry.directional_pct(50, 100, "increase") == 50
+
+
+def test_directional_pct_increase_with_explicit_start():
+    # 20 -> 100 target, currently at 60: (60-20)/(100-20) = 50%
+    assert module_registry.directional_pct(60, 100, "increase", start_value=20) == 50
+
+
+def test_directional_pct_decrease_weight_loss_shape():
+    # started at 180, target 150, now 165: (180-165)/(180-150) = 50%
+    assert module_registry.directional_pct(165, 150, "decrease", start_value=180) == 50
+
+
+def test_directional_pct_decrease_without_start_value_reads_as_zero_until_it_moves():
+    # no explicit start — first resolve treats "now" as the baseline
+    assert module_registry.directional_pct(180, 150, "decrease") == 0
+
+
+def test_directional_pct_clamps_above_100():
+    assert module_registry.directional_pct(200, 100, "increase") == 100
+
+
+def test_directional_pct_clamps_below_0():
+    assert module_registry.directional_pct(-50, 100, "increase") == 0
+
+
+def test_directional_pct_no_target_is_zero():
+    assert module_registry.directional_pct(50, None, "increase") == 0

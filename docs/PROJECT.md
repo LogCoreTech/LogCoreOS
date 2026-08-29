@@ -147,6 +147,7 @@ The App currently provides:
 - Collapsible sidebar (desktop) with collapse state persisted to `localStorage`
 - Frosted card blur, left-border active nav highlight, CSS variable-driven corner radii
 - Help system — an in-app Help & Guide page (per-module how-to, FAQ, search, "only my modules" filter, `?` shortcut), an ⓘ button on every module page, a first-run Getting Started checklist, and a What's-New broadcast (inbox note + banner) after each update. All authored in one source (`content/help.json`) that the AI also reads via a `get_help` tool + a capability index injected into chat, so the assistant can explain any feature and point users to the right module
+- Goals module (2026-08-28, reworked 2026-08-29 per the owner's own try-it-out pass — "Round 2," same still-uncommitted changeset) — converted from a fake feature (Task records with `type=="goal"`, riding on Tasks' own permission gate) into a real, independent module: unbounded-depth subgoals (including linking an EXISTING goal as a subgoal, i.e. re-parenting, added Round 2), tasks linked directly to a goal, a generic metric-provider mechanism (a built-in subgoal/task completion rollup, a user-logged manual metric with history, or a live percentage pulled from another module — a Finance budget's spent-vs-limit, a number-type Contacts custom field, or the caller's own Contacts weight, added Round 2 — with a shared `direction`/`start_value` config so a decrease-type goal like weight loss reads correctly), a recurring linked task's own 30-day completion rate feeding its parent goal's rollup (Round 2, replacing a binary done/not-done contribution), on-pace tracking against a due date, a completion celebration and a progress-drift/deadline-urgency suggestion pair, a shared tag vocabulary with Tasks (Round 2), and an ME/pool tab split BY OWNERSHIP (Round 2 — "ME" is all of the caller's own goals at any depth, a second tab shows the household's/team's pool goals; the original Round 1 split was by DEPTH instead, root-level-only vs. everything, replaced once the owner reported not being able to find pool goals in the merged list); household/team pool goals via the same personal+pool pattern Finance/Contacts/Assets/Notes already use
 
 **Phase 2 (complete):**
 
@@ -298,16 +299,31 @@ clean. See `docs/MEMORY.md`'s 2026-08-28 entry (Finance) for the full writeup.
 **The Mod Store migration is now complete.** All 13 modules the rollout plan ever targeted —
 journal, home_assistant, automations, calendar, tasks, household, team, chat, notes, dashboard,
 assets, contacts, finance — have converted into `module_packages/`. The only things that remain
-permanently core/unconverted are `goals` (never a real backend module, rides Tasks' own permission
-gate) and the plan's own explicitly-designated cross-cutting infrastructure that was never meant to
-convert: `dashboard_blocks/` (registry.py, render.py, every block resolver), `agent_service.py`'s
-tool-orchestration/session engine, and `module_registry.py` itself. No further module conversions
-are planned. What's left is real-world verification on the live instance of the modules built since
-journal/Home Assistant/Automations were last confirmed working there — see `docs/TASKS.md`'s Mod
-Store tracking item for exactly which modules are confirmed-live vs. still pending.
+permanently core/unconverted are the plan's own explicitly-designated cross-cutting infrastructure
+that was never meant to convert: `dashboard_blocks/` (registry.py, render.py, every block resolver),
+`agent_service.py`'s tool-orchestration/session engine, and `module_registry.py` itself. No further
+module conversions are planned. What's left is real-world verification on the live instance of the
+modules built since journal/Home Assistant/Automations were last confirmed working there — see
+`docs/TASKS.md`'s Mod Store tracking item for exactly which modules are confirmed-live vs. still
+pending.
 Full design in `docs/MEMORY.md`'s 2026-08-24/25/26/27/28 entries and
 `/home/logcore/.claude/plans/i-want-you-to-composed-scone.md`; rollout order tracked in
 `docs/TASKS.md`.
+
+**Goals used this same infrastructure, the same day, but was NOT one of the 13 rollout modules
+above.** Immediately after this rollout's own migration-verification pass, `goals` — until then not
+a real backend module at all, just Task records with `type=="goal"` riding on Tasks' own permission
+gate — was scoped through its own interview and built as a genuinely new, independent
+`module_packages/goals/` entry: unbounded subgoal hierarchy, linked tasks, the new generic
+metric-provider mechanism (`module_registry.py`'s `MetricProviderSpec`/`owned_metric_providers`/
+`metric_providers()`), and household/team pool goals. It's the mechanical *result* of everything this
+rollout built (manifest/migration/agent-tool/dashboard-block infrastructure, the personal+pool
+single-router pattern Finance/Contacts/Assets/Notes established), not a 14th increment of the
+rollout itself — there was no `routers/goals.py`/`services/goals_service.py` to move, so "conversion"
+isn't even the right word for it. Its own `m031` migration is what finally emptied
+`features_service.py`'s `_CORE_MODULE_IDS` (and the frontend's `CORE_MODULES`) down to `[]` — `goals`
+was the very last hardcoded-core id in the app, and it's now a real, independent, uninstallable
+module like any other. See `docs/MEMORY.md`'s 2026-08-28 entry (Goals) for the full design writeup.
 
 **Planned (future phases):**
 

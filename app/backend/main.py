@@ -32,6 +32,7 @@ from routers import (
     push,
     setup,
     suggestions,
+    tags,
     update,
 )
 from scheduler import start as start_scheduler
@@ -362,6 +363,7 @@ app.add_middleware(DynamicCORSMiddleware)
 app.include_router(health.router, prefix="/api/v1/health", tags=["health"])
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(priorities.router, prefix="/api/v1/priorities", tags=["priorities"])
+app.include_router(tags.router, prefix="/api/v1/tags", tags=["tags"])
 app.include_router(setup.router, prefix="/api/v1/setup", tags=["setup"])
 app.include_router(brain.router, prefix="/api/v1/brain", tags=["brain"])
 app.include_router(export.router, prefix="/api/v1/user", tags=["export"])

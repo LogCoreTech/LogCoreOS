@@ -19,25 +19,6 @@
       "modules": []
     },
     {
-      "id": "goals",
-      "icon": "🎯",
-      "title": "Goals",
-      "blurb": "Goals are the bigger outcomes you're working toward (lose weight, launch the site). Unlike tasks, they always carry a target date and aren't swept away when completed.",
-      "howto": [
-        "Open Goals and create one — a target date is required so you can track it on a timeline.",
-        "Use the timeline filter (Today / Week / Month / Quarter / Year) to focus on the horizon you care about.",
-        "The \"X of Y\" progress reflects the goals inside the current timeline window.",
-        "Finished goals stay visible under Done; use \"Clear completed\" to archive them to history when you want a clean slate."
-      ],
-      "tips": [
-        "Ask the AI to \"break this goal into tasks\" — it proposes concrete subtasks you can create in one approval.",
-        "Goals are kept out of the daily task surfaces on purpose, so they don't crowd out your day-to-day."
-      ],
-      "modules": [
-        "goals"
-      ]
-    },
-    {
       "id": "workspaces",
       "icon": "🔀",
       "title": "Personal vs Business",
