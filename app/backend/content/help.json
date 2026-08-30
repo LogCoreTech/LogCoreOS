@@ -204,6 +204,17 @@
   },
   "whats_new": [
     {
+      "version": "0.7.0",
+      "date": "2026-08-30",
+      "highlights": [
+        "Every module can now be installed or uninstalled from Admin → Mod Store — Journal, Home Assistant, n8n Automation, Calendar, Household, Team, Notes, Assets, Contacts, and Finance are all optional now instead of permanent. Uninstalling never deletes your data; reinstalling picks everything back up untouched.",
+        "Goals is now its own real module instead of riding on Tasks — nest goals inside each other to any depth, link as many tasks as you want, and track progress automatically from a Finance budget, a number on your Contacts profile (weight, or anything else you track), or a logged history against a target, instead of only ever checking a box by hand. Household and Team pool goals work the same way pool Finance/Contacts/Assets already do.",
+        "A new app-wide search — click the magnifying-glass icon in the header, or press Ctrl/Cmd+K — searches your whole app at once: tasks, goals, notes (including content, not just titles), journal (including content), contacts, assets, calendar, and finance transactions. Filter by tag alongside your search text.",
+        "Tags now work the same way everywhere — Assets, Calendar events, Finance transactions, Notes, and Journal entries can all be tagged now too, sharing one vocabulary with Tasks and Goals so a tag means the same thing no matter where you use it.",
+        "Goals now shows a real collapsible hierarchy — like Assets, with an expand/collapse toggle per goal and its own linked tasks visible right underneath it — and each top-level goal or asset now gets its own card instead of the whole list blending together."
+      ]
+    },
+    {
       "version": "0.6.4",
       "date": "2026-08-22",
       "highlights": [
