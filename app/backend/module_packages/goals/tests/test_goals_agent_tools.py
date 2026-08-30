@@ -45,7 +45,9 @@ def test_link_and_unlink_task_to_goal(brain):
     goal = agent_tools.execute("create_goal", {"title": "Goal with tasks"}, USER)
     task = task_service.add_task("Alice", {"title": "Do the thing", "category": "Work"})
 
-    linked = agent_tools.execute("link_task_to_goal", {"task_id": task["id"], "goal_id": goal["id"]}, USER)
+    linked = agent_tools.execute(
+        "link_task_to_goal", {"task_id": task["id"], "goal_id": goal["id"]}, USER
+    )
     assert linked["goal_id"] == goal["id"]
 
     unlinked = agent_tools.execute("unlink_task_from_goal", {"task_id": task["id"]}, USER)

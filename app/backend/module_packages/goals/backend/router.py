@@ -109,10 +109,16 @@ class MetricLog(BaseModel):
     pool: bool = False
 
 
-def _annotate_with_progress(goals: list[dict], store_user: str, store_ws: str, owner_label: str) -> list[dict]:
+def _annotate_with_progress(
+    goals: list[dict], store_user: str, store_ws: str, owner_label: str
+) -> list[dict]:
     user = {"name": store_user}
     return [
-        {**g, "_owner": owner_label, "progress": goals_service.compute_progress(store_user, g, store_ws, user, goals)}
+        {
+            **g,
+            "_owner": owner_label,
+            "progress": goals_service.compute_progress(store_user, g, store_ws, user, goals),
+        }
         for g in goals
     ]
 
@@ -127,12 +133,17 @@ def list_goals(
     Notes' visible-to-all-members shape, not Dashboards' contributors-gated
     one, per the owner's own confirmed choice for Goals)."""
     own = _annotate_with_progress(
-        goals_service.list_goals(current_user["name"], workspace), current_user["name"], workspace, current_user["name"]
+        goals_service.list_goals(current_user["name"], workspace),
+        current_user["name"],
+        workspace,
+        current_user["name"],
     )
     if not _pool_installed(workspace):
         return own
     pool_user = _pool_user(workspace)
-    pool = _annotate_with_progress(goals_service.list_goals(pool_user, "personal"), pool_user, "personal", pool_user)
+    pool = _annotate_with_progress(
+        goals_service.list_goals(pool_user, "personal"), pool_user, "personal", pool_user
+    )
     return own + pool
 
 
@@ -154,13 +165,16 @@ def list_metric_providers(current_user: dict = Depends(_require_goals)):
                     "label": "Direction",
                     "kind": "select",
                     "options": [
-                        {"value": "increase", "label": "Increase to target (e.g. pages read, savings)"},
+                        {
+                            "value": "increase",
+                            "label": "Increase to target (e.g. pages read, savings)",
+                        },
                         {"value": "decrease", "label": "Decrease to target (e.g. weight, debt)"},
                     ],
                 },
                 {
                     "key": "start_value",
-                    "label": "Starting value (required for \"decrease\")",
+                    "label": 'Starting value (required for "decrease")',
                     "kind": "number",
                     "optional": True,
                 },

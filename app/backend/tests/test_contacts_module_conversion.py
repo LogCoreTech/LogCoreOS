@@ -52,9 +52,7 @@ def test_m029_noop_on_fresh_install(brain):
 def test_install_uninstall_reinstall_round_trip_preserves_data(brain):
     from services import contacts_service
 
-    contacts_service.create_contact(
-        "dana", "personal", {"name": "Erin"}, created_by="dana"
-    )
+    contacts_service.create_contact("dana", "personal", {"name": "Erin"}, created_by="dana")
 
     mod_store_service.mark_installed("contacts", by="tester")
     assert mod_store_service.is_installed("contacts")
@@ -136,9 +134,7 @@ def test_available_for_linking_deliberately_stays_module_gate_free(brain):
     GET/PATCH /contacts/me's precedent, not an oversight left unfixed."""
     import inspect
 
-    from module_packages.contacts.backend.router import (
-        list_contacts_available_for_linking,
-    )
+    from module_packages.contacts.backend.router import list_contacts_available_for_linking
 
     params = inspect.signature(list_contacts_available_for_linking).parameters
     assert set(params) == {"current_user", "_rl"}

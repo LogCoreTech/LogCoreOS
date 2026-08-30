@@ -74,6 +74,7 @@ def test_restart_fails_fast_and_synchronously_on_docker_connection_error(admin, 
     container name) must surface to the client immediately as a 502 — not
     get swallowed by the background task where only server logs would ever
     show it."""
+
     def _broken_from_env():
         raise RuntimeError("cannot reach docker socket")
 

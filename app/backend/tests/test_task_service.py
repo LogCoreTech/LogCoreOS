@@ -218,7 +218,9 @@ def test_recurring_task_created_already_linked_defaults_to_not_counting(user_bra
 
 
 def test_recurring_task_created_unlinked_has_no_counts_toward_goal_field(user_brain):
-    task = task_service.add_task(USER, {**_make_task("Solo"), "type": "recurring", "recurrence": "daily"})
+    task = task_service.add_task(
+        USER, {**_make_task("Solo"), "type": "recurring", "recurrence": "daily"}
+    )
     assert "counts_toward_goal" not in task
 
 
@@ -228,7 +230,9 @@ def test_non_recurring_task_created_linked_has_no_counts_toward_goal_field(user_
 
 
 def test_newly_linking_recurring_task_via_update_defaults_to_not_counting(user_brain):
-    task = task_service.add_task(USER, {**_make_task("Later"), "type": "recurring", "recurrence": "daily"})
+    task = task_service.add_task(
+        USER, {**_make_task("Later"), "type": "recurring", "recurrence": "daily"}
+    )
     updated = task_service.update_task(USER, task["id"], {"goal_id": "g1"})
     assert updated["counts_toward_goal"] is False
 
@@ -236,15 +240,25 @@ def test_newly_linking_recurring_task_via_update_defaults_to_not_counting(user_b
 def test_relinking_same_goal_does_not_reset_explicit_counts_toward_goal(user_brain):
     task = task_service.add_task(
         USER,
-        {**_make_task("Kept"), "type": "recurring", "recurrence": "daily", "goal_id": "g1", "counts_toward_goal": True},
+        {
+            **_make_task("Kept"),
+            "type": "recurring",
+            "recurrence": "daily",
+            "goal_id": "g1",
+            "counts_toward_goal": True,
+        },
     )
     updated = task_service.update_task(USER, task["id"], {"title": "Kept renamed"})
     assert updated["counts_toward_goal"] is True
 
 
 def test_explicit_counts_toward_goal_respected_on_link(user_brain):
-    task = task_service.add_task(USER, {**_make_task("Explicit"), "type": "recurring", "recurrence": "daily"})
-    updated = task_service.update_task(USER, task["id"], {"goal_id": "g1", "counts_toward_goal": True})
+    task = task_service.add_task(
+        USER, {**_make_task("Explicit"), "type": "recurring", "recurrence": "daily"}
+    )
+    updated = task_service.update_task(
+        USER, task["id"], {"goal_id": "g1", "counts_toward_goal": True}
+    )
     assert updated["counts_toward_goal"] is True
 
 

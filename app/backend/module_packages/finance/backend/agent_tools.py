@@ -216,8 +216,8 @@ def execute(name: str, inputs: dict, user: dict, workspace: str = "personal"):
         return {"items": items, "total": total}
 
     if name == "get_finance_report":
-        from services import finance_service
         from module_packages.finance.backend import reports as finance_reports
+        from services import finance_service
 
         found_book = finance_service.find_book(
             user["name"],

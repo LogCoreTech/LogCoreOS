@@ -123,9 +123,7 @@ def install(
 ):
     from module_registry import discover_manifests
 
-    catalog_entry = next(
-        (e for e in mod_store_service.get_catalog() if e["id"] == module_id), None
-    )
+    catalog_entry = next((e for e in mod_store_service.get_catalog() if e["id"] == module_id), None)
     if catalog_entry is None:
         raise HTTPException(status_code=404, detail="Unknown module")
     if catalog_entry["status"] != "available":

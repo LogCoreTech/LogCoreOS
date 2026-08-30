@@ -99,16 +99,12 @@ def m017_rename_home_id_to_home_assistant(brain: Path) -> None:
             dm = user.get("disabled_modules")
             if isinstance(dm, list):
                 if "home" in dm and "home_assistant" not in dm:
-                    user["disabled_modules"] = [
-                        "home_assistant" if m == "home" else m for m in dm
-                    ]
+                    user["disabled_modules"] = ["home_assistant" if m == "home" else m for m in dm]
                     changed = True
             elif isinstance(dm, dict):
                 for workspace, mods in dm.items():
                     if isinstance(mods, list) and "home" in mods and "home_assistant" not in mods:
-                        dm[workspace] = [
-                            "home_assistant" if m == "home" else m for m in mods
-                        ]
+                        dm[workspace] = ["home_assistant" if m == "home" else m for m in mods]
                         changed = True
         if changed:
             write_json(auth_file, data)
@@ -244,9 +240,18 @@ MODULE = ModuleManifest(
     read_only_agent_tools=[],
     owned_block_types=["home_assistant_favourites"],
     migrations=[
-        ("home:m016_backfill_home_installed_from_ha_config", m016_backfill_home_installed_from_ha_config),
-        ("home_assistant:m017_rename_home_id_to_home_assistant", m017_rename_home_id_to_home_assistant),
-        ("home_assistant:m018_rename_home_favourites_block_type", m018_rename_home_favourites_block_type),
+        (
+            "home:m016_backfill_home_installed_from_ha_config",
+            m016_backfill_home_installed_from_ha_config,
+        ),
+        (
+            "home_assistant:m017_rename_home_id_to_home_assistant",
+            m017_rename_home_id_to_home_assistant,
+        ),
+        (
+            "home_assistant:m018_rename_home_favourites_block_type",
+            m018_rename_home_favourites_block_type,
+        ),
     ],
     help_section={
         "id": "home-assistant",
@@ -260,7 +265,7 @@ MODULE = ModuleManifest(
             "Star your favourites to pin them to the Dashboard widget for quick access.",
         ],
         "tips": [
-            "You can also ask the AI to \"turn off the living room lights\" once Home Assistant is connected.",
+            'You can also ask the AI to "turn off the living room lights" once Home Assistant is connected.',
             "Home Assistant is personal-workspace only.",
         ],
         "modules": ["home_assistant"],

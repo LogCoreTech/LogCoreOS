@@ -305,7 +305,9 @@ def execute(name: str, inputs: dict, user: dict, workspace: str = "personal"):
 
         if user.get("role") != "admin":
             return {"error": "Admin access required"}
-        found = assets_service.find_asset(user["name"], workspace, inputs["asset_id"], is_admin=True)
+        found = assets_service.find_asset(
+            user["name"], workspace, inputs["asset_id"], is_admin=True
+        )
         if found is None:
             return {"error": f"Asset {inputs['asset_id']!r} not found"}
         ok = assets_service.delete_asset(

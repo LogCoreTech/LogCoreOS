@@ -31,7 +31,11 @@ def test_resolve_weight_reads_own_self_contact(alice):
     contacts_service.update_contact(
         "_household", "personal", self_contact["id"], {"weight_kg": 82}, viewer="Alice"
     )
-    result = _resolve_weight({"target_value": 75, "direction": "decrease", "start_value": 90}, {"name": "Alice"}, "personal")
+    result = _resolve_weight(
+        {"target_value": 75, "direction": "decrease", "start_value": 90},
+        {"name": "Alice"},
+        "personal",
+    )
     # started 90, target 75, now 82: (90-82)/(90-75) = 53.3% -> 53
     assert result["current"] == 82
     assert result["pct"] == 53
@@ -54,7 +58,9 @@ def test_resolve_weight_defaults_to_decrease_direction(alice):
 
 
 def test_resolve_number_field_still_reads_custom_fields(alice):
-    contacts_service.set_custom_fields([{"key": "resting_hr", "label": "Resting HR", "type": "number"}])
+    contacts_service.set_custom_fields(
+        [{"key": "resting_hr", "label": "Resting HR", "type": "number"}]
+    )
     self_contact = contacts_service.get_self_contact("Alice")
     contacts_service.update_contact(
         "_household", "personal", self_contact["id"], {"custom": {"resting_hr": 60}}, viewer="Alice"

@@ -95,9 +95,7 @@ def test_add_finance_transaction_tool_contribute_expense_only_cap(users):
         "Alice",
         "personal",
         book["id"],
-        shared_with=[
-            {"target": "Bob", "access": "contribute", "caps": {"add": ["expense"]}}
-        ],
+        shared_with=[{"target": "Bob", "access": "contribute", "caps": {"add": ["expense"]}}],
     )
     finance_service.respond_share("Bob", "Alice", "personal", book["id"], True)
 
@@ -129,7 +127,13 @@ def test_categorize_transaction_tool_learns_rule_for_imported_tx(users):
         "Alice",
         "personal",
         book,
-        {"date": "2026-08-28", "amount_cents": -999, "account_id": account["id"], "payee": "COFFEE SHOP", "source": "csv"},
+        {
+            "date": "2026-08-28",
+            "amount_cents": -999,
+            "account_id": account["id"],
+            "payee": "COFFEE SHOP",
+            "source": "csv",
+        },
         created_by="Alice",
     )
 
@@ -169,7 +173,10 @@ def test_get_finance_report_tool_returns_monthly_report(users):
 def test_get_balance_projection_tool_returns_itemized_breakdown(users):
     book = finance_service.create_book("Alice", "personal", name="ProjBook", created_by="Alice")
     account = finance_service.add_account(
-        "Alice", "personal", book["id"], {"name": "Checking", "type": "checking", "opening_balance_cents": 10000}
+        "Alice",
+        "personal",
+        book["id"],
+        {"name": "Checking", "type": "checking", "opening_balance_cents": 10000},
     )
 
     result = agent_service._execute_tool(
@@ -204,7 +211,11 @@ def test_create_invoice_tool_requires_edit_access(users):
 
     result = agent_service._execute_tool(
         "create_invoice",
-        {"book_id": book["id"], "due_date": "2026-09-15", "line_items": [{"description": "Work", "unit_cents": 10000}]},
+        {
+            "book_id": book["id"],
+            "due_date": "2026-09-15",
+            "line_items": [{"description": "Work", "unit_cents": 10000}],
+        },
         users["bob"],
         workspace="personal",
     )
@@ -216,7 +227,11 @@ def test_create_invoice_tool_creates_draft_for_owner(users):
 
     result = agent_service._execute_tool(
         "create_invoice",
-        {"book_id": book["id"], "due_date": "2026-09-15", "line_items": [{"description": "Work", "unit_cents": 10000}]},
+        {
+            "book_id": book["id"],
+            "due_date": "2026-09-15",
+            "line_items": [{"description": "Work", "unit_cents": 10000}],
+        },
         users["alice"],
         workspace="personal",
     )

@@ -29,7 +29,12 @@ def _search_team_tasks(query: str, tags: list[str], user: dict, workspace: str) 
         haystack = " ".join(filter(None, [t.get("title"), t.get("notes"), t.get("category")]))
         if search_match(query, tags, haystack, own_tags):
             results.append(
-                {"title": t["title"], "snippet": t.get("notes"), "tags": own_tags, "record_id": t["id"]}
+                {
+                    "title": t["title"],
+                    "snippet": t.get("notes"),
+                    "tags": own_tags,
+                    "record_id": t["id"],
+                }
             )
     return results
 
@@ -43,7 +48,12 @@ def _search_team_goals(query: str, tags: list[str], user: dict, workspace: str) 
         haystack = " ".join(filter(None, [g.get("title"), g.get("notes"), g.get("category")]))
         if search_match(query, tags, haystack, own_tags):
             results.append(
-                {"title": g["title"], "snippet": g.get("notes"), "tags": own_tags, "record_id": g["id"]}
+                {
+                    "title": g["title"],
+                    "snippet": g.get("notes"),
+                    "tags": own_tags,
+                    "record_id": g["id"],
+                }
             )
     return results
 
@@ -111,7 +121,7 @@ MODULE = ModuleManifest(
         "blurb": "The business-workspace equivalent of Household: a shared task and event pool for your team, kept structurally separate from any personal/family data.",
         "howto": [
             "Switch to the business workspace, then open Team to see shared tasks and events.",
-            "Members read and complete; adding/editing/assigning needs admin or a \"Can manage\" grant.",
+            'Members read and complete; adding/editing/assigning needs admin or a "Can manage" grant.',
             "Assign work to a teammate and it appears on their Tasks and Calendar.",
         ],
         "tips": [

@@ -9,9 +9,9 @@ The access URL is never returned outside the rate-limited admin reveal.
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
-from routers.auth import get_workspace, require_admin, require_module
-from module_packages.finance.backend.router import _find_or_404, _require_edit
 from module_packages.finance.backend import import_service as finance_import_service
+from module_packages.finance.backend.router import _find_or_404, _require_edit
+from routers.auth import get_workspace, require_admin, require_module
 from services import auth_service, finance_service, simplefin_service
 from services.file_service import simplefin_path
 from services.rate_limiter import rate_limit

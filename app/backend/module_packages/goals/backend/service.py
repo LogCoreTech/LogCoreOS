@@ -18,13 +18,18 @@ no join table.
 """
 
 import uuid
-from datetime import datetime, date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from services.auth_service import get_user_timezone
-from services.file_service import goals_path, goal_progress_history_path, read_json, update_json, write_json
-
+from services.file_service import (
+    goal_progress_history_path,
+    goals_path,
+    read_json,
+    update_json,
+    write_json,
+)
 
 # ---------------------------------------------------------------------------
 # Basic CRUD
@@ -61,7 +66,11 @@ def collect_subtree_ids(goals: list[dict], root_id: str) -> set[str]:
 
 
 def create_goal(store_user: str, data: dict, workspace: str = "personal") -> dict:
-    tz = ZoneInfo(get_user_timezone(store_user)) if not store_user.startswith("_") else ZoneInfo("UTC")
+    tz = (
+        ZoneInfo(get_user_timezone(store_user))
+        if not store_user.startswith("_")
+        else ZoneInfo("UTC")
+    )
     now = datetime.now(tz).isoformat()
 
     parent_id = data.get("parent_id")
@@ -104,7 +113,11 @@ def create_goal(store_user: str, data: dict, workspace: str = "personal") -> dic
 def update_goal(
     store_user: str, goal_id: str, updates: dict, workspace: str = "personal"
 ) -> dict | None:
-    tz = ZoneInfo(get_user_timezone(store_user)) if not store_user.startswith("_") else ZoneInfo("UTC")
+    tz = (
+        ZoneInfo(get_user_timezone(store_user))
+        if not store_user.startswith("_")
+        else ZoneInfo("UTC")
+    )
     found: dict | None = None
     error: str | None = None
 
@@ -222,7 +235,9 @@ def get_root_goals(store_user: str, workspace: str = "personal") -> list[dict]:
 def get_linked_tasks(store_user: str, goal_id: str, workspace: str = "personal") -> list[dict]:
     from services import task_service
 
-    return [t for t in task_service.list_tasks(store_user, workspace) if t.get("goal_id") == goal_id]
+    return [
+        t for t in task_service.list_tasks(store_user, workspace) if t.get("goal_id") == goal_id
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -231,12 +246,20 @@ def get_linked_tasks(store_user: str, goal_id: str, workspace: str = "personal")
 
 
 def log_manual_value(
-    store_user: str, goal_id: str, value: float, workspace: str = "personal", when: str | None = None
+    store_user: str,
+    goal_id: str,
+    value: float,
+    workspace: str = "personal",
+    when: str | None = None,
 ) -> dict | None:
     """Append a dated {date, value} entry to a manual-metric goal's history.
     `when` defaults to today in the store's own timezone; pass an explicit
     date to backfill/correct an entry."""
-    tz = ZoneInfo(get_user_timezone(store_user)) if not store_user.startswith("_") else ZoneInfo("UTC")
+    tz = (
+        ZoneInfo(get_user_timezone(store_user))
+        if not store_user.startswith("_")
+        else ZoneInfo("UTC")
+    )
     entry_date = when or datetime.now(tz).date().isoformat()
     found: dict | None = None
 
@@ -333,7 +356,9 @@ def compute_progress(
 
     from services import task_service
 
-    linked_tasks = [t for t in task_service.list_tasks(store_user, workspace) if t.get("goal_id") == goal["id"]]
+    linked_tasks = [
+        t for t in task_service.list_tasks(store_user, workspace) if t.get("goal_id") == goal["id"]
+    ]
 
     children_pct: list[float] = []
     for sg in subgoals:
@@ -356,7 +381,7 @@ def compute_progress(
 
 
 def on_pace(goal: dict, progress: dict) -> str | None:
-    """"on_pace" / "behind_pace", or None if the goal doesn't have both a
+    """ "on_pace" / "behind_pace", or None if the goal doesn't have both a
     metric target_value and a due_date (there's nothing to project against).
     Straight-line interpolation from created_at to due_date."""
     metric = goal.get("metric") or {}
@@ -403,15 +428,15 @@ def snapshot_progress(store_user: str, workspace: str, user: dict) -> list[dict]
     if not goals:
         return []
     today = datetime.now(ZoneInfo("UTC")).date().isoformat()
-    snapshot = {g["id"]: compute_progress(store_user, g, workspace, user, goals)["pct"] for g in goals}
+    snapshot = {
+        g["id"]: compute_progress(store_user, g, workspace, user, goals)["pct"] for g in goals
+    }
 
     hist = read_json(goal_progress_history_path(store_user, workspace), default={"entries": []})
     prior_entries = [e for e in (hist.get("entries") or []) if e.get("date") != today]
     prior = prior_entries[-1]["pct_by_goal"] if prior_entries else {}
     newly_complete = [
-        g
-        for g in goals
-        if snapshot.get(g["id"], 0) >= 100 and prior.get(g["id"], 0) < 100
+        g for g in goals if snapshot.get(g["id"], 0) >= 100 and prior.get(g["id"], 0) < 100
     ]
 
     def _update(hist: dict) -> dict:
@@ -425,7 +450,9 @@ def snapshot_progress(store_user: str, workspace: str, user: dict) -> list[dict]
     return newly_complete
 
 
-def progress_snapshot_days_ago(store_user: str, goal_id: str, days: int, workspace: str = "personal") -> int | None:
+def progress_snapshot_days_ago(
+    store_user: str, goal_id: str, days: int, workspace: str = "personal"
+) -> int | None:
     """This goal's snapshotted percent from `days` ago, or None if no
     snapshot old enough exists yet (e.g. the goal was created recently)."""
     target_date = (datetime.now(ZoneInfo("UTC")).date() - timedelta(days=days)).isoformat()

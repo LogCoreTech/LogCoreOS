@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 import pytest
 from fastapi import HTTPException
 
+from module_packages.finance.backend import reports
 from module_packages.finance.backend.router import TransactionUpdate
 from module_packages.finance.backend.router import delete_transaction as single_tx_delete
 from module_packages.finance.backend.router import update_transaction as single_tx_update
@@ -27,7 +28,6 @@ from module_packages.finance.backend.router_transfers import (
 )
 from services import auth_service
 from services import finance_planning_service as planning
-from module_packages.finance.backend import reports
 from services import finance_service as fin
 
 

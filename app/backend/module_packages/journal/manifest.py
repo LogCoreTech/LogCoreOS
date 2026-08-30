@@ -24,7 +24,12 @@ def _search_journal(query: str, tags: list[str], user: dict, workspace: str) -> 
             if snippet is None:
                 continue
         results.append(
-            {"title": entry["date"], "snippet": snippet or entry.get("preview"), "tags": own_tags, "record_id": entry["date"]}
+            {
+                "title": entry["date"],
+                "snippet": snippet or entry.get("preview"),
+                "tags": own_tags,
+                "record_id": entry["date"],
+            }
         )
     return results
 
@@ -102,7 +107,12 @@ MODULE = ModuleManifest(
     owned_search_providers=[
         SearchProviderSpec(key="journal", label="Journal", resolve=_search_journal),
     ],
-    migrations=[("journal:m015_backfill_journal_installed_from_existing_data", m015_backfill_journal_installed_from_existing_data)],
+    migrations=[
+        (
+            "journal:m015_backfill_journal_installed_from_existing_data",
+            m015_backfill_journal_installed_from_existing_data,
+        )
+    ],
     on_install=_on_install,
     on_new_user=_on_new_user,
     help_section={

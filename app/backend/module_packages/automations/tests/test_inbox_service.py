@@ -9,8 +9,7 @@ import pytest
 from fastapi import HTTPException
 
 from module_packages.automations.backend import inbox_service as svc
-from services import auth_service
-from services import automations_config, suggestions_service
+from services import auth_service, automations_config, suggestions_service
 
 
 @pytest.fixture()
@@ -22,7 +21,11 @@ def users(brain):
 
 
 def _post_items(user, workflow_key, items, workspace="business"):
-    from module_packages.automations.backend.router import AutomationInboxPost, InboxItemIn, automation_post_items
+    from module_packages.automations.backend.router import (
+        AutomationInboxPost,
+        InboxItemIn,
+        automation_post_items,
+    )
 
     return automation_post_items(
         AutomationInboxPost(

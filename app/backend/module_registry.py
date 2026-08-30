@@ -214,7 +214,10 @@ def admin_agent_tool_names() -> set[str]:
 
 
 def directional_pct(
-    current: float, target: float | None, direction: str = "increase", start_value: float | None = None
+    current: float,
+    target: float | None,
+    direction: str = "increase",
+    start_value: float | None = None,
 ) -> int:
     """0-100 progress toward `target`, aware of which way progress moves —
     shared by every MetricProviderSpec.resolve() that needs it (Goals' own

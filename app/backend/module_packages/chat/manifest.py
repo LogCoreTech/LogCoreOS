@@ -87,7 +87,7 @@ MODULE = ModuleManifest(
         "title": "AI Chat",
         "blurb": "Talk to your LogCore AI. It can read your Brain (tasks, notes, journal, priorities, and more) and, with your approval, make changes for you — including building your Dashboards.",
         "howto": [
-            "Type what you need — \"plan my week\", \"summarize my month\", \"add three tasks for the move\", \"build me a dashboard for my house search\", or \"how do I use Finance?\"",
+            'Type what you need — "plan my week", "summarize my month", "add three tasks for the move", "build me a dashboard for my house search", or "how do I use Finance?"',
             "Approve mode (the default): the AI reads freely but pauses for your OK before any change — approving replays exactly what was shown, never something re-guessed.",
             "If something's ambiguous, the AI can ask you a quick multiple-choice question right in the chat instead of guessing — pick an option (or a few) to continue.",
             "Switch modes with the selector — Plan proposes a plan first, Auto acts directly, Research adds web search (read-only).",

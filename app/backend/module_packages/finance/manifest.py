@@ -104,7 +104,7 @@ exists, so this manifest declares no admin_agent_tools."""
 
 from pathlib import Path
 
-from module_registry import ModuleManifest, MetricProviderSpec, SearchProviderSpec, search_match
+from module_registry import MetricProviderSpec, ModuleManifest, SearchProviderSpec, search_match
 
 
 def _book_store(book: dict, viewer: str, workspace: str) -> str:
@@ -149,7 +149,9 @@ def _search_finance(query: str, tags: list[str], user: dict, workspace: str) -> 
         txs, _total = list_transactions(store_user, workspace, book_id, limit=200)
         for tx in txs:
             own_tags = tx.get("tags") or []
-            haystack = " ".join(filter(None, [tx.get("payee"), tx.get("notes"), tx.get("category")]))
+            haystack = " ".join(
+                filter(None, [tx.get("payee"), tx.get("notes"), tx.get("category")])
+            )
             if search_match(query, tags, haystack, own_tags):
                 results.append(
                     {
@@ -179,7 +181,12 @@ def _search_finance(query: str, tags: list[str], user: dict, workspace: str) -> 
             haystack = " ".join(filter(None, [c.get("name"), c.get("notes"), c.get("email")]))
             if search_match(query, [], haystack, []):
                 results.append(
-                    {"title": c.get("name") or "(unnamed)", "snippet": c.get("notes"), "tags": [], "record_id": book_id}
+                    {
+                        "title": c.get("name") or "(unnamed)",
+                        "snippet": c.get("notes"),
+                        "tags": [],
+                        "record_id": book_id,
+                    }
                 )
 
     return results
@@ -325,7 +332,7 @@ MODULE = ModuleManifest(
             "Moving money between two of your own books (even across personal and business)? Use Transfer instead of Expense/Income — pick the destination book and account and both sides are created and linked automatically, and never show up as income or expense in your reports or budgets.",
             "Set budgets and recurring bills to get alerts and a projected balance; deviations from your bank balance flag early.",
             "Invoice clients, record partial payments, and see who's behind under Invoices → AR.",
-            "Share a book or a single account with someone — \"contribute\" access can be limited to submitting expenses with no visibility into balances.",
+            'Share a book or a single account with someone — "contribute" access can be limited to submitting expenses with no visibility into balances.',
         ],
         "tips": [
             "Your personal books are private — even admins can't see them unless you share them.",

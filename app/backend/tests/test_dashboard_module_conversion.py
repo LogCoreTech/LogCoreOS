@@ -51,8 +51,9 @@ def test_locked_module_boot_crash_via_real_discovery_path(monkeypatch, brain):
     test_chat_module_conversion.py proved it for the first two real locked
     modules — this proves it holds for dashboard too, the third real,
     shipped locked manifest."""
-    import module_registry
     from fastapi import FastAPI
+
+    import module_registry
     from module_packages.dashboard import manifest as dashboard_manifest
 
     def _broken_router():
@@ -66,8 +67,8 @@ def test_locked_module_boot_crash_via_real_discovery_path(monkeypatch, brain):
 
 
 def test_uninstall_dashboard_rejected_through_the_real_router(brain):
-    from services import auth_service
     from routers.mod_store import uninstall
+    from services import auth_service
 
     admin = auth_service.create_user("admin@example.com", "password123", "Admin", role="admin")
     assert mod_store_service.is_installed("dashboard")

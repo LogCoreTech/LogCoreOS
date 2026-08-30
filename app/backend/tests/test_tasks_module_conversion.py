@@ -47,8 +47,9 @@ def test_locked_module_boot_crash_via_real_discovery_path(monkeypatch, brain):
     synthetic fake module; this proves it holds for the real, shipped tasks
     manifest — a broken get_router() on an actually-discovered locked module
     really does crash register_routers(), not just a hand-built fixture."""
-    import module_registry
     from fastapi import FastAPI
+
+    import module_registry
     from module_packages.tasks import manifest as tasks_manifest
 
     def _broken_router():
@@ -62,8 +63,8 @@ def test_locked_module_boot_crash_via_real_discovery_path(monkeypatch, brain):
 
 
 def test_uninstall_tasks_rejected_through_the_real_router(brain):
-    from services import auth_service
     from routers.mod_store import uninstall
+    from services import auth_service
 
     admin = auth_service.create_user("admin@example.com", "password123", "Admin", role="admin")
     assert mod_store_service.is_installed("tasks")

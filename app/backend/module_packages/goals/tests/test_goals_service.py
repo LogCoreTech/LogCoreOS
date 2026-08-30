@@ -104,7 +104,9 @@ def test_get_linked_tasks(brain):
     from services import task_service
 
     g = _mk("Ship it")
-    t = task_service.add_task(USER, {"title": "Write tests", "category": "Work", "goal_id": g["id"]})
+    t = task_service.add_task(
+        USER, {"title": "Write tests", "category": "Work", "goal_id": g["id"]}
+    )
     linked = goals_service.get_linked_tasks(USER, g["id"])
     assert [x["id"] for x in linked] == [t["id"]]
 
@@ -200,8 +202,17 @@ def test_rollup_is_weighted_average_of_children(user, brain):
 def test_metric_wins_over_rollup_when_both_present(user, brain):
     from services import task_service
 
-    root = _mk("Root", metric={"provider": "manual", "config": {"target_value": 10}, "history": [{"date": "2026-01-01", "value": 5}]})
-    task_service.add_task(USER, {"title": "T1", "category": "Work", "goal_id": root["id"], "status": "done"})
+    root = _mk(
+        "Root",
+        metric={
+            "provider": "manual",
+            "config": {"target_value": 10},
+            "history": [{"date": "2026-01-01", "value": 5}],
+        },
+    )
+    task_service.add_task(
+        USER, {"title": "T1", "category": "Work", "goal_id": root["id"], "status": "done"}
+    )
 
     goals = goals_service.list_goals(USER)
     root_fresh = next(g for g in goals if g["id"] == root["id"])
@@ -277,12 +288,20 @@ def test_goal_from_legacy_task_preserves_core_fields():
 
 def test_recurring_linked_task_contributes_completion_rate_not_binary(user, brain):
     from datetime import date, timedelta
+
     from services import task_service
 
     root = _mk("Habit goal")
     task = task_service.add_task(
-        USER, {"title": "Meditate", "category": "Health", "type": "recurring",
-               "recurrence": "daily", "goal_id": root["id"], "counts_toward_goal": True}
+        USER,
+        {
+            "title": "Meditate",
+            "category": "Health",
+            "type": "recurring",
+            "recurrence": "daily",
+            "goal_id": root["id"],
+            "counts_toward_goal": True,
+        },
     )
     # Manually seed a completion_log with 15 of the last 30 days completed —
     # a real "done" toggle only ever adds today's date, so this simulates a
@@ -304,8 +323,15 @@ def test_recurring_linked_task_with_no_completions_contributes_zero(user, brain)
 
     root = _mk("Fresh habit goal")
     task_service.add_task(
-        USER, {"title": "New habit", "category": "Health", "type": "recurring",
-               "recurrence": "daily", "goal_id": root["id"], "counts_toward_goal": True}
+        USER,
+        {
+            "title": "New habit",
+            "category": "Health",
+            "type": "recurring",
+            "recurrence": "daily",
+            "goal_id": root["id"],
+            "counts_toward_goal": True,
+        },
     )
     goals = goals_service.list_goals(USER)
     root_fresh = next(g for g in goals if g["id"] == root["id"])
@@ -318,7 +344,9 @@ def test_non_recurring_linked_task_still_uses_binary_contribution(user, brain):
     from services import task_service
 
     root = _mk("Mixed goal")
-    t = task_service.add_task(USER, {"title": "One-off", "category": "Health", "goal_id": root["id"]})
+    t = task_service.add_task(
+        USER, {"title": "One-off", "category": "Health", "goal_id": root["id"]}
+    )
     task_service.update_task(USER, t["id"], {"status": "done"})
     goals = goals_service.list_goals(USER)
     root_fresh = next(g for g in goals if g["id"] == root["id"])
@@ -328,12 +356,20 @@ def test_non_recurring_linked_task_still_uses_binary_contribution(user, brain):
 
 def test_recurring_task_not_counting_toward_goal_is_excluded_from_rollup(user, brain):
     from datetime import date, timedelta
+
     from services import task_service
 
     root = _mk("Opt-out habit goal")
     task = task_service.add_task(
-        USER, {"title": "Journaling", "category": "Health", "type": "recurring",
-               "recurrence": "daily", "goal_id": root["id"], "counts_toward_goal": False}
+        USER,
+        {
+            "title": "Journaling",
+            "category": "Health",
+            "type": "recurring",
+            "recurrence": "daily",
+            "goal_id": root["id"],
+            "counts_toward_goal": False,
+        },
     )
     log = [{"date": (date.today() - timedelta(days=i)).isoformat()} for i in range(0, 30, 2)]
     task_service.update_task(USER, task["id"], {"completion_log": log})
@@ -355,7 +391,8 @@ def test_recurring_task_default_missing_field_still_counts(user, brain):
 
     root = _mk("Legacy habit goal")
     task = task_service.add_task(
-        USER, {"title": "Old habit", "category": "Health", "type": "recurring", "recurrence": "daily"}
+        USER,
+        {"title": "Old habit", "category": "Health", "type": "recurring", "recurrence": "daily"},
     )
     task_service.update_task(USER, task["id"], {"goal_id": root["id"], "counts_toward_goal": True})
     # Simulate legacy data by stripping the field back off directly.

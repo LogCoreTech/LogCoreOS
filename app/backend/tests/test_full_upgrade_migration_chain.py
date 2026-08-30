@@ -97,10 +97,8 @@ def test_no_migration_name_collisions_across_all_14_modules(brain):
 
     manifests, errors = discover_manifests()
 
-    collision_errors = {
-        mid: msg for mid, msg in errors.items() if "collision" in msg
-    }
+    collision_errors = {mid: msg for mid, msg in errors.items() if "collision" in msg}
     assert not collision_errors, f"real migration name collisions found: {collision_errors}"
-    assert _ALL_14.issubset(manifests.keys()), (
-        f"expected all 14 modules discoverable, missing: {_ALL_14 - manifests.keys()}"
-    )
+    assert _ALL_14.issubset(
+        manifests.keys()
+    ), f"expected all 14 modules discoverable, missing: {_ALL_14 - manifests.keys()}"

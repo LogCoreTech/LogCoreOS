@@ -183,7 +183,7 @@ MODULE = ModuleManifest(
         "tips": [
             "A goal with both a target value and a due date shows whether you're on pace to hit it.",
             "You'll get a notification the moment a goal's progress crosses 100%.",
-            "Tags are shared between Goals and Tasks — tag something \"urgent\" in either place and it means the same thing in both.",
+            'Tags are shared between Goals and Tasks — tag something "urgent" in either place and it means the same thing in both.',
             "The pool tab only shows up if your household or team is set up — everyone in it sees the same shared goals by default.",
             "Each linked recurring task has its own \"Counts toward this goal's progress\" checkbox — turn it off to track its completion rate for your own reference without it moving the goal's overall percentage; a newly linked recurring task starts with it off until you turn it on.",
         ],

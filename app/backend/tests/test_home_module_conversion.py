@@ -25,7 +25,9 @@ def test_m016_marks_home_assistant_installed_when_ha_was_already_configured(brai
     """An existing instance that had already connected Home Assistant (a
     real url+token saved) had the feature effectively on — upgrading must
     not silently disconnect it."""
-    write_json(brain / "_system" / "ha_config.json", {"url": "http://ha.local:8123", "token": "abc123"})
+    write_json(
+        brain / "_system" / "ha_config.json", {"url": "http://ha.local:8123", "token": "abc123"}
+    )
 
     run_pending(brain)
 
@@ -57,9 +59,10 @@ def test_m016_noop_when_ha_config_file_exists_but_incomplete(brain):
 def test_m017_renames_installed_modules_key(brain):
     """A real instance that installed under the old "home" id before the
     2026-08-24 rename must not look freshly-uninstalled after upgrading."""
-    write_json(brain / "_system" / "installed_modules.json", {
-        "installed": {"home": {"installed_at": "2026-08-01T00:00:00Z", "installed_by": "alice"}}
-    })
+    write_json(
+        brain / "_system" / "installed_modules.json",
+        {"installed": {"home": {"installed_at": "2026-08-01T00:00:00Z", "installed_by": "alice"}}},
+    )
 
     run_pending(brain)
 
@@ -73,10 +76,13 @@ def test_m017_renames_features_role_map_key(brain):
     """An admin who explicitly disabled Home Assistant for a role (e.g.
     cleaner) before the rename must not have that override silently
     dropped — dropping it would default the role back to enabled."""
-    write_json(brain / "_system" / "features.json", {
-        "profile": "personal",
-        "roles": {"member": {"home": True}, "cleaner": {"home": False}},
-    })
+    write_json(
+        brain / "_system" / "features.json",
+        {
+            "profile": "personal",
+            "roles": {"member": {"home": True}, "cleaner": {"home": False}},
+        },
+    )
 
     run_pending(brain)
 
@@ -89,9 +95,19 @@ def test_m017_renames_features_role_map_key(brain):
 def test_m017_renames_per_user_disabled_modules_list(brain):
     """A user's own explicit disabled_modules override (flat list form)
     must carry the rename too, or their opt-out silently reverts."""
-    write_json(brain / "_system" / "auth.json", {
-        "users": [{"id": "u1", "name": "Alice", "email": "a@x.com", "disabled_modules": ["home", "chat"]}]
-    })
+    write_json(
+        brain / "_system" / "auth.json",
+        {
+            "users": [
+                {
+                    "id": "u1",
+                    "name": "Alice",
+                    "email": "a@x.com",
+                    "disabled_modules": ["home", "chat"],
+                }
+            ]
+        },
+    )
 
     run_pending(brain)
 
@@ -102,12 +118,19 @@ def test_m017_renames_per_user_disabled_modules_list(brain):
 def test_m017_renames_per_user_disabled_modules_workspace_dict(brain):
     """Same as the flat-list case, but for the workspace-keyed dict form of
     disabled_modules (per get_effective_disabled()'s documented shapes)."""
-    write_json(brain / "_system" / "auth.json", {
-        "users": [{
-            "id": "u1", "name": "Alice", "email": "a@x.com",
-            "disabled_modules": {"personal": ["home"], "business": []},
-        }]
-    })
+    write_json(
+        brain / "_system" / "auth.json",
+        {
+            "users": [
+                {
+                    "id": "u1",
+                    "name": "Alice",
+                    "email": "a@x.com",
+                    "disabled_modules": {"personal": ["home"], "business": []},
+                }
+            ]
+        },
+    )
 
     run_pending(brain)
 
@@ -141,7 +164,12 @@ def test_m017_is_idempotent_and_safe_on_a_fresh_instance(brain):
 
 
 def _block(type_: str, block_id: str = "b1") -> dict:
-    return {"id": block_id, "type": type_, "config": {}, "layout": {"lg": {"x": 0, "y": 0, "w": 6, "h": 3}}}
+    return {
+        "id": block_id,
+        "type": type_,
+        "config": {},
+        "layout": {"lg": {"x": 0, "y": 0, "w": 6, "h": 3}},
+    }
 
 
 def test_m018_renames_block_type_on_a_real_users_dashboard(brain):
@@ -151,9 +179,10 @@ def test_m018_renames_block_type_on_a_real_users_dashboard(brain):
     from services import auth_service
 
     auth_service.create_user("alice@example.com", "password123", "alice")
-    write_json(dashboards_path("alice"), {
-        "dashboards": [{"id": "d1", "name": "Home", "blocks": [_block("home_favourites")]}]
-    })
+    write_json(
+        dashboards_path("alice"),
+        {"dashboards": [{"id": "d1", "name": "Home", "blocks": [_block("home_favourites")]}]},
+    )
 
     run_pending(brain)
 
@@ -165,9 +194,10 @@ def test_m018_renames_block_type_on_a_pool_dashboard(brain):
     """dashboards_service._all_stores() covers _household/_team too — a
     migration that only swept real per-user stores would miss pool
     dashboards entirely, same gap m011's own docstring calls out."""
-    write_json(dashboards_path("_household"), {
-        "dashboards": [{"id": "d1", "name": "Household", "blocks": [_block("home_favourites")]}]
-    })
+    write_json(
+        dashboards_path("_household"),
+        {"dashboards": [{"id": "d1", "name": "Household", "blocks": [_block("home_favourites")]}]},
+    )
 
     run_pending(brain)
 
@@ -179,9 +209,18 @@ def test_m018_leaves_unrelated_block_types_untouched(brain):
     from services import auth_service
 
     auth_service.create_user("alice@example.com", "password123", "alice")
-    write_json(dashboards_path("alice"), {
-        "dashboards": [{"id": "d1", "name": "Home", "blocks": [_block("top3_tasks", "b1"), _block("home_favourites", "b2")]}]
-    })
+    write_json(
+        dashboards_path("alice"),
+        {
+            "dashboards": [
+                {
+                    "id": "d1",
+                    "name": "Home",
+                    "blocks": [_block("top3_tasks", "b1"), _block("home_favourites", "b2")],
+                }
+            ]
+        },
+    )
 
     run_pending(brain)
 
@@ -194,9 +233,10 @@ def test_m018_renames_block_type_in_a_per_user_template(brain):
     from services import auth_service
 
     auth_service.create_user("alice@example.com", "password123", "alice")
-    write_json(dashboard_templates_path("alice"), {
-        "templates": [{"id": "t1", "name": "My Template", "blocks": [_block("home_favourites")]}]
-    })
+    write_json(
+        dashboard_templates_path("alice"),
+        {"templates": [{"id": "t1", "name": "My Template", "blocks": [_block("home_favourites")]}]},
+    )
 
     run_pending(brain)
 
@@ -205,9 +245,14 @@ def test_m018_renames_block_type_in_a_per_user_template(brain):
 
 
 def test_m018_renames_block_type_in_the_global_template(brain):
-    write_json(global_dashboard_templates_path(), {
-        "templates": [{"id": "t1", "name": "Global Template", "blocks": [_block("home_favourites")]}]
-    })
+    write_json(
+        global_dashboard_templates_path(),
+        {
+            "templates": [
+                {"id": "t1", "name": "Global Template", "blocks": [_block("home_favourites")]}
+            ]
+        },
+    )
 
     run_pending(brain)
 

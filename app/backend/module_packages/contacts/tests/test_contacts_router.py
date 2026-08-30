@@ -78,9 +78,7 @@ def test_get_contact_404_when_missing(users):
 
 
 def test_update_contact_renames(users):
-    created = create_contact(
-        ContactCreate(name="Old Name", pool=False), users["alice"], "personal"
-    )
+    created = create_contact(ContactCreate(name="Old Name", pool=False), users["alice"], "personal")
 
     result = update_contact(
         created["id"], ContactUpdate(name="New Name"), users["alice"], "personal"

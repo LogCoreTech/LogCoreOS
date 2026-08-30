@@ -65,7 +65,13 @@ def test_render_block_locks_when_viewer_owns_and_module_disabled(fake_module):
         block = {"id": "b1", "type": "t_gate_block", "config": {}}
 
         result = render_block(
-            dashboard, block, "alice", "member", False, "personal", "edit",
+            dashboard,
+            block,
+            "alice",
+            "member",
+            False,
+            "personal",
+            "edit",
             viewer_disabled_modules={"t_dash_gate"},
         )
         assert result.ok is False
@@ -82,7 +88,13 @@ def test_render_block_resolves_when_viewer_owns_and_module_enabled(fake_module):
         block = {"id": "b1", "type": "t_gate_block", "config": {}}
 
         result = render_block(
-            dashboard, block, "alice", "member", False, "personal", "edit",
+            dashboard,
+            block,
+            "alice",
+            "member",
+            False,
+            "personal",
+            "edit",
             viewer_disabled_modules=set(),
         )
         assert result.ok is True
@@ -108,7 +120,13 @@ def test_render_block_falls_back_to_owner_when_viewer_disabled_but_owner_enabled
         block = {"id": "b1", "type": "t_gate_block", "config": {}}
 
         result = render_block(
-            dashboard, block, "viewer_name", "member", False, "personal", "read",
+            dashboard,
+            block,
+            "viewer_name",
+            "member",
+            False,
+            "personal",
+            "read",
             viewer_disabled_modules={"t_dash_gate"},
         )
         assert result.ok is True
@@ -131,7 +149,13 @@ def test_render_block_locks_when_both_viewer_and_owner_have_it_disabled(fake_mod
         block = {"id": "b1", "type": "t_gate_block", "config": {}}
 
         result = render_block(
-            dashboard, block, "viewer_name", "member", False, "personal", "read",
+            dashboard,
+            block,
+            "viewer_name",
+            "member",
+            False,
+            "personal",
+            "read",
             viewer_disabled_modules={"t_dash_gate"},
         )
         assert result.ok is False

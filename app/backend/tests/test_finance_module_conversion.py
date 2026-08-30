@@ -60,11 +60,17 @@ def test_install_uninstall_reinstall_round_trip_preserves_data(brain):
     mod_store_service.mark_uninstalled("finance", by="tester")
     assert not mod_store_service.is_installed("finance")
     # data untouched even while "uninstalled"
-    assert finance_service.list_visible_books("dana", "member", False, "personal")[0]["name"] == "Dana's Book"
+    assert (
+        finance_service.list_visible_books("dana", "member", False, "personal")[0]["name"]
+        == "Dana's Book"
+    )
 
     mod_store_service.mark_installed("finance", by="tester")
     assert mod_store_service.is_installed("finance")
-    assert finance_service.list_visible_books("dana", "member", False, "personal")[0]["name"] == "Dana's Book"
+    assert (
+        finance_service.list_visible_books("dana", "member", False, "personal")[0]["name"]
+        == "Dana's Book"
+    )
 
 
 def test_finance_ai_tools_hidden_when_module_disabled(brain):

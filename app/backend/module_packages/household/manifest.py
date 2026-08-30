@@ -34,7 +34,12 @@ def _search_household_tasks(query: str, tags: list[str], user: dict, workspace: 
         haystack = " ".join(filter(None, [t.get("title"), t.get("notes"), t.get("category")]))
         if search_match(query, tags, haystack, own_tags):
             results.append(
-                {"title": t["title"], "snippet": t.get("notes"), "tags": own_tags, "record_id": t["id"]}
+                {
+                    "title": t["title"],
+                    "snippet": t.get("notes"),
+                    "tags": own_tags,
+                    "record_id": t["id"],
+                }
             )
     return results
 
@@ -48,7 +53,12 @@ def _search_household_goals(query: str, tags: list[str], user: dict, workspace: 
         haystack = " ".join(filter(None, [g.get("title"), g.get("notes"), g.get("category")]))
         if search_match(query, tags, haystack, own_tags):
             results.append(
-                {"title": g["title"], "snippet": g.get("notes"), "tags": own_tags, "record_id": g["id"]}
+                {
+                    "title": g["title"],
+                    "snippet": g.get("notes"),
+                    "tags": own_tags,
+                    "record_id": g["id"],
+                }
             )
     return results
 
@@ -212,7 +222,9 @@ MODULE = ModuleManifest(
     owned_search_providers=[
         SearchProviderSpec(key="tasks", label="Household Tasks", resolve=_search_household_tasks),
         SearchProviderSpec(key="goals", label="Household Goals", resolve=_search_household_goals),
-        SearchProviderSpec(key="events", label="Household Events", resolve=_search_household_events),
+        SearchProviderSpec(
+            key="events", label="Household Events", resolve=_search_household_events
+        ),
     ],
     migrations=[
         (
@@ -232,7 +244,7 @@ MODULE = ModuleManifest(
         "howto": [
             "Open Household to see all shared tasks and events in one place.",
             "Any member can complete or un-complete shared tasks.",
-            "Adding, editing, deleting, or assigning items requires pool-management rights — an admin grants \"Can manage\" per user.",
+            'Adding, editing, deleting, or assigning items requires pool-management rights — an admin grants "Can manage" per user.',
             "Assign a task to a member and it shows up on their personal Tasks and Calendar with a 🏠 badge.",
         ],
         "tips": [

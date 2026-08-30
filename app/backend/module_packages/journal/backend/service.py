@@ -48,7 +48,11 @@ def get_entry(user_name: str, date: str, workspace: str = "personal") -> dict | 
     path = _entry_path(user_name, date, workspace)
     if not path.exists():
         return None
-    return {"date": date, "content": read_markdown(path), "tags": get_entry_tags(user_name, date, workspace)}
+    return {
+        "date": date,
+        "content": read_markdown(path),
+        "tags": get_entry_tags(user_name, date, workspace),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +78,9 @@ def get_entry_tags(user_name: str, date: str, workspace: str = "personal") -> li
     return load_entry_tags(user_name, workspace).get(date, [])
 
 
-def set_entry_tags(user_name: str, date: str, tags: list[str], workspace: str = "personal") -> list[str]:
+def set_entry_tags(
+    user_name: str, date: str, tags: list[str], workspace: str = "personal"
+) -> list[str]:
     _validate_date(date)
     clean = [t.strip() for t in (tags or []) if isinstance(t, str) and t.strip()]
     current = load_entry_tags(user_name, workspace)

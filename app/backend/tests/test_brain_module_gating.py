@@ -62,7 +62,9 @@ def test_owned_path_read_blocked_when_module_disabled(fake_module, brain):
     import pytest
 
     with pytest.raises(HTTPException) as exc:
-        brain_router.get_file("TestOwned/entry.md", _user("alice", ["t_brain_gate"]), workspace="personal")
+        brain_router.get_file(
+            "TestOwned/entry.md", _user("alice", ["t_brain_gate"]), workspace="personal"
+        )
     assert exc.value.status_code == 403
 
 

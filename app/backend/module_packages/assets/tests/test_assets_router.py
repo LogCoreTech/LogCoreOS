@@ -77,9 +77,7 @@ def test_get_asset_invalid_id_400(users):
 def test_update_asset_renames(users):
     created = create_asset(AssetCreate(name="Old Name"), users["alice"], "personal")
 
-    result = update_asset(
-        created["id"], AssetUpdate(name="New Name"), users["alice"], "personal"
-    )
+    result = update_asset(created["id"], AssetUpdate(name="New Name"), users["alice"], "personal")
 
     assert result["name"] == "New Name"
 
@@ -98,9 +96,7 @@ def test_archive_and_unarchive_asset(users):
 
 def test_delete_blocked_while_has_children(users):
     parent = create_asset(AssetCreate(name="Parent"), users["alice"], "personal")
-    create_asset(
-        AssetCreate(name="Child", parent_id=parent["id"]), users["alice"], "personal"
-    )
+    create_asset(AssetCreate(name="Child", parent_id=parent["id"]), users["alice"], "personal")
 
     with pytest.raises(HTTPException) as exc:
         delete_asset(parent["id"], users["alice"], "personal")

@@ -89,8 +89,7 @@ each found and closed in their turn. No admin-only Contacts tool exists
 
 from pathlib import Path
 
-from module_registry import ModuleManifest, MetricProviderSpec, SearchProviderSpec, search_match
-
+from module_registry import MetricProviderSpec, ModuleManifest, SearchProviderSpec, search_match
 
 # Shared by both metric providers below — same shape as Goals' own "manual"
 # provider's config_schema entries (module_packages/goals/backend/router.py)
@@ -122,7 +121,7 @@ _WEIGHT_DIRECTION_FIELD = {
 }
 _START_VALUE_FIELD = {
     "key": "start_value",
-    "label": "Starting value (required for \"decrease\")",
+    "label": 'Starting value (required for "decrease")',
     "kind": "number",
     "optional": True,
 }
@@ -157,7 +156,9 @@ def _resolve_number_field(config: dict, user: dict, workspace: str) -> dict:
     current = (contact.get("custom") or {}).get(field_key)
     if not isinstance(current, (int, float)):
         return {"current": 0, "target": target, "pct": 0}
-    pct = directional_pct(current, target, config.get("direction", "increase"), config.get("start_value"))
+    pct = directional_pct(
+        current, target, config.get("direction", "increase"), config.get("start_value")
+    )
     return {"current": current, "target": target, "pct": pct}
 
 
@@ -184,7 +185,9 @@ def _resolve_weight(config: dict, user: dict, workspace: str) -> dict:
     target = config.get("target_value")
     if not isinstance(current, (int, float)):
         return {"current": 0, "target": target, "pct": 0}
-    pct = directional_pct(current, target, config.get("direction", "decrease"), config.get("start_value"))
+    pct = directional_pct(
+        current, target, config.get("direction", "decrease"), config.get("start_value")
+    )
     return {"current": current, "target": target, "pct": pct}
 
 
@@ -208,11 +211,24 @@ def _search_contacts(query: str, tags: list[str], user: dict, workspace: str) ->
     for c in contacts:
         own_tags = c.get("tags") or []
         haystack = " ".join(
-            filter(None, [c.get("name"), c.get("notes"), c.get("address"), " ".join(c.get("core_values") or [])])
+            filter(
+                None,
+                [
+                    c.get("name"),
+                    c.get("notes"),
+                    c.get("address"),
+                    " ".join(c.get("core_values") or []),
+                ],
+            )
         )
         if search_match(query, tags, haystack, own_tags):
             results.append(
-                {"title": c.get("name") or "(unnamed)", "snippet": c.get("notes"), "tags": own_tags, "record_id": c["id"]}
+                {
+                    "title": c.get("name") or "(unnamed)",
+                    "snippet": c.get("notes"),
+                    "tags": own_tags,
+                    "record_id": c["id"],
+                }
             )
     return results
 
@@ -278,7 +294,11 @@ MODULE = ModuleManifest(
         MetricProviderSpec(
             key="weight",
             label="Contacts: My Weight",
-            config_schema=[_WEIGHT_DIRECTION_FIELD, _START_VALUE_FIELD, {"key": "target_value", "label": "Target weight", "kind": "number"}],
+            config_schema=[
+                _WEIGHT_DIRECTION_FIELD,
+                _START_VALUE_FIELD,
+                {"key": "target_value", "label": "Target weight", "kind": "number"},
+            ],
             resolve=_resolve_weight,
         ),
     ],
@@ -299,9 +319,9 @@ MODULE = ModuleManifest(
         "howto": [
             "Add a contact with emails, phones (with country code and extension), tags, and any admin-defined custom fields — it's shared with your household or team by default, with a \"keep this personal\" option if you'd rather it stay just yours.",
             "Any contact can also be flipped to show up in your other workspace too, from the editor — it's still one real record, not a copy, so an edit from either tab always changes the same contact.",
-            "Your own Profile lives here as a self-contact, pinned to the top of your Contacts list labeled \"ME\" — visible to your whole household and team from either workspace, and it opens as a full page since there's a lot more on it than a typical contact.",
+            'Your own Profile lives here as a self-contact, pinned to the top of your Contacts list labeled "ME" — visible to your whole household and team from either workspace, and it opens as a full page since there\'s a lot more on it than a typical contact.',
             "Upload a photo for any contact — it replaces the default icon at the top of the card.",
-            "Build a work history under Career — add a role, then \"Archive this role & start a new one\" when it ends, keeping past roles on record like a resume. You can also add a past role directly with its own start and end dates, or edit one later — past roles list with the most recent one first.",
+            'Build a work history under Career — add a role, then "Archive this role & start a new one" when it ends, keeping past roles on record like a resume. You can also add a past role directly with its own start and end dates, or edit one later — past roles list with the most recent one first.',
             "Filter the list to just people or just companies.",
             "The list sorts alphabetically by name — jump straight to a letter with the A-Z strip beside it.",
             "Tag a contact as a company and its editor switches to company fields — Locations (one or more addresses) and Hours (open/close per day) instead of personal fields like gender or career.",
@@ -309,11 +329,11 @@ MODULE = ModuleManifest(
             "Track opportunities on the deals pipeline (Lead → Contacted → … → Won/Lost).",
             "Set a follow-up date on an interaction or deal to get reminded.",
             "Link two contacts as affiliated (family, a company and its people, etc.) — the link shows on both contacts' cards.",
-            "Share contacts like assets and finance — \"contribute\" lets someone log interactions and advance deals without editing the core record.",
+            'Share contacts like assets and finance — "contribute" lets someone log interactions and advance deals without editing the core record.',
             "Delete a contact from its edit screen — your own contacts anytime, a shared household/team contact only if you're an admin.",
             "Convert a personal contact into a shared household/team contact from its edit screen — or convert several at once from the → Household/Team button in the Contacts page toolbar, which only shows up when you have contacts eligible to convert.",
             "Add Core Values as individual pills, one at a time, instead of typing them all into one field.",
-            "On your own profile, each of the Personal, Address, Career, Family, Values & Principles, and Priorities sections has a \"Hide from others\" toggle right next to its heading — turn one on and your household/team stops seeing that section, while you still see everything yourself.",
+            'On your own profile, each of the Personal, Address, Career, Family, Values & Principles, and Priorities sections has a "Hide from others" toggle right next to its heading — turn one on and your household/team stops seeing that section, while you still see everything yourself.',
         ],
         "tips": [
             "Link a payee or an invoice client to a contact to see all their spend/receive activity in one place.",

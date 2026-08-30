@@ -6,13 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from services import (
-    auth_service,
-    notes_service,
-    profile_service,
-    push_service,
-    task_service,
-)
+from services import auth_service, notes_service, profile_service, push_service, task_service
 from services.ai_provider import agent_completion
 from services.file_service import (
     brain_path,
@@ -43,9 +37,14 @@ def _brain_skip(user: dict) -> set[str]:
     from module_registry import brain_paths_for_disabled
 
     disabled = set(user.get("disabled_modules", []))
-    return {"Tasks", "Dashboards", "Assets", "Contacts", "Finance", "Goals"} | brain_paths_for_disabled(
-        disabled
-    )
+    return {
+        "Tasks",
+        "Dashboards",
+        "Assets",
+        "Contacts",
+        "Finance",
+        "Goals",
+    } | brain_paths_for_disabled(disabled)
 
 
 # Tools available in research mode — read-only access only
@@ -521,9 +520,7 @@ def _module_tool_schemas() -> list[dict]:
             mod = importlib.import_module(f"module_packages.{module_id}.backend.agent_tools")
             schemas.extend(mod.TOOL_SCHEMAS)
         except Exception:
-            logger.exception(
-                "module_packages/%s: agent_tools schemas failed to load", module_id
-            )
+            logger.exception("module_packages/%s: agent_tools schemas failed to load", module_id)
     return schemas
 
 
@@ -585,7 +582,6 @@ def _get_tools(user: dict) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Tool executor
 # ---------------------------------------------------------------------------
-
 
 
 def _execute_tool(
@@ -807,7 +803,6 @@ def _execute_tool(
 
                 safe = {"id", "name", "email", "role", "timezone"}
                 return [{k: v for k, v in u.items() if k in safe} for u in _load_auth()["users"]]
-
 
             case "read_system_file":
                 if user.get("role") != "admin":

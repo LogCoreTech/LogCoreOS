@@ -80,11 +80,23 @@ def _search_assets(query: str, tags: list[str], user: dict, workspace: str) -> l
     for a in items:
         own_tags = a.get("tags") or []
         haystack = " ".join(
-            filter(None, [a.get("name"), a.get("notes"), *[str(v) for v in (a.get("fields") or {}).values()]])
+            filter(
+                None,
+                [
+                    a.get("name"),
+                    a.get("notes"),
+                    *[str(v) for v in (a.get("fields") or {}).values()],
+                ],
+            )
         )
         if search_match(query, tags, haystack, own_tags):
             results.append(
-                {"title": a["name"], "snippet": a.get("notes"), "tags": own_tags, "record_id": a["id"]}
+                {
+                    "title": a["name"],
+                    "snippet": a.get("notes"),
+                    "tags": own_tags,
+                    "record_id": a["id"],
+                }
             )
     return results
 
@@ -132,7 +144,13 @@ MODULE = ModuleManifest(
     ],
     read_only_agent_tools=["list_asset_templates", "list_assets", "search_assets"],
     admin_agent_tools=["delete_asset", "create_asset_template", "update_asset_template"],
-    owned_block_types=["documents", "linked_tasks", "linked_contact", "my_assets_summary", "collection"],
+    owned_block_types=[
+        "documents",
+        "linked_tasks",
+        "linked_contact",
+        "my_assets_summary",
+        "collection",
+    ],
     owned_search_providers=[
         SearchProviderSpec(key="assets", label="Assets", resolve=_search_assets),
     ],
@@ -149,11 +167,11 @@ MODULE = ModuleManifest(
         "blurb": "Track anything you own — property, vehicles, equipment — as flexible, nestable objects built from templates. Great for organizing and for handing employees limited access.",
         "howto": [
             "Pick a template (an admin sets up the field structure, e.g. a Vehicle or Folder) and create an asset — or start blank if nothing needs to be tracked in structured fields. A blank asset can still have its own custom fields, picked from the same field types templates use (text, number, date, yes/no, dropdown, contact) — no template required.",
-            "Built out a blank asset's custom fields and want to reuse that structure? Click \"Save as template\" on it — it becomes a real, reusable template, and the asset itself switches over to using it.",
+            'Built out a blank asset\'s custom fields and want to reuse that structure? Click "Save as template" on it — it becomes a real, reusable template, and the asset itself switches over to using it.',
             "Nest assets under each other (a parcel under a subdivision, equipment under a building) to build a tree.",
             "Attach images or PDFs, add notes, and link related tasks.",
             "Click an asset to read it first; hit ✎ Edit to change it. Share a subtree with a user, your team, or your household.",
-            "Give a contributor limited \"contribute\" access — pick exactly which fields they can change and whether they can add comments, files, or child assets.",
+            'Give a contributor limited "contribute" access — pick exactly which fields they can change and whether they can add comments, files, or child assets.',
         ],
         "tips": [
             "Comments on an asset are an attributed log — a good way for a crew to leave notes that notify the owner.",

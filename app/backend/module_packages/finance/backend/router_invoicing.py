@@ -5,8 +5,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from routers.auth import get_workspace, require_module
 from module_packages.finance.backend.router import _find_or_404, _require_edit, _require_full_read
+from routers.auth import get_workspace, require_module
 from services import finance_invoice_service as invoicing
 from services.rate_limiter import rate_limit
 

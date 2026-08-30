@@ -1028,7 +1028,9 @@ def add_transaction(
         "notes": (tx_data.get("notes") or "").strip()[:2000],
         "deductible": bool(tx_data.get("deductible", False)),
         "tax_category": tx_data.get("tax_category"),
-        "tags": [t.strip() for t in (tx_data.get("tags") or []) if isinstance(t, str) and t.strip()],
+        "tags": [
+            t.strip() for t in (tx_data.get("tags") or []) if isinstance(t, str) and t.strip()
+        ],
         "source": source,
         "simplefin_id": tx_data.get("simplefin_id"),
         "import_hash": tx_data.get("import_hash"),

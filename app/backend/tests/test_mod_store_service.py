@@ -78,9 +78,7 @@ def test_history_survives_reinstall_after_uninstall(brain):
 
     history = read_json(mod_store_service._history_path(), default={"events": []})
     # Filtered to field_ops — see comment above.
-    actions = [
-        (e["action"], e["by"]) for e in history["events"] if e["module_id"] == "field_ops"
-    ]
+    actions = [(e["action"], e["by"]) for e in history["events"] if e["module_id"] == "field_ops"]
     assert actions == [("install", "alice"), ("uninstall", "alice"), ("install", "bob")]
 
 
@@ -111,7 +109,9 @@ def test_get_catalog_reflects_error_status(fake_module, brain, monkeypatch):
     assert entry["error"] is not None
 
 
-def test_get_catalog_flips_coming_soon_to_available_once_code_present(fake_module, brain, monkeypatch):
+def test_get_catalog_flips_coming_soon_to_available_once_code_present(
+    fake_module, brain, monkeypatch
+):
     monkeypatch.setattr(
         mod_store_service,
         "_load_catalog_file",

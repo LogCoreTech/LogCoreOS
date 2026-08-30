@@ -82,7 +82,9 @@ def test_metric_log_on_manual_goal(users):
         users["bob"],
         "personal",
     )
-    result = log_metric_value(created["id"], MetricLog(value=160, date="2026-01-01"), users["bob"], "personal")
+    result = log_metric_value(
+        created["id"], MetricLog(value=160, date="2026-01-01"), users["bob"], "personal"
+    )
     assert result["metric"]["history"][-1]["value"] == 160
 
 

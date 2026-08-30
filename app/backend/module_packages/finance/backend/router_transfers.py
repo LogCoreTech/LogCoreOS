@@ -17,8 +17,8 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from routers.auth import require_module
 from module_packages.finance.backend.router import _find_or_404, _require_edit
+from routers.auth import require_module
 from services import finance_service
 from services.rate_limiter import rate_limit
 

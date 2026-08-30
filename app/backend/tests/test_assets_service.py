@@ -149,7 +149,9 @@ def test_create_asset_without_a_template(users):
 def test_create_asset_with_tags_registers_shared_vocabulary(users):
     from services import tags_service
 
-    asset = svc.create_asset("Alice", {"name": "Truck", "tags": ["fleet", "vehicle"]}, created_by="Alice")
+    asset = svc.create_asset(
+        "Alice", {"name": "Truck", "tags": ["fleet", "vehicle"]}, created_by="Alice"
+    )
     assert set(asset["tags"]) == {"fleet", "vehicle"}
     assert set(tags_service.get_tags("Alice", "personal")) == {"fleet", "vehicle"}
 
@@ -1149,7 +1151,10 @@ def test_comment_notifies_edit_audience_not_author(parcel, users):
 
 
 def test_automation_comment_posts_and_notifies(parcel, users):
-    from module_packages.assets.backend.router import AutomationCommentCreate, automation_add_comment
+    from module_packages.assets.backend.router import (
+        AutomationCommentCreate,
+        automation_add_comment,
+    )
     from services import suggestions_service
 
     sub, _ = _tree(users)

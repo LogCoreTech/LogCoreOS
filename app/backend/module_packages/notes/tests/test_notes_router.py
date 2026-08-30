@@ -104,7 +104,9 @@ def test_create_folder_and_move_note_into_it(users):
     create_note(NoteCreate(path="Recipe", content="eggs"), users["alice"], "personal")
 
     result = move_item(
-        MoveItem(from_path="Recipe", to_path="Cooking/Recipe", type="note"), users["alice"], "personal"
+        MoveItem(from_path="Recipe", to_path="Cooking/Recipe", type="note"),
+        users["alice"],
+        "personal",
     )
 
     assert result["to_path"] == "Cooking/Recipe"
@@ -117,7 +119,9 @@ def test_pool_note_creation_requires_admin(users):
 
 
 def test_pool_note_creation_by_admin_is_visible_to_members(users):
-    create_note(NoteCreate(path="Chores", content="trash day", pool=True), users["alice"], "personal")
+    create_note(
+        NoteCreate(path="Chores", content="trash day", pool=True), users["alice"], "personal"
+    )
 
     result = list_notes(users["bob"], "personal")
 

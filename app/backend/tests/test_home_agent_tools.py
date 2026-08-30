@@ -27,7 +27,9 @@ def _user(name: str = "alice", disabled_modules: list[str] | None = None) -> dic
 
 
 def _configure_ha(brain):
-    write_json(brain / "_system" / "ha_config.json", {"url": "http://ha.local:8123", "token": "abc"})
+    write_json(
+        brain / "_system" / "ha_config.json", {"url": "http://ha.local:8123", "token": "abc"}
+    )
 
 
 def test_ha_tools_present_when_installed_and_configured(brain):
@@ -80,7 +82,9 @@ def test_execute_tool_dispatches_get_home_assistant_state_through_to_ha_service(
     mod_store_service.mark_installed("home_assistant", by="tester")
     _configure_ha(brain)
 
-    with patch.object(ha_service, "get_state", return_value={"entity_id": "light.x", "state": "on"}) as mock_get:
+    with patch.object(
+        ha_service, "get_state", return_value={"entity_id": "light.x", "state": "on"}
+    ) as mock_get:
         result = agent_service._execute_tool(
             "get_home_assistant_state", {"entity_ids": ["light.x"]}, _user()
         )

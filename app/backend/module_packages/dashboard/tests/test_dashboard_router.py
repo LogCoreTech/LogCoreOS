@@ -82,7 +82,9 @@ def test_delete_dashboard(users):
 
     delete_dashboard(second["id"], users["alice"], "personal")
 
-    assert not any(d["id"] == second["id"] for d in list_dashboards(users["alice"], "personal")["items"])
+    assert not any(
+        d["id"] == second["id"] for d in list_dashboards(users["alice"], "personal")["items"]
+    )
 
 
 def test_delete_last_dashboard_rejected_409(users):
@@ -108,7 +110,9 @@ def test_pool_dashboard_creation_by_admin_is_edit_accessible_to_admin_only_by_de
     grant (dashboards_service._contributor_access) — a plain member sees
     nothing until one is added. Confirmed real design, not a bug: admins
     always get edit on any pool dashboard regardless."""
-    created = create_dashboard(DashboardCreate(name="Shared", pool=True), users["alice"], "personal")
+    created = create_dashboard(
+        DashboardCreate(name="Shared", pool=True), users["alice"], "personal"
+    )
 
     admin_view = list_dashboards(users["alice"], "personal")
     assert any(d["name"] == "Shared" for d in admin_view["items"])

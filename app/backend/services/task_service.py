@@ -95,7 +95,9 @@ def update_task(
                     today_str = today_for_user(user_name).isoformat()
                     updates["last_completed_date"] = today_str
                     updates["streak_count"] = task.get("streak_count", 0) + 1
-                    log = [e for e in (task.get("completion_log") or []) if e.get("date") != today_str]
+                    log = [
+                        e for e in (task.get("completion_log") or []) if e.get("date") != today_str
+                    ]
                     log.append({"date": today_str})
                     updates["completion_log"] = log[-_COMPLETION_LOG_CAP:]
             elif updates.get("status") == "pending" and task.get("status") == "done":
@@ -103,9 +105,11 @@ def update_task(
                 if task.get("type") == "recurring":
                     updates["last_completed_date"] = None
                     updates["streak_count"] = max(0, task.get("streak_count", 0) - 1)
-                    undone_date = (task.get("last_completed_date") or "")
+                    undone_date = task.get("last_completed_date") or ""
                     updates["completion_log"] = [
-                        e for e in (task.get("completion_log") or []) if e.get("date") != undone_date
+                        e
+                        for e in (task.get("completion_log") or [])
+                        if e.get("date") != undone_date
                     ]
 
             if updates.get("tags"):

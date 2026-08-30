@@ -28,7 +28,12 @@ def _search_calendar(query: str, tags: list[str], user: dict, workspace: str) ->
         haystack = " ".join(filter(None, [e.get("title"), e.get("notes")]))
         if search_match(query, tags, haystack, own_tags):
             results.append(
-                {"title": e["title"], "snippet": e.get("notes"), "tags": own_tags, "record_id": e["id"]}
+                {
+                    "title": e["title"],
+                    "snippet": e.get("notes"),
+                    "tags": own_tags,
+                    "record_id": e["id"],
+                }
             )
     return results
 
@@ -85,10 +90,10 @@ MODULE = ModuleManifest(
         "title": "Calendar",
         "blurb": "A month view of your world: events you create plus any tasks that have a due date, all on one grid.",
         "howto": [
-            "Click a day to see its detail, or click \"+ New Event\" to add one with a title, date, colour, and notes.",
+            'Click a day to see its detail, or click "+ New Event" to add one with a title, date, colour, and notes.',
             "Tasks with due dates appear as pills on their day automatically — no need to add them twice.",
             "Toggle the 🏠 / 🧑‍🤝‍🧑 pill to overlay shared Household (personal) or Team (business) events and tasks.",
-            "Use the \"Add to Household\" toggle in the event editor to move a personal event into the shared pool.",
+            'Use the "Add to Household" toggle in the event editor to move a personal event into the shared pool.',
         ],
         "tips": [
             "The calendar follows your active workspace — personal and business each have their own events.",

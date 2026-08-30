@@ -13,9 +13,9 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
+from module_packages.finance.backend import reports as finance_reports
 from routers.auth import get_workspace, require_module
 from services import finance_service
-from module_packages.finance.backend import reports as finance_reports
 from services.rate_limiter import rate_limit
 
 _require_finance = require_module("finance")

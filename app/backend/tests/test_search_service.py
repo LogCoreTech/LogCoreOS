@@ -79,8 +79,12 @@ def test_search_respects_disabled_modules(user_brain):
 def test_search_filters_by_tag(user_brain):
     from services import search_service
 
-    task_service.add_task(USER, {"title": "Renew passport", "category": "Errands", "tags": ["urgent"]})
-    task_service.add_task(USER, {"title": "Buy groceries", "category": "Errands", "tags": ["routine"]})
+    task_service.add_task(
+        USER, {"title": "Renew passport", "category": "Errands", "tags": ["urgent"]}
+    )
+    task_service.add_task(
+        USER, {"title": "Buy groceries", "category": "Errands", "tags": ["routine"]}
+    )
 
     results = search_service.search("", ["urgent"], _user(), "personal")
     titles = [r["title"] for r in results]
@@ -121,13 +125,17 @@ def test_search_respects_disabled_household_module(pool_brain):
     task_service.add_task("_household", {"title": "Buy groceries", "category": "Home"})
 
     # Household disabled for this user, but Tasks/Goals stay enabled.
-    results = search_service.search("groceries", [], _user(disabled_modules=["household"]), "personal")
+    results = search_service.search(
+        "groceries", [], _user(disabled_modules=["household"]), "personal"
+    )
     assert results == []
 
     # A personal task with the same word IS still found — only the pool
     # provider was skipped, not the caller's own Tasks provider.
     task_service.add_task(USER, {"title": "Buy groceries too", "category": "Home"})
-    results = search_service.search("groceries", [], _user(disabled_modules=["household"]), "personal")
+    results = search_service.search(
+        "groceries", [], _user(disabled_modules=["household"]), "personal"
+    )
     titles = [r["title"] for r in results]
     assert "Buy groceries too" in titles
     assert "Buy groceries" not in titles
@@ -149,7 +157,9 @@ def test_contacts_provider_finds_matching_contact(user_brain):
     from services import contacts_service, search_service
 
     mod_store_service.mark_installed("contacts", by="test")
-    contacts_service.create_contact(USER, "personal", {"name": "Jane Doe", "notes": "met at conference"}, created_by=USER)
+    contacts_service.create_contact(
+        USER, "personal", {"name": "Jane Doe", "notes": "met at conference"}, created_by=USER
+    )
 
     results = search_service.search("conference", [], _user(), "personal")
     assert any(r["title"] == "Jane Doe" and r["_module"] == "contacts" for r in results)
@@ -159,7 +169,9 @@ def test_assets_provider_finds_matching_asset(user_brain):
     from services import assets_service, search_service
 
     mod_store_service.mark_installed("assets", by="test")
-    assets_service.create_asset(USER, {"name": "Backup Generator", "notes": "propane fueled"}, created_by=USER)
+    assets_service.create_asset(
+        USER, {"name": "Backup Generator", "notes": "propane fueled"}, created_by=USER
+    )
 
     results = search_service.search("propane", [], _user(), "personal")
     assert any(r["title"] == "Backup Generator" and r["_module"] == "assets" for r in results)
@@ -170,7 +182,8 @@ def test_calendar_provider_finds_matching_event(user_brain):
 
     mod_store_service.mark_installed("calendar", by="test")
     events_service.add_event(
-        USER, {"title": "Dentist appointment", "start_date": "2026-09-01", "notes": "annual checkup"}
+        USER,
+        {"title": "Dentist appointment", "start_date": "2026-09-01", "notes": "annual checkup"},
     )
 
     results = search_service.search("checkup", [], _user(), "personal")
@@ -183,16 +196,29 @@ def test_finance_provider_finds_matching_transaction_and_returns_book_id(user_br
     mod_store_service.mark_installed("finance", by="test")
     book = finance_service.create_book(USER, "personal", name="Household", created_by=USER)
     account = finance_service.add_account(
-        USER, "personal", book["id"], {"name": "Checking", "type": "checking", "opening_balance_cents": 0}
+        USER,
+        "personal",
+        book["id"],
+        {"name": "Checking", "type": "checking", "opening_balance_cents": 0},
     )
     finance_service.add_transaction(
-        USER, "personal", book,
-        {"date": "2026-07-01", "amount_cents": -500, "account_id": account["id"], "payee": "Plumber Bob"},
+        USER,
+        "personal",
+        book,
+        {
+            "date": "2026-07-01",
+            "amount_cents": -500,
+            "account_id": account["id"],
+            "payee": "Plumber Bob",
+        },
         USER,
     )
 
     results = search_service.search("plumber", [], _user(), "personal")
-    assert any(r["title"] == "Plumber Bob" and r["_module"] == "finance" and r["record_id"] == book["id"] for r in results)
+    assert any(
+        r["title"] == "Plumber Bob" and r["_module"] == "finance" and r["record_id"] == book["id"]
+        for r in results
+    )
 
 
 def test_notes_provider_finds_matching_note_content(user_brain):
@@ -202,7 +228,10 @@ def test_notes_provider_finds_matching_note_content(user_brain):
     notes_service.create_note(USER, "trip-plan", "we're renting a canoe for the lake trip")
 
     results = search_service.search("canoe", [], _user(), "personal")
-    assert any(r["title"] == "trip-plan" and r["_module"] == "notes" and r["record_id"] == "trip-plan" for r in results)
+    assert any(
+        r["title"] == "trip-plan" and r["_module"] == "notes" and r["record_id"] == "trip-plan"
+        for r in results
+    )
 
 
 def test_journal_provider_finds_matching_entry_content(user_brain):
@@ -213,13 +242,16 @@ def test_journal_provider_finds_matching_entry_content(user_brain):
     journal_service.upsert_entry(USER, "2026-06-01", "went kayaking on the lake today")
 
     results = search_service.search("kayaking", [], _user(), "personal")
-    assert any(r["title"] == "2026-06-01" and r["_module"] == "journal" and r["record_id"] == "2026-06-01" for r in results)
+    assert any(
+        r["title"] == "2026-06-01" and r["_module"] == "journal" and r["record_id"] == "2026-06-01"
+        for r in results
+    )
 
 
 def test_broken_provider_degrades_to_no_results_without_crashing(user_brain, monkeypatch):
-    from services import search_service
     import module_registry
     from module_registry import SearchProviderSpec
+    from services import search_service
 
     def _boom(query, tags, user, workspace):
         raise RuntimeError("provider exploded")

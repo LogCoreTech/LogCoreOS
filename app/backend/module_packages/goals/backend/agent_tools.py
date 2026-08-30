@@ -30,8 +30,14 @@ TOOL_SCHEMAS = [
             "properties": {
                 "title": {"type": "string"},
                 "notes": {"type": "string"},
-                "category": {"type": "string", "description": "Life-priority category (e.g. Health, Career)"},
-                "parent_id": {"type": "string", "description": "Optional — makes this a subgoal of another goal"},
+                "category": {
+                    "type": "string",
+                    "description": "Life-priority category (e.g. Health, Career)",
+                },
+                "parent_id": {
+                    "type": "string",
+                    "description": "Optional — makes this a subgoal of another goal",
+                },
                 "due_date": {"type": "string", "description": "Optional target date YYYY-MM-DD"},
             },
             "required": ["title"],
@@ -60,8 +66,14 @@ TOOL_SCHEMAS = [
             "type": "object",
             "properties": {
                 "goal_id": {"type": "string"},
-                "cascade": {"type": "boolean", "description": "Delete subgoals too instead of re-parenting them"},
-                "delete_linked_tasks": {"type": "boolean", "description": "Delete linked tasks too instead of just unlinking them"},
+                "cascade": {
+                    "type": "boolean",
+                    "description": "Delete subgoals too instead of re-parenting them",
+                },
+                "delete_linked_tasks": {
+                    "type": "boolean",
+                    "description": "Delete linked tasks too instead of just unlinking them",
+                },
             },
             "required": ["goal_id"],
         },
@@ -104,7 +116,9 @@ def execute(name: str, inputs: dict, user: dict, workspace: str = "personal"):
         return {
             "goal": goal,
             "subgoals": goals_service.get_subgoals(user["name"], inputs["goal_id"], workspace),
-            "linked_tasks": goals_service.get_linked_tasks(user["name"], inputs["goal_id"], workspace),
+            "linked_tasks": goals_service.get_linked_tasks(
+                user["name"], inputs["goal_id"], workspace
+            ),
             "progress": progress,
         }
 
@@ -142,7 +156,9 @@ def execute(name: str, inputs: dict, user: dict, workspace: str = "personal"):
     if name == "link_task_to_goal":
         from services import task_service
 
-        result = task_service.update_task(user["name"], inputs["task_id"], {"goal_id": inputs["goal_id"]}, workspace)
+        result = task_service.update_task(
+            user["name"], inputs["task_id"], {"goal_id": inputs["goal_id"]}, workspace
+        )
         if result is None:
             return {"error": f"Task {inputs['task_id']!r} not found"}
         return result
@@ -150,7 +166,9 @@ def execute(name: str, inputs: dict, user: dict, workspace: str = "personal"):
     if name == "unlink_task_from_goal":
         from services import task_service
 
-        result = task_service.update_task(user["name"], inputs["task_id"], {"goal_id": None}, workspace)
+        result = task_service.update_task(
+            user["name"], inputs["task_id"], {"goal_id": None}, workspace
+        )
         if result is None:
             return {"error": f"Task {inputs['task_id']!r} not found"}
         return result

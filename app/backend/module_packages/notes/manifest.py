@@ -130,9 +130,9 @@ MODULE = ModuleManifest(
         "howto": [
             "Create a note or folder from the sidebar; click a note to edit it in Markdown.",
             "There's no Save button — notes auto-save about a second and a half after you stop typing.",
-            "Drag a note onto a folder to move it, or use the \"Move to folder\" menu.",
+            'Drag a note onto a folder to move it, or use the "Move to folder" menu.',
             "Share a note or a whole folder with another user or a pool from the Share menu.",
-            "Archive a note or folder from its ··· menu to tuck it out of the way without deleting it; toggle \"Show archived\" to see archived items again.",
+            'Archive a note or folder from its ··· menu to tuck it out of the way without deleting it; toggle "Show archived" to see archived items again.',
         ],
         "tips": [
             "Sharing a folder cascades to everything inside it.",

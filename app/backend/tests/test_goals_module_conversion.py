@@ -35,8 +35,8 @@ def test_upgrade_marks_goals_installed(brain):
 
 
 def test_upgrade_converts_legacy_goal_tasks_to_real_goals(brain):
-    from services import auth_service, task_service
     from module_packages.goals.backend import service as goals_service
+    from services import auth_service, task_service
 
     auth_service.create_user("alice@example.com", "password123", "Alice")
     _seed_pre_existing_instance(brain)
@@ -68,8 +68,8 @@ def test_upgrade_converts_legacy_goal_tasks_to_real_goals(brain):
 
 
 def test_upgrade_converts_pool_goal_tasks_too(brain):
-    from services.file_service import tasks_path, write_json
     from module_packages.goals.backend import service as goals_service
+    from services.file_service import tasks_path, write_json
 
     _seed_pre_existing_instance(brain)
     write_json(

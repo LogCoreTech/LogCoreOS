@@ -12,7 +12,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 import pytest
 
 from config import settings
-from module_packages.chat.backend.router import ChatRequest, ResumeAction, _write_chat_archive, chat, get_pending
+from module_packages.chat.backend.router import (
+    ChatRequest,
+    ResumeAction,
+    _write_chat_archive,
+    chat,
+    get_pending,
+)
 from services import agent_service, auth_service
 from services.ai_provider import AgentResponse, ToolCall
 from services.file_service import read_markdown, ws_path

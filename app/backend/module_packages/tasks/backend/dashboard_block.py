@@ -31,11 +31,7 @@ def resolve_due_today(ctx: BlockRenderCtx) -> BlockRenderResult:
 
     today_str = today_for_user(target).isoformat()
     all_tasks = task_service.list_tasks(target, ctx.workspace)
-    due = [
-        t
-        for t in all_tasks
-        if t.get("status") == "pending" and t.get("due_date") == today_str
-    ]
+    due = [t for t in all_tasks if t.get("status") == "pending" and t.get("due_date") == today_str]
     sort_mode = ctx.config.get("sort_mode", "priority")
     order = get_priority_order(target, ctx.workspace)
     due = priority_service.sort_tasks(due, order, today_str, sort_mode)

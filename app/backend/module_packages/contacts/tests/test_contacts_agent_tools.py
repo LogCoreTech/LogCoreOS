@@ -46,7 +46,11 @@ def test_get_contact_tool_returns_detail_and_related_records(users):
         "Alice", "personal", {"type": "person", "name": "Carol"}, created_by="Alice"
     )
     contacts_service.add_interaction(
-        "Alice", "personal", created["id"], {"type": "call", "summary": "checked in"}, created_by="Alice"
+        "Alice",
+        "personal",
+        created["id"],
+        {"type": "call", "summary": "checked in"},
+        created_by="Alice",
     )
     result = agent_service._execute_tool(
         "get_contact", {"contact_id": created["id"]}, users["alice"], workspace="personal"
@@ -64,7 +68,10 @@ def test_get_contact_tool_returns_error_for_missing_id(users):
 
 def test_create_contact_tool_dedups_on_existing_name_or_email(users):
     contacts_service.create_contact(
-        "Alice", "personal", {"type": "person", "name": "Dana", "emails": ["dana@x.com"]}, created_by="Alice"
+        "Alice",
+        "personal",
+        {"type": "person", "name": "Dana", "emails": ["dana@x.com"]},
+        created_by="Alice",
     )
     result = agent_service._execute_tool(
         "create_contact",
@@ -80,7 +87,9 @@ def test_create_contact_tool_creates_when_no_match(users):
         "create_contact", {"name": "Erin"}, users["alice"], workspace="personal"
     )
     assert result["created"] is True
-    found = contacts_service.find_contact("Alice", "member", False, "personal", result["contact_id"])
+    found = contacts_service.find_contact(
+        "Alice", "member", False, "personal", result["contact_id"]
+    )
     assert found[1]["name"] == "Erin"
 
 
