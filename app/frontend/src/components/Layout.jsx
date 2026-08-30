@@ -11,6 +11,7 @@ import { dashboards as dashboardsApi, dashboardTemplates as dashboardTemplatesAp
 import { notes as notesApi } from '../module_packages/notes/frontend/api'
 import { deepLinkUrl } from '../lib/deepLinks'
 import WhatsNewBanner from './WhatsNewBanner'
+import GlobalSearch from './GlobalSearch'
 
 // Shared by the sidebar's main nav loop and its new Pinned section
 // (2026-08-18) so the active/inactive styling can't drift between the two.
@@ -21,6 +22,21 @@ function navLinkClass(collapsed) {
         ? 'border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400'
         : 'border-transparent text-charcoal-600 dark:text-charcoal-400 hover:bg-charcoal-100 dark:hover:bg-charcoal-800'
     } ${collapsed ? 'justify-center' : ''}`
+}
+
+function SearchButton({ onOpen }) {
+  return (
+    <button
+      onClick={onOpen}
+      className="p-1.5 rounded-lg text-charcoal-500 dark:text-charcoal-400 hover:text-orange-500 hover:bg-charcoal-100 dark:hover:bg-charcoal-800 transition-colors"
+      title="Search (Ctrl+K)"
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="11" cy="11" r="8"/>
+        <path d="m21 21-4.3-4.3"/>
+      </svg>
+    </button>
+  )
 }
 
 function NotifBell() {
@@ -200,6 +216,7 @@ export default function Layout() {
   const location = useLocation()
   const [showDrawer, setShowDrawer] = useState(false)
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('lc_sidebar') === 'collapsed')
+  const [searchOpen, setSearchOpen] = useState(false)
 
   const userWorkspaces = user?.workspaces || ['personal']
   const hasMultipleWorkspaces = userWorkspaces.length > 1
@@ -270,6 +287,20 @@ export default function Layout() {
     return () => window.removeEventListener('keydown', onKey)
   }, [navigate])
 
+  // Global Ctrl/Cmd+K → open search. Unlike "?" above, this should fire even
+  // while typing elsewhere on the page (standard convention) — only guarded
+  // against the search modal's own input so opening it while already open
+  // doesn't re-trigger anything.
+  useEffect(() => {
+    function onKey(e) {
+      if (!((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) return
+      e.preventDefault()
+      setSearchOpen(true)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   const disabledIds = new Set(user?.disabledModules || [])
   const visibleModules = ALL_MODULES.filter(m =>
     m.nav !== false && m.to && !disabledIds.has(m.id) &&
@@ -296,7 +327,10 @@ export default function Layout() {
           {collapsed ? (
             <>
               <span className="text-orange-500 font-bold text-xl">LC</span>
-              <NotifBell />
+              <div className="flex flex-col items-center gap-1">
+                <SearchButton onOpen={() => setSearchOpen(true)} />
+                <NotifBell />
+              </div>
             </>
           ) : (
             <>
@@ -304,7 +338,10 @@ export default function Layout() {
                 <span className="text-orange-500 font-bold text-xl tracking-tight">LogCore</span>
                 <span className="text-charcoal-400 dark:text-charcoal-500 text-xs block mt-0.5">{user?.name}</span>
               </div>
-              <NotifBell />
+              <div className="flex items-center gap-1">
+                <SearchButton onOpen={() => setSearchOpen(true)} />
+                <NotifBell />
+              </div>
             </>
           )}
         </div>
@@ -438,7 +475,10 @@ export default function Layout() {
         {/* Mobile-only top bar with brand + bell */}
         <header className="md:hidden flex items-center justify-between px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] bg-white dark:bg-charcoal-950 border-b border-charcoal-200 dark:border-charcoal-800 shrink-0">
           <span className="text-orange-500 font-bold text-xl tracking-tight">LogCore</span>
-          <NotifBell />
+          <div className="flex items-center gap-1">
+            <SearchButton onOpen={() => setSearchOpen(true)} />
+            <NotifBell />
+          </div>
         </header>
 
         <WhatsNewBanner />
@@ -456,6 +496,8 @@ export default function Layout() {
         </main>
       </div>
     </div>
+
+    {searchOpen && <GlobalSearch onClose={() => setSearchOpen(false)} />}
 
     {/* Bottom bar — mobile: pinned shortcuts + More button. Fixed AND rendered
         outside BOTH overflow-hidden flex containers above (not just off the

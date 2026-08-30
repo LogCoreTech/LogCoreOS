@@ -298,6 +298,17 @@ export default function AssetView({
             </div>
           )}
 
+          {/* Tags */}
+          {(asset.tags || []).length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {asset.tags.map(tag => (
+                <span key={tag} className="text-xs px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+
           {/* Children — drill into an item inside this one */}
           {kids.length > 0 && (
             <div>

@@ -4,6 +4,8 @@ import { finance as financeApi } from './api'
 import { contacts as contactsApi } from '../../contacts/frontend/api'
 import { toCents, centsToInput, todayStr } from '../../../components/finance/money'
 import ContactPicker from '../../../components/contacts/ContactPicker'
+import TagInput from '../../../components/TagInput'
+import { tags as tagsApi } from '../../../lib/api'
 
 const KIND_LABELS = { expense: '− Expense', income: '+ Income', transfer: '⇄ Transfer' }
 
@@ -25,6 +27,8 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
   const [payeeContactId, setPayeeContactId] = useState(tx?.payee_contact_id || null)
   const [assetId, setAssetId] = useState(tx?.asset_id || '')
   const [notes, setNotes] = useState(tx?.notes || '')
+  const [tags, setTags] = useState(tx?.tags || [])
+  const [tagSuggestions, setTagSuggestions] = useState([])
   const [deductible, setDeductible] = useState(!!tx?.deductible)
   const [taxCategory, setTaxCategory] = useState(tx?.tax_category || '')
   const [receipts, setReceipts] = useState(tx?.attachments || [])
@@ -47,6 +51,10 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
   useEffect(() => {
     if (kind === 'transfer') amountRef.current?.blur()
   }, [kind])
+
+  useEffect(() => {
+    tagsApi.list(!!book?._owner).then(r => setTagSuggestions(r.tags || [])).catch(() => setTagSuggestions([]))
+  }, [book])
 
   // Transfer-only state — a second workspace's books are fetched lazily,
   // only once "Transfer" is actually picked, since most transactions never
@@ -142,6 +150,7 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
       notes,
       deductible,
       tax_category: deductible && taxCategory ? taxCategory : null,
+      tags,
     }
     setBusy(true)
     try {
@@ -303,6 +312,11 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
           <div>
             <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Notes</label>
             <input className="input" value={notes} onChange={e => setNotes(e.target.value)} maxLength={2000} />
+          </div>
+
+          <div>
+            <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Tags</label>
+            <TagInput value={tags} onChange={setTags} suggestions={tagSuggestions} placeholder="Add a tag…" />
           </div>
 
           {/* Tax flags (expenses) */}

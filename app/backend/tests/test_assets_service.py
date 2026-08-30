@@ -139,6 +139,34 @@ def test_create_asset_without_a_template(users):
     assert asset["fields"] == {}
 
 
+# ---------------------------------------------------------------------------
+# Tags (2026-08-29) — new field, registered into tags_service.py's shared
+# vocabulary the same way Goals/Tasks/Contacts already are, feeding the
+# app-wide search bar's tag facet.
+# ---------------------------------------------------------------------------
+
+
+def test_create_asset_with_tags_registers_shared_vocabulary(users):
+    from services import tags_service
+
+    asset = svc.create_asset("Alice", {"name": "Truck", "tags": ["fleet", "vehicle"]}, created_by="Alice")
+    assert set(asset["tags"]) == {"fleet", "vehicle"}
+    assert set(tags_service.get_tags("Alice", "personal")) == {"fleet", "vehicle"}
+
+
+def test_create_asset_without_tags_has_empty_list(users):
+    asset = svc.create_asset("Alice", {"name": "Untagged"}, created_by="Alice")
+    assert asset["tags"] == []
+
+
+def test_update_asset_registers_new_tags(users):
+    from services import tags_service
+
+    asset = svc.create_asset("Alice", {"name": "Truck"}, created_by="Alice")
+    svc.update_asset("Alice", asset["id"], {"tags": ["fleet"]}, by="Alice")
+    assert "fleet" in tags_service.get_tags("Alice", "personal")
+
+
 def test_create_blank_asset_accepts_freeform_custom_fields(users):
     # Owner report, 2026-08-17: "blank assets has no way to make custom
     # fields which is mandatory" — a blank asset has no admin-defined field

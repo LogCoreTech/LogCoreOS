@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import HelpButton from '../../../components/HelpButton'
 import { notes as notesApi } from './api'
+import { tags as tagsApi } from '../../../lib/api'
+import TagInput from '../../../components/TagInput'
 import { useWorkspace } from '../../../lib/workspace'
 
 // ── Tree builder ─────────────────────────────────────────────────────────────
@@ -234,6 +236,7 @@ export default function Notes() {
   const [modalBusy, setModalBusy]   = useState(false)
   const [showSidebar, setShowSidebar] = useState(true)
   const [showArchived, setShowArchived] = useState(false)
+  const [tagSuggestions, setTagSuggestions] = useState([])
   const [dragActive, setDragActive] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -248,6 +251,7 @@ export default function Notes() {
   }, [loading, searchParams])
   const [overFolder, setOverFolder] = useState(null)   // folder path ('' = root) under the pointer
   const autoSaveTimer = useRef(null)
+  const textareaRef = useRef(null)
   const dragRef = useRef(null)
   const overFolderRef = useRef(null)
 
@@ -373,6 +377,37 @@ export default function Notes() {
 
   const selectedItem = items.find(i => i.path === selectedPath)
   const readOnly = selectedItem?._access === 'read'
+
+  useEffect(() => {
+    if (!note) return
+    tagsApi.list(!!note._owner).then(r => setTagSuggestions(r.tags || [])).catch(() => setTagSuggestions([]))
+  }, [note?.path]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Grow the textarea to fit its own content instead of scrolling
+  // internally, so the tag row above it scrolls away with the note as part
+  // of one shared scroll area (owner ask, 2026-08-30: tags were "fixed on
+  // that spot of the screen" instead of scrolling with the note) — the
+  // OUTER wrapper below is the actual scroll boundary now, not the
+  // textarea itself. Still a plain, properly min-h-0-bounded container
+  // doing the scrolling (see MEMORY.md's Journal fixed-layout gotcha) —
+  // the textarea is no longer the flex-1 scrolling item, just a normal
+  // auto-height block inside one, so that fix's own reasoning still holds.
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [editContent, note?.path])
+
+  async function saveTags(newTags) {
+    if (!note || readOnly) return
+    setNote(prev => ({ ...prev, tags: newTags }))
+    try {
+      await notesApi.setTags(note.path, newTags)
+    } catch {
+      setError('Could not save tags.')
+    }
+  }
 
   async function save() {
     if (!note || readOnly) return
@@ -629,15 +664,35 @@ export default function Notes() {
         </span>
       </div>
 
-      {error && <p className="text-red-500 text-sm px-4 py-2">{error}</p>}
+      {error && <p className="text-red-500 text-sm px-4 py-2 shrink-0">{error}</p>}
 
-      {/* Wrapped in a plain div, not set as the flex-1 item directly — a
-          <textarea> as a direct flex child doesn't reliably honor
-          min-height: 0 (see MEMORY.md's Journal fixed-layout gotcha), which
-          can force this panel taller than its bounds and leak scroll up to
-          the page shell instead of staying contained inside the textarea. */}
-      <div className="flex-1 min-h-0 overflow-hidden">
+      {/* This div (not the textarea) is the scroll boundary — a plain,
+          min-h-0-bounded flex-1 container, same safe shape MEMORY.md's
+          Journal fixed-layout gotcha already established. The tag row and
+          the textarea are both normal-flow children inside it, so they
+          scroll together as one unit instead of the tag row staying
+          pinned above a separately-scrolling textarea. The textarea
+          itself auto-grows to its own content height (see the resize
+          effect above) rather than scrolling internally — it's no longer
+          the flex-1 item that gotcha warns about, just an ordinary
+          auto-height block. */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+        {!readOnly && (
+          <div className="px-4 py-2 border-b border-charcoal-200 dark:border-charcoal-700">
+            <TagInput value={note.tags || []} onChange={saveTags} suggestions={tagSuggestions} placeholder="Add a tag…" />
+          </div>
+        )}
+        {readOnly && (note.tags || []).length > 0 && (
+          <div className="flex flex-wrap gap-1.5 px-4 py-2 border-b border-charcoal-200 dark:border-charcoal-700">
+            {note.tags.map(tag => (
+              <span key={tag} className="text-xs px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300">
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
         <textarea
+          ref={textareaRef}
           value={editContent}
           onChange={e => setEditContent(e.target.value)}
           spellCheck={false}
@@ -648,7 +703,7 @@ export default function Notes() {
           // never zooms back out on its own — reported 2026-08-15 as "hides
           // the edges and looks bad, have to manually zoom back out." 16px
           // is the standard threshold that avoids it; not a visual choice.
-          className="w-full h-full font-mono text-base p-4 bg-white dark:bg-charcoal-900 resize-none focus:outline-none leading-relaxed overflow-x-hidden overscroll-contain"
+          className="w-full font-mono text-base p-4 bg-white dark:bg-charcoal-900 resize-none focus:outline-none leading-relaxed overflow-x-hidden overflow-y-hidden block"
         />
       </div>
     </div>

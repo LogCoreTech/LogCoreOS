@@ -36,6 +36,7 @@ class EventCreate(BaseModel):
     all_day: bool = True
     color: str = "blue"
     notes: str | None = Field(None, max_length=5000)
+    tags: list[str] | None = None
 
     @field_validator("start_date")
     @classmethod
@@ -82,6 +83,7 @@ class EventUpdate(BaseModel):
     all_day: bool | None = None
     color: str | None = None
     notes: str | None = Field(None, max_length=5000)
+    tags: list[str] | None = None
 
     @field_validator("start_date")
     @classmethod

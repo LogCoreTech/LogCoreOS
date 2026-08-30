@@ -1217,3 +1217,33 @@ def test_annotate_never_adds_online_field_to_an_ordinary_contact(brain):
     c = _contact(name="Not A User")
     annotated = crm.annotate(c, "Owner", "Owner", "edit")
     assert "_online" not in annotated
+
+
+# ---------------------------------------------------------------------------
+# Tag vocabulary registration (2026-08-29) — Contacts' own `tags` field
+# existed before this but was never wired into the shared tags_service.py
+# vocabulary Goals/Tasks already use; closing that gap for the app-wide
+# search bar's tag facet.
+# ---------------------------------------------------------------------------
+
+
+def test_create_contact_registers_tags_into_shared_vocabulary(brain):
+    from services import tags_service
+
+    _contact(name="Jane Doe", tags=["client", "vip"])
+    assert set(tags_service.get_tags("Owner", "personal")) == {"client", "vip"}
+
+
+def test_create_contact_with_no_tags_registers_nothing(brain):
+    from services import tags_service
+
+    _contact(name="No Tags Here")
+    assert tags_service.get_tags("Owner", "personal") == []
+
+
+def test_update_contact_registers_new_tags(brain):
+    from services import tags_service
+
+    c = _contact(name="Jane Doe")
+    crm.update_contact("Owner", "personal", c["id"], {"tags": ["prospect"]})
+    assert "prospect" in tags_service.get_tags("Owner", "personal")

@@ -10,13 +10,27 @@ require_module("calendar"))."""
 
 from pathlib import Path
 
-from module_registry import ModuleManifest
+from module_registry import ModuleManifest, SearchProviderSpec, search_match
 
 
 def _get_router():
     from module_packages.calendar.backend.router import router
 
     return router
+
+
+def _search_calendar(query: str, tags: list[str], user: dict, workspace: str) -> list[dict]:
+    from services import events_service
+
+    results = []
+    for e in events_service.list_events(user["name"], workspace):
+        own_tags = e.get("tags") or []
+        haystack = " ".join(filter(None, [e.get("title"), e.get("notes")]))
+        if search_match(query, tags, haystack, own_tags):
+            results.append(
+                {"title": e["title"], "snippet": e.get("notes"), "tags": own_tags, "record_id": e["id"]}
+            )
+    return results
 
 
 def m020_backfill_calendar_installed_from_existing_data(brain: Path) -> None:
@@ -56,6 +70,9 @@ MODULE = ModuleManifest(
     owned_agent_tools=[],  # no AI chat tools exist for calendar today — not adding new ones as part of converting what's already there
     read_only_agent_tools=[],
     owned_block_types=["upcoming_events", "single_event"],
+    owned_search_providers=[
+        SearchProviderSpec(key="events", label="Calendar", resolve=_search_calendar),
+    ],
     migrations=[
         (
             "calendar:m020_backfill_calendar_installed_from_existing_data",

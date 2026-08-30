@@ -16,13 +16,54 @@ matching Calendar's/Tasks' own no-rename conversions."""
 
 from pathlib import Path
 
-from module_registry import ModuleManifest
+from module_registry import ModuleManifest, SearchProviderSpec, search_match
 
 
 def _get_router():
     from module_packages.household.backend.router import router
 
     return router
+
+
+def _search_household_tasks(query: str, tags: list[str], user: dict, workspace: str) -> list[dict]:
+    from services import task_service
+
+    results = []
+    for t in task_service.list_tasks("_household", "personal"):
+        own_tags = t.get("tags") or []
+        haystack = " ".join(filter(None, [t.get("title"), t.get("notes"), t.get("category")]))
+        if search_match(query, tags, haystack, own_tags):
+            results.append(
+                {"title": t["title"], "snippet": t.get("notes"), "tags": own_tags, "record_id": t["id"]}
+            )
+    return results
+
+
+def _search_household_goals(query: str, tags: list[str], user: dict, workspace: str) -> list[dict]:
+    from module_packages.goals.backend import service as goals_service
+
+    results = []
+    for g in goals_service.list_goals("_household", "personal"):
+        own_tags = g.get("tags") or []
+        haystack = " ".join(filter(None, [g.get("title"), g.get("notes"), g.get("category")]))
+        if search_match(query, tags, haystack, own_tags):
+            results.append(
+                {"title": g["title"], "snippet": g.get("notes"), "tags": own_tags, "record_id": g["id"]}
+            )
+    return results
+
+
+def _search_household_events(query: str, tags: list[str], user: dict, workspace: str) -> list[dict]:
+    from services import events_service
+
+    results = []
+    for e in events_service.list_events("_household", "personal"):
+        haystack = " ".join(filter(None, [e.get("title"), e.get("notes")]))
+        if search_match(query, tags, haystack, []):
+            results.append(
+                {"title": e["title"], "snippet": e.get("notes"), "tags": [], "record_id": e["id"]}
+            )
+    return results
 
 
 def m022_backfill_household_installed_from_existing_data(brain: Path) -> None:
@@ -168,6 +209,11 @@ MODULE = ModuleManifest(
         "delete_shared_task",
     ],
     owned_block_types=["household_tasks", "household_goals"],
+    owned_search_providers=[
+        SearchProviderSpec(key="tasks", label="Household Tasks", resolve=_search_household_tasks),
+        SearchProviderSpec(key="goals", label="Household Goals", resolve=_search_household_goals),
+        SearchProviderSpec(key="events", label="Household Events", resolve=_search_household_events),
+    ],
     migrations=[
         (
             "household:m022_backfill_household_installed_from_existing_data",

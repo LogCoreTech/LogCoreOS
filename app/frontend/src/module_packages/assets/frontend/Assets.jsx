@@ -325,21 +325,26 @@ export default function Assets() {
       ) : (
         // Always foldered — a match whose parent is filtered out floats to top
         // level (childrenMap promotes it), which is exactly what we want for
-        // shared/team views where a parent may not be shared.
-        <div className="card p-2">
+        // shared/team views where a parent may not be shared. Each top-level
+        // asset gets its OWN card (owner ask, 2026-08-30, applied here too
+        // after Goals' own tree got the same treatment) — one card per root,
+        // its own subtree rendered inside that same card via the normal
+        // recursive expand, instead of every root sharing one big block.
+        <div className="space-y-2">
           {roots.map(a => (
-            <AssetRow
-              key={a.id}
-              asset={a}
-              depth={0}
-              childrenMap={childrenMap}
-              expanded={expanded}
-              onToggle={toggle}
-              onOpen={asset => setModal({ asset })}
-              onAddChild={asset => setModal({ creating: true, parentId: asset.id })}
-              onMove={asset => setMoveAsset(asset)}
-              templatesByKey={templatesByKey}
-            />
+            <div key={a.id} className="card p-2">
+              <AssetRow
+                asset={a}
+                depth={0}
+                childrenMap={childrenMap}
+                expanded={expanded}
+                onToggle={toggle}
+                onOpen={asset => setModal({ asset })}
+                onAddChild={asset => setModal({ creating: true, parentId: asset.id })}
+                onMove={asset => setMoveAsset(asset)}
+                templatesByKey={templatesByKey}
+              />
+            </div>
           ))}
         </div>
       )}

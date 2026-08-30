@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import HelpButton from '../../../components/HelpButton'
 import { journal as journalApi } from './api'
+import { tags as tagsApi } from '../../../lib/api'
+import TagInput from '../../../components/TagInput'
 
 function _todayStr() {
   const d = new Date()
@@ -9,7 +12,8 @@ function _todayStr() {
 
 export default function Journal() {
   const today = _todayStr()
-  const [date, setDate]         = useState(today)
+  const [searchParams] = useSearchParams()
+  const [date, setDate]         = useState(() => searchParams.get('date') || today)
   const [content, setContent]   = useState('')
   const [loading, setLoading]   = useState(true)
   const [saving, setSaving]     = useState(false)
@@ -17,6 +21,8 @@ export default function Journal() {
   const [error, setError]       = useState('')
   const [entries, setEntries]   = useState([])
   const [showHistory, setShowHistory] = useState(false)
+  const [entryTags, setEntryTags] = useState([])
+  const [tagSuggestions, setTagSuggestions] = useState([])
 
   async function loadEntry(d) {
     setLoading(true)
@@ -24,11 +30,22 @@ export default function Journal() {
     try {
       const data = await journalApi.get(d)
       setContent(data.content || '')
+      setEntryTags(data.tags || [])
     } catch {
       setError('Could not load entry.')
       setContent('')
+      setEntryTags([])
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function saveTags(newTags) {
+    setEntryTags(newTags)
+    try {
+      await journalApi.setTags(date, newTags)
+    } catch {
+      setError('Could not save tags.')
     }
   }
 
@@ -42,6 +59,10 @@ export default function Journal() {
     loadEntry(date)
     loadHistory()
   }, [date])
+
+  useEffect(() => {
+    tagsApi.list(false).then(r => setTagSuggestions(r.tags || [])).catch(() => setTagSuggestions([]))
+  }, [])
 
   async function save() {
     setSaving(true)
@@ -118,6 +139,10 @@ export default function Journal() {
             onChange={e => e.target.value && setDate(e.target.value)}
             className="text-xs text-charcoal-400 bg-transparent cursor-pointer shrink-0"
           />
+        </div>
+
+        <div className="px-3 py-2 border-b border-charcoal-200 dark:border-charcoal-700 shrink-0">
+          <TagInput value={entryTags} onChange={saveTags} suggestions={tagSuggestions} placeholder="Add a tag…" />
         </div>
 
         {error && <p className="text-red-500 text-sm px-3 pt-2 shrink-0">{error}</p>}

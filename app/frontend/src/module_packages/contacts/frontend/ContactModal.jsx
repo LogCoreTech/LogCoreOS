@@ -5,6 +5,7 @@ import ContactPicker from '../../../components/contacts/ContactPicker'
 import { useContactPhotoUrl } from './ContactAvatar'
 import TagInput from '../../../components/TagInput'
 import SectionHeader from './SectionHeader'
+import { tags as tagsApi } from '../../../lib/api'
 
 const DEFAULT_PRIORITY_ORDER = ['Religion', 'Family', 'Job', 'Personal Growth', 'Hobbies']
 const EDUCATION_LEVELS = [
@@ -466,7 +467,6 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
     name: contact?.name || '',
     emails: (contact?.emails || []).join(', '),
     address: contact?.address || '',
-    tags: (contact?.tags || []).join(', '),
     birthday: contact?.birthday || '',
     status: contact?.status || '',
     notes: contact?.notes || '',
@@ -511,6 +511,15 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
   // with commas"). `Array.isArray` guard covers a not-yet-migrated legacy
   // string value defensively, same as TagInput's own prop guard.
   const [coreValues, setCoreValues] = useState(Array.isArray(contact?.core_values) ? contact.core_values : [])
+  // Real pill-input backed by the shared tag vocabulary (2026-08-30) — was
+  // a plain comma-separated text field until now, the one contacts.js
+  // field this codebase's own tags rollout deliberately left unmigrated at
+  // the time (Contacts already had SOME tags field, unlike every other
+  // module, so it read as "already done" — the owner caught that the UI
+  // itself was never actually upgraded). `tagSuggestions` fetched below,
+  // same shape every other module's own tag picker already uses.
+  const [tags, setTags] = useState(Array.isArray(contact?.tags) ? contact.tags : [])
+  const [tagSuggestions, setTagSuggestions] = useState([])
   // Which of the (self-contact-only) hideable sections are hidden from
   // everyone but the owner — owner, 2026-08-18: "hiddeable for user
   // contacts by the user themself only."
@@ -522,6 +531,12 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
   // cross-workspace toggle (editable anytime, except for a self-contact,
   // which is always cross-workspace and forced server-side regardless).
   const [keepPersonal, setKeepPersonal] = useState(false)
+
+  useEffect(() => {
+    const pool = editing ? isPoolContact : !keepPersonal
+    tagsApi.list(pool).then(r => setTagSuggestions(r.tags || [])).catch(() => setTagSuggestions([]))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPoolContact, keepPersonal])
   const [crossWorkspace, setCrossWorkspace] = useState(!!contact?.cross_workspace)
   const [affiliatedIds, setAffiliatedIds] = useState(contact?.affiliated_contact_ids || [])
   const [affiliatedContacts, setAffiliatedContacts] = useState([])
@@ -592,7 +607,7 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
       type: form.type, name: form.name.trim(),
       emails: emailList,
       phones: phones.filter(p => p.number),
-      address: form.address, tags: splitList(form.tags),
+      address: form.address, tags,
       birthday: form.birthday || null, status: form.status,
       notes: form.notes, custom: form.custom,
       pronouns: form.pronouns, gender: form.gender, city: form.city, state: form.state, country: form.country,
@@ -709,10 +724,8 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
         {!isSelf && (
           <input className="input" placeholder="Address" value={form.address} onChange={e => set('address', e.target.value)} />
         )}
-        <div className="grid grid-cols-2 gap-3">
-          <input className="input" placeholder="Tags (comma-separated)" value={form.tags} onChange={e => set('tags', e.target.value)} />
-          <input className="input" placeholder="Status" value={form.status} onChange={e => set('status', e.target.value)} maxLength={40} />
-        </div>
+        <TagInput value={tags} onChange={setTags} suggestions={tagSuggestions} placeholder="Add a tag…" />
+        <input className="input" placeholder="Status" value={form.status} onChange={e => set('status', e.target.value)} maxLength={40} />
         <Field label="Birthday">
           <input type="date" className="input" value={form.birthday || ''} onChange={e => set('birthday', e.target.value)} />
         </Field>

@@ -135,8 +135,10 @@ def list_notes(
         )
 
     archived_paths = set(load_archived(user_name, workspace))
+    note_tags = load_note_tags(user_name, workspace)
     for item in items:
         item["archived"] = _is_archived_path(archived_paths, item["path"])
+        item["tags"] = note_tags.get(item["path"], [])
     if not include_archived:
         items = [i for i in items if not i["archived"]]
 
@@ -153,6 +155,7 @@ def get_note(user_name: str, path: str, workspace: str = "personal") -> dict | N
         "name": Path(path).name,
         "content": read_markdown(p),
         "modified_at": datetime.fromtimestamp(p.stat().st_mtime).isoformat(),
+        "tags": get_note_tags(user_name, workspace, path),
     }
 
 
@@ -197,6 +200,7 @@ def delete_note(user_name: str, path: str, workspace: str = "personal") -> bool:
         return False
     p.unlink()
     _drop_archived_entry(user_name, workspace, path)
+    _drop_note_tags_entry(user_name, workspace, path)
     return True
 
 
@@ -216,6 +220,7 @@ def delete_folder(user_name: str, path: str, workspace: str = "personal") -> boo
         return False
     shutil.rmtree(p)
     _drop_archived_prefix(user_name, workspace, path)
+    _drop_note_tags_prefix(user_name, workspace, path)
     return True
 
 
@@ -299,6 +304,52 @@ def _drop_archived_prefix(store_user: str, workspace: str, path: str) -> None:
 # ---------------------------------------------------------------------------
 # Sharing (sidecar index keyed by path; folder shares cascade to the subtree)
 # ---------------------------------------------------------------------------
+
+
+def _tags_file(store_user: str, workspace: str) -> Path:
+    return _notes_root(store_user, workspace) / "_tags.json"
+
+
+def load_note_tags(store_user: str, workspace: str) -> dict[str, list[str]]:
+    """Path -> tags, for every tagged note/folder in this store — same
+    sidecar-index shape as _shares_file/_archive_file above, since a note's
+    own content is plain markdown with no structured-field mechanism (no
+    frontmatter parsing exists anywhere in this codebase)."""
+    return read_json(_tags_file(store_user, workspace), default={"tags": {}}).get("tags", {})
+
+
+def get_note_tags(store_user: str, workspace: str, path: str) -> list[str]:
+    return load_note_tags(store_user, workspace).get(path, [])
+
+
+def set_note_tags(store_user: str, workspace: str, path: str, tags: list[str]) -> list[str]:
+    _validate_path(path)
+    clean = [t.strip() for t in (tags or []) if isinstance(t, str) and t.strip()]
+    current = load_note_tags(store_user, workspace)
+    if clean:
+        current[path] = clean
+    else:
+        current.pop(path, None)
+    write_json(_tags_file(store_user, workspace), {"tags": current})
+    if clean:
+        from services.tags_service import register_tags
+
+        register_tags(store_user, workspace, clean)
+    return clean
+
+
+def _drop_note_tags_entry(store_user: str, workspace: str, path: str) -> None:
+    current = load_note_tags(store_user, workspace)
+    if path in current:
+        del current[path]
+        write_json(_tags_file(store_user, workspace), {"tags": current})
+
+
+def _drop_note_tags_prefix(store_user: str, workspace: str, path: str) -> None:
+    current = load_note_tags(store_user, workspace)
+    remaining = {p: t for p, t in current.items() if p != path and not p.startswith(f"{path}/")}
+    if remaining != current:
+        write_json(_tags_file(store_user, workspace), {"tags": remaining})
 
 
 def _shares_file(store_user: str, workspace: str) -> Path:

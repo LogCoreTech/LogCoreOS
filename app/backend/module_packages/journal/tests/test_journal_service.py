@@ -134,3 +134,46 @@ def test_invalid_date_raises(journal_dir, bad_date):
 def test_invalid_date_get_raises(journal_dir, bad_date):
     with pytest.raises(ValueError):
         svc.get_entry(USER, bad_date)
+
+
+# ---------------------------------------------------------------------------
+# Tags (2026-08-29) — a new sidecar index (_tags.json), date-keyed, since
+# Journal had no JSON store at all before this — registered into
+# tags_service.py's shared vocabulary, feeding the app-wide search bar's
+# tag facet.
+# ---------------------------------------------------------------------------
+
+
+def test_set_entry_tags_registers_shared_vocabulary(journal_dir):
+    from services import tags_service
+
+    svc.upsert_entry(USER, "2024-06-01", "content")
+    svc.set_entry_tags(USER, "2024-06-01", ["gratitude", "travel"])
+    assert set(svc.get_entry_tags(USER, "2024-06-01")) == {"gratitude", "travel"}
+    assert set(tags_service.get_tags(USER, "personal")) == {"gratitude", "travel"}
+
+
+def test_entry_with_no_tags_has_empty_list(journal_dir):
+    svc.upsert_entry(USER, "2024-06-01", "content")
+    assert svc.get_entry_tags(USER, "2024-06-01") == []
+
+
+def test_get_entry_includes_tags(journal_dir):
+    svc.upsert_entry(USER, "2024-06-01", "content")
+    svc.set_entry_tags(USER, "2024-06-01", ["gratitude"])
+    entry = svc.get_entry(USER, "2024-06-01")
+    assert entry["tags"] == ["gratitude"]
+
+
+def test_list_entries_includes_tags(journal_dir):
+    svc.upsert_entry(USER, "2024-06-01", "content")
+    svc.set_entry_tags(USER, "2024-06-01", ["gratitude"])
+    entries = svc.list_entries(USER)
+    assert entries[0]["tags"] == ["gratitude"]
+
+
+def test_delete_entry_clears_tags_entry(journal_dir):
+    svc.upsert_entry(USER, "2024-06-01", "content")
+    svc.set_entry_tags(USER, "2024-06-01", ["gratitude"])
+    svc.delete_entry(USER, "2024-06-01")
+    assert svc.load_entry_tags(USER) == {}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { finance as financeApi } from '../../finance/frontend/api'
+import { tags as tagsApi } from '../../../lib/api'
 import { assets as assetsApi } from './api'
 import { tasks as tasksApi } from '../../tasks/frontend/api'
 import TaskModal from '../../../components/TaskModal'
@@ -153,8 +154,10 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
     parent_id: asset?.parent_id || defaultParentId || '',
     fields: { ...(asset?.fields || {}) },
     notes: asset?.notes || '',
+    tags: asset?.tags || [],
     owner: 'me',
   })
+  const [tagSuggestions, setTagSuggestions] = useState([])
   // A blank asset's own ad-hoc field definitions (2026-08-18) — kept
   // outside `form` (unlike `fields`) since the template-switch effect below
   // resets `form.fields` on every template change but has no equivalent
@@ -236,6 +239,11 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
   }, [form.template])
 
   useEffect(() => {
+    const pool = isPool || form.owner === 'pool'
+    tagsApi.list(pool).then(r => setTagSuggestions(r.tags || [])).catch(() => setTagSuggestions([]))
+  }, [isPool, form.owner])
+
+  useEffect(() => {
     if (!asset?.id) return
     tasksApi.list()
       .then(all => setLinkedTasks((all || []).filter(t => t.asset_id === asset.id)))
@@ -297,7 +305,7 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
         fields[k] = v === '' ? null : v
       }
       if (editing) {
-        const payload = { name: form.name, fields, custom_field_defs: customFieldDefs, notes: form.notes || null }
+        const payload = { name: form.name, fields, custom_field_defs: customFieldDefs, notes: form.notes || null, tags: form.tags }
         if (!isForeign) payload.parent_id = form.parent_id || null
         await assetsApi.update(asset.id, payload)
         // Save sharing/hiding in the same Save (owner/pool-manager only) so the
@@ -318,6 +326,7 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
           fields,
           custom_field_defs: customFieldDefs,
           notes: form.notes || null,
+          tags: form.tags,
           owner: form.owner,
         })
         // Flip to edit mode in place so files/tasks/sharing become available
@@ -667,6 +676,19 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
                 onChange={e => set('notes', e.target.value)}
                 rows={2}
                 className="input resize-none"
+              />
+            </div>
+
+            {/* Tags */}
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Tags <span className="text-charcoal-400 font-normal">(optional)</span>
+              </label>
+              <TagInput
+                value={form.tags}
+                onChange={t => setForm(f => ({ ...f, tags: t }))}
+                suggestions={tagSuggestions}
+                placeholder="Add a tag…"
               />
             </div>
           </fieldset>

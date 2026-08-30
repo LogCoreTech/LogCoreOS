@@ -104,7 +104,85 @@ exists, so this manifest declares no admin_agent_tools."""
 
 from pathlib import Path
 
-from module_registry import ModuleManifest, MetricProviderSpec
+from module_registry import ModuleManifest, MetricProviderSpec, SearchProviderSpec, search_match
+
+
+def _book_store(book: dict, viewer: str, workspace: str) -> str:
+    """Resolve a visible book's REAL store_user from its own denormalized
+    `_owner` (finance_service.annotate() sets it to the label "household"/
+    "team" for a pool book, the raw username for a peer-shared one, or
+    leaves it absent for the viewer's own book) — mirrors how
+    dashboard_blocks/_finance.py's own resolvers already do this same
+    lookup rather than re-deriving store lists from scratch."""
+    from services.finance_service import pool_for
+
+    owner = book.get("_owner")
+    if owner in ("household", "team"):
+        return pool_for(workspace)
+    return owner or viewer
+
+
+def _search_finance(query: str, tags: list[str], user: dict, workspace: str) -> list[dict]:
+    """Transactions get real tag support (see TransactionCreate/Update); a
+    Finance record with no natural tag concept (invoices, clients) still
+    gets full-text search coverage, but a tag-only search (query empty,
+    tags set) can never match one — an explicit, honest non-match rather
+    than silently ignoring the facet.
+
+    `record_id` is always the BOOK's own id, never the transaction's/
+    invoice's/client's — Finance.jsx (recordParam: 'book') only supports
+    deep-linking to a book at all, no per-transaction/invoice/client route
+    exists anywhere in the frontend today. Landing on the right book is the
+    most precise real navigation available; scrolled-to-the-exact-line-item
+    is future work if that route ever gets built."""
+    from services import finance_invoice_service
+    from services.finance_service import list_transactions, list_visible_books
+
+    results = []
+    books = list_visible_books(
+        user["name"], user.get("feature_role", "member"), user.get("role") == "admin", workspace
+    )
+    for book in books:
+        store_user = _book_store(book, user["name"], workspace)
+        book_id = book["id"]
+
+        txs, _total = list_transactions(store_user, workspace, book_id, limit=200)
+        for tx in txs:
+            own_tags = tx.get("tags") or []
+            haystack = " ".join(filter(None, [tx.get("payee"), tx.get("notes"), tx.get("category")]))
+            if search_match(query, tags, haystack, own_tags):
+                results.append(
+                    {
+                        "title": tx.get("payee") or tx.get("category") or "Transaction",
+                        "snippet": tx.get("notes"),
+                        "tags": own_tags,
+                        "record_id": book_id,
+                    }
+                )
+
+        if tags:
+            continue  # neither invoices nor clients carry tags — see docstring
+
+        for inv in finance_invoice_service.list_invoices(store_user, workspace, book_id):
+            haystack = f"Invoice {inv.get('number', '')} {inv.get('notes') or ''}"
+            if search_match(query, [], haystack, []):
+                results.append(
+                    {
+                        "title": f"Invoice {inv.get('number', '')}",
+                        "snippet": inv.get("notes"),
+                        "tags": [],
+                        "record_id": book_id,
+                    }
+                )
+
+        for c in finance_invoice_service.list_clients(store_user, workspace, book_id):
+            haystack = " ".join(filter(None, [c.get("name"), c.get("notes"), c.get("email")]))
+            if search_match(query, [], haystack, []):
+                results.append(
+                    {"title": c.get("name") or "(unnamed)", "snippet": c.get("notes"), "tags": [], "record_id": book_id}
+                )
+
+    return results
 
 
 def _resolve_budget_pct(config: dict, user: dict, workspace: str) -> dict:
@@ -216,6 +294,9 @@ MODULE = ModuleManifest(
         "get_balance_projection",
     ],
     owned_block_types=["finance_activity", "finance_book_report"],
+    owned_search_providers=[
+        SearchProviderSpec(key="finance", label="Finance", resolve=_search_finance),
+    ],
     owned_metric_providers=[
         MetricProviderSpec(
             key="budget_pct",

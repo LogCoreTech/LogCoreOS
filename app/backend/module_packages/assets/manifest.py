@@ -57,13 +57,36 @@ about what this module owns."""
 
 from pathlib import Path
 
-from module_registry import ModuleManifest
+from module_registry import ModuleManifest, SearchProviderSpec, search_match
 
 
 def _get_router():
     from module_packages.assets.backend.router import router
 
     return router
+
+
+def _search_assets(query: str, tags: list[str], user: dict, workspace: str) -> list[dict]:
+    from services import assets_service
+
+    results = []
+    items = assets_service.list_visible(
+        user["name"],
+        workspace,
+        is_admin=user.get("role") == "admin",
+        pool_edit=user.get("pool_edit") or [],
+        viewer_role=user.get("feature_role") or "",
+    )
+    for a in items:
+        own_tags = a.get("tags") or []
+        haystack = " ".join(
+            filter(None, [a.get("name"), a.get("notes"), *[str(v) for v in (a.get("fields") or {}).values()]])
+        )
+        if search_match(query, tags, haystack, own_tags):
+            results.append(
+                {"title": a["name"], "snippet": a.get("notes"), "tags": own_tags, "record_id": a["id"]}
+            )
+    return results
 
 
 def m028_backfill_assets_installed_from_existing_data(brain: Path) -> None:
@@ -110,6 +133,9 @@ MODULE = ModuleManifest(
     read_only_agent_tools=["list_asset_templates", "list_assets", "search_assets"],
     admin_agent_tools=["delete_asset", "create_asset_template", "update_asset_template"],
     owned_block_types=["documents", "linked_tasks", "linked_contact", "my_assets_summary", "collection"],
+    owned_search_providers=[
+        SearchProviderSpec(key="assets", label="Assets", resolve=_search_assets),
+    ],
     migrations=[
         (
             "assets:m028_backfill_assets_installed_from_existing_data",

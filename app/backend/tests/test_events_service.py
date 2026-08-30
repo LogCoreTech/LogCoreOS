@@ -124,3 +124,30 @@ def test_household_events_pool(brain):
     events = list_events("_household")
     assert any(e["title"] == "Family BBQ" for e in events)
     assert get_event("_household", ev["id"]) is not None
+
+
+# ---------------------------------------------------------------------------
+# Tags (2026-08-29) — new field, registered into tags_service.py's shared
+# vocabulary, feeding the app-wide search bar's tag facet.
+# ---------------------------------------------------------------------------
+
+
+def test_add_event_with_tags_registers_shared_vocabulary(brain):
+    from services import tags_service
+
+    ev = add_event(USER, _make_event(tags=["family", "annual"]))
+    assert set(ev["tags"]) == {"family", "annual"}
+    assert set(tags_service.get_tags(USER, "personal")) == {"family", "annual"}
+
+
+def test_add_event_without_tags_has_empty_list(brain):
+    ev = add_event(USER, _make_event())
+    assert ev["tags"] == []
+
+
+def test_update_event_registers_new_tags(brain):
+    from services import tags_service
+
+    ev = add_event(USER, _make_event())
+    update_event(USER, ev["id"], {"tags": ["rescheduled"]})
+    assert "rescheduled" in tags_service.get_tags(USER, "personal")

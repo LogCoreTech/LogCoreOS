@@ -96,6 +96,7 @@ class AssetCreate(BaseModel):
     # when no template/template_id is set.
     custom_field_defs: list[FieldDefModel] = Field(default=[], max_length=50)
     notes: str | None = Field(None, max_length=5000)
+    tags: list[str] | None = None
     owner: str = Field("me", pattern="^(me|pool)$")
 
 
@@ -105,6 +106,7 @@ class AssetUpdate(BaseModel):
     fields: dict | None = None
     custom_field_defs: list[FieldDefModel] | None = Field(None, max_length=50)
     notes: str | None = Field(None, max_length=5000)
+    tags: list[str] | None = None
 
 
 class AttachTemplateRequest(BaseModel):

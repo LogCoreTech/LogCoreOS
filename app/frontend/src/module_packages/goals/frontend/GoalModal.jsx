@@ -32,7 +32,7 @@ function Portal({ children }) {
   return createPortal(children, document.body)
 }
 
-async function poolTaskApi(workspace) {
+export async function poolTaskApi(workspace) {
   if (workspace === 'business') {
     const { team } = await import('../../team/frontend/api')
     return team

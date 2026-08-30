@@ -1028,6 +1028,7 @@ def add_transaction(
         "notes": (tx_data.get("notes") or "").strip()[:2000],
         "deductible": bool(tx_data.get("deductible", False)),
         "tax_category": tx_data.get("tax_category"),
+        "tags": [t.strip() for t in (tx_data.get("tags") or []) if isinstance(t, str) and t.strip()],
         "source": source,
         "simplefin_id": tx_data.get("simplefin_id"),
         "import_hash": tx_data.get("import_hash"),
@@ -1054,6 +1055,12 @@ def add_transaction(
     shard = _read_shard(store_user, workspace, book["id"], tx_date.year)
     shard.setdefault("transactions", []).append(tx)
     _write_shard(store_user, workspace, book["id"], tx_date.year, shard)
+
+    if tx["tags"]:
+        from services.tags_service import register_tags
+
+        register_tags(store_user, workspace, tx["tags"])
+
     return tx
 
 
@@ -1091,8 +1098,17 @@ def update_transaction(
                 allowed["deductible"] = bool(updates["deductible"])
             if "tax_category" in updates:
                 allowed["tax_category"] = updates["tax_category"]
+            if "tags" in updates:
+                allowed["tags"] = [
+                    t.strip() for t in (updates["tags"] or []) if isinstance(t, str) and t.strip()
+                ]
             allowed["updated_at"] = _now()
             updated = {**tx, **allowed}
+
+            if allowed.get("tags"):
+                from services.tags_service import register_tags
+
+                register_tags(store_user, workspace, allowed["tags"])
 
             new_year = int(updated["date"][:4])
             if new_year != year:

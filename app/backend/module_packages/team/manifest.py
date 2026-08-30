@@ -11,13 +11,54 @@ pools, not something invented or fixed as part of this conversion."""
 
 from pathlib import Path
 
-from module_registry import ModuleManifest
+from module_registry import ModuleManifest, SearchProviderSpec, search_match
 
 
 def _get_router():
     from module_packages.team.backend.router import router
 
     return router
+
+
+def _search_team_tasks(query: str, tags: list[str], user: dict, workspace: str) -> list[dict]:
+    from services import task_service
+
+    results = []
+    for t in task_service.list_tasks("_team", "personal"):
+        own_tags = t.get("tags") or []
+        haystack = " ".join(filter(None, [t.get("title"), t.get("notes"), t.get("category")]))
+        if search_match(query, tags, haystack, own_tags):
+            results.append(
+                {"title": t["title"], "snippet": t.get("notes"), "tags": own_tags, "record_id": t["id"]}
+            )
+    return results
+
+
+def _search_team_goals(query: str, tags: list[str], user: dict, workspace: str) -> list[dict]:
+    from module_packages.goals.backend import service as goals_service
+
+    results = []
+    for g in goals_service.list_goals("_team", "personal"):
+        own_tags = g.get("tags") or []
+        haystack = " ".join(filter(None, [g.get("title"), g.get("notes"), g.get("category")]))
+        if search_match(query, tags, haystack, own_tags):
+            results.append(
+                {"title": g["title"], "snippet": g.get("notes"), "tags": own_tags, "record_id": g["id"]}
+            )
+    return results
+
+
+def _search_team_events(query: str, tags: list[str], user: dict, workspace: str) -> list[dict]:
+    from services import events_service
+
+    results = []
+    for e in events_service.list_events("_team", "personal"):
+        haystack = " ".join(filter(None, [e.get("title"), e.get("notes")]))
+        if search_match(query, tags, haystack, []):
+            results.append(
+                {"title": e["title"], "snippet": e.get("notes"), "tags": [], "record_id": e["id"]}
+            )
+    return results
 
 
 def m024_backfill_team_installed_from_existing_data(brain: Path) -> None:
@@ -52,6 +93,11 @@ MODULE = ModuleManifest(
     owned_brain_paths=[],
     owned_agent_tools=[],
     owned_block_types=["team_tasks", "team_goals"],
+    owned_search_providers=[
+        SearchProviderSpec(key="tasks", label="Team Tasks", resolve=_search_team_tasks),
+        SearchProviderSpec(key="goals", label="Team Goals", resolve=_search_team_goals),
+        SearchProviderSpec(key="events", label="Team Events", resolve=_search_team_events),
+    ],
     migrations=[
         (
             "team:m024_backfill_team_installed_from_existing_data",

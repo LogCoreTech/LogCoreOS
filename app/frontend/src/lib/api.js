@@ -136,6 +136,17 @@ export const tags = {
   list: (pool = false) => get(`/tags?pool=${pool}`),
 }
 
+// App-wide search fan-out (2026-08-29) — see services/search_service.py's
+// own docstring for why this stays core, same shape as `tags` above.
+export const search = {
+  query: (q, tags = []) => {
+    const params = new URLSearchParams()
+    if (q) params.set('q', q)
+    for (const t of tags) params.append('tags', t)
+    return get(`/search?${params.toString()}`)
+  },
+}
+
 export const admin = {
   // User management
   users:             ()                          => get('/auth/users'),

@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { calendar as calendarApi } from '../module_packages/calendar/frontend/api'
+import { tags as tagsApi } from '../lib/api'
+import TagInput from './TagInput'
 
 export const EVENT_COLORS = {
   blue:   '#3b82f6',
@@ -33,10 +35,17 @@ export default function EventModal({ event, defaultDate, onClose, onSave, saveAp
     all_day:    event?.all_day    ?? true,
     color:      event?.color      || 'blue',
     notes:      event?.notes      || '',
+    tags:       event?.tags       || [],
   })
   const [shareToPool, setShareToPool] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
+  const [tagSuggestions, setTagSuggestions] = useState([])
+
+  useEffect(() => {
+    const pool = !!isHouseholdEvent || shareToPool
+    tagsApi.list(pool).then(r => setTagSuggestions(r.tags || [])).catch(() => setTagSuggestions([]))
+  }, [isHouseholdEvent, shareToPool])
 
   function set(field, value) {
     setForm(f => ({ ...f, [field]: value }))
@@ -199,6 +208,19 @@ export default function EventModal({ event, defaultDate, onClose, onSave, saveAp
               placeholder="Any details…"
               rows={2}
               className="input resize-none"
+            />
+          </div>
+
+          {/* Tags */}
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Tags <span className="text-charcoal-400 font-normal">(optional)</span>
+            </label>
+            <TagInput
+              value={form.tags}
+              onChange={t => set('tags', t)}
+              suggestions={tagSuggestions}
+              placeholder="Add a tag…"
             />
           </div>
 

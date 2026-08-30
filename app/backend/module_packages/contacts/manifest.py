@@ -89,7 +89,7 @@ each found and closed in their turn. No admin-only Contacts tool exists
 
 from pathlib import Path
 
-from module_registry import ModuleManifest, MetricProviderSpec
+from module_registry import ModuleManifest, MetricProviderSpec, SearchProviderSpec, search_match
 
 
 # Shared by both metric providers below — same shape as Goals' own "manual"
@@ -194,6 +194,29 @@ def _get_router():
     return router
 
 
+def _search_contacts(query: str, tags: list[str], user: dict, workspace: str) -> list[dict]:
+    """Deliberately its own haystack, not a reuse of contacts_service's own
+    search_contacts() (the AI tool's function, name+emails+tags only) — a
+    different consumer with a narrower, already-shipped contract; widening
+    it here would risk an unrelated behavior change to the AI tool."""
+    from services import contacts_service
+
+    results = []
+    contacts = contacts_service.list_visible_contacts(
+        user["name"], user.get("feature_role", "member"), user.get("role") == "admin", workspace
+    )
+    for c in contacts:
+        own_tags = c.get("tags") or []
+        haystack = " ".join(
+            filter(None, [c.get("name"), c.get("notes"), c.get("address"), " ".join(c.get("core_values") or [])])
+        )
+        if search_match(query, tags, haystack, own_tags):
+            results.append(
+                {"title": c.get("name") or "(unnamed)", "snippet": c.get("notes"), "tags": own_tags, "record_id": c["id"]}
+            )
+    return results
+
+
 def m029_backfill_contacts_installed_from_existing_data(brain: Path) -> None:
     """Every instance that existed before this migration shipped had contacts
     permanently on — mark it installed so upgrading never silently takes
@@ -258,6 +281,9 @@ MODULE = ModuleManifest(
             config_schema=[_WEIGHT_DIRECTION_FIELD, _START_VALUE_FIELD, {"key": "target_value", "label": "Target weight", "kind": "number"}],
             resolve=_resolve_weight,
         ),
+    ],
+    owned_search_providers=[
+        SearchProviderSpec(key="contacts", label="Contacts", resolve=_search_contacts),
     ],
     migrations=[
         (

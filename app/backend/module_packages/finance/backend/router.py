@@ -195,6 +195,7 @@ class TransactionCreate(BaseModel):
     notes: str = Field(default="", max_length=2000)
     deductible: bool = False
     tax_category: str | None = Field(default=None, max_length=60)
+    tags: list[str] | None = None
 
 
 class TransactionUpdate(BaseModel):
@@ -208,6 +209,7 @@ class TransactionUpdate(BaseModel):
     notes: str | None = Field(default=None, max_length=2000)
     deductible: bool | None = None
     tax_category: str | None = Field(default=None, max_length=60)
+    tags: list[str] | None = None
 
 
 # ---------------------------------------------------------------------------

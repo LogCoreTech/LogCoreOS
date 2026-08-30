@@ -1065,6 +1065,12 @@ def create_contact(store_user: str, workspace: str, data: dict, created_by: str)
         return {"contacts": contacts}
 
     update_json(contacts_path(store_user, workspace), _append, default={"contacts": []})
+
+    if contact["tags"]:
+        from services.tags_service import register_tags
+
+        register_tags(store_user, workspace, contact["tags"])
+
     return contact
 
 
@@ -1107,6 +1113,12 @@ def update_contact(
         fields["updated_at"] = _now()
         contacts[i] = {**c, **fields}
         _save_contacts(store_user, workspace, contacts)
+
+        if fields.get("tags"):
+            from services.tags_service import register_tags
+
+            register_tags(store_user, workspace, fields["tags"])
+
         return contacts[i]
     return None
 

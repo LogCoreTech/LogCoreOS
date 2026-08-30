@@ -195,6 +195,37 @@ def test_removing_category_relabels_transactions(brain, book, checking):
 
 
 # ---------------------------------------------------------------------------
+# Transaction tags (2026-08-29) — registered into tags_service.py's shared
+# vocabulary, feeding the app-wide search bar's tag facet. Deliberately
+# scoped to Transactions only, not Budgets/Invoices/Clients — see
+# module_packages/finance/manifest.py's own docstring for why.
+# ---------------------------------------------------------------------------
+
+
+def test_add_transaction_with_tags_registers_shared_vocabulary(brain, book, checking):
+    from services import tags_service
+
+    tx = svc.add_transaction(
+        "Alice", "personal", book, _tx(checking["id"], -100, tags=["deductible", "q3"]), "Alice"
+    )
+    assert set(tx["tags"]) == {"deductible", "q3"}
+    assert set(tags_service.get_tags("Alice", "personal")) == {"deductible", "q3"}
+
+
+def test_add_transaction_without_tags_has_empty_list(brain, book, checking):
+    tx = svc.add_transaction("Alice", "personal", book, _tx(checking["id"], -100), "Alice")
+    assert tx["tags"] == []
+
+
+def test_update_transaction_registers_new_tags(brain, book, checking):
+    from services import tags_service
+
+    tx = svc.add_transaction("Alice", "personal", book, _tx(checking["id"], -100), "Alice")
+    svc.update_transaction("Alice", "personal", book, tx["id"], {"tags": ["reimbursable"]})
+    assert "reimbursable" in tags_service.get_tags("Alice", "personal")
+
+
+# ---------------------------------------------------------------------------
 # Balances + net worth (always computed)
 # ---------------------------------------------------------------------------
 

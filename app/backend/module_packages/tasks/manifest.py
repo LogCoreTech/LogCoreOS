@@ -28,13 +28,32 @@ docs/MEMORY.md's 2026-08-25 entry for the full design, including:
 
 from pathlib import Path
 
-from module_registry import ModuleManifest
+from module_registry import ModuleManifest, SearchProviderSpec, search_match
 
 
 def _get_router():
     from module_packages.tasks.backend.router import router
 
     return router
+
+
+def _search_tasks(query: str, tags: list[str], user: dict, workspace: str) -> list[dict]:
+    from services import task_service
+
+    results = []
+    for t in task_service.list_tasks(user["name"], workspace):
+        haystack = " ".join(filter(None, [t.get("title"), t.get("notes"), t.get("category")]))
+        if not search_match(query, tags, haystack, t.get("tags") or []):
+            continue
+        results.append(
+            {
+                "title": t["title"],
+                "snippet": t.get("notes"),
+                "tags": t.get("tags") or [],
+                "record_id": t["id"],
+            }
+        )
+    return results
 
 
 def m021_mark_tasks_installed_unconditionally(brain: Path) -> None:
@@ -94,6 +113,9 @@ MODULE = ModuleManifest(
         "get_week_snapshot",
     ],
     owned_block_types=["top3_tasks", "due_today", "streaks", "single_task"],
+    owned_search_providers=[
+        SearchProviderSpec(key="tasks", label="Tasks", resolve=_search_tasks),
+    ],
     migrations=[
         (
             "tasks:m021_mark_tasks_installed_unconditionally",

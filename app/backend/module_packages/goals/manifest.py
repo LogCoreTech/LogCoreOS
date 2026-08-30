@@ -57,13 +57,32 @@ goal-exclusion filters were simplified away."""
 
 from pathlib import Path
 
-from module_registry import ModuleManifest
+from module_registry import ModuleManifest, SearchProviderSpec, search_match
 
 
 def _get_router():
     from module_packages.goals.backend.router import router
 
     return router
+
+
+def _search_goals(query: str, tags: list[str], user: dict, workspace: str) -> list[dict]:
+    from module_packages.goals.backend import service as goals_service
+
+    results = []
+    for g in goals_service.list_goals(user["name"], workspace):
+        haystack = " ".join(filter(None, [g.get("title"), g.get("notes"), g.get("category")]))
+        if not search_match(query, tags, haystack, g.get("tags") or []):
+            continue
+        results.append(
+            {
+                "title": g["title"],
+                "snippet": g.get("notes"),
+                "tags": g.get("tags") or [],
+                "record_id": g["id"],
+            }
+        )
+    return results
 
 
 def m031_migrate_goals(brain: Path) -> None:
@@ -137,6 +156,9 @@ MODULE = ModuleManifest(
     ],
     read_only_agent_tools=["list_goals", "get_goal"],
     owned_block_types=["goals_progress"],
+    owned_search_providers=[
+        SearchProviderSpec(key="goals", label="Goals", resolve=_search_goals),
+    ],
     migrations=[
         ("goals:m031_migrate_goals", m031_migrate_goals),
     ],

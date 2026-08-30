@@ -30,6 +30,7 @@ def add_event(user_name: str, event_data: dict, workspace: str = "personal") -> 
         "all_day": event_data.get("all_day", True),
         "color": event_data.get("color", "blue"),
         "notes": event_data.get("notes"),
+        "tags": event_data.get("tags") or [],
         "created_at": datetime.now(tz).isoformat(),
     }
     for extra in ("created_by",):
@@ -37,6 +38,12 @@ def add_event(user_name: str, event_data: dict, workspace: str = "personal") -> 
             event[extra] = event_data[extra]
     data["events"].append(event)
     write_json(events_path(user_name, workspace), data)
+
+    if event["tags"]:
+        from services.tags_service import register_tags
+
+        register_tags(user_name, workspace, event["tags"])
+
     return event
 
 
@@ -48,6 +55,12 @@ def update_event(
         if event["id"] == event_id:
             data["events"][i] = {**event, **updates}
             write_json(events_path(user_name, workspace), data)
+
+            if updates.get("tags"):
+                from services.tags_service import register_tags
+
+                register_tags(user_name, workspace, updates["tags"])
+
             return data["events"][i]
     return None
 

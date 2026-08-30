@@ -257,6 +257,58 @@ def test_delete_folder_clears_nested_archive_entries(notes_root):
     assert svc.load_archived(USER, "personal") == []
 
 
+# ---------------------------------------------------------------------------
+# Tags (2026-08-29) — sidecar-index shape (same as _shares.json/_archive.json,
+# since a note's own content has no structured-field mechanism), registered
+# into tags_service.py's shared vocabulary, feeding the app-wide search
+# bar's tag facet.
+# ---------------------------------------------------------------------------
+
+
+def test_set_note_tags_registers_shared_vocabulary(notes_root):
+    from services import tags_service
+
+    svc.create_note(USER, "hello", "hi")
+    svc.set_note_tags(USER, "personal", "hello", ["idea", "draft"])
+    assert set(svc.get_note_tags(USER, "personal", "hello")) == {"idea", "draft"}
+    assert set(tags_service.get_tags(USER, "personal")) == {"idea", "draft"}
+
+
+def test_note_with_no_tags_has_empty_list(notes_root):
+    svc.create_note(USER, "hello", "hi")
+    assert svc.get_note_tags(USER, "personal", "hello") == []
+
+
+def test_set_note_tags_appears_in_list_notes(notes_root):
+    svc.create_note(USER, "hello", "hi")
+    svc.set_note_tags(USER, "personal", "hello", ["idea"])
+    items = svc.list_notes(USER)
+    hello = next(i for i in items if i["path"] == "hello")
+    assert hello["tags"] == ["idea"]
+
+
+def test_set_note_tags_to_empty_removes_entry(notes_root):
+    svc.create_note(USER, "hello", "hi")
+    svc.set_note_tags(USER, "personal", "hello", ["idea"])
+    svc.set_note_tags(USER, "personal", "hello", [])
+    assert svc.get_note_tags(USER, "personal", "hello") == []
+
+
+def test_delete_note_clears_tags_entry(notes_root):
+    svc.create_note(USER, "hello", "hi")
+    svc.set_note_tags(USER, "personal", "hello", ["idea"])
+    svc.delete_note(USER, "hello")
+    assert svc.load_note_tags(USER, "personal") == {}
+
+
+def test_delete_folder_clears_nested_tags_entries(notes_root):
+    svc.create_folder(USER, "Projects")
+    svc.create_note(USER, "Projects/readme", "hi")
+    svc.set_note_tags(USER, "personal", "Projects/readme", ["idea"])
+    svc.delete_folder(USER, "Projects")
+    assert svc.load_note_tags(USER, "personal") == {}
+
+
 def test_transfer_ownership_carries_archived_flag(notes_root):
     from services import auth_service
 

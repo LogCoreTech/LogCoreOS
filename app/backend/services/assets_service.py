@@ -789,6 +789,7 @@ def create_asset(
         "parent_id": parent_id,
         "fields": fields,
         "notes": data.get("notes"),
+        "tags": [t.strip() for t in (data.get("tags") or []) if isinstance(t, str) and t.strip()],
         "archived": False,
         "shared_with": inherited_shares,
         "hidden_from": inherited_hidden,
@@ -804,6 +805,10 @@ def create_asset(
     _save(store_user, workspace, store)
     if inherited_shares:  # child carries an audience → refresh the share index
         assets_index.reindex_owner(store_user, workspace)
+    if asset["tags"]:
+        from services.tags_service import register_tags
+
+        register_tags(store_user, workspace, asset["tags"])
     return asset
 
 
@@ -831,6 +836,12 @@ def update_asset(
     if "notes" in updates and updates["notes"] != asset.get("notes"):
         changes["notes"] = [asset.get("notes"), updates["notes"]]
         asset["notes"] = updates["notes"]
+
+    if "tags" in updates:
+        new_tags = [t.strip() for t in (updates["tags"] or []) if isinstance(t, str) and t.strip()]
+        if new_tags != (asset.get("tags") or []):
+            changes["tags"] = [asset.get("tags"), new_tags]
+            asset["tags"] = new_tags
 
     if "parent_id" in updates and updates["parent_id"] != asset.get("parent_id"):
         new_parent = updates["parent_id"]
@@ -872,6 +883,10 @@ def update_asset(
         asset["updated_at"] = _now_iso(by or store_user)
         _push_history(asset, by, "update", changes)
         _save(store_user, workspace, store)
+        if updates.get("tags"):
+            from services.tags_service import register_tags
+
+            register_tags(store_user, workspace, asset["tags"])
     return asset
 
 

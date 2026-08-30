@@ -61,6 +61,35 @@ class MetricProviderSpec:
 
 
 @dataclass
+class SearchProviderSpec:
+    """A source of live search results the global search bar (services/
+    search_service.py) fans out to, WITHOUT that fan-out containing any
+    module-specific logic — the same generic-registry shape as
+    MetricProviderSpec above, applied to search instead of metrics.
+    Declared on the OWNING module's own manifest; a pool pseudo-module
+    (household/team) declares its OWN provider for its own pool data rather
+    than that logic living inside the data module's provider — see
+    household/team's manifest.py for why (Tasks'/Goals'/Calendar's own
+    providers only ever see the caller's personal store).
+
+    `key` only needs to be unique within the owning module —
+    search_providers() below namespaces it as f"{module_id}:{key}", the
+    same convention metric_providers() already uses.
+
+    `resolve(query, tags, user, workspace)` returns a list of
+    {"title": str, "snippet": str | None, "tags": list[str],
+    "record_id": str} dicts. `query` may be empty (a tag-only browse);
+    `tags` may be empty (a plain text search); search_service.search()
+    never calls a provider when both are empty. Must never raise — a
+    broken provider degrades to zero results from that module only, never
+    crashes the whole search response."""
+
+    key: str
+    label: str
+    resolve: Callable[[str, list[str], dict, str], list[dict]]
+
+
+@dataclass
 class ModuleManifest:
     id: str
     display_name: str
@@ -76,6 +105,7 @@ class ModuleManifest:
     admin_agent_tools: list[str] = field(default_factory=list)
     owned_block_types: list[str] = field(default_factory=list)
     owned_metric_providers: list[MetricProviderSpec] = field(default_factory=list)
+    owned_search_providers: list[SearchProviderSpec] = field(default_factory=list)
     migrations: list[tuple[str, MigrationFn]] = field(default_factory=list)
     uninstallable: bool = False
     on_install: Callable[[Path], None] | None = None
@@ -219,6 +249,45 @@ def directional_pct(
     return max(0, min(100, round(pct)))
 
 
+def search_match(query: str, tags: list[str], haystack: str, own_tags: list[str]) -> bool:
+    """Shared substring + tag-intersect matching every SearchProviderSpec.resolve()
+    needs — lives here (not inside any one module_packages/) for the exact same
+    reason directional_pct() does: a module registering its own search provider
+    shouldn't have to import from a sibling module's package for pure matching
+    logic. `query` empty means "no text filter" (tags alone can match); `tags`
+    empty means "no tag filter" (query alone can match) — a provider is only
+    ever called at all when at least one of the two is non-empty
+    (search_service.search()'s own short-circuit), but either one alone must
+    still work standalone here."""
+    if query.strip() and query.strip().lower() not in haystack.lower():
+        return False
+    if tags:
+        wanted = {t.lower() for t in tags}
+        if not (wanted & {t.lower() for t in own_tags}):
+            return False
+    return True
+
+
+def search_snippet(text: str, query: str) -> str | None:
+    """±100/+200-char excerpt around the first case-insensitive match of
+    `query` in `text`, or None if it doesn't appear — the exact substring-
+    snippet logic agent_service.py's own search_brain tool already uses for
+    Brain markdown, factored out here (it was a local closure there, not
+    importable) so Notes'/Journal's own SearchProviderSpec.resolve()
+    functions can search real note/entry CONTENT, not just titles, without
+    duplicating this by hand. Only meaningful when `query` is non-empty —
+    callers should skip calling this for a tag-only search."""
+    q = query.strip().lower()
+    if not q:
+        return None
+    idx = text.lower().find(q)
+    if idx == -1:
+        return None
+    start = max(0, idx - 100)
+    end = min(len(text), idx + 200)
+    return text[start:end].strip()
+
+
 def metric_providers() -> dict[str, MetricProviderSpec]:
     """Every metric provider registered by an ACTIVE module, keyed by
     f"{module_id}:{provider.key}" — the mechanism Goals' own metric picker
@@ -233,6 +302,22 @@ def metric_providers() -> dict[str, MetricProviderSpec]:
     providers: dict[str, MetricProviderSpec] = {}
     for module_id, manifest in active_manifests().items():
         for spec in manifest.owned_metric_providers:
+            providers[f"{module_id}:{spec.key}"] = spec
+    return providers
+
+
+def search_providers() -> dict[str, SearchProviderSpec]:
+    """Every search provider registered by an ACTIVE module, keyed by
+    f"{module_id}:{provider.key}" — the mechanism services/search_service.py
+    fans out through. search_service.py has zero module-specific code; it
+    just calls this and queries whatever comes back, filtering out any
+    module_id the caller has disabled BEFORE calling resolve() (never after
+    — a disabled module's resolve() is never invoked at all, the same
+    "never even offered" precedent _get_tools() already sets for AI tools).
+    Same discovery shape as metric_providers() above."""
+    providers: dict[str, SearchProviderSpec] = {}
+    for module_id, manifest in active_manifests().items():
+        for spec in manifest.owned_search_providers:
             providers[f"{module_id}:{spec.key}"] = spec
     return providers
 

@@ -12,6 +12,7 @@ function encodePath(path) {
 export const notes = {
   list:         (includeArchived = false)  => get(`/notes${includeArchived ? '?include_archived=true' : ''}`),
   setArchived:  (path, archived = true)    => post('/notes/archive', { path, archived }),
+  setTags:      (path, tags)               => put('/notes/tags', { path, tags }),
   get:          (path)                     => get(`/notes/file/${encodePath(path)}`),
   create:       (path, content = '')       => post('/notes/file', { path, content }),
   update:       (path, content)            => put(`/notes/file/${encodePath(path)}`, { content }),

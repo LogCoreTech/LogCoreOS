@@ -10,11 +10,13 @@
         "Set your life priorities in Profile — LogCore uses them to score your tasks so the most important ones rise to the top.",
         "Open Chat and just talk to your AI: ask it to plan your week, add tasks, or explain any feature.",
         "Pin the modules you use most to the bottom bar (phone) in Settings → Shortcuts.",
-        "Every module page has an ⓘ button next to its title — tap it to jump straight to that module's help."
+        "Every module page has an ⓘ button next to its title — tap it to jump straight to that module's help.",
+        "Click the 🔍 search icon in the header (or press Ctrl/Cmd+K) to search across your whole app at once — tasks, notes, goals, contacts, assets, calendar, finance, and journal — instead of hunting through each module separately."
       ],
       "tips": [
         "Not sure where something belongs? Ask the AI in Chat — it knows every module and will point you to the right one.",
-        "Your data never leaves your server unless you explicitly export or share it."
+        "Your data never leaves your server unless you explicitly export or share it.",
+        "In the search bar, filter by tag alongside your search text — tags are shared across every module they exist on, so tagging something once makes it findable everywhere."
       ],
       "modules": []
     },

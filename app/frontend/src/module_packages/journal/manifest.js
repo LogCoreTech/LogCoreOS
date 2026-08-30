@@ -10,6 +10,10 @@ export default {
   icon: '📖',
   label: 'Journal',
   workspace: 'personal',
+  // Added 2026-08-29 (app-wide search bar rollout) — Journal was the only
+  // converted module with no way to deep-link to a specific record at all;
+  // a search result's click-through was a dead link without this.
+  recordParam: 'date',
   loadPage: () => import('./frontend/Journal.jsx'),
   blocks: [
     {

@@ -10,6 +10,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **App-wide search** (magnifying-glass icon in the header, or Ctrl/Cmd+K) — search your whole app
+  from one place instead of hunting through each module separately: Tasks, Goals, Household/Team
+  shared items, Contacts, Assets, Calendar, Finance transactions, Notes (including note content,
+  not just titles), and Journal (including entry content). Filter by tag alongside a text search,
+  and click a result to jump straight to it.
+- **Tags**, previously only on Tasks and Goals, are now available on Assets, Calendar events,
+  Finance transactions, Notes, and Journal entries too — sharing the same tag vocabulary across
+  every module, so a tag you use in one place means the same thing everywhere, and it's all
+  searchable from the new app-wide search above. Contacts' own tags field now uses the same
+  pill-style picker as every other module instead of a plain comma-separated text box.
+- **Goals now shows a real hierarchy** — matching Assets, subgoals collapse under their parent with
+  a ▸/▾ toggle instead of every goal (parent and child alike) listing flat, and a goal's own linked
+  tasks show right underneath it in the same tree, one level deeper.
+
 - **Mod Store** (Admin → Mod Store): install and uninstall first-party LogCoreOS modules. Journal,
   Home Assistant, n8n Automation (renamed from "Automations"), Calendar, Household, Team, Notes,
   Assets, Contacts, and Finance are optional this way — none is a permanent core feature anymore, and a fresh install now ships

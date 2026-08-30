@@ -31,7 +31,39 @@ during upfront research, not introduced by it):
 
 from pathlib import Path
 
-from module_registry import ModuleManifest
+from module_registry import ModuleManifest, SearchProviderSpec, search_match, search_snippet
+
+
+def _search_notes(query: str, tags: list[str], user: dict, workspace: str) -> list[dict]:
+    """Searches path/name AND real note content (via search_snippet) — not
+    just titles, per the owner's own "search for links and data" framing.
+    Only notes (not folders) are meaningful search results."""
+    from services import notes_service
+
+    results = []
+    items = notes_service.list_visible_notes(
+        user["name"], user.get("feature_role", "member"), user.get("role") == "admin", workspace
+    )
+    q = query.strip()
+    for item in items:
+        if item["type"] != "note":
+            continue
+        own_tags = item.get("tags") or []
+        if tags and not search_match("", tags, "", own_tags):
+            continue
+        snippet = None
+        if q:
+            store_user = notes_service.store_for_owner(item.get("_owner"), user["name"])
+            note = notes_service.get_note(store_user, item["path"], workspace)
+            content = (note or {}).get("content") or ""
+            if item["name"].lower().find(q.lower()) == -1:
+                snippet = search_snippet(content, q)
+                if snippet is None:
+                    continue
+        results.append(
+            {"title": item["name"], "snippet": snippet, "tags": own_tags, "record_id": item["path"]}
+        )
+    return results
 
 
 def _get_router():
@@ -81,6 +113,9 @@ MODULE = ModuleManifest(
     ],
     read_only_agent_tools=["list_notes", "read_note"],
     owned_block_types=["note_embed"],
+    owned_search_providers=[
+        SearchProviderSpec(key="notes", label="Notes", resolve=_search_notes),
+    ],
     migrations=[
         (
             "notes:m026_backfill_notes_installed_from_existing_data",

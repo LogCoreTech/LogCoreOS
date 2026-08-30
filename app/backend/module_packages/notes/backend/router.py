@@ -67,6 +67,11 @@ class ArchiveRequest(BaseModel):
     archived: bool = True
 
 
+class TagsRequest(BaseModel):
+    path: str = Field(..., min_length=1, max_length=500)
+    tags: list[str] = Field(default=[])
+
+
 def _resolve(current_user: dict, workspace: str, path: str, need: str):
     """Return the store_user for a path the viewer can reach at >= `need`
     access (read|contribute|edit), or 404/403."""
@@ -247,6 +252,21 @@ def set_archived(
     store_user = _resolve(current_user, workspace, req.path, "edit")
     notes_service.set_archived(store_user, workspace, req.path, req.archived)
     return {"ok": True}
+
+
+@router.put("/tags")
+def set_note_tags(
+    req: TagsRequest,
+    current_user: dict = Depends(_require_notes),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_write_limit),
+):
+    """Purely organizational, same access bar as content edits (contribute,
+    not edit) — tagging a shared note is closer to editing its content than
+    to the structural edit-level actions (move/delete/reshare) below."""
+    store_user = _resolve(current_user, workspace, req.path, "contribute")
+    tags = notes_service.set_note_tags(store_user, workspace, req.path, req.tags)
+    return {"tags": tags}
 
 
 # ── Sharing ────────────────────────────────────────────────────────────────────

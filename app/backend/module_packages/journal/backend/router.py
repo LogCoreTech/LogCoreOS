@@ -28,6 +28,10 @@ class EntryUpsert(BaseModel):
     content: str = Field(..., max_length=_MAX_CONTENT)
 
 
+class EntryTagsUpdate(BaseModel):
+    tags: list[str] = Field(default=[])
+
+
 @router.get("")
 def list_entries(
     current_user: dict = Depends(_require_journal),
@@ -60,6 +64,19 @@ def upsert_entry(
         return journal_service.upsert_entry(current_user["name"], date, req.content, workspace)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/{date}/tags")
+def set_entry_tags(
+    date: str,
+    req: EntryTagsUpdate,
+    current_user: dict = Depends(_require_journal),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_write_limit),
+):
+    _check_date(date)
+    tags = journal_service.set_entry_tags(current_user["name"], date, req.tags, workspace)
+    return {"tags": tags}
 
 
 @router.delete("/{date}")

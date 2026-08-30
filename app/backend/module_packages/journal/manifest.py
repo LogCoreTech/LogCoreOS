@@ -3,7 +3,30 @@ contract and docs/MEMORY.md's 2026-08-24 entry for the full design."""
 
 from pathlib import Path
 
-from module_registry import ModuleManifest
+from module_registry import ModuleManifest, SearchProviderSpec, search_match, search_snippet
+
+
+def _search_journal(query: str, tags: list[str], user: dict, workspace: str) -> list[dict]:
+    """Searches entry content (via search_snippet), not just the date —
+    dates aren't meaningfully "searchable" text the way a title is."""
+    from module_packages.journal.backend import service as journal_service
+
+    results = []
+    q = query.strip()
+    for entry in journal_service.list_entries(user["name"], workspace):
+        own_tags = entry.get("tags") or []
+        if tags and not search_match("", tags, "", own_tags):
+            continue
+        snippet = None
+        if q:
+            full = journal_service.get_entry(user["name"], entry["date"], workspace)
+            snippet = search_snippet((full or {}).get("content") or "", q)
+            if snippet is None:
+                continue
+        results.append(
+            {"title": entry["date"], "snippet": snippet or entry.get("preview"), "tags": own_tags, "record_id": entry["date"]}
+        )
+    return results
 
 
 def _get_router():
@@ -76,6 +99,9 @@ MODULE = ModuleManifest(
     owned_agent_tools=["read_journal_entry", "write_journal_entry", "list_journal_entries"],
     read_only_agent_tools=["read_journal_entry", "list_journal_entries"],
     owned_block_types=["journal_entry"],
+    owned_search_providers=[
+        SearchProviderSpec(key="journal", label="Journal", resolve=_search_journal),
+    ],
     migrations=[("journal:m015_backfill_journal_installed_from_existing_data", m015_backfill_journal_installed_from_existing_data)],
     on_install=_on_install,
     on_new_user=_on_new_user,

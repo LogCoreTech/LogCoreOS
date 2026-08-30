@@ -7,5 +7,6 @@ export const journal = {
   list:   ()                => get('/journal'),
   get:    (date)            => get(`/journal/${date}`),
   upsert: (date, content)   => put(`/journal/${date}`, { content }),
+  setTags: (date, tags)     => put(`/journal/${date}/tags`, { tags }),
   remove: (date)            => del(`/journal/${date}`),
 }
