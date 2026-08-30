@@ -11,6 +11,28 @@ function _urlBase64ToUint8Array(base64String) {
   return new Uint8Array([...raw].map(c => c.charCodeAt(0)))
 }
 
+// Best-effort human label for "which device is this" in the device list —
+// not a full UA-parsing library, just enough to tell a phone from a laptop
+// and which browser, since the push subscription itself has no readable name.
+function _deviceLabel() {
+  const ua = navigator.userAgent
+  let os = 'Unknown device'
+  if (/iPhone/.test(ua)) os = 'iPhone'
+  else if (/iPad/.test(ua)) os = 'iPad'
+  else if (/Android/.test(ua)) os = 'Android'
+  else if (/Mac OS X/.test(ua)) os = 'Mac'
+  else if (/Windows/.test(ua)) os = 'Windows'
+  else if (/Linux/.test(ua)) os = 'Linux'
+  let browser = ''
+  if (/Edg\//.test(ua)) browser = 'Edge'
+  else if (/CriOS\//.test(ua)) browser = 'Chrome'
+  else if (/Chrome\//.test(ua)) browser = 'Chrome'
+  else if (/FxiOS\//.test(ua)) browser = 'Firefox'
+  else if (/Firefox\//.test(ua)) browser = 'Firefox'
+  else if (/Safari\//.test(ua)) browser = 'Safari'
+  return browser ? `${os} · ${browser}` : os
+}
+
 export default function Notifications() {
   const [ntfyChannel, setNtfyChannel] = useState('')
   const [channelRotatedAt, setChannelRotatedAt] = useState(null)
@@ -21,10 +43,20 @@ export default function Notifications() {
   const [pushStatus, setPushStatus] = useState('unknown')
   const [pushLoading, setPushLoading] = useState(false)
   const [pushMsg, setPushMsg] = useState('')
+  const [devices, setDevices] = useState([])
+  const [currentEndpoint, setCurrentEndpoint] = useState(null)
+  const [removingId, setRemovingId] = useState(null)
+  const [editingId, setEditingId] = useState(null)
+  const [editingLabel, setEditingLabel] = useState('')
+  const [savingRename, setSavingRename] = useState(false)
 
   const [sugConfig, setSugConfig] = useState(null)
   const [sugRunning, setSugRunning] = useState({})
   const [sugFlash, setSugFlash] = useState({})
+
+  function loadDevices() {
+    pushApi.devices().then(res => setDevices(res.devices || [])).catch(() => {})
+  }
 
   useEffect(() => {
     authApi.me().then(me => {
@@ -39,7 +71,9 @@ export default function Notifications() {
         reg.pushManager.getSubscription()
       ).then(sub => {
         setPushStatus(sub ? 'subscribed' : 'unsubscribed')
+        setCurrentEndpoint(sub ? sub.endpoint : null)
       }).catch(() => setPushStatus('unsubscribed'))
+      loadDevices()
     }
   }, [])
 
@@ -75,9 +109,11 @@ export default function Notifications() {
         userVisibleOnly: true,
         applicationServerKey: _urlBase64ToUint8Array(publicKey),
       })
-      await pushApi.subscribe(JSON.parse(JSON.stringify(sub)))
+      await pushApi.subscribe({ ...JSON.parse(JSON.stringify(sub)), label: _deviceLabel() })
       setPushStatus('subscribed')
-      setPushMsg('Push notifications enabled!')
+      setCurrentEndpoint(sub.endpoint)
+      setPushMsg('Push notifications enabled on this device!')
+      loadDevices()
     } catch (e) {
       setPushMsg(e.message || 'Failed to enable push notifications')
     } finally {
@@ -91,9 +127,11 @@ export default function Notifications() {
       const reg = await navigator.serviceWorker.ready
       const sub = await reg.pushManager.getSubscription()
       if (sub) await sub.unsubscribe()
-      await pushApi.unsubscribe()
+      await pushApi.unsubscribe(sub ? sub.endpoint : currentEndpoint)
       setPushStatus('unsubscribed')
-      setPushMsg('Push notifications disabled.')
+      setCurrentEndpoint(null)
+      setPushMsg('Push notifications disabled on this device.')
+      loadDevices()
     } catch (e) {
       setPushMsg(e.message || 'Failed to disable notifications')
     } finally {
@@ -105,11 +143,43 @@ export default function Notifications() {
     setPushLoading(true)
     try {
       await pushApi.test()
-      setPushMsg('Test notification sent!')
+      setPushMsg('Test notification sent to every enabled device!')
     } catch (e) {
       setPushMsg(e.message || 'Failed to send test')
     } finally {
       setPushLoading(false)
+    }
+  }
+
+  async function removeDevice(id) {
+    setRemovingId(id)
+    try {
+      await pushApi.removeDevice(id)
+      setDevices(prev => prev.filter(d => d.id !== id))
+    } catch (e) {
+      setPushMsg(e.message || 'Failed to remove device')
+    } finally {
+      setRemovingId(null)
+    }
+  }
+
+  function startRename(d) {
+    setEditingId(d.id)
+    setEditingLabel(d.label)
+  }
+
+  async function saveRename(id) {
+    const label = editingLabel.trim()
+    if (!label) { setEditingId(null); return }
+    setSavingRename(true)
+    try {
+      await pushApi.renameDevice(id, label)
+      setDevices(prev => prev.map(d => d.id === id ? { ...d, label } : d))
+      setEditingId(null)
+    } catch (e) {
+      setPushMsg(e.message || 'Failed to rename device')
+    } finally {
+      setSavingRename(false)
     }
   }
 
@@ -208,7 +278,7 @@ export default function Notifications() {
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <div className={`w-2 h-2 rounded-full ${pushStatus === 'subscribed' ? 'bg-green-500' : 'bg-charcoal-300'}`} />
-              <span className="text-sm">{pushStatus === 'subscribed' ? 'Subscribed' : 'Not subscribed'}</span>
+              <span className="text-sm">{pushStatus === 'subscribed' ? 'Subscribed on this device' : 'Not subscribed on this device'}</span>
             </div>
             <div className="flex flex-wrap gap-2">
               {pushStatus !== 'subscribed' ? (
@@ -221,12 +291,83 @@ export default function Notifications() {
                     {pushLoading ? '…' : 'Send Test'}
                   </button>
                   <button onClick={unsubscribePush} disabled={pushLoading} className="text-sm text-red-500 hover:text-red-600 font-medium disabled:opacity-50">
-                    Disable
+                    Disable on this device
                   </button>
                 </>
               )}
             </div>
             {pushMsg && <p className="text-xs text-charcoal-500">{pushMsg}</p>}
+
+            {devices.length > 0 && (
+              <div className="pt-2 border-t border-charcoal-200 dark:border-charcoal-700 space-y-2">
+                <p className="text-xs font-medium text-charcoal-500 dark:text-charcoal-400">
+                  Devices with push enabled ({devices.length})
+                </p>
+                {devices.map(d => (
+                  <div key={d.id} className="flex items-center justify-between gap-2 text-sm">
+                    {editingId === d.id ? (
+                      <div className="flex items-center gap-1 flex-1 min-w-0">
+                        <input
+                          type="text"
+                          value={editingLabel}
+                          onChange={e => setEditingLabel(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') saveRename(d.id)
+                            if (e.key === 'Escape') setEditingId(null)
+                          }}
+                          autoFocus
+                          maxLength={100}
+                          className="input text-sm py-1 px-2 flex-1 min-w-0"
+                        />
+                        <button
+                          onClick={() => saveRename(d.id)}
+                          disabled={savingRename}
+                          className="text-xs text-orange-500 hover:text-orange-600 font-medium disabled:opacity-50 shrink-0"
+                        >
+                          {savingRename ? '…' : 'Save'}
+                        </button>
+                        <button
+                          onClick={() => setEditingId(null)}
+                          className="text-xs text-charcoal-400 hover:text-charcoal-500 shrink-0"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="min-w-0">
+                          <span className="truncate">{d.label}</span>
+                          {d.created_at && (
+                            <span className="text-xs text-charcoal-400 dark:text-charcoal-500 ml-2">
+                              added {new Date(d.created_at).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => startRename(d)}
+                            className="text-xs text-charcoal-500 hover:text-orange-500 font-medium"
+                          >
+                            Rename
+                          </button>
+                          <button
+                            onClick={() => removeDevice(d.id)}
+                            disabled={removingId === d.id}
+                            className="text-xs text-red-500 hover:text-red-600 font-medium disabled:opacity-50"
+                          >
+                            {removingId === d.id ? '…' : 'Remove'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+                <p className="text-xs text-charcoal-400 dark:text-charcoal-500">
+                  Test notifications go to every device in this list at once. Remove a device you
+                  no longer have — it won&apos;t disable notifications on the others.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>

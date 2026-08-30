@@ -61,7 +61,7 @@
       "blurb": "LogCore reaches you through an in-app inbox (the bell), self-hosted push via ntfy, and web push on your devices.",
       "howto": [
         "Click the bell to see your notification inbox; actionable items (like share requests) have Accept/Decline right there.",
-        "Enable browser/web push in Settings → Notifications to get alerts on your devices — this works from anywhere, including away from home.",
+        "Enable browser/web push in Settings → Notifications to get alerts on your devices — this works from anywhere, including away from home. Enable it separately on each phone, tablet, or computer you want alerts on; Settings → Notifications lists every device that's enabled it, with its own Remove button, so you can drop one you no longer have without affecting the rest.",
         "For phone notifications at home, install the ntfy app and subscribe to your channel (shown in Settings → Notifications).",
         "Rotate your ntfy channel anytime from Settings → Notifications if you think it's been shared or exposed; you'll need to re-subscribe in the ntfy app with the new channel afterward. LogCore also reminds you here once a channel is over 30 days old.",
         "Proactive digests (morning summary, overdue alerts, weekly review) are configurable in Settings.",

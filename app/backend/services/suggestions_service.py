@@ -221,11 +221,11 @@ def _deliver(
 ) -> None:
     """Send via all configured delivery channels."""
     from services.notification_service import send
-    from services.push_service import get_subscription, send_push
+    from services.push_service import get_subscriptions, send_push
 
     if "push" in delivery:
         send(channel=_ntfy_channel(user_name), title=title, message=body, priority="default")
-        if get_subscription(user_name):
+        if get_subscriptions(user_name):
             send_push(user_name, title, body, url=url)
     if "in_app" in delivery:
         add_notification(user_name, title, body, source, "in_app")
@@ -247,10 +247,10 @@ def notify_user(
     add_notification(user_name, title, body, source, "in_app", action=action)
     try:
         from services.notification_service import send
-        from services.push_service import get_subscription, send_push
+        from services.push_service import get_subscriptions, send_push
 
         send(channel=_ntfy_channel(user_name), title=title, message=body, priority="default")
-        if get_subscription(user_name):
+        if get_subscriptions(user_name):
             send_push(user_name, title, body, url=url)
     except Exception:  # push delivery must never break the write path
         pass

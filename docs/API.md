@@ -1200,15 +1200,28 @@ Router mounted at `/api/v1/contacts` (module id `contacts` — converted into `m
 Get the VAPID public key for web push subscription.
 
 ### `POST /push/subscribe`
-Register a push subscription.
+Register a push subscription for the current device. As of 2026-08-30, one account can hold more than one subscription at once (phone + laptop, say) — subscribing a new device no longer silently replaces an already-subscribed one; re-subscribing the *same* device (same `endpoint`) still replaces just that one entry. Capped at 10 devices per account (`400` past that — remove one first); a genuinely new `endpoint` must resolve to a public IP over `https://` or is rejected with `400` (SSRF guard, 2026-08-30 — see `docs/MEMORY.md`).
 
-**Body** — Web Push subscription object from the browser.
+**Body** — Web Push subscription object from the browser, plus an optional `label` (≤100 chars) — a client-guessed human-readable name (e.g. "iPhone · Safari") for that device, shown back via `GET /push/devices`.
 
 ### `DELETE /push/subscribe`
-Remove the current push subscription.
+Remove the subscription for **this** device only — the caller identifies it by its own `endpoint` (from the live browser subscription object), so other devices on the same account are unaffected. To remove a device that isn't the one making the request (an old phone you no longer have), use `DELETE /push/devices/{id}` instead.
+
+**Body** — `{endpoint}`.
+
+### `GET /push/devices`
+List every device with push enabled for the current account. Returns `{devices: [{id, label, created_at}]}` — `id` is an opaque, stable per-subscription identifier (not the real push endpoint, which is a live sender-authenticated URL and never returned to the client after the initial subscribe).
+
+### `DELETE /push/devices/{id}`
+Remove one device's subscription by its opaque `id`, regardless of whether it's the device making the request. `404` if `id` doesn't match any current subscription for this account.
+
+### `PATCH /push/devices/{id}`
+Overwrite one device's own label (no browser exposes a device's real name/model to a web page, so a self-chosen label is the only way to tell devices apart). `404` if `id` doesn't match; `422` if the label is blank.
+
+**Body** — `{label}` (1-100 chars).
 
 ### `POST /push/test`
-Send a test push notification to the current user. As of 2026-08-15 the failure cases are distinguishable instead of a collapsed generic error: `400` "No push subscription on file — enable push notifications in Settings first" when the caller has never subscribed, `502` "...push service rejected or failed the send" when a subscription exists but the actual send failed (e.g. `VAPID_SUBJECT` still the default placeholder, an expired subscription, or a network error to the push endpoint).
+Send a test push notification to **every** device currently subscribed for the current user (as of 2026-08-30 — previously just the one stored subscription); one device failing doesn't block delivery to the others. As of 2026-08-15 the failure cases are distinguishable instead of a collapsed generic error: `400` "No push subscription on file — enable push notifications in Settings first" when the caller has never subscribed on any device, `502` "...push service rejected or failed the send on every device" when at least one subscription exists but every send failed (e.g. `VAPID_SUBJECT` still the default placeholder, every subscription expired, or a network error to the push endpoint).
 
 ---
 

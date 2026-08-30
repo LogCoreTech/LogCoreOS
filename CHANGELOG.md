@@ -8,6 +8,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Push notifications now work on multiple devices at once.** Enable it separately on your phone, tablet, and computer — a test or a real notification goes to all of them, and Settings → Notifications lists every enabled device with its own Rename and Remove buttons, so dropping an old device you no longer have doesn't touch the others. Previously, enabling push on a second device silently stole notifications from the first with no warning. Capped at 10 devices per account.
+
+### Fixed
+
+- **Push notifications now actually decrypt on the receiving device.** The Web Push payload encryption had a real key-derivation bug since it was first built — the push service itself always reported success (it only relays encrypted bytes, never decrypts them), but no device could ever actually decrypt and display the notification. Fixed the RFC 8291 key derivation to match spec.
+- `VAPID_SUBJECT` (the contact address a push provider uses if it needs to flag a delivery problem) now defaults automatically to the domain already configured in Admin → Hosting, instead of requiring a manual `docker/.env` edit and restart.
+
+### Security
+
+- A push subscription's `endpoint` is now validated (must resolve to a public address over `https://`) before it's accepted, closing a server-side request forgery path where any authenticated account could point notification delivery at an internal-only address and have the server make outbound requests to it on every notification.
+
 ## [0.7.0] — 2026-08-30
 
 ### Added

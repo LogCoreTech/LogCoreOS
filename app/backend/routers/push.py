@@ -5,9 +5,12 @@ from pydantic import BaseModel, Field
 
 from routers.auth import get_current_user
 from services.push_service import (
+    delete_device,
     delete_subscription,
-    get_subscription,
+    get_subscriptions,
     get_vapid_public_key,
+    list_devices,
+    rename_device,
     save_subscription,
     send_push,
 )
@@ -25,6 +28,15 @@ class SubscriptionKeys(BaseModel):
 class PushSubscription(BaseModel):
     endpoint: str = Field(..., max_length=2048)
     keys: SubscriptionKeys
+    label: str | None = Field(default=None, max_length=100)
+
+
+class UnsubscribeRequest(BaseModel):
+    endpoint: str = Field(..., max_length=2048)
+
+
+class RenameDeviceRequest(BaseModel):
+    label: str = Field(..., min_length=1, max_length=100)
 
 
 class TestPushRequest(BaseModel):
@@ -44,13 +56,52 @@ def subscribe(
     current_user: dict = Depends(get_current_user),
     _rl: None = Depends(_push_limit),
 ):
-    save_subscription(current_user["name"], sub.model_dump())
+    data = sub.model_dump()
+    label = data.pop("label", None)
+    try:
+        save_subscription(current_user["name"], data, label=label)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     return {"ok": True}
 
 
 @router.delete("/subscribe")
-def unsubscribe(current_user: dict = Depends(get_current_user)):
-    delete_subscription(current_user["name"])
+def unsubscribe(req: UnsubscribeRequest, current_user: dict = Depends(get_current_user)):
+    """Unsubscribe THIS device — the caller already knows its own endpoint
+    from the live browser subscription object. To remove a different device,
+    use DELETE /push/devices/{id} instead."""
+    delete_subscription(current_user["name"], endpoint=req.endpoint)
+    return {"ok": True}
+
+
+@router.get("/devices")
+def devices(current_user: dict = Depends(get_current_user)):
+    """Every device with push enabled for this account — no raw endpoint/keys,
+    just enough to tell devices apart and remove one that isn't the device
+    making this request (an old phone you no longer have, say)."""
+    return {"devices": list_devices(current_user["name"])}
+
+
+@router.delete("/devices/{device_id}")
+def remove_device(device_id: str, current_user: dict = Depends(get_current_user)):
+    if not delete_device(current_user["name"], device_id):
+        raise HTTPException(status_code=404, detail="No matching device subscription.")
+    return {"ok": True}
+
+
+@router.patch("/devices/{device_id}")
+def rename(
+    device_id: str, req: RenameDeviceRequest, current_user: dict = Depends(get_current_user)
+):
+    """Overwrite one device's label. No browser exposes a device's real name
+    or model to a web page — a self-chosen label is the only way to tell two
+    devices apart in the list, so this is the fix for 'every device says
+    Unknown device', not a cosmetic nicety."""
+    label = req.label.strip()
+    if not label:
+        raise HTTPException(status_code=422, detail="Label cannot be blank.")
+    if not rename_device(current_user["name"], device_id, label):
+        raise HTTPException(status_code=404, detail="No matching device subscription.")
     return {"ok": True}
 
 
@@ -65,7 +116,7 @@ def test_push(
     # failed" — these used to collapse into one generic message, making the
     # real cause (VAPID subject, an expired subscription, a push-service
     # rejection) invisible without shell access to the server logs.
-    if get_subscription(current_user["name"]) is None:
+    if not get_subscriptions(current_user["name"]):
         raise HTTPException(
             status_code=400,
             detail='No push subscription on file for this account — click "Enable Push '
@@ -76,6 +127,6 @@ def test_push(
         raise HTTPException(
             status_code=502,
             detail="A subscription exists but the push service rejected or failed the "
-            "send. Check the server logs (services.push.*) for the exact reason.",
+            "send on every device. Check the server logs (services.push.*) for the exact reason.",
         )
     return {"ok": True}

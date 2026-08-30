@@ -212,10 +212,13 @@ export const presence = {
 }
 
 export const push = {
-  vapidKey:    ()       => get('/push/vapid-key'),
-  subscribe:   (sub)    => post('/push/subscribe', sub),
-  unsubscribe: ()       => request('DELETE', '/push/subscribe'),
-  test:        ()       => post('/push/test', {}),
+  vapidKey:     ()           => get('/push/vapid-key'),
+  subscribe:    (sub)        => post('/push/subscribe', sub),
+  unsubscribe:  (endpoint)   => request('DELETE', '/push/subscribe', { endpoint }),
+  test:         ()           => post('/push/test', {}),
+  devices:      ()           => get('/push/devices'),
+  removeDevice: (id)         => request('DELETE', `/push/devices/${id}`),
+  renameDevice: (id, label)  => request('PATCH', `/push/devices/${id}`, { label }),
 }
 
 export const suggestions = {
