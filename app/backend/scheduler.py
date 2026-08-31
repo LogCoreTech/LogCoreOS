@@ -366,6 +366,18 @@ def start():
     from datetime import datetime as _dt
     from datetime import timedelta as _td
 
+    # Boot-relative "date" jobs below all anchor on _dt.now(scheduler.timezone) —
+    # NOT naive _dt.now(). Real bug found 2026-08-31 (owner report: boot-time jobs
+    # never actually fired): a "date" trigger passed as the string alias "date" gets
+    # scheduler.timezone auto-injected by APScheduler's own _create_trigger() (see
+    # _cron()'s docstring above for the same mechanism). If run_date is a NAIVE
+    # datetime built from a container whose system clock reads UTC wall-clock values
+    # (the normal case — Docker images default to UTC), attaching the "America/
+    # Chicago" label to those UTC-valued numbers doesn't convert them, it just
+    # mislabels them — producing a run_date several hours further in the future than
+    # intended (confirmed directly: a job meant to fire in 3 seconds computed a
+    # 18000-second, i.e. 5-hour, wait instead). datetime.now(scheduler.timezone)
+    # computes a genuinely correct current moment in that zone instead.
     scheduler.add_job(job_recurring_processor, _cron(hour=0, minute=1), id="recurring")
     # Also run once shortly after boot — the nightly cron above only self-heals a
     # stale/overdue recurring task once per local day, so a task that went stale
@@ -375,7 +387,10 @@ def start():
     # this can't double-process anything even if it lands right next to the nightly
     # run. Same boot-then-periodic shape as workflow_sync/simplefin/n8n_reconcile below.
     scheduler.add_job(
-        job_recurring_processor, "date", run_date=_dt.now() + _td(seconds=15), id="recurring_boot"
+        job_recurring_processor,
+        "date",
+        run_date=_dt.now(scheduler.timezone) + _td(seconds=15),
+        id="recurring_boot",
     )
     scheduler.add_job(
         job_morning_digest, _cron(hour=settings.morning_digest_hour, minute=0), id="morning"
@@ -404,26 +419,38 @@ def start():
     scheduler.add_job(job_cleanup_revoked_jtis, _cron(hour=3, minute=0), id="jti_cleanup")
     # Workflow sync: 90s after boot (wait for n8n), then every 6 hours
     scheduler.add_job(
-        job_workflow_sync, "date", run_date=_dt.now() + _td(seconds=90), id="workflow_sync_boot"
+        job_workflow_sync,
+        "date",
+        run_date=_dt.now(scheduler.timezone) + _td(seconds=90),
+        id="workflow_sync_boot",
     )
     scheduler.add_job(job_workflow_sync, _interval(hours=6), id="workflow_sync_periodic")
     scheduler.add_job(job_update_check, _cron(hour=12, minute=0), id="update_check")
     # SimpleFIN bank sync: 2 min after boot, then every 12h (bridge data refreshes ~daily)
     scheduler.add_job(
-        job_simplefin_sync, "date", run_date=_dt.now() + _td(seconds=120), id="simplefin_boot"
+        job_simplefin_sync,
+        "date",
+        run_date=_dt.now(scheduler.timezone) + _td(seconds=120),
+        id="simplefin_boot",
     )
     scheduler.add_job(job_simplefin_sync, _interval(hours=12), id="simplefin_periodic")
     scheduler.add_job(job_finance_nightly, _cron(hour=7, minute=30), id="finance_nightly")
     scheduler.add_job(job_contacts_followups, _cron(hour=8, minute=0), id="contacts_followups")
     scheduler.add_job(job_channel_rotation_check, _cron(hour=9, minute=30), id="channel_rotation")
     scheduler.add_job(
-        job_n8n_reconcile, "date", run_date=_dt.now() + _td(seconds=100), id="n8n_reconcile_boot"
+        job_n8n_reconcile,
+        "date",
+        run_date=_dt.now(scheduler.timezone) + _td(seconds=100),
+        id="n8n_reconcile_boot",
     )
     # What's-New catch-up: update.sh stamps installed_version.json only after the
     # restarted app passes its health check, so the in-lifespan announce misses
     # fresh updates. One-shot re-check well after the stamp has landed.
     scheduler.add_job(
-        job_whats_new_recheck, "date", run_date=_dt.now() + _td(seconds=180), id="whats_new_boot"
+        job_whats_new_recheck,
+        "date",
+        run_date=_dt.now(scheduler.timezone) + _td(seconds=180),
+        id="whats_new_boot",
     )
     scheduler.start()
     _load_custom_jobs()

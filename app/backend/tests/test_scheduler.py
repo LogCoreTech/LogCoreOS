@@ -85,7 +85,7 @@ def test_every_start_job_trigger_uses_scheduler_timezone(monkeypatch):
     registered = []
 
     def _spy_add_job(func, trigger=None, **kwargs):
-        registered.append((kwargs.get("id"), trigger))
+        registered.append((kwargs.get("id"), trigger, kwargs.get("run_date")))
         return None
 
     monkeypatch.setattr(scheduler_module.scheduler, "add_job", _spy_add_job)
@@ -96,14 +96,33 @@ def test_every_start_job_trigger_uses_scheduler_timezone(monkeypatch):
 
     cron_or_interval = [
         (job_id, trig)
-        for job_id, trig in registered
+        for job_id, trig, _ in registered
         if hasattr(trig, "timezone")  # excludes the 5 boot-time "date" triggers
     ]
     assert cron_or_interval, "expected at least one cron/interval job to be registered"
     for job_id, trig in cron_or_interval:
         assert trig.timezone == scheduler.timezone, f"job {job_id!r} has the wrong timezone"
 
-    job_ids = [job_id for job_id, _ in registered]
+    # The 5 boot-relative "date" jobs must anchor on a timezone-AWARE now, not naive
+    # datetime.now() — a naive value built from a container whose system clock reads
+    # UTC wall-clock numbers gets mislabeled as scheduler.timezone by APScheduler's own
+    # string-alias trigger construction (not converted), producing a run_date hours in
+    # the future. Real bug, confirmed directly against a live container 2026-08-31: a
+    # job meant to fire in 3 seconds computed an 18000-second (5-hour) wait instead.
+    date_jobs = [(job_id, run_date) for job_id, trig, run_date in registered if trig == "date"]
+    boot_job_ids = {
+        "recurring_boot",
+        "workflow_sync_boot",
+        "simplefin_boot",
+        "n8n_reconcile_boot",
+        "whats_new_boot",
+    }
+    found_boot_ids = {job_id for job_id, _ in date_jobs}
+    assert boot_job_ids <= found_boot_ids, f"missing boot jobs: {boot_job_ids - found_boot_ids}"
+    for job_id, run_date in date_jobs:
+        assert run_date.tzinfo is not None, f"job {job_id!r}'s run_date must be timezone-aware"
+
+    job_ids = [job_id for job_id, _, _ in registered]
     assert "recurring" in job_ids, "expected the nightly recurring-processor cron job"
     assert "recurring_boot" in job_ids, (
         "expected a boot-time one-shot recurring-processor run — otherwise a task that "

@@ -99,6 +99,45 @@ def test_process_user_breaks_streak_on_missed_task(rec_brain):
     assert tasks[0]["streak_count"] == 0
 
 
+def test_process_user_missed_daily_task_advances_to_today_not_tomorrow(rec_brain):
+    # Real bug (2026-08-31, owner-reported: "it skipped today and went to tomorrow"):
+    # a daily task due yesterday must land back on TODAY, not get pushed to tomorrow —
+    # today itself hasn't happened yet, so it's still a valid occurrence to complete.
+    today = auth_service.today_for_user(REC_USER)
+    yesterday = (today - timedelta(days=1)).isoformat()
+    _seed_recurring(
+        rec_brain,
+        [
+            _task_row("Daily", "pending", yesterday, streak=3),
+        ],
+    )
+    process_user(REC_USER)
+    tasks = read_json(tasks_path(REC_USER))["tasks"]
+    assert tasks[0]["due_date"] == today.isoformat()
+
+
+def test_process_user_missed_weekly_task_on_its_own_weekday_lands_today(rec_brain):
+    # Same bug, weekly case: if today IS the task's own weekday and it was missed a
+    # week ago, the fix must not skip past today to next week.
+    today = auth_service.today_for_user(REC_USER)
+    weekday_code = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"][today.weekday()]
+    a_week_ago = (today - timedelta(weeks=1)).isoformat()
+    _seed_recurring(
+        rec_brain,
+        [
+            _task_row(
+                "Weekly",
+                "pending",
+                a_week_ago,
+                recurrence={"freq": "weekly", "interval": 1, "weekdays": [weekday_code]},
+            ),
+        ],
+    )
+    process_user(REC_USER)
+    tasks = read_json(tasks_path(REC_USER))["tasks"]
+    assert tasks[0]["due_date"] == today.isoformat()
+
+
 def test_process_user_logs_missed_occurrence(rec_brain):
     past_due = "2020-01-01"
     _seed_recurring(

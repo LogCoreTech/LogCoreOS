@@ -60,11 +60,19 @@ def process_user(user_name: str) -> dict:
                 advanced += 1
             elif task.get("status") == "pending" and due < today:
                 # The occurrence due on `due` was never completed — log it as missed
-                # before advancing, then advance from *today* (not the stale `due`)
-                # so this branch doesn't re-trigger every night.
+                # before advancing. Real bug fixed 2026-08-31 (owner-reported: "it
+                # skipped today and went to tomorrow"): this used to call
+                # next_occurrence(today, rule), which finds the occurrence STRICTLY
+                # AFTER its anchor — correct for chaining from a real prior occurrence,
+                # but today hasn't happened yet, so for a daily task that unconditionally
+                # skipped straight to tomorrow even though today itself is a perfectly
+                # valid occurrence; for a weekly task landing on today's own weekday it
+                # did the same thing. first_occurrence_on_or_after uses inclusive
+                # on-or-after semantics instead, which is what "the next time this
+                # should happen, at the earliest today" actually means.
                 task["completion_log"] = append_log_entry(task.get("completion_log"), due, "missed")
                 task["streak_count"] = 0
-                task["due_date"] = next_occurrence(today, rule)
+                task["due_date"] = first_occurrence_on_or_after(today, rule)
                 broken += 1
         except (ValueError, KeyError, TypeError):
             logger.exception(
