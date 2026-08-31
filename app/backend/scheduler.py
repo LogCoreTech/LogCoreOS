@@ -367,6 +367,16 @@ def start():
     from datetime import timedelta as _td
 
     scheduler.add_job(job_recurring_processor, _cron(hour=0, minute=1), id="recurring")
+    # Also run once shortly after boot — the nightly cron above only self-heals a
+    # stale/overdue recurring task once per local day, so a task that went stale
+    # while the app was down (or running old/buggy scheduling code) would otherwise
+    # sit wrong for up to 24h after a restart before the next midnight run touches
+    # it. process_user() is idempotent (a task with nothing stale is a no-op), so
+    # this can't double-process anything even if it lands right next to the nightly
+    # run. Same boot-then-periodic shape as workflow_sync/simplefin/n8n_reconcile below.
+    scheduler.add_job(
+        job_recurring_processor, "date", run_date=_dt.now() + _td(seconds=15), id="recurring_boot"
+    )
     scheduler.add_job(
         job_morning_digest, _cron(hour=settings.morning_digest_hour, minute=0), id="morning"
     )

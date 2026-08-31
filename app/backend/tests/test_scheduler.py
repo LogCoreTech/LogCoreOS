@@ -97,8 +97,16 @@ def test_every_start_job_trigger_uses_scheduler_timezone(monkeypatch):
     cron_or_interval = [
         (job_id, trig)
         for job_id, trig in registered
-        if hasattr(trig, "timezone")  # excludes the 4 boot-time "date" triggers
+        if hasattr(trig, "timezone")  # excludes the 5 boot-time "date" triggers
     ]
     assert cron_or_interval, "expected at least one cron/interval job to be registered"
     for job_id, trig in cron_or_interval:
         assert trig.timezone == scheduler.timezone, f"job {job_id!r} has the wrong timezone"
+
+    job_ids = [job_id for job_id, _ in registered]
+    assert "recurring" in job_ids, "expected the nightly recurring-processor cron job"
+    assert "recurring_boot" in job_ids, (
+        "expected a boot-time one-shot recurring-processor run — otherwise a task that "
+        "went stale while the app was down (or on old scheduling code) sits wrong for up "
+        "to 24h after a restart before the next midnight run touches it"
+    )

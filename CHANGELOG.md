@@ -19,6 +19,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Push notifications now actually decrypt on the receiving device.** The Web Push payload encryption had a real key-derivation bug since it was first built — the push service itself always reported success (it only relays encrypted bytes, never decrypts them), but no device could ever actually decrypt and display the notification. Fixed the RFC 8291 key derivation to match spec.
 - `VAPID_SUBJECT` (the contact address a push provider uses if it needs to flag a delivery problem) now defaults automatically to the domain already configured in Admin → Hosting, instead of requiring a manual `docker/.env` edit and restart.
 - **Every scheduled job (morning digest, overdue alerts, weekly review, goal checks, and any custom AI-suggestion schedule) now actually fires at the configured local time.** They were silently running in the server's own system timezone instead of the configured `SCHEDULER_TIMEZONE` — invisible on a server already set to the right zone, but a several-hour miss anywhere else (the usual case: containers default to UTC).
+- **A restart no longer waits until midnight to fix an overdue recurring task.** The nightly job that catches a recurring task whose due date slipped (and logs it as missed) now also runs once right after the app starts, instead of only at 00:01 local time — so recovering from a restart (or from the timezone bug above) doesn't leave tasks showing the wrong date/status for up to a day.
 
 ### Security
 
