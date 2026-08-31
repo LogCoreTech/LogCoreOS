@@ -2,16 +2,24 @@ import { useState, useEffect } from 'react'
 import { tasks as tasksApi } from '../module_packages/tasks/frontend/api'
 import { priorities as prioritiesApi, tags as tagsApi } from '../lib/api'
 import TagInput from './TagInput'
+import RecurrencePicker, { describeRecurrence } from './RecurrencePicker'
+import TaskView from './TaskView'
 
 const PRIORITIES = ['High', 'Medium', 'Low']
 const TYPES = ['todo', 'recurring', 'appointment']
-const RECURRENCES = ['daily', 'weekly', 'monthly']
 
 export default function TaskModal({ task, categories: propCategories, defaultType, saveApi, users, assets, defaultAssetId, defaultGoalId, onClose, onSave, onDelete }) {
   const editing = !!task
   // Assigned pool tasks (household/team) live in another store — open them view-only.
   // Tasks page tags them with `_source`; Calendar tags them with `_household`.
   const readOnly = editing && (task._source === 'household' || task._source === 'team' || task._household === true)
+  // Read-first: an existing task opens in view mode (more room to show a
+  // recurring task's real history — see TaskView), same pattern Assets/Goals
+  // already use (AssetModal/AssetView, GoalModal's own `editing` state). A
+  // readOnly task always starts (and stays) in view mode simply because
+  // TaskView never renders its Edit button when canEdit is false — no
+  // separate mode-forcing guard needed.
+  const [mode, setMode] = useState(editing ? 'view' : 'edit')
   const [categories, setCategories] = useState(propCategories || [])
   const [form, setForm] = useState({
     title:       task?.title       || '',
@@ -86,7 +94,7 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
         ...form,
         due_date:    form.due_date   || null,
         due_time:    (form.due_date && form.due_time) ? form.due_time : null,
-        recurrence:  form.type === 'recurring' ? (form.recurrence || 'daily') : null,
+        recurrence:  form.type === 'recurring' ? form.recurrence : null,
         notes:       form.notes      || null,
         assigned_to: form.assigned_to || null,
         asset_id:    form.asset_id   || null,
@@ -121,16 +129,37 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
     }
   }
 
+  // Cancel returns to the view for an existing task (matching
+  // AssetModal.jsx's own handleCancel exactly); a brand-new task has no
+  // view to return to, so it just closes.
+  function handleCancel() {
+    if (editing) setMode('view')
+    else onClose()
+  }
+
+  if (mode === 'view' && task) {
+    return (
+      <TaskView
+        task={task}
+        canEdit={!readOnly}
+        saveApi={saveApi}
+        onEdit={() => setMode('edit')}
+        onClose={onClose}
+        onDelete={onDelete ? handleDelete : undefined}
+        onSave={onSave}
+      />
+    )
+  }
+
   return (
     <div className="modal-overlay">
       <div className="modal-card p-5 max-w-sm">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold">{readOnly ? 'View Task' : editing ? 'Edit Task' : 'Add Task'}</h2>
+          <h2 className="font-semibold">{editing ? 'Edit Task' : 'Add Task'}</h2>
           <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
         </div>
 
         <form onSubmit={submit} className="space-y-4">
-          <fieldset disabled={readOnly} className="space-y-4 border-0 p-0 m-0 min-w-0 disabled:opacity-70">
           {/* Title */}
           <div>
             <label className="block text-sm font-medium mb-1">Task</label>
@@ -160,45 +189,65 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
             </div>
           </div>
 
-          {/* Type */}
+          {/* Type — editable only at creation; already excluded from
+              TaskUpdateBase server-side, so editing an existing task shows
+              it as static text instead of a control that would silently
+              no-op on save. */}
           <div>
             <label className="block text-sm font-medium mb-1">Type</label>
-            <div className="flex gap-1">
-              {TYPES.map(t => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => set('type', t)}
-                  className={`flex-1 py-1.5 rounded-md text-xs font-medium capitalize transition-colors ${
-                    form.type === t
-                      ? 'bg-orange-500 text-white'
-                      : 'bg-charcoal-100 dark:bg-charcoal-700 text-charcoal-600 dark:text-charcoal-300'
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
+            {editing ? (
+              <p className="input !bg-charcoal-50 dark:!bg-charcoal-800 text-charcoal-600 dark:text-charcoal-300 capitalize">
+                {form.type}
+              </p>
+            ) : (
+              <div className="flex gap-1">
+                {TYPES.map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => set('type', t)}
+                    className={`flex-1 py-1.5 rounded-md text-xs font-medium capitalize transition-colors ${
+                      form.type === t
+                        ? 'bg-orange-500 text-white'
+                        : 'bg-charcoal-100 dark:bg-charcoal-700 text-charcoal-600 dark:text-charcoal-300'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Recurrence (only if recurring) */}
+          {/* Recurrence — create-only server-side; an existing recurring
+              task's real pattern + history already shows in the task's own
+              view (TaskView/RecurrenceLog), so edit mode just notes it. */}
           {form.type === 'recurring' && (
             <div>
               <label className="block text-sm font-medium mb-1">Repeats</label>
-              <select
-                value={form.recurrence || 'daily'}
-                onChange={e => set('recurrence', e.target.value)}
-                className="input"
-              >
-                {RECURRENCES.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
+              {editing ? (
+                <p className="input !bg-charcoal-50 dark:!bg-charcoal-800 text-charcoal-600 dark:text-charcoal-300">
+                  {describeRecurrence(task.recurrence)} — set at creation, see the task view for history
+                </p>
+              ) : (
+                <RecurrencePicker
+                  value={form.recurrence}
+                  onChange={r => set('recurrence', r)}
+                  dueDate={form.due_date}
+                />
+              )}
             </div>
           )}
 
           {/* Due date + optional time */}
           <div>
             <label className="block text-sm font-medium mb-1">
-              Due Date <span className="text-charcoal-400 font-normal">(optional)</span>
+              Due Date{' '}
+              <span className="text-charcoal-400 font-normal">
+                {!editing && form.type === 'recurring' && !form.due_date
+                  ? '(starts from the pattern above if left blank)'
+                  : '(optional)'}
+              </span>
             </label>
             <div className="space-y-2">
               <input
@@ -304,27 +353,19 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
             </div>
           )}
 
-          </fieldset>
-
           {error && <p className="text-red-500 text-sm">{error}</p>}
 
           <div className="flex gap-2 pt-1">
-            {readOnly ? (
-              <button type="button" onClick={onClose} className="btn-ghost flex-1">Close</button>
-            ) : (
-              <>
-                {editing && onDelete && (
-                  <button type="button" onClick={handleDelete} disabled={loading}
-                    className="px-3 py-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                    Delete
-                  </button>
-                )}
-                <button type="button" onClick={onClose} className="btn-ghost flex-1">Cancel</button>
-                <button type="submit" disabled={loading} className="btn-primary flex-1">
-                  {loading ? 'Saving…' : editing ? 'Save Changes' : 'Add Task'}
-                </button>
-              </>
+            {editing && onDelete && (
+              <button type="button" onClick={handleDelete} disabled={loading}
+                className="px-3 py-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                Delete
+              </button>
             )}
+            <button type="button" onClick={handleCancel} className="btn-ghost flex-1">Cancel</button>
+            <button type="submit" disabled={loading} className="btn-primary flex-1">
+              {loading ? 'Saving…' : editing ? 'Save Changes' : 'Add Task'}
+            </button>
           </div>
         </form>
       </div>

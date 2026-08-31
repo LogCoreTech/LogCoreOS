@@ -107,7 +107,7 @@ Cross-reference: the per-user JSON write race (`task_service.py` has no read-mod
 - [ ] **Personal calendar task completion toggle** — tasks in the CalendarGrid day detail panel need a done/undo button
 - [ ] **Projects / chat system evolution** — ChatGPT/Claude-style Projects: named projects with custom context, per-project chat archives, optional agent usage
 - [ ] **Quick capture** — email-to-inbox (forward email → task/note), PWA share_target, quick-add hotkey; capture must take <2s
-- [ ] **Recurring-task upgrades** — rrule-based patterns + natural-language date parsing. Owner ask: a proper day-of-week/day-of-month/day-of-year picker on the recurrence UI, not just interval presets
+- [ ] **Natural-language date parsing** for quick task entry (e.g. "every 2nd Tuesday" typed as text auto-filling the picker). The rrule-style structured picker itself (day-of-week/day-of-month/day-of-year, interval-N) shipped 2026-08-30 — see CHANGELOG/docs/MEMORY.md — this item is now just the NL-parsing half
 - [ ] **Journal → insight loops** — weekly AI pattern detection (mood vs sleep etc.) beyond the existing weekly review
 - [ ] **Offline-first PWA sync** — local-first data + background sync + conflict resolution; structural advantage of file-based storage, but a big lift
 - [ ] **v1.0 trust stack — gates the Show HN post** — app-level 2FA, automated backups + one-click restore, audit logging, <10-min onboarding, real docs, test-coverage push; plugin API if feasible

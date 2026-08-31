@@ -338,7 +338,12 @@ def recurring_completion_rate(task: dict) -> float:
     if not log:
         return 0.0
     cutoff = (date.today() - timedelta(days=_COMPLETION_RATE_WINDOW_DAYS)).isoformat()
-    recent = sum(1 for e in log if e.get("date", "") >= cutoff)
+    # A missing "status" is a legacy entry from before missed-day logging existed —
+    # every entry logged before that point was always a completion, so it still
+    # counts (same missing-key-defaults-to-counting precedent as counts_toward_goal).
+    recent = sum(
+        1 for e in log if e.get("date", "") >= cutoff and e.get("status", "completed") != "missed"
+    )
     return max(0.0, min(100.0, recent * 100 / _COMPLETION_RATE_WINDOW_DAYS))
 
 

@@ -22,6 +22,44 @@ fixing it is out of scope for a pure relocation."""
 
 from services import priority_service, task_service
 
+# Mirrors routers/_task_models.py's RecurrenceRule — task_service.add_task() does zero
+# shape validation itself (pure passthrough), so a malformed AI-authored rule here is
+# only ever caught later by recurring_service.py's own per-task try/except, not by this
+# tool call. Kept as one shared dict so add_task's and create_tasks' schemas can't drift.
+_RECURRENCE_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Required when type='recurring'. Exactly one of month_day/month_week for "
+        "monthly/yearly; weekdays required for weekly; month required for yearly."
+    ),
+    "properties": {
+        "freq": {"type": "string", "enum": ["daily", "weekly", "monthly", "yearly"]},
+        "interval": {"type": "integer", "description": "Every N periods (default 1)"},
+        "weekdays": {
+            "type": "array",
+            "description": "Weekly only, e.g. ['MO','WE','FR']",
+            "items": {"type": "string", "enum": ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]},
+        },
+        "month_day": {
+            "type": "integer",
+            "description": "Monthly/yearly 'day N of month' mode; -1 = last day",
+        },
+        "month_week": {
+            "type": "object",
+            "description": "Monthly/yearly 'Nth weekday' mode, e.g. {ordinal:2, weekday:'TU'} = 2nd Tuesday",
+            "properties": {
+                "ordinal": {"type": "integer", "enum": [1, 2, 3, 4, -1]},
+                "weekday": {
+                    "type": "string",
+                    "enum": ["MO", "TU", "WE", "TH", "FR", "SA", "SU"],
+                },
+            },
+        },
+        "month": {"type": "integer", "description": "Yearly only, 1-12"},
+    },
+    "required": ["freq"],
+}
+
 TOOL_SCHEMAS = [
     {
         "name": "list_tasks",
@@ -41,7 +79,7 @@ TOOL_SCHEMAS = [
                 },
                 "priority": {"type": "string", "enum": ["High", "Medium", "Low"]},
                 "type": {"type": "string", "enum": ["todo", "recurring", "appointment"]},
-                "recurrence": {"type": "string", "enum": ["daily", "weekly", "monthly"]},
+                "recurrence": _RECURRENCE_SCHEMA,
                 "due_date": {"type": "string", "description": "Due date YYYY-MM-DD"},
                 "due_time": {"type": "string", "description": "Due time HH:MM (requires due_date)"},
                 "notes": {"type": "string"},
@@ -137,6 +175,7 @@ TOOL_SCHEMAS = [
                                 "type": "string",
                                 "enum": ["todo", "recurring", "appointment"],
                             },
+                            "recurrence": _RECURRENCE_SCHEMA,
                             "due_date": {"type": "string"},
                             "due_time": {"type": "string"},
                             "notes": {"type": "string"},

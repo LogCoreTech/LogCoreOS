@@ -7,6 +7,11 @@ import TaskPicker from '../../../components/TaskPicker'
 import TagInput from '../../../components/TagInput'
 import MetricPicker from './MetricPicker'
 import GoalPicker from './GoalPicker'
+import RecurrenceLog from '../../../components/RecurrenceLog'
+import HistoryCalendar from '../../../components/HistoryCalendar'
+import MetricGraph from '../../../components/MetricGraph'
+
+const METRIC_LOG_LEGEND = [{ colorClass: 'bg-orange-500', label: 'Logged value' }]
 
 function ProgressBar({ pct }) {
   return (
@@ -69,6 +74,17 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
   const [deleteCascade, setDeleteCascade] = useState(false)
   const [deleteLinkedTasks, setDeleteLinkedTasks] = useState(false)
   const [manualValue, setManualValue] = useState('')
+  const [expandedHistory, setExpandedHistory] = useState(new Set())
+  const [metricView, setMetricView] = useState('graph')
+
+  function toggleHistory(taskId) {
+    setExpandedHistory(prev => {
+      const next = new Set(prev)
+      if (next.has(taskId)) next.delete(taskId)
+      else next.add(taskId)
+      return next
+    })
+  }
 
   async function load() {
     if (!goalId) return
@@ -260,16 +276,54 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
                   </p>
                 )}
                 {goal.metric?.provider === 'manual' && (
-                  <div className="flex gap-2 mt-3">
-                    <input
-                      type="number"
-                      className="input flex-1 !py-1 text-sm"
-                      placeholder="Log a new value…"
-                      value={manualValue}
-                      onChange={e => setManualValue(e.target.value)}
-                    />
-                    <button className="btn-ghost text-xs px-2" onClick={logManual}>Log</button>
-                  </div>
+                  <>
+                    <div className="flex gap-2 mt-3">
+                      <input
+                        type="number"
+                        className="input flex-1 !py-1 text-sm"
+                        placeholder="Log a new value…"
+                        value={manualValue}
+                        onChange={e => setManualValue(e.target.value)}
+                      />
+                      <button className="btn-ghost text-xs px-2" onClick={logManual}>Log</button>
+                    </div>
+                    <div className="mt-3">
+                      <div className="flex justify-center mb-2">
+                        <div className="inline-flex bg-charcoal-100 dark:bg-charcoal-700 rounded-full p-0.5 text-[11px]">
+                          {['graph', 'calendar'].map(v => (
+                            <button
+                              key={v}
+                              type="button"
+                              onClick={() => setMetricView(v)}
+                              className={`px-2.5 py-0.5 rounded-full font-medium capitalize transition-colors ${
+                                metricView === v
+                                  ? 'bg-white dark:bg-charcoal-600 text-charcoal-900 dark:text-gray-100 shadow-sm'
+                                  : 'text-charcoal-500 dark:text-charcoal-400'
+                              }`}
+                            >
+                              {v}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {metricView === 'graph' ? (
+                        <MetricGraph
+                          entries={goal.metric.history || []}
+                          target={goal.metric.config?.target_value}
+                        />
+                      ) : (
+                        <HistoryCalendar
+                          entriesByDate={Object.fromEntries(
+                            (goal.metric.history || []).map(e => [
+                              e.date,
+                              { colorClass: 'bg-orange-500', label: String(e.value) },
+                            ])
+                          )}
+                          legend={METRIC_LOG_LEGEND}
+                        />
+                      )}
+                    </div>
+                  </>
                 )}
                 {!hasMetric && (
                   <label className="flex items-center gap-2 text-sm mt-3 cursor-pointer">
@@ -337,14 +391,28 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
                           <button onClick={() => unlinkTask(t.id)} className="text-xs text-charcoal-400 hover:text-red-500 shrink-0 ml-2">Unlink</button>
                         </div>
                         {t.type === 'recurring' && (
-                          <label className="flex items-center gap-1.5 mt-1 text-xs text-charcoal-400">
-                            <input
-                              type="checkbox"
-                              checked={t.counts_toward_goal !== false}
-                              onChange={() => toggleTaskCounts(t.id, t.counts_toward_goal !== false)}
-                            />
-                            Counts toward this goal&apos;s progress
-                          </label>
+                          <>
+                            <label className="flex items-center gap-1.5 mt-1 text-xs text-charcoal-400">
+                              <input
+                                type="checkbox"
+                                checked={t.counts_toward_goal !== false}
+                                onChange={() => toggleTaskCounts(t.id, t.counts_toward_goal !== false)}
+                              />
+                              Counts toward this goal&apos;s progress
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => toggleHistory(t.id)}
+                              className="text-[11px] text-orange-500 hover:underline mt-1"
+                            >
+                              {expandedHistory.has(t.id) ? '▾ Hide history' : '▸ Show history'}
+                            </button>
+                            {expandedHistory.has(t.id) && (
+                              <div className="mt-2">
+                                <RecurrenceLog completionLog={t.completion_log || []} />
+                              </div>
+                            )}
+                          </>
                         )}
                       </li>
                     ))}

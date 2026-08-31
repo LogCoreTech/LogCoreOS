@@ -8,7 +8,16 @@ from zoneinfo import ZoneInfo
 from services.auth_service import get_user_timezone, today_for_user
 from services.file_service import history_path, read_json, tasks_path, update_json
 
-_COMPLETION_LOG_CAP = 90  # comfortably more than the 30-day rate window goals_service reads
+COMPLETION_LOG_CAP = 90  # comfortably more than the 30-day rate window goals_service reads
+
+
+def append_log_entry(log: list[dict] | None, date_str: str, status: str) -> list[dict]:
+    """Dedup-by-date-then-append-then-cap — shared by a task's own completion branch
+    (status="completed") and recurring_service.py's nightly missed-occurrence detection
+    (status="missed")."""
+    deduped = [e for e in (log or []) if e.get("date") != date_str]
+    deduped.append({"date": date_str, "status": status})
+    return deduped[-COMPLETION_LOG_CAP:]
 
 
 def list_tasks(user_name: str, workspace: str = "personal") -> list[dict]:
@@ -21,14 +30,26 @@ def get_task(user_name: str, task_id: str, workspace: str = "personal") -> dict 
 
 def add_task(user_name: str, task_data: dict, workspace: str = "personal") -> dict:
     tz = ZoneInfo(get_user_timezone(user_name))
+
+    due_date = task_data.get("due_date")
+    recurrence = task_data.get("recurrence")
+    if task_data.get("type") == "recurring" and not due_date and isinstance(recurrence, dict):
+        # A recurring task should always start with a real due_date matching its own
+        # pattern — the due_date field is otherwise a fully separate control the
+        # caller might never touch (see components/RecurrencePicker.jsx), which
+        # silently left recurring tasks with no due_date at all, forever.
+        from services.recurrence_engine import first_occurrence_on_or_after
+
+        due_date = first_occurrence_on_or_after(today_for_user(user_name).isoformat(), recurrence)
+
     task: dict[str, Any] = {
         "id": str(uuid.uuid4()),
         "title": task_data["title"],
         "category": task_data.get("category", ""),
         "priority": task_data.get("priority", "Medium"),
         "type": task_data.get("type", "todo"),
-        "recurrence": task_data.get("recurrence"),
-        "due_date": task_data.get("due_date"),
+        "recurrence": recurrence,
+        "due_date": due_date,
         "due_time": task_data.get("due_time"),
         "status": "pending",
         "created_at": datetime.now(tz).isoformat(),
@@ -95,11 +116,9 @@ def update_task(
                     today_str = today_for_user(user_name).isoformat()
                     updates["last_completed_date"] = today_str
                     updates["streak_count"] = task.get("streak_count", 0) + 1
-                    log = [
-                        e for e in (task.get("completion_log") or []) if e.get("date") != today_str
-                    ]
-                    log.append({"date": today_str})
-                    updates["completion_log"] = log[-_COMPLETION_LOG_CAP:]
+                    updates["completion_log"] = append_log_entry(
+                        task.get("completion_log"), today_str, "completed"
+                    )
             elif updates.get("status") == "pending" and task.get("status") == "done":
                 updates["completed_at"] = None
                 if task.get("type") == "recurring":

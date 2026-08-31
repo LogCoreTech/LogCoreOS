@@ -7,7 +7,7 @@ every optional module NOT installed while the 3 locked ones still are.
 This is deliberately broader than any single module's own conversion test:
 each module's own m0XX test proves ITS OWN guard logic works in isolation:
 this file proves the full chain works together on one shared brain,
-the way a real production upgrade actually runs it — all 31 core+module
+the way a real production upgrade actually runs it — all 32 core+module
 migrations, in the same run, against the same files, once.
 
 Goals (2026-08-28) joined _OPTIONAL alongside the 13-module Mod Store

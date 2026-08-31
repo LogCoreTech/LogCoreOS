@@ -31,9 +31,9 @@ function AssetRow({ asset, depth, childrenMap, expanded, onToggle, onOpen, onAdd
       <div className={`flex items-center gap-2 py-2 px-2 rounded-lg hover:bg-charcoal-50 dark:hover:bg-charcoal-800 transition-colors group ${pad}`}>
         <button
           onClick={() => children.length && onToggle(asset.id)}
-          className={`w-4 text-xs text-charcoal-400 shrink-0 ${children.length ? 'hover:text-orange-500' : 'opacity-0'}`}
+          className={`w-6 text-xl leading-none text-charcoal-400 shrink-0 ${children.length ? 'hover:text-orange-500' : 'opacity-0'}`}
         >
-          {isOpen ? '▾' : '▸'}
+          {isOpen ? '▼' : '▶'}
         </button>
         <button onClick={() => onOpen(asset)} className="flex items-center gap-2 flex-1 min-w-0 text-left">
           <span className="shrink-0">{template?.icon || '▫️'}</span>

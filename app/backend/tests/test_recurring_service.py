@@ -1,4 +1,7 @@
-"""Tests for recurring task date arithmetic and the nightly processor."""
+"""Tests for the nightly recurring-task processor (services/recurring_service.py).
+Date-math itself lives in services/recurrence_engine.py and is tested there —
+this file covers process_user()'s own orchestration: advancing, streak-breaking,
+and the missed-occurrence log entry."""
 
 import sys
 from datetime import timedelta
@@ -9,65 +12,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import pytest
 
 from services import auth_service
-from services.file_service import read_json, tasks_path, user_path, write_json
-from services.recurring_service import _next_due, process_user
-
-
-def test_daily():
-    assert _next_due("2024-01-31", "daily") == "2024-02-01"
-
-
-def test_weekly():
-    assert _next_due("2024-01-01", "weekly") == "2024-01-08"
-
-
-def test_monthly_normal():
-    assert _next_due("2024-01-15", "monthly") == "2024-02-15"
-
-
-def test_monthly_end_of_month_clamped():
-    # Jan 31 → Feb 29 in leap year 2024
-    assert _next_due("2024-01-31", "monthly") == "2024-02-29"
-
-
-def test_monthly_leap_year_feb_to_mar():
-    # Feb 29 in leap year → Mar 29
-    assert _next_due("2024-02-29", "monthly") == "2024-03-29"
-
-
-def test_monthly_clamp_non_leap_year():
-    # Jan 31, 2025 → Feb 28 (2025 is NOT a leap year)
-    assert _next_due("2025-01-31", "monthly") == "2025-02-28"
-
-
-def test_monthly_century_year_not_leap():
-    # 1900 was NOT a leap year (divisible by 100 but not 400)
-    assert _next_due("1900-01-31", "monthly") == "1900-02-28"
-
-
-def test_monthly_400_year_is_leap():
-    # 2000 WAS a leap year (divisible by 400)
-    assert _next_due("2000-01-31", "monthly") == "2000-02-29"
-
-
-def test_monthly_year_rollover():
-    assert _next_due("2024-12-15", "monthly") == "2025-01-15"
-
-
-def test_monthly_year_rollover_end_of_month():
-    # Dec 31 → Jan 31
-    assert _next_due("2024-12-31", "monthly") == "2025-01-31"
-
-
-def test_unknown_recurrence_falls_back_to_daily():
-    assert _next_due("2024-06-01", "unknown") == "2024-06-02"
-
-
-# ---------------------------------------------------------------------------
-# process_user — nightly scheduler integration
-# ---------------------------------------------------------------------------
+from services.file_service import read_json, tasks_path, write_json
+from services.recurring_service import process_user
 
 REC_USER = "RecurringUser"
+DAILY_RULE = {"freq": "daily", "interval": 1}
 
 
 def _seed_recurring(brain, tasks: list[dict]) -> None:
@@ -77,17 +26,24 @@ def _seed_recurring(brain, tasks: list[dict]) -> None:
 
 
 def _task_row(
-    title: str, status: str, due: str, last_completed: str | None = None, streak: int = 0
+    title: str,
+    status: str,
+    due: str,
+    last_completed: str | None = None,
+    streak: int = 0,
+    recurrence: dict | None = None,
+    completion_log: list[dict] | None = None,
 ) -> dict:
     return {
         "id": title,
         "title": title,
         "type": "recurring",
-        "recurrence": "daily",
+        "recurrence": recurrence or DAILY_RULE,
         "status": status,
         "due_date": due,
         "last_completed_date": last_completed,
         "streak_count": streak,
+        "completion_log": completion_log or [],
     }
 
 
@@ -130,8 +86,6 @@ def test_process_user_leaves_task_completed_today(rec_brain):
 
 
 def test_process_user_breaks_streak_on_missed_task(rec_brain):
-    today = auth_service.today_for_user(REC_USER).isoformat()
-    yesterday = _next_due(today, "daily")  # one day ahead; use a past date instead
     past_due = "2020-01-01"
     _seed_recurring(
         rec_brain,
@@ -145,8 +99,70 @@ def test_process_user_breaks_streak_on_missed_task(rec_brain):
     assert tasks[0]["streak_count"] == 0
 
 
-def test_process_user_ignores_non_recurring_tasks(rec_brain):
+def test_process_user_logs_missed_occurrence(rec_brain):
+    past_due = "2020-01-01"
+    _seed_recurring(
+        rec_brain,
+        [
+            _task_row("Missed", "pending", past_due, streak=5),
+        ],
+    )
+    process_user(REC_USER)
+    tasks = read_json(tasks_path(REC_USER))["tasks"]
+    log = tasks[0]["completion_log"]
+    assert {"date": past_due, "status": "missed"} in log
+
+
+def test_process_user_missed_log_entry_deduped_on_repeat_run(rec_brain):
+    # Simulates the same stale due_date being detected twice (e.g. a scheduler
+    # hiccup re-running the same night) — the log should never carry two
+    # entries for the same date.
+    past_due = "2020-01-01"
+    _seed_recurring(
+        rec_brain,
+        [
+            _task_row(
+                "Missed",
+                "pending",
+                past_due,
+                streak=5,
+                completion_log=[{"date": past_due, "status": "missed"}],
+            ),
+        ],
+    )
+    process_user(REC_USER)
+    tasks = read_json(tasks_path(REC_USER))["tasks"]
+    matches = [e for e in tasks[0]["completion_log"] if e["date"] == past_due]
+    assert len(matches) == 1
+
+
+def test_process_user_backfills_missing_due_date(rec_brain):
+    # Self-heal: a recurring task somehow missing due_date entirely (pre-fix data, or
+    # a bypassed-validation write) gets a real one computed from its rule, not left
+    # stuck forever.
+    _seed_recurring(
+        rec_brain,
+        [
+            {
+                "id": "NoDueDate",
+                "title": "NoDueDate",
+                "type": "recurring",
+                "recurrence": {"freq": "daily", "interval": 1},
+                "status": "pending",
+                "due_date": None,
+                "last_completed_date": None,
+                "streak_count": 0,
+                "completion_log": [],
+            }
+        ],
+    )
+    process_user(REC_USER)
+    tasks = read_json(tasks_path(REC_USER))["tasks"]
     today = auth_service.today_for_user(REC_USER).isoformat()
+    assert tasks[0]["due_date"] == today
+
+
+def test_process_user_ignores_non_recurring_tasks(rec_brain):
     user_dir = rec_brain / "USERS" / REC_USER / "Tasks"
     user_dir.mkdir(parents=True, exist_ok=True)
     write_json(
@@ -175,3 +191,29 @@ def test_process_user_returns_username(rec_brain):
     _seed_recurring(rec_brain, [])
     result = process_user(REC_USER)
     assert result["user"] == REC_USER
+
+
+def test_process_user_skips_malformed_task_without_aborting_others(rec_brain):
+    # A recurring task with a structurally invalid rule (e.g. a still-broken AI
+    # tool call, which bypasses Pydantic validation entirely) must not abort
+    # processing of the user's other, valid recurring tasks.
+    today = auth_service.today_for_user(REC_USER)
+    yesterday = (today - timedelta(days=1)).isoformat()
+    _seed_recurring(
+        rec_brain,
+        [
+            _task_row(
+                "Broken",
+                "pending",
+                "2020-01-01",
+                recurrence={"freq": "weekly", "interval": 1, "weekdays": []},
+            ),
+            _task_row("Valid", "done", yesterday, last_completed=yesterday),
+        ],
+    )
+    result = process_user(REC_USER)
+    assert result["advanced"] == 1  # the valid task still processed
+    tasks = {t["id"]: t for t in read_json(tasks_path(REC_USER))["tasks"]}
+    assert tasks["Valid"]["status"] == "pending"
+    # The broken task is left untouched, not crashed on.
+    assert tasks["Broken"]["due_date"] == "2020-01-01"

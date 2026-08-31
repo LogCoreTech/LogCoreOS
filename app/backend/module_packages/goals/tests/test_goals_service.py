@@ -383,6 +383,84 @@ def test_recurring_task_not_counting_toward_goal_is_excluded_from_rollup(user, b
     assert progress["pct"] == 0
 
 
+def test_recurring_rollup_excludes_missed_log_entries(user, brain):
+    """A 'missed' entry (2026-08-30, auto-logged by the nightly job) must not
+    inflate the completion rate the way a completed entry would."""
+    from datetime import date, timedelta
+
+    from services import task_service
+
+    root = _mk("Missed-aware habit goal")
+    task = task_service.add_task(
+        USER,
+        {
+            "title": "Stretch",
+            "category": "Health",
+            "type": "recurring",
+            "recurrence": "daily",
+            "goal_id": root["id"],
+            "counts_toward_goal": True,
+        },
+    )
+    # 30 entries, all in the trailing window, half "completed" half "missed".
+    log = [
+        {
+            "date": (date.today() - timedelta(days=i)).isoformat(),
+            "status": "completed" if i % 2 == 0 else "missed",
+        }
+        for i in range(30)
+    ]
+    task_service.update_task(USER, task["id"], {"completion_log": log})
+
+    goals = goals_service.list_goals(USER)
+    root_fresh = next(g for g in goals if g["id"] == root["id"])
+    progress = goals_service.compute_progress(USER, root_fresh, "personal", user, goals)
+    assert progress["source"] == "rollup"
+    # 15 of 30 are "completed" — same 50% a pre-status-field log with 15
+    # entries would have produced, confirming "missed" entries are excluded
+    # rather than silently counted.
+    assert progress["pct"] == 50
+
+
+def test_recurring_rollup_mixed_completed_missed_and_legacy_entries(user, brain):
+    """A log with real 'completed', real 'missed', and legacy no-status
+    entries all in the same window — legacy entries must count exactly like
+    'completed' ones."""
+    from datetime import date, timedelta
+
+    from services import task_service
+
+    root = _mk("Mixed-log habit goal")
+    task = task_service.add_task(
+        USER,
+        {
+            "title": "Read",
+            "category": "Personal",
+            "type": "recurring",
+            "recurrence": "daily",
+            "goal_id": root["id"],
+            "counts_toward_goal": True,
+        },
+    )
+    log = []
+    for i in range(30):
+        entry = {"date": (date.today() - timedelta(days=i)).isoformat()}
+        if i < 10:
+            entry["status"] = "completed"
+        elif i < 20:
+            entry["status"] = "missed"
+        # else: legacy entry, no "status" key at all — should count like "completed"
+        log.append(entry)
+    task_service.update_task(USER, task["id"], {"completion_log": log})
+
+    goals = goals_service.list_goals(USER)
+    root_fresh = next(g for g in goals if g["id"] == root["id"])
+    progress = goals_service.compute_progress(USER, root_fresh, "personal", user, goals)
+    assert progress["source"] == "rollup"
+    # 10 "completed" + 10 legacy (counts) = 20 of 30 = ~67%
+    assert progress["pct"] == round(20 * 100 / 30)
+
+
 def test_recurring_task_default_missing_field_still_counts(user, brain):
     """A recurring task linked before this feature shipped has no
     counts_toward_goal key at all — must keep counting (backward compat),

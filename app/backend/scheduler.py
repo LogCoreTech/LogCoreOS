@@ -15,6 +15,33 @@ logger = logging.getLogger("logcore.scheduler")
 scheduler = BackgroundScheduler(timezone=settings.scheduler_timezone)
 
 
+def _cron(**kwargs) -> CronTrigger:
+    """CronTrigger, defaulted to the scheduler's own configured timezone.
+
+    APScheduler's BackgroundScheduler(timezone=...) constructor arg does NOT
+    apply to a trigger object constructed and passed to add_job() directly —
+    that auto-injection only happens on the "pass a trigger alias string +
+    kwargs" call shape (see apscheduler.schedulers.base._create_trigger).
+    Every CronTrigger/IntervalTrigger here was constructed the object-first
+    way with no explicit timezone=, so each one silently resolved its own
+    timezone via get_localzone() (the container's SYSTEM timezone, not
+    SCHEDULER_TIMEZONE) at construction time — every scheduled job in this
+    app was firing at the wrong wall-clock time whenever the container's
+    system tz differs from SCHEDULER_TIMEZONE (the normal case: Docker base
+    images default to UTC, this app's own default is America/Chicago).
+    Route every trigger through here (or _interval below) instead of
+    constructing CronTrigger/IntervalTrigger directly, so this can't
+    regress the next time a job is added."""
+    kwargs.setdefault("timezone", scheduler.timezone)
+    return CronTrigger(**kwargs)
+
+
+def _interval(**kwargs) -> IntervalTrigger:
+    """IntervalTrigger, defaulted to the scheduler's own configured timezone — see _cron()."""
+    kwargs.setdefault("timezone", scheduler.timezone)
+    return IntervalTrigger(**kwargs)
+
+
 def _all_users() -> list[str]:
     users_dir = brain_path() / "USERS"
     return [
@@ -278,20 +305,22 @@ def _trigger_for_custom(suggestion: dict):
     schedule = suggestion.get("schedule", "daily")
     if schedule == "interval":
         days = suggestion.get("interval_days") or 1
-        import math
         from datetime import datetime, timedelta
 
-        now = datetime.now()
+        # Timezone-aware "now" in the scheduler's own configured timezone (not
+        # naive/system-local — see _cron()'s docstring) so `hour` is correctly
+        # interpreted as SCHEDULER_TIMEZONE wall-clock time, not container-local.
+        now = datetime.now(scheduler.timezone)
         # Start at the next occurrence of 'hour' today or tomorrow
         start = now.replace(hour=hour, minute=0, second=0, microsecond=0)
         if start <= now:
             start += timedelta(days=1)
-        return IntervalTrigger(days=days, start_date=start)
+        return _interval(days=days, start_date=start)
     if schedule == "weekly":
         dow = suggestion.get("day_of_week", "mon")
-        return CronTrigger(day_of_week=dow, hour=hour, minute=0)
+        return _cron(day_of_week=dow, hour=hour, minute=0)
     # default: daily
-    return CronTrigger(hour=hour, minute=0)
+    return _cron(hour=hour, minute=0)
 
 
 def add_custom_job(user_name: str, suggestion: dict) -> None:
@@ -337,50 +366,46 @@ def start():
     from datetime import datetime as _dt
     from datetime import timedelta as _td
 
-    scheduler.add_job(job_recurring_processor, CronTrigger(hour=0, minute=1), id="recurring")
+    scheduler.add_job(job_recurring_processor, _cron(hour=0, minute=1), id="recurring")
     scheduler.add_job(
-        job_morning_digest, CronTrigger(hour=settings.morning_digest_hour, minute=0), id="morning"
+        job_morning_digest, _cron(hour=settings.morning_digest_hour, minute=0), id="morning"
     )
     scheduler.add_job(
-        job_overdue_check, CronTrigger(hour=settings.overdue_check_hour, minute=0), id="overdue"
+        job_overdue_check, _cron(hour=settings.overdue_check_hour, minute=0), id="overdue"
     )
     scheduler.add_job(
         job_weekly_review,
-        CronTrigger(day_of_week="sun", hour=settings.overdue_check_hour, minute=0),
+        _cron(day_of_week="sun", hour=settings.overdue_check_hour, minute=0),
         id="weekly",
     )
     scheduler.add_job(
         job_goal_progress_snapshot,
-        CronTrigger(hour=settings.overdue_check_hour, minute=15),
+        _cron(hour=settings.overdue_check_hour, minute=15),
         id="goal_progress_snapshot",
     )
     scheduler.add_job(
-        job_goal_drift, CronTrigger(hour=settings.overdue_check_hour, minute=30), id="goal_drift"
+        job_goal_drift, _cron(hour=settings.overdue_check_hour, minute=30), id="goal_drift"
     )
     scheduler.add_job(
         job_goal_due_urgency,
-        CronTrigger(hour=settings.overdue_check_hour, minute=35),
+        _cron(hour=settings.overdue_check_hour, minute=35),
         id="goal_due_urgency",
     )
-    scheduler.add_job(job_cleanup_revoked_jtis, CronTrigger(hour=3, minute=0), id="jti_cleanup")
+    scheduler.add_job(job_cleanup_revoked_jtis, _cron(hour=3, minute=0), id="jti_cleanup")
     # Workflow sync: 90s after boot (wait for n8n), then every 6 hours
     scheduler.add_job(
         job_workflow_sync, "date", run_date=_dt.now() + _td(seconds=90), id="workflow_sync_boot"
     )
-    scheduler.add_job(job_workflow_sync, IntervalTrigger(hours=6), id="workflow_sync_periodic")
-    scheduler.add_job(job_update_check, CronTrigger(hour=12, minute=0), id="update_check")
+    scheduler.add_job(job_workflow_sync, _interval(hours=6), id="workflow_sync_periodic")
+    scheduler.add_job(job_update_check, _cron(hour=12, minute=0), id="update_check")
     # SimpleFIN bank sync: 2 min after boot, then every 12h (bridge data refreshes ~daily)
     scheduler.add_job(
         job_simplefin_sync, "date", run_date=_dt.now() + _td(seconds=120), id="simplefin_boot"
     )
-    scheduler.add_job(job_simplefin_sync, IntervalTrigger(hours=12), id="simplefin_periodic")
-    scheduler.add_job(job_finance_nightly, CronTrigger(hour=7, minute=30), id="finance_nightly")
-    scheduler.add_job(
-        job_contacts_followups, CronTrigger(hour=8, minute=0), id="contacts_followups"
-    )
-    scheduler.add_job(
-        job_channel_rotation_check, CronTrigger(hour=9, minute=30), id="channel_rotation"
-    )
+    scheduler.add_job(job_simplefin_sync, _interval(hours=12), id="simplefin_periodic")
+    scheduler.add_job(job_finance_nightly, _cron(hour=7, minute=30), id="finance_nightly")
+    scheduler.add_job(job_contacts_followups, _cron(hour=8, minute=0), id="contacts_followups")
+    scheduler.add_job(job_channel_rotation_check, _cron(hour=9, minute=30), id="channel_rotation")
     scheduler.add_job(
         job_n8n_reconcile, "date", run_date=_dt.now() + _td(seconds=100), id="n8n_reconcile_boot"
     )

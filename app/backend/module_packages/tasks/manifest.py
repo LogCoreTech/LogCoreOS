@@ -76,6 +76,51 @@ def m021_mark_tasks_installed_unconditionally(brain: Path) -> None:
     mod_store_service.mark_installed("tasks", by="migration:m021")
 
 
+def m032_migrate_recurrence_to_structured_rule(brain: Path) -> None:
+    """Converts every recurring task's plain daily/weekly/monthly recurrence string
+    (the pre-2026-08-30 model) into the structured RecurrenceRule shape
+    (routers/_task_models.py), deriving the weekday/day-of-month from the task's own
+    due_date so its actual next-occurrence behavior doesn't change on upgrade. Covers
+    every real user (both workspaces) plus the _household/_team pool stores, same
+    iteration pattern as goals/manifest.py's own m031. The isinstance(str) check makes
+    this naturally idempotent on top of the migration ledger's own once-only guarantee.
+    See services/recurrence_engine.py's legacy_recurrence_to_rule() for the mapping.
+
+    Deliberately skips m031's features.json-existence guard: that guard exists there to
+    gate a real fresh-vs-upgrade DECISION (should this optional module auto-install?).
+    This migration makes no such decision — tasks is locked/always-installed already
+    (m021) — it's a pure data conversion that's a no-op on any store with nothing to
+    convert, including a genuinely fresh instance (no users are registered yet at the
+    first boot's migration pass, so list_users() is empty and the pool stores are too).
+    """
+    from services.file_service import brain_path
+
+    if brain != brain_path():
+        return  # test/alternate brain root — file_service helpers always read the live one
+
+    from services.auth_service import list_users
+    from services.file_service import read_json, tasks_path, write_json
+    from services.recurrence_engine import legacy_recurrence_to_rule
+
+    stores: list[tuple[str, str]] = []
+    for u in list_users():
+        stores.append((u["name"], "personal"))
+        stores.append((u["name"], "business"))
+    stores.append(("_household", "personal"))
+    stores.append(("_team", "personal"))
+
+    for store_user, workspace in stores:
+        tpath = tasks_path(store_user, workspace)
+        tdata = read_json(tpath, default={"tasks": []})
+        changed = False
+        for t in tdata.get("tasks", []):
+            if t.get("type") == "recurring" and isinstance(t.get("recurrence"), str):
+                t["recurrence"] = legacy_recurrence_to_rule(t["recurrence"], t.get("due_date"))
+                changed = True
+        if changed:
+            write_json(tpath, tdata)
+
+
 MODULE = ModuleManifest(
     id="tasks",
     display_name="Tasks",
@@ -121,6 +166,10 @@ MODULE = ModuleManifest(
             "tasks:m021_mark_tasks_installed_unconditionally",
             m021_mark_tasks_installed_unconditionally,
         ),
+        (
+            "tasks:m032_migrate_recurrence_to_structured_rule",
+            m032_migrate_recurrence_to_structured_rule,
+        ),
     ],
     help_section={
         "id": "tasks",
@@ -130,17 +179,19 @@ MODULE = ModuleManifest(
         "howto": [
             'Click "+ New Task", give it a title, and pick a category and priority (High/Medium/Low).',
             "Add a due date and time if it matters — overdue and due-today tasks score highest, and a set time shows right next to the date on the card.",
-            'Set Type to "Recurring" for repeating tasks; completing them on schedule builds a streak.',
+            'Set Type to "Recurring" for repeating tasks; pick exactly which days it repeats on — any combination of weekdays, a day of the month (or the last day), or "the 2nd Tuesday" style patterns — and completing it on schedule builds a streak.',
             'Use the "Sort by" control above the list to switch between Priority score (default — ranks every task against every other one, regardless of category), Date/Time, and Alphabetical; your choice is remembered.',
             "Check a task off to complete it. Non-recurring done tasks move to History during the nightly tidy-up.",
             "Tasks assigned to you from a shared Household or Team pool show up here with a 🏠 badge.",
             "Add tags to group tasks beyond category — click a tag anywhere to filter the list down to just that tag.",
+            "Click any task's card to open its full detail — recurring tasks show a real calendar of which days were completed or missed. Edit from there if you need to change something.",
         ],
         "tips": [
             "Your Dashboard shows the top 3 tasks to focus on right now — a filtered view of this list.",
             "Reorder your category priorities in Profile; it directly changes which tasks surface first.",
             'You can also ask the AI in Chat to "add three tasks for the move" and approve them in one step.',
             'Tags are shared with Goals — tag something "urgent" in either place and it means the same thing in both, and you can link a recurring task to a goal to feed it real completion-rate data.',
+            "A recurring task's repeat pattern is locked in once created — delete and recreate it if the schedule genuinely needs to change, rather than trying to edit it in place.",
         ],
         "modules": ["tasks"],
     },

@@ -244,7 +244,7 @@ export default function Tasks() {
               catColor={catColor(task.category)}
               today={_todayStr}
               onDone={() => toggleDone(task)}
-              onEdit={() => { setEditTask(task); setShowModal(true) }}
+              onOpen={() => { setEditTask(task); setShowModal(true) }}
               onTagClick={t => setTagFilter(t)}
             />
           ))}
@@ -318,13 +318,16 @@ export default function Tasks() {
   )
 }
 
-function TaskCard({ task, catColor, today, onDone, onEdit, onTagClick }) {
+function TaskCard({ task, catColor, today, onDone, onOpen, onTagClick }) {
   const overdue = task.due_date && task.due_date < today && task.status === 'pending'
 
   return (
-    <div className={`card p-3 flex items-start gap-3 overflow-hidden ${overdue ? 'border-red-500/40' : ''}`}>
+    <div
+      onClick={onOpen}
+      className={`card p-3 flex items-start gap-3 overflow-hidden cursor-pointer hover:border-orange-400 transition-colors ${overdue ? 'border-red-500/40' : ''}`}
+    >
       <button
-        onClick={onDone}
+        onClick={e => { e.stopPropagation(); onDone() }}
         className={`mt-0.5 shrink-0 w-5 h-5 rounded transition-colors flex items-center justify-center text-white text-xs ${
           task.status === 'done'
             ? 'bg-orange-500 hover:bg-orange-400'
@@ -363,7 +366,7 @@ function TaskCard({ task, catColor, today, onDone, onEdit, onTagClick }) {
             {task.tags.map(t => (
               <span
                 key={t}
-                onClick={() => onTagClick(t)}
+                onClick={e => { e.stopPropagation(); onTagClick(t) }}
                 className="inline-flex items-center bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 text-[11px] px-1.5 py-0.5 rounded-full hover:bg-orange-200 dark:hover:bg-orange-900/70 cursor-pointer"
               >
                 {t}
@@ -371,10 +374,6 @@ function TaskCard({ task, catColor, today, onDone, onEdit, onTagClick }) {
             ))}
           </div>
         )}
-      </div>
-
-      <div className="shrink-0">
-        <button onClick={onEdit} className="text-charcoal-400 hover:text-orange-500 p-1 text-xs">✎</button>
       </div>
     </div>
   )

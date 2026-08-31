@@ -177,6 +177,21 @@ def test_recurring_completion_logs_todays_date(user_brain):
     updated = task_service.update_task(USER, task["id"], {"status": "done"})
     assert len(updated["completion_log"]) == 1
     assert "date" in updated["completion_log"][0]
+    assert updated["completion_log"][0]["status"] == "completed"
+
+
+def test_append_log_entry_dedups_by_date():
+    log = [{"date": "2024-01-01", "status": "missed"}]
+    result = task_service.append_log_entry(log, "2024-01-01", "completed")
+    assert result == [{"date": "2024-01-01", "status": "completed"}]
+
+
+def test_append_log_entry_caps_at_90():
+    log = [{"date": f"2024-01-{i:02d}", "status": "completed"} for i in range(1, 91)]
+    result = task_service.append_log_entry(log, "2024-04-01", "completed")
+    assert len(result) == 90
+    assert result[0]["date"] == "2024-01-02"  # oldest entry dropped
+    assert result[-1]["date"] == "2024-04-01"
 
 
 def test_undoing_recurring_completion_removes_todays_log_entry(user_brain):
@@ -186,6 +201,44 @@ def test_undoing_recurring_completion_removes_todays_log_entry(user_brain):
     task_service.update_task(USER, task["id"], {"status": "done"})
     undone = task_service.update_task(USER, task["id"], {"status": "pending"})
     assert undone["completion_log"] == []
+
+
+def test_recurring_task_without_due_date_gets_one_auto_computed(user_brain):
+    from services.auth_service import today_for_user
+    from services.recurrence_engine import first_occurrence_on_or_after
+
+    rule = {"freq": "weekly", "interval": 1, "weekdays": ["MO", "WE", "FR"]}
+    task = task_service.add_task(
+        USER, {**_make_task("Auto due date"), "type": "recurring", "recurrence": rule}
+    )
+    expected = first_occurrence_on_or_after(today_for_user(USER).isoformat(), rule)
+    assert task["due_date"] == expected
+
+
+def test_recurring_task_with_explicit_due_date_is_not_overridden(user_brain):
+    rule = {"freq": "daily", "interval": 1}
+    task = task_service.add_task(
+        USER,
+        {
+            **_make_task("Explicit due date"),
+            "type": "recurring",
+            "recurrence": rule,
+            "due_date": "2030-01-01",
+        },
+    )
+    assert task["due_date"] == "2030-01-01"
+
+
+def test_recurring_task_with_no_recurrence_rule_leaves_due_date_alone(user_brain):
+    # Defensive case: type="recurring" but no rule at all (e.g. a bypassed-validation
+    # write) — nothing to compute from, so due_date stays whatever was given (None).
+    task = task_service.add_task(USER, {**_make_task("No rule"), "type": "recurring"})
+    assert task["due_date"] is None
+
+
+def test_non_recurring_task_due_date_is_never_auto_computed(user_brain):
+    task = task_service.add_task(USER, _make_task("Plain todo"))
+    assert task["due_date"] is None
 
 
 def test_non_recurring_task_never_logs_completions(user_brain):

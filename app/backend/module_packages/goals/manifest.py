@@ -186,6 +186,8 @@ MODULE = ModuleManifest(
             'Tags are shared between Goals and Tasks — tag something "urgent" in either place and it means the same thing in both.',
             "The pool tab only shows up if your household or team is set up — everyone in it sees the same shared goals by default.",
             "Each linked recurring task has its own \"Counts toward this goal's progress\" checkbox — turn it off to track its completion rate for your own reference without it moving the goal's overall percentage; a newly linked recurring task starts with it off until you turn it on.",
+            "A goal you log by hand (weight, savings, anything numeric) shows a trend graph of every value you've logged, with a Calendar view alongside it if you'd rather see which days you logged on.",
+            'Click "Show history" under any linked recurring task to see its own completed/missed calendar without leaving the goal.',
         ],
         "modules": ["goals"],
     },

@@ -277,9 +277,9 @@ function GoalRow({ goal, depth, childrenMap, tasksByGoal, expanded, onToggle, on
       <div className={`flex items-center gap-2 py-2 px-2 rounded-lg hover:bg-charcoal-50 dark:hover:bg-charcoal-800 transition-colors ${pad} ${overdue ? 'border-l-2 border-red-500/40' : ''}`}>
         <button
           onClick={() => hasKids && onToggle(goal.id)}
-          className={`w-4 text-xs text-charcoal-400 shrink-0 ${hasKids ? 'hover:text-orange-500' : 'opacity-0'}`}
+          className={`w-6 text-xl leading-none text-charcoal-400 shrink-0 ${hasKids ? 'hover:text-orange-500' : 'opacity-0'}`}
         >
-          {isOpen ? '▾' : '▸'}
+          {isOpen ? '▼' : '▶'}
         </button>
         <button onClick={() => onOpen(goal)} className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0 text-left">
           <span className={`badge ${color} shrink-0`}>{goal.category || 'Uncategorized'}</span>
