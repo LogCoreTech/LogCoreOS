@@ -179,7 +179,7 @@ MODULE = ModuleManifest(
         "howto": [
             'Click "+ New Task", give it a title, and pick a category and priority (High/Medium/Low).',
             "Add a due date and time if it matters — overdue and due-today tasks score highest, and a set time shows right next to the date on the card.",
-            'Set Type to "Recurring" for repeating tasks; pick exactly which days it repeats on — any combination of weekdays, a day of the month (or the last day), or "the 2nd Tuesday" style patterns — and completing it on schedule builds a streak.',
+            'Set Type to "Recurring" for repeating tasks, then pick the pattern: choose Daily/Weekly/Monthly/Yearly and an "Every N" count (every 2 weeks, every 3 days, etc.), then, for Weekly, tap which weekdays it repeats on, or for Monthly/Yearly, choose either a fixed day of the month (or "Last day of month") or "On the Nth weekday" for a pattern like "the 2nd Tuesday." Completing it on schedule builds a streak.',
             'Use the "Sort by" control above the list to switch between Priority score (default — ranks every task against every other one, regardless of category), Date/Time, and Alphabetical; your choice is remembered.',
             "Check a task off to complete it. Non-recurring done tasks move to History during the nightly tidy-up.",
             "Tasks assigned to you from a shared Household or Team pool show up here with a 🏠 badge.",

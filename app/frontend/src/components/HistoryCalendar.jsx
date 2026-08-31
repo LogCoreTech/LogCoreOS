@@ -51,15 +51,20 @@ function getYearColumns(year) {
   return columns
 }
 
-function Cell({ date, entriesByDate, dim, size = 'w-full aspect-square' }) {
+function Cell({ date, entriesByDate, dim, showDayNumber, size = 'w-full aspect-square' }) {
   const entry = entriesByDate[date]
   const color = entry?.colorClass || 'bg-charcoal-50 dark:bg-charcoal-800'
+  // Filled cells (a real colorClass, not the neutral empty background) get
+  // white text for contrast; empty cells stay muted.
+  const textColor = entry?.colorClass ? 'text-white' : 'text-charcoal-400 dark:text-charcoal-500'
+  const dayNumber = showDayNumber ? parseInt(date.slice(-2), 10) : null
   return (
     <div
       title={entry?.title || date}
-      className={`${size} rounded-sm flex items-center justify-center text-[8px] leading-none ${color} ${dim ? 'opacity-30' : ''}`}
+      className={`${size} rounded-sm flex flex-col items-center justify-center leading-none gap-px ${color} ${textColor} ${dim ? 'opacity-30' : ''}`}
     >
-      {entry?.label || ''}
+      {dayNumber != null && <span className="text-[10px] font-medium">{dayNumber}</span>}
+      {entry?.label && <span className="text-[7px] opacity-90">{entry.label}</span>}
     </div>
   )
 }
@@ -119,7 +124,13 @@ export default function HistoryCalendar({ entriesByDate = {}, legend }) {
           </div>
           <div className="grid grid-cols-7 gap-1">
             {getWeekRows(year, month).flat().map(date => (
-              <Cell key={date} date={date} entriesByDate={entriesByDate} dim={date.slice(0, 7) !== `${year}-${String(month + 1).padStart(2, '0')}`} />
+              <Cell
+                key={date}
+                date={date}
+                entriesByDate={entriesByDate}
+                dim={date.slice(0, 7) !== `${year}-${String(month + 1).padStart(2, '0')}`}
+                showDayNumber
+              />
             ))}
           </div>
         </>
