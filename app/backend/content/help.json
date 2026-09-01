@@ -204,6 +204,17 @@
   },
   "whats_new": [
     {
+      "version": "0.7.1",
+      "date": "2026-09-01",
+      "highlights": [
+        "Recurring tasks now support a real day-of-week/day-of-month picker — any combination of weekdays, a specific day of the month (or \"last day\"), a \"2nd Tuesday\"-style pattern, monthly/yearly cadences, and an every-N-periods interval, with a log of which days were actually completed vs. missed.",
+        "Tasks and Goals both got a read-first detail view — click a task or goal to see a clean summary with an Edit button, and view a recurring task's history or a goal's logged-metric history as a month/year calendar or trend graph.",
+        "Push notifications now actually decrypt on the receiving device (a real encryption bug, not just a setup issue) and work on multiple devices at once, each with its own Rename/Remove in Settings → Notifications.",
+        "Every scheduled job — morning digest, overdue alerts, weekly review, goal checks, custom AI suggestions — now actually fires at the configured local time instead of the server's own system timezone.",
+        "Admin → Updates can now fix a stuck update on its own — if an update ever refuses to apply because local history no longer matches the latest release, a \"Fix Automatically\" button explains what happened, shows exactly what will change, and resolves it with one click."
+      ]
+    },
+    {
       "version": "0.7.0",
       "date": "2026-08-30",
       "highlights": [

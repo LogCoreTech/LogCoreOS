@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-09-01
+
 ### Added
 
 - **Push notifications now work on multiple devices at once.** Enable it separately on your phone, tablet, and computer — a test or a real notification goes to all of them, and Settings → Notifications lists every enabled device with its own Rename and Remove buttons, so dropping an old device you no longer have doesn't touch the others. Previously, enabling push on a second device silently stole notifications from the first with no warning. Capped at 10 devices per account.
