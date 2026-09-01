@@ -28,6 +28,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DOCKER_DIR="$SCRIPT_DIR"
 BRAIN_SYS="$REPO_ROOT/brain/_system"
 FLAG_FILE="$BRAIN_SYS/pending_update"
+RESYNC_FLAG_FILE="$BRAIN_SYS/pending_resync"
 RUNNING_FLAG="$BRAIN_SYS/update_running"
 STATUS_FILE="$BRAIN_SYS/update_status.json"
 HEARTBEAT_FILE="$BRAIN_SYS/update_heartbeat.json"
@@ -298,6 +299,13 @@ verify_signature() {
 # ── Core update ───────────────────────────────────────────────────────────────
 
 do_update() {
+    # force_resync=true means the admin explicitly confirmed discarding local
+    # git history (Admin -> Updates, after a "divergent local history" failure)
+    # — lands the target with `git reset --hard` instead of the normal
+    # fast-forward-only merge. Everything else (backup, build, restart, health
+    # check, rollback) is identical to a normal update.
+    local force_resync="${1:-false}"
+
     # Prevent concurrent updates
     if [[ -f "$RUNNING_FLAG" ]]; then
         log "Update already in progress — skipping."
@@ -401,9 +409,27 @@ do_update() {
         return 1
     fi
 
-    # 3b. Land the verified commit (fast-forward only — refuse divergent history)
-    if ! git -C "$REPO_ROOT" merge --ff-only "$new_commit" >> "$LOG_FILE" 2>&1; then
+    # 3b. Land the verified commit. Fast-forward only by default (refuses to
+    #     discard any local state); force_resync=true (admin explicitly
+    #     confirmed via Admin -> Updates) instead hard-resets to it.
+    if [[ "$force_resync" == "true" ]]; then
+        log "Resync requested — hard-resetting to $new_commit (admin-confirmed)."
+        if ! git -C "$REPO_ROOT" reset --hard "$new_commit" >> "$LOG_FILE" 2>&1; then
+            log "git reset --hard $new_commit failed — aborting, see log above."
+            write_status "resync-failed" "$new_commit"
+            rm -f "$RUNNING_FLAG"
+            return 1
+        fi
+    elif ! git -C "$REPO_ROOT" merge --ff-only "$new_commit" >> "$LOG_FILE" 2>&1; then
         log "Cannot fast-forward to $new_commit (divergent local history) — aborting."
+        log "This is a deliberate safety refusal, not a bug — the updater never discards local"
+        log "state on its own. It means this checkout's history doesn't share commits with the"
+        log "target release, most likely because origin's history was rewritten upstream (rare —"
+        log "e.g. a past release scrubbed leaked data) since this instance last updated."
+        log "If you're sure discarding local git history here is safe (your Brain data lives"
+        log "outside the repo and is never touched by this), resync manually and re-run:"
+        log "  cd $REPO_ROOT && git fetch origin --force --tags && git reset --hard origin/master"
+        log "...or use the 'Fix Automatically' button on Admin -> Updates to do the same thing."
         write_status "ff-failed" "$new_commit"
         rm -f "$RUNNING_FLAG"
         return 1
@@ -466,10 +492,14 @@ do_update() {
 
 watch_mode() {
     log "Update watcher started (PID $$, polling every ${WATCH_INTERVAL}s)."
-    log "Watching: $FLAG_FILE"
+    log "Watching: $FLAG_FILE, $RESYNC_FLAG_FILE"
     while true; do
         write_heartbeat
-        if [[ -f "$FLAG_FILE" ]]; then
+        if [[ -f "$RESYNC_FLAG_FILE" ]]; then
+            log "Pending resync flag detected — applying update with a forced resync."
+            rm -f "$RESYNC_FLAG_FILE" "$FLAG_FILE"
+            do_update true || log "Resync failed — see log above."
+        elif [[ -f "$FLAG_FILE" ]]; then
             log "Pending update flag detected — applying update."
             rm -f "$FLAG_FILE"
             do_update || log "Update failed — see log above."
@@ -487,7 +517,10 @@ case "${1:-}" in
     --cron)
         # Designed for cron (runs every minute). Writes heartbeat, applies update if flag present, then exits.
         write_heartbeat
-        if [[ -f "$FLAG_FILE" ]]; then
+        if [[ -f "$RESYNC_FLAG_FILE" ]]; then
+            rm -f "$RESYNC_FLAG_FILE" "$FLAG_FILE"
+            do_update true || true
+        elif [[ -f "$FLAG_FILE" ]]; then
             rm -f "$FLAG_FILE"
             do_update || true
         fi

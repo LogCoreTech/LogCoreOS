@@ -1652,6 +1652,42 @@ container's own shutdown (2026-08-24, see `docs/MEMORY.md`). Rate limited: 10/60
 
 ---
 
+## Update
+
+Router mounted at `/api/v1/update` (`routers/update.py`). Admin only. Backend endpoints never touch
+git/Docker directly — they only ever read status files or write flag files under `brain/_system/`;
+the host-side `docker/update.sh` (run via cron or `--watch`) is what actually polls for those flags
+and performs the update.
+
+### `GET /update/status`
+Current/latest version, `update_available`, `update_pending`/`resync_pending`/`update_running` flags,
+`last_update` (the most recent `write_status()` result from `update.sh`), `daemon_active` (heartbeat
+freshness), `auto_update_enabled`.
+
+### `POST /update/check`
+Force-refreshes the cached GitHub latest-release lookup (bypasses the 4h TTL), returns fresh status.
+
+### `POST /update/apply`
+Writes the `pending_update` flag. `409` if an update is already running or queued.
+
+### `POST /update/resync` (2026-09-01)
+Writes the `pending_resync` flag — functionally identical to `/apply` except the host-side
+`update.sh` lands the target release with `git reset --hard` instead of a fast-forward-only merge,
+for the one case a normal update deliberately refuses: this instance's local git history no longer
+shares commits with the latest release (e.g. after an upstream history rewrite). `409` under the same
+conditions as `/apply`. Only ever exposed in the UI after a real `ff-failed` result — never triggered
+automatically, and never resets anything outside the app's own code checkout (`brain/` is untouched).
+See `docs/MEMORY.md`'s 2026-09-01 entry for the full design.
+
+### `GET /update/log?lines=100`
+Tail of the host-written `update.log`.
+
+### `GET /update/settings` / `PATCH /update/settings`
+Get/set the `auto_update` toggle (`{"auto_update": bool}`) controlling whether `update.sh --watch`
+applies updates automatically vs. only queuing them for manual approval.
+
+---
+
 ## Health
 
 ### `GET /health`

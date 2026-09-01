@@ -42,6 +42,22 @@ def apply_update(_: dict = Depends(_admin)) -> dict:
     return trigger_update()
 
 
+@router.post("/resync")
+def resync_update(_: dict = Depends(_admin)) -> dict:
+    """Write the pending_resync flag — same as /apply, but the host-side update.sh
+    lands the target with `git reset --hard` instead of a fast-forward-only merge.
+    Only meaningful (and only ever shown in the UI) after a real 'ff-failed' result,
+    so this is an explicit, admin-confirmed action, never triggered automatically."""
+    from services.update_service import get_update_status, trigger_resync
+
+    status = get_update_status()
+    if status.get("update_running"):
+        raise HTTPException(409, "Update already in progress")
+    if status.get("update_pending"):
+        raise HTTPException(409, "Update already queued")
+    return trigger_resync()
+
+
 @router.get("/log")
 def update_log(lines: int = 100, _: dict = Depends(_admin)) -> dict:
     from services.update_service import get_update_log

@@ -221,6 +221,7 @@ function UpdateSection() {
   const [refreshing, setRefreshing] = useState(false)
   const [togglingAuto, setTogglingAuto] = useState(false)
   const [msg, setMsg]               = useState(null)
+  const [showResync, setShowResync] = useState(false)
   const pollRef                     = useRef(null)
 
   function flash(ok, text) {
@@ -245,11 +246,11 @@ function UpdateSection() {
 
   useEffect(() => {
     clearInterval(pollRef.current)
-    if (status?.update_pending || status?.update_running) {
+    if (status?.update_pending || status?.resync_pending || status?.update_running) {
       pollRef.current = setInterval(() => { loadStatus(); if (showLog) loadLog() }, 8000)
     }
     return () => clearInterval(pollRef.current)
-  }, [status?.update_pending, status?.update_running, showLog])
+  }, [status?.update_pending, status?.resync_pending, status?.update_running, showLog])
 
   async function applyUpdate() {
     if (!status?.daemon_active) {
@@ -283,7 +284,8 @@ function UpdateSection() {
     }
   }
 
-  const isWorking = status?.update_pending || status?.update_running
+  const isWorking = status?.update_pending || status?.resync_pending || status?.update_running
+  const ffFailed = status?.last_update?.result === 'ff-failed' && !isWorking
 
   return (
     <div className="card p-5 space-y-3">
@@ -361,19 +363,35 @@ function UpdateSection() {
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-sm text-blue-700 dark:text-blue-300">
               {status.update_running
                 ? '⟳ Update in progress — app will restart momentarily.'
+                : status.resync_pending
+                ? '⏳ Resync queued — daemon will apply it within 60 seconds.'
                 : '⏳ Update queued — daemon will apply it within 60 seconds.'}
             </div>
           )}
 
           {status.last_update?.result && !['success', 'up-to-date'].includes(status.last_update.result) && !isWorking && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-700 dark:text-red-300">
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-700 dark:text-red-300 space-y-2">
+              <p>
               {status.last_update.result === 'rollback'
                 ? '⚠ Last update failed and was rolled back automatically. Check the log below.'
                 : status.last_update.result === 'fetch-failed'
                 ? '⚠ Last update could not fetch new code from GitHub (nothing was changed). Check the host repo\'s remote URL/credentials and the log below.'
                 : status.last_update.result === 'success-stamp-failed'
                 ? '⚠ Last update deployed, but the new version could not be recorded — check brain/_system permissions and the log below.'
+                : status.last_update.result === 'resync-failed'
+                ? '⚠ The resync fix itself failed — this needs manual attention. Check the log below.'
+                : status.last_update.result === 'ff-failed'
+                ? '⚠ Last update refused to apply — this instance\'s git history no longer shares commits with the latest release (most likely the project rewrote its history upstream since this instance last updated). Nothing was changed.'
                 : `⚠ Last update did not complete (${status.last_update.result}). Check the log below.`}
+              </p>
+              {ffFailed && (
+                <button
+                  onClick={() => setShowResync(true)}
+                  className="text-sm font-medium underline hover:no-underline"
+                >
+                  Fix Automatically →
+                </button>
+              )}
             </div>
           )}
 
@@ -422,6 +440,115 @@ function UpdateSection() {
           )}
         </>
       )}
+
+      {showResync && (
+        <ResyncModal
+          onClose={() => setShowResync(false)}
+          onQueued={() => { setShowResync(false); loadStatus() }}
+          flash={flash}
+          currentVersion={status.current_version}
+          latestVersion={status.latest_version}
+        />
+      )}
+    </div>
+  )
+}
+
+function ResyncModal({ onClose, onQueued, flash, currentVersion, latestVersion }) {
+  const [running, setRunning] = useState(false)
+  const [copied, setCopied]   = useState(false)
+  const fixCommand = 'git fetch origin --force --tags && git reset --hard origin/master'
+  const compareUrl = currentVersion && latestVersion
+    ? `https://github.com/LogCoreTech/LogCoreOS/compare/v${currentVersion}...v${latestVersion}`
+    : null
+
+  async function copyCommand() {
+    try {
+      await navigator.clipboard.writeText(fixCommand)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch { /* clipboard permission denied — the text is still selectable */ }
+  }
+
+  async function runFix() {
+    if (!confirm(
+      'Reset this instance\'s local git history to match the latest release?\n\n' +
+      'This discards only local git commits — your Brain data lives outside the repo ' +
+      'and is never touched. The daemon will then rebuild and restart as a normal update would.'
+    )) return
+    setRunning(true)
+    try {
+      await updateApi.resync()
+      flash(true, 'Resync queued — the daemon will apply it within 60 seconds.')
+      onQueued()
+    } catch (e) {
+      flash(false, e.message || 'Failed to queue resync')
+      setRunning(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-card max-w-lg" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold">Fix Update Divergence</h2>
+          <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-600">✕</button>
+        </div>
+
+        <div className="space-y-3 text-sm">
+          <p className="text-charcoal-600 dark:text-charcoal-300">
+            The last update refused to apply because this instance&apos;s local git history no
+            longer shares commits with the latest release — most likely the project rewrote
+            its published history upstream (rare; usually to remove something that should
+            never have been committed, like a leaked internal detail) since this instance
+            last updated.
+          </p>
+          <p className="text-charcoal-600 dark:text-charcoal-300">
+            The fix resets <em>only this instance&apos;s copy of the app&apos;s own source code</em> to
+            match the latest release. Your Brain data (tasks, notes, everything under{' '}
+            <code className="text-xs bg-charcoal-100 dark:bg-charcoal-800 px-1 rounded">brain/</code>)
+            lives outside the code repository and is never touched by this.
+          </p>
+          {compareUrl && (
+            <a
+              href={compareUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block text-orange-600 dark:text-orange-400 hover:underline"
+            >
+              See exactly what will change (v{currentVersion} → v{latestVersion}) on GitHub →
+            </a>
+          )}
+
+          <div>
+            <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-1">
+              To do it yourself instead, run this on the host:
+            </p>
+            <div className="flex items-start gap-2 bg-charcoal-900 dark:bg-black rounded-lg p-3">
+              <code className="text-xs font-mono text-charcoal-100 flex-1 break-all">{fixCommand}</code>
+              <button
+                onClick={copyCommand}
+                className="text-xs text-charcoal-400 hover:text-white shrink-0"
+                title="Copy to clipboard"
+              >
+                {copied ? '✓ Copied' : 'Copy'}
+              </button>
+            </div>
+          </div>
+
+          <button
+            onClick={runFix}
+            disabled={running}
+            className="btn-primary text-sm w-full disabled:opacity-50"
+          >
+            {running ? 'Queuing…' : 'Fix Automatically'}
+          </button>
+          <p className="text-xs text-charcoal-500 dark:text-charcoal-400 text-center">
+            Runs the same command above via the update daemon, then rebuilds and restarts
+            like a normal update.
+          </p>
+        </div>
+      </div>
     </div>
   )
 }

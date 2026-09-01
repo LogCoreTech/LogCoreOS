@@ -252,6 +252,7 @@ export const update = {
   status:        ()           => get('/update/status'),
   check:         ()           => post('/update/check', {}),
   apply:         ()           => post('/update/apply', {}),
+  resync:        ()           => post('/update/resync', {}),
   log:           (lines = 100) => get(`/update/log?lines=${lines}`),
   patchSettings: (body)       => patch('/update/settings', body),
 }

@@ -144,6 +144,7 @@ def get_update_status() -> dict:
         "last_checked": info.get("cached_at"),
         "check_error": info.get("error"),
         "update_pending": (_sys() / "pending_update").exists(),
+        "resync_pending": (_sys() / "pending_resync").exists(),
         "update_running": (_sys() / "update_running").exists(),
         "last_update": last_update,
         "daemon_active": daemon_is_active(),
@@ -157,6 +158,18 @@ def trigger_update() -> dict:
     flag.parent.mkdir(parents=True, exist_ok=True)
     flag.write_text(datetime.now(timezone.utc).isoformat())
     logger.info("update triggered via Admin UI")
+    return {"triggered": True}
+
+
+def trigger_resync() -> dict:
+    """Write the pending_resync flag — the host-side update.sh lands the target with
+    `git reset --hard` instead of refusing on divergent local history. See that
+    script's own do_update()/force_resync for why this is safe (no Brain data lives
+    inside the repo checkout this affects)."""
+    flag = _sys() / "pending_resync"
+    flag.parent.mkdir(parents=True, exist_ok=True)
+    flag.write_text(datetime.now(timezone.utc).isoformat())
+    logger.info("resync triggered via Admin UI")
     return {"triggered": True}
 
 
