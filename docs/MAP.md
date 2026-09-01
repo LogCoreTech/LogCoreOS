@@ -253,6 +253,7 @@ LogCoreOS/
         ├── docs_loader.sh         → UserPromptSubmit hook: injects key docs at session start
         ├── docs_reminder.sh       → Stop hook: prompts doc updates at end of each turn
         ├── commit_reminder.sh     → Stop hook: reminds to commit every 30 min if changes exist
+        ├── leak_check.sh          → Stop hook (2026-09-01): scans uncommitted changes + the latest commit for real IPs/secret patterns before they reach the public repo — enforces Security Rule 11, added after two real IPs + a client's name were found already pushed to origin
         └── safety_check.sh        → PreToolUse hook: blocks destructive Bash commands
 ```
 

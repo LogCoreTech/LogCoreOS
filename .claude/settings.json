@@ -12,6 +12,11 @@
             "type": "command",
             "command": "bash \"/home/logcore/LogCoreDEV/LogCoreOS/docs/hooks/commit_reminder.sh\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "bash \"/home/logcore/LogCoreDEV/LogCoreOS/docs/hooks/leak_check.sh\"",
+            "timeout": 5
           }
         ]
       }
