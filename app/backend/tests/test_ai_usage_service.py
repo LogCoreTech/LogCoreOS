@@ -224,7 +224,12 @@ def test_get_overview_sums_personal_and_business(brain):
     svc.record_tokens(USER, "business", 20, 5)
     svc.record_message(USER, "personal")
 
-    month = date.today().strftime("%Y-%m")
+    # record_tokens/record_message bucket by today_for_user(), not the system
+    # clock's own date.today() — USER isn't a real registered user here, so
+    # that resolves to plain UTC. Matching the same basis here (rather than
+    # date.today()) keeps this test correct across the UTC-midnight boundary
+    # regardless of what timezone the machine running it is in.
+    month = today_for_user(USER).strftime("%Y-%m")
     overview = svc.get_overview(month)
     assert overview["personal"]["input_tokens"] == 100
     assert overview["business"]["input_tokens"] == 20
@@ -236,7 +241,11 @@ def test_get_user_rows_includes_every_registered_user(brain):
     create_user("member@example.com", "password123", USER)
     svc.record_message(USER, "personal")
 
-    rows = svc.get_user_rows()
+    # Same reasoning as test_get_overview_sums_personal_and_business above:
+    # pin the query month to the same basis record_message() wrote under
+    # instead of relying on get_user_rows()'s own date.today()-based default,
+    # which disagrees with it for a few hours around UTC midnight.
+    rows = svc.get_user_rows(today_for_user(USER).strftime("%Y-%m"))
     names = [r["name"] for r in rows]
     assert USER in names
     row = next(r for r in rows if r["name"] == USER)

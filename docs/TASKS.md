@@ -36,9 +36,6 @@ From the 2026-07-19 audit (full detail in `docs/Security-Audit-2026-07-19.md`) p
 
 ## Launch surface (dev work only — business/ops/marketing items tracked in the private Business repo's `TASKS.md`, not here)
 
-- [ ] **AI cost protection for demo** — the per-user daily message cap is done (Admin → AI Usage & Limits, mode: hard + period: daily already supports this); remaining work is just the Haiku model switch
-- [ ] **Daily demo reset script** — cron wipe of non-admin Brain folders + auth entries nightly
-- [ ] **Demo banner in UI** — "this is a demo, data resets nightly"
 - [ ] **Screenshots in README** — 3+ images + a 30-second GIF of the AI using its memory
 - [ ] **CONTRIBUTING.md** — how to run locally and submit a PR (CLA/DCO decision this depends on is tracked in the private Business repo — legal/licensing strategy, not dev work)
 

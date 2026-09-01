@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { auth as authApi, modStore as modStoreApi } from './api'
 import { applyAccentColor, applyDarkMode, applyBackground, applyDensity, applyCornerStyle, getSystemDarkPreference } from './theme'
-import DemoBanner from '../components/DemoBanner'
 
 const AuthContext = createContext(null)
 
@@ -38,8 +37,11 @@ export function AuthProvider({ children }) {
   }
 
   // Instance-wide, not user-specific — fetched once regardless of login
-  // state (the public /auth/status endpoint), so the banner shows on the
-  // login screen too, not just once inside the app.
+  // state (the public /auth/status endpoint) and exposed via context so
+  // both Layout.jsx and Login.jsx can render DemoBanner themselves, each
+  // in the right spot for their own page structure — this provider used to
+  // render it once at the very top, above Layout's entire sidebar/header,
+  // which is the "appears above the header" bug that got reported.
   useEffect(() => {
     authApi.status().then(s => setDemoMode(!!s.demo_mode)).catch(() => {})
   }, [])
@@ -174,7 +176,6 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{ user, login, logout, updateUserField, refreshUser, demoMode, activeModuleIds, refreshActiveModules }}>
-      {demoMode && <DemoBanner />}
       {children}
     </AuthContext.Provider>
   )

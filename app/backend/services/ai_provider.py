@@ -54,7 +54,14 @@ def _get_config() -> dict:
     base = vars(settings).copy()
     # vars(settings) may include Path objects — convert brain_path for safety
     base["brain_path"] = str(base.get("brain_path", ""))
-    return {**base, **_load_ai_settings()}
+    merged = {**base, **_load_ai_settings()}
+    # Demo cost protection: force the cheap model regardless of whatever an admin
+    # configured in ai_settings.json — a public demo takes unattended registrations,
+    # so this can't be an opt-in the admin has to remember. Anthropic-only; a demo
+    # instance running the openai provider isn't a case worth guarding here.
+    if merged.get("demo_mode") and merged.get("ai_provider", "anthropic") == "anthropic":
+        merged["ai_model"] = merged.get("demo_ai_model", "claude-haiku-4-6")
+    return merged
 
 
 def is_ai_configured() -> bool:

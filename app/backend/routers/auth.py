@@ -1,5 +1,6 @@
 import logging
 import re
+import secrets
 import shutil
 from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -37,6 +38,7 @@ _login_limit = rate_limit(
     5, 300, bucket="auth-login"
 )  # 5 credential checks / 5 min, shared by /login + /token
 _register_limit = rate_limit(3, 3600)  # 3 registrations per hour
+_demo_login_limit = rate_limit(5, 3600)  # 5 one-click demo accounts per hour per IP
 _me_limit = rate_limit(10, 60)  # 10 profile updates per minute
 _get_me_limit = rate_limit(30, 60)  # 30 GET /me or /today per minute (polled endpoints)
 _status_limit = rate_limit(20, 60)  # 20 /status checks per minute (public)
@@ -52,6 +54,13 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+
+class DemoLoginRequest(BaseModel):
+    # Browser-detected IANA zone (frontend's own _detectTz() helper) — best-effort,
+    # falls back to UTC. Never validated against the real zone list here; setup_user()
+    # already does that and a demo account isn't worth a second check for.
+    timezone: str = "UTC"
 
 
 def _set_auth_cookie(response: Response, token: str, session_minutes: int) -> None:
@@ -227,6 +236,99 @@ def register(
         user["workspaces"] = ["personal", "business"]
     token = auth_service.create_token(user)
     _set_auth_cookie(response, token, auth_service.get_effective_session_minutes())
+    effective = get_effective_disabled(
+        user.get("feature_role", "member"),
+        user.get("disabled_modules", []),
+        "personal",
+    )
+    return {
+        "id": user["id"],
+        "name": user["name"],
+        "role": user["role"],
+        "disabled_modules": effective,
+        "workspaces": user.get("workspaces", ["personal"]),
+        "timezone": user.get("timezone", "UTC"),
+        "accent_color": user.get("accent_color"),
+        "dark_mode": user.get("dark_mode", "system"),
+        "background": user.get("background"),
+        "density": user.get("density", "comfortable"),
+        "corner_style": user.get("corner_style", "rounded"),
+    }
+
+
+_DEMO_ADJECTIVES = [
+    "Swift",
+    "Curious",
+    "Bright",
+    "Quiet",
+    "Bold",
+    "Clever",
+    "Gentle",
+    "Sunny",
+    "Wandering",
+    "Steady",
+    "Nimble",
+    "Calm",
+]
+_DEMO_NOUNS = [
+    "Otter",
+    "Falcon",
+    "Fox",
+    "Heron",
+    "Wolf",
+    "Sparrow",
+    "Badger",
+    "Lynx",
+    "Raven",
+    "Hare",
+    "Finch",
+    "Marten",
+]
+# Mirrors pages/Setup.jsx's own BASE_CATEGORIES exactly — a demo account skips
+# the setup wizard entirely, so it needs the same default a real user would
+# have picked there, not an invented alternative.
+_DEMO_PRIORITIES = ["Religion", "Family", "Job", "Personal Growth", "Hobbies"]
+
+
+@router.post("/demo-login")
+def demo_login(req: DemoLoginRequest, response: Response, _rl: None = Depends(_demo_login_limit)):
+    """One-click account for a public demo instance — no email/password/setup wizard.
+    Asking a curious visitor to fill out a registration form before they've seen
+    anything is exactly the friction a demo exists to remove.
+
+    Only available when DEMO_MODE is on — a personal/managed instance always 404s
+    here, the same safety posture demo_reset.py takes for its own destructive
+    counterpart (both gate on the instance-level flag, never a per-request check
+    a caller could influence). Rate-limited same as /register; a demo account's
+    own blast radius is bounded further by the nightly reset wiping it anyway.
+    """
+    if not settings.demo_mode:
+        raise HTTPException(status_code=404)
+
+    name = f"{secrets.choice(_DEMO_ADJECTIVES)} {secrets.choice(_DEMO_NOUNS)}"
+    # Never surfaced anywhere — the auth cookie set below is this account's only
+    # credential. A demo visitor has no password to remember or lose.
+    email = f"demo-{secrets.token_hex(6)}@demo.logcoretech.invalid"
+    password = secrets.token_urlsafe(24)
+
+    try:
+        user = auth_service.create_user(email, password, name, role="member", timezone=req.timezone)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    token = auth_service.create_token(user)
+    _set_auth_cookie(response, token, auth_service.get_effective_session_minutes())
+
+    # Provision the Brain folder directly with the same defaults a real user
+    # would pick in the wizard — reuses setup_user() itself rather than
+    # duplicating its template-copy/self-contact/features-init logic.
+    from routers.setup import SetupRequest, setup_user
+
+    setup_user(
+        SetupRequest(priority_order=_DEMO_PRIORITIES, timezone=req.timezone, profile="personal"),
+        current_user=user,
+    )
+
     effective = get_effective_disabled(
         user.get("feature_role", "member"),
         user.get("disabled_modules", []),

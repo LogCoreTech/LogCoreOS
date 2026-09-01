@@ -84,6 +84,12 @@ class Settings(BaseSettings):
     # personal/family instance by mistake can't silently wipe real user data).
     # Never set this on a personal or managed-hosting instance.
     demo_mode: bool = False
+    # Model forced for every AI call when demo_mode is on, regardless of whatever
+    # ai_model an admin has configured — a demo instance takes unattended registrations,
+    # so cost protection can't depend on an admin remembering to pick a cheap model.
+    # Anthropic-only (matches this app's own default provider); has no effect when
+    # ai_provider is "openai" — see ai_provider.py::_get_config().
+    demo_ai_model: str = "claude-haiku-4-6"
 
     # Set to true when running behind a trusted reverse proxy (nginx, Caddy).
     # Allows the rate limiter to read the real client IP from X-Forwarded-For.

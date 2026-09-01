@@ -28,6 +28,7 @@ services:
       OVERDUE_CHECK_HOUR: ${OVERDUE_CHECK_HOUR:-19}
       ALLOW_OPEN_REGISTRATION: ${ALLOW_OPEN_REGISTRATION:-false}
       DEMO_MODE: ${DEMO_MODE:-false}
+      DEMO_AI_MODEL: ${DEMO_AI_MODEL:-claude-haiku-4-6}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
       # Managed hosting only — leave all three blank for self-hosted

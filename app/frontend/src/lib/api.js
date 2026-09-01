@@ -105,6 +105,7 @@ export const auth = {
   register: (email, password, name, session_minutes) =>
     post('/auth/register', { email, password, name, session_minutes }),
   login:            (email, password) => post('/auth/login',   { email, password }),
+  demoLogin:        (timezone)        => post('/auth/demo-login', { timezone }),
   logout:           ()                => post('/auth/logout',  {}),
   token:            (email, password) => post('/auth/token',   { email, password }),
   me:               ()                => get('/auth/me'),

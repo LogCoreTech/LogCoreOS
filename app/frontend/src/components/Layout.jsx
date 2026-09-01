@@ -11,6 +11,7 @@ import { dashboards as dashboardsApi, dashboardTemplates as dashboardTemplatesAp
 import { notes as notesApi } from '../module_packages/notes/frontend/api'
 import { deepLinkUrl } from '../lib/deepLinks'
 import WhatsNewBanner from './WhatsNewBanner'
+import DemoBanner from './DemoBanner'
 import GlobalSearch from './GlobalSearch'
 
 // Shared by the sidebar's main nav loop and its new Pinned section
@@ -210,7 +211,7 @@ function NotifBell() {
 }
 
 export default function Layout() {
-  const { user, logout, refreshUser } = useAuth()
+  const { user, logout, refreshUser, demoMode } = useAuth()
   const { workspace, switchWorkspace } = useWorkspace()
   const navigate = useNavigate()
   const location = useLocation()
@@ -481,6 +482,7 @@ export default function Layout() {
           </div>
         </header>
 
+        {demoMode && <DemoBanner />}
         <WhatsNewBanner />
 
         {/* 2026-08-15: briefly split padding onto an inner wrapper here to

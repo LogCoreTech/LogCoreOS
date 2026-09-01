@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { auth as authApi, setup as setupApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import DemoBanner from '../components/DemoBanner'
 
 export default function Login() {
   const [mode, setMode] = useState('login')
@@ -12,7 +13,8 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [registrationOpen, setRegistrationOpen] = useState(null) // null = loading
   const [bgLoaded, setBgLoaded] = useState(false)
-  const { login } = useAuth()
+  const [demoLoading, setDemoLoading] = useState(false)
+  const { login, demoMode } = useAuth()
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -44,8 +46,28 @@ export default function Login() {
     }
   }
 
+  async function handleDemoLogin() {
+    setError('')
+    setDemoLoading(true)
+    try {
+      let tz = 'UTC'
+      try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { /* keep UTC */ }
+      const me = await authApi.demoLogin(tz)
+      login(me.id, me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC', me.accent_color || null, me.dark_mode || 'system', me.background || null, me.density || 'comfortable', me.corner_style || 'rounded', me.workspaces || ['personal'])
+      // Setup already ran server-side (demo-login provisions the Brain folder
+      // directly) — straight into the app, no /setup detour.
+      navigate('/')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setDemoLoading(false)
+    }
+  }
+
   return (
-    <div className="relative min-h-screen flex items-center justify-center p-4 bg-charcoal-900 overflow-hidden">
+    <>
+      {demoMode && <DemoBanner />}
+      <div className="relative min-h-screen flex items-center justify-center p-4 bg-charcoal-900 overflow-hidden">
       {/* Fade the banner in once fully loaded so the large PNG never paints
           top-to-bottom — the solid bg shows until the image is ready. */}
       <img
@@ -80,7 +102,7 @@ export default function Login() {
                       : 'text-charcoal-500 dark:text-charcoal-400'
                   }`}
                 >
-                  {m === 'login' ? 'Sign In' : 'Create Account'}
+                  {m === 'login' ? 'Sign In' : demoMode ? 'Try the Demo' : 'Create Account'}
                 </button>
               ))}
             </div>
@@ -98,6 +120,32 @@ export default function Login() {
             </div>
           )}
 
+          {mode === 'register' && demoMode ? (
+            <div className="space-y-4">
+              <p className="text-sm text-center text-charcoal-600 dark:text-charcoal-300">
+                Generates a random guest account — no email or password needed. Everything resets nightly.
+              </p>
+              {error && <p className="text-red-500 text-sm">{error}</p>}
+              <button
+                type="button"
+                onClick={handleDemoLogin}
+                disabled={demoLoading}
+                className="w-full py-2 rounded-lg font-medium text-white bg-[#f97316] hover:bg-[#ea580c] transition-colors disabled:opacity-60"
+              >
+                {demoLoading ? 'Creating your demo account…' : 'Generate my demo account →'}
+              </button>
+              <p className="text-xs text-center text-charcoal-500 dark:text-charcoal-400">
+                By continuing you agree to our{' '}
+                <a href="https://logcoretech.com/privacy/" target="_blank" rel="noopener noreferrer" className="underline hover:text-charcoal-700 dark:hover:text-charcoal-200">
+                  Privacy Policy
+                </a>{' '}
+                and{' '}
+                <a href="https://logcoretech.com/terms/" target="_blank" rel="noopener noreferrer" className="underline hover:text-charcoal-700 dark:hover:text-charcoal-200">
+                  Terms of Service
+                </a>.
+              </p>
+            </div>
+          ) : (
           <form onSubmit={submit} className="space-y-4">
             {mode === 'register' && (
               <div>
@@ -169,8 +217,10 @@ export default function Login() {
               </p>
             )}
           </form>
+          )}
         </div>
       </div>
-    </div>
+      </div>
+    </>
   )
 }
