@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+
+- Pinned a transitive `browserslist` dependency (pulled in via Autoprefixer/ESLint tooling) to a patched version, closing a Dependabot-flagged crash/prototype-pollution bug. Build-tooling only — never runs inside the deployed app — but a free, zero-risk fix.
+
 ## [0.7.1] — 2026-09-01
 
 ### Added
