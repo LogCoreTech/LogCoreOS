@@ -14,6 +14,8 @@ import RecurringPanel from './RecurringPanel'
 import InvoicesPanel from './InvoicesPanel'
 import ReportsPanel from './ReportsPanel'
 import { fmtMoney, monthStr } from '../../../components/finance/money'
+import ConfirmDialog from '../../../components/ConfirmDialog'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 export default function Finance() {
   const { user } = useAuth()
@@ -31,6 +33,7 @@ export default function Finance() {
   const [showArchived, setShowArchived] = useState(false)
   const [assetList, setAssetList] = useState([]) // for the tx linked-asset picker; [] if assets module off
   const [invoicePrefill, setInvoicePrefill] = useState(null) // {contactId, amountCents, title, dealId} from a deal
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
 
   useEffect(() => {
     assetsApi.list().then(r => setAssetList(Array.isArray(r) ? r : [])).catch(() => setAssetList([]))
@@ -44,13 +47,20 @@ export default function Finance() {
   const canAddTx = canEdit || (isContribute && (caps.add || []).length > 0)
   const isSharedToMe = active?._owner && active._owner !== 'household' && active._owner !== 'team'
 
-  async function leaveBook() {
-    if (!window.confirm(`Leave "${active.name}"? The owner keeps the book; you lose access.`)) return
-    try {
-      await financeApi.leaveBook(active.id)
-      setActiveId(null)
-      load(false)
-    } catch { /* surfaced by reload */ }
+  function leaveBook() {
+    setConfirmState({
+      title: 'Leave book',
+      message: `Leave "${active.name}"? The owner keeps the book; you lose access.`,
+      confirmLabel: 'Leave',
+      onConfirm: async () => {
+        setConfirmState(null)
+        try {
+          await financeApi.leaveBook(active.id)
+          setActiveId(null)
+          load(false)
+        } catch { /* surfaced by reload */ }
+      },
+    })
   }
 
   async function load(keepActive = true) {
@@ -274,6 +284,17 @@ export default function Finance() {
           onClose={() => setTransferModal(null)}
           onSaved={() => { setTransferModal(null); load() }}
           onDeleted={() => { setTransferModal(null); load() }}
+        />
+      )}
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
         />
       )}
 
@@ -558,6 +579,7 @@ function NewBookModal({ workspace, isAdmin, onClose, onCreated }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const poolLabel = workspace === 'business' ? 'team' : 'household'
+  useEscapeToClose(onClose)
 
   async function submit(e) {
     e.preventDefault()

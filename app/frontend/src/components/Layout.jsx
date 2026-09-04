@@ -11,6 +11,7 @@ import { dashboards as dashboardsApi, dashboardTemplates as dashboardTemplatesAp
 import { notes as notesApi } from '../module_packages/notes/frontend/api'
 import { deepLinkUrl } from '../lib/deepLinks'
 import WhatsNewBanner from './WhatsNewBanner'
+import WelcomeBackPopup from './WelcomeBackPopup'
 import DemoBanner from './DemoBanner'
 import GlobalSearch from './GlobalSearch'
 
@@ -484,6 +485,7 @@ export default function Layout() {
 
         {demoMode && <DemoBanner />}
         <WhatsNewBanner />
+        <WelcomeBackPopup />
 
         {/* 2026-08-15: briefly split padding onto an inner wrapper here to
             keep the scrollbar off the edge of the padded content — reverted

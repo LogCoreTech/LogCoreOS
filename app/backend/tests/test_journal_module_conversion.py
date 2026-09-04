@@ -22,16 +22,17 @@ def test_m015_marks_journal_installed_on_upgrade(brain):
     assert mod_store_service.is_installed("journal")
 
 
-def test_m015_noop_on_fresh_install(brain):
-    """No _system/features.json yet means this Brain never went through the
-    always-on-journal era — it should start with journal NOT installed,
-    matching the actual goal of slimming the default install."""
+def test_m015_installs_journal_on_fresh_install(brain):
+    """Journal is one of the 4 modules (journal, calendar, notes, goals)
+    that joined the fresh-install default baseline (2026-09-04 UX Polish
+    Batch, item #12), so it should now be installed unconditionally, same
+    as on an upgrading instance. See docs/MEMORY.md's 2026-09-04 entry."""
     # brain fixture creates _system/ but not features.json — genuinely fresh
     assert not (brain / "_system" / "features.json").exists()
 
     run_pending(brain)
 
-    assert not mod_store_service.is_installed("journal")
+    assert mod_store_service.is_installed("journal")
 
 
 def test_on_install_backfills_journal_folder_for_existing_users(brain):

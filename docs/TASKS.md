@@ -23,6 +23,50 @@ Keep this up to date. When a task is completed, **remove it** rather than checki
 
 ---
 
+## UX Polish Batch — owner-approved 2026-09-04, Tier 1+2 shipped, Tier 3+4 in progress
+
+Full triage of the former "Cross-App UX & Polish" Idea Backlog list (34 items), dispositioned item-by-item with the owner via a structured interview (2026-09-04), then scoped into 4 dependency-ordered tiers via a second interview round in plan mode. Tier 1 (foundation) and Tier 2 fully built, tested (backend suite 1315 passed), and verified — see `docs/Daily Notes/2026-09-04.md`'s matching entry for the full build writeup. Remaining items below are Tier 3/4, not yet built.
+
+- [ ] **Bulk actions** — multi-select archive/delete/tag across Tasks, Notes, Assets, Contacts. Bulk-delete must route through the soft-delete/trash-bin item below once it exists, never a hard delete.
+- [ ] **Soft-delete / trash bin** — the single biggest gap in this backlog, and the largest remaining item. 30-day restore window, one shared Trash page respecting each module's own access rules, a new scheduler purge job. Every module's delete path — including every AI delete tool, not just human UI deletes — must route through it; this is the actual fix for the AI & Chat Agent backlog's #1 flagged finding (Auto mode destructive actions, no undo).
+- [ ] **App-wide search fast-follow** — cross-workspace search (permission-checked, auto-switches workspace, shows a toast) + per-provider "show more" pagination. Real relevance ranking is explicitly NOT part of this item (belongs to the future RAG project).
+- [ ] **Onboarding seed data** — one example item (prefixed "Example: ...") per module at account creation, via the existing per-module `on_new_user()` hook — Tasks, Notes, Journal, Calendar, Goals, Assets, Contacts, Finance.
+- [ ] **"Today at a glance" dashboard block** — opt-in via Add Block, needs an explicit `module=` gate before shipping (likely `dashboard` itself).
+- [ ] **Accessibility (a11y) pass** — baked into Tier 1/2's new components already (ConfirmDialog/Toast/WelcomeBackPopup all have real ARIA/keyboard/focus handling); what's left is an audit of pre-existing pages built before this batch, plus real touch-target sizing (44×44px) on new interactive elements.
+- [ ] **Purpose-built empty states with a CTA per module** — one shared `EmptyState` component, custom copy per module.
+- [ ] **Command palette / quick-add (Cmd+K)** — settings storage exists (`command_palette_enabled`/`command_palette_actions` on `auth.json`, `PATCH /auth/me`), but the actual "create" mode on `GlobalSearch.jsx` and the Settings → Shortcuts customization UI are NOT built yet.
+- [ ] **A shared toast/snackbar component** — `lib/toast.jsx` (`ToastProvider`/`useToast`) is built and mounted app-wide, but not yet adopted by any specific feature. #10 (search workspace-switch) is its first intended real caller.
+- [ ] **Warn before discarding unsaved form changes** — dirty-check on every form; when built, wire into the existing `useEscapeToClose(onClose, { hasUnsavedChanges, onUnsavedAttempt })` second-argument shape already reserved for it.
+- [ ] **Visible offline-state banner** instead of scattered per-request error messages.
+- [ ] **Swipe gestures** for common list actions (complete, archive) — swipe-right = primary, swipe-left = secondary.
+- [ ] **Show/hide password toggle** on Login/Register.
+- [ ] **`autoComplete` attributes on auth forms** — confirmed real gap (`pages/Login.jsx`'s email/password inputs have none today).
+- [ ] **Persist list-view filter/sort choices** — server-side per-account (new `auth.json` field via the existing locked `update_json()` helper), not localStorage.
+- [ ] **Plain "Duplicate" action** on Tasks/Events/Transactions — copies everything except completion/streak state; a duplicated pool item stays in the pool, a personal item stays personal.
+- [ ] **"Save & add another"** on create modals — retains shared context fields (category/book/account), clears identifying fields (title/amount); may need smaller buttons on mobile.
+- [ ] **Role-aware empty-state/Getting Started messaging** for guest/restricted feature-role users.
+- [ ] **Context-aware destructive-action warnings** in `ConfirmDialog` (e.g. "You'll lose its 90-day streak") — curated highest-value subset (streaks, unread counts, linked-record counts), not all 34 sites. `ConfirmDialog` itself now exists, so this is unblocked.
+- [ ] **Custom app icon/splash screen per accent color** for PWA install — only affects fresh installs going forward.
+- [ ] **Pull-to-refresh + diff-based list refresh** — tracked as one item, all list views at once. Diffing applies to every list refresh (any refetch), not just the pull gesture — desktop has no pull gesture but still needs the underlying fix.
+
+**Group Home Assistant entities by room/area** — removed from this batch (real scope: `ha_service.get_areas()` returns only a flat area-name list and is called from nowhere in the frontend; no entity-to-area mapping exists). Re-scope alongside other Home Assistant module backlog work.
+
+**Shipped, Tier 1+2 (2026-09-04):**
+- ConfirmDialog (all 34 `confirm()` sites migrated), Toast/snackbar infrastructure, Escape-to-close (retrofitted into ~40 existing modals)
+- Progressive module/nav disclosure — fresh instances now auto-install Journal/Calendar/Notes/Goals alongside the always-on Tasks/Chat/Dashboards
+- Welcome-back popup with optional AI summary
+- "This week at a glance" as a 5th `suggestions_service.py` builtin (daily/weekly cadence)
+
+**Declined/dropped this session — do not re-propose without new information:**
+- Native app-store wrapper (Capacitor) — dropped entirely. Doesn't remove the server dependency (this app was never offline-first) and the update-cycle concern is largely avoidable (a WebView pointed at the live domain means only native shell/plugin changes need store review) — but the owner judged it not worth building regardless.
+- Non-color priority signal — retired. `Tasks.jsx:344` already renders priority as a plain text badge, not just a color (verified 2026-09-04); no color-only indicator exists anywhere in the app. Original backlog premise was stale.
+- Split pasted comma/newline text into multiple tags (TagInput) — declined, owner's call.
+
+**Deferred, revisit after the rest of this batch ships:**
+- **User avatar / Profile-Contact merge** — owner wants Profile and the self-contact to eventually become the same record, with per-field privacy (others see only what the owner explicitly allows). Real architectural question raised and researched this session, deliberately parked: self-contact today is NOT stored in the user's own Brain folder — it's deliberately stored in the `_household` pool (`contacts_service.py:230-234`, verified 2026-09-04) specifically so it (a) survives account deletion for free and (b) is cross-workspace visible for free; moving it into the user's own folder would solve module-independence (today the feature breaks if Contacts is uninstalled) but reopen both of those already-solved problems. Two live options when this returns: (1) cheap fix — promote just the photo (maybe display name) to a core `auth.json` field, independent of Contacts entirely, mirroring how `get_profile`/`update_profile` already stayed core independent of Contacts' module state; (2) the full merge — Profile becomes the self-contact, gets permanent/uninstallable-module status (mirroring Tasks/Chat/Dashboards, since Profile is already unconditionally core), plus a new field-level privacy primitive (real small precedent already exists: `_PRIVATE_SHORT_FIELDS` hardcodes height/weight as always-private on a self-contact). Owner explicitly wants this held until the rest of this batch is done, not decided now.
+
+---
+
 ## Security
 
 From the 2026-07-19 audit (full detail in `docs/Security-Audit-2026-07-19.md`) plus later findings. All CRITICAL/HIGH items are shipped — see `CHANGELOG.md` [0.4.0]. What's left, roughly in order:
@@ -188,7 +232,7 @@ Generated across a systematic search→generate→compare→document pass over t
 ### AI & Chat Agent
 
 - **Auto mode executes destructive AI actions (deletes) with zero human confirmation, and there is still no trash/undo backstop anywhere in the app.** The single most severe finding in the original backlog pass — an AI in Auto mode that misreads an instruction can permanently destroy real data with no confirmation and no recovery path. Fix before promoting Auto mode as safe for general use: either keep destructive tools approval-gated even in Auto mode, or ship a trash-bin/soft-delete backstop so any AI-driven delete is recoverable regardless of mode.
-- AI change-log / "what the AI did while I was away" digest. No single place reviews what the AI actually touched over time — the trust-building differentiator unique to an AI-native life OS, and the strongest true product differentiator in the whole backlog.
+- ~~AI change-log / "what the AI did while I was away" digest~~ — shipped as the Welcome-back popup (UX Polish Batch section above, 2026-09-04) — the two ideas merged into one feature.
 - Cross-module AI proactivity — surface overdue follow-ups, open deals, and 30-day-overdue linked invoices via the existing suggestions engine; the linking data already exists, this just makes it visible.
 - "Ask your Brain" natural-language search (RAG-lite stepping stone) ahead of the full v0.2 RAG project.
 - AI usage transparency widget for the end user, not just the admin.
@@ -207,40 +251,11 @@ Generated across a systematic search→generate→compare→document pass over t
 
 ### Cross-App UX & Polish
 
-- Accessibility (a11y) pass — keyboard nav, focus states, ARIA labels, color-contrast audit. Genuinely absent anywhere in the app or its docs. Real legal exposure (ADA/EN 301 549) once managed hosting has paying customers, and a credibility signal reviewers explicitly call out.
-- Purpose-built empty states with a clear CTA per module.
-- Command palette / quick-add (Cmd+K).
-- Bulk actions (multi-select archive/delete/tag) across Tasks, Notes, Assets, Contacts.
-- Soft-delete / trash bin with a restore window — there's no undo anywhere in the app.
-- Dashboard "this week at a glance" summary strip.
-- Replace all 14 native `confirm()` dialogs app-wide with one shared, styled `ConfirmDialog` component.
-- Universal Escape-to-close for every modal — zero `Esc` handling exists anywhere.
-- Warn before discarding unsaved form changes — no dirty-check exists on any form in the app.
-- **App-wide search fast-follow (deliberately deferred out of the 2026-08-29/30 rollout, not built)**: cross-workspace search (a dual-workspace user's search today only covers their active workspace — Chat's own `cross_workspace` toggle is the precedent to mirror), per-provider "show more" pagination (`search_service.py`'s `_PER_PROVIDER_CAP`/`_TOTAL_CAP` silently truncate today with no affordance to see the rest), and real relevance ranking across providers (results are grouped by module with no cross-module ordering — that's the roadmapped RAG project's own job, not this feature's). See `docs/MEMORY.md`'s 2026-08-29 entry (App-wide search bar + universal tags) for the full design this builds on.
-- Onboarding sample data toggle ("load example tasks/notes/finance book to explore").
-- Progressive module/nav disclosure for new users (a smaller starter set that expands with engagement).
-- Micro-interaction pass: loading skeletons, save-confirmation toasts, subtle transitions where still missing.
-- Keyboard shortcuts overlay.
-- Native app-store wrapper (Capacitor) for iOS/Android.
-- Visible offline-state banner instead of scattered per-request error messages.
-- Swipe gestures for common list actions (complete, archive).
-- Show/hide password toggle on Login/Register.
-- User avatar/profile picture.
-- Group Home Assistant entities by room/area instead of domain-only tabs.
-- Add standard `autoComplete` attributes to auth forms.
-- Persist list-view filter/sort choices instead of resetting on every navigation.
-- Plain "Duplicate" action on Tasks/Events/Transactions.
-- "Save & add another" option on create modals for batch entry.
-- A distinct "welcome back" Dashboard state after a long absence.
-- A shared toast/snackbar component, adopted consistently.
-- Add a non-color signal to priority indicators (tooltip at minimum) — currently color-only, a textbook WCAG failure.
-- Role-aware empty-state/Getting Started messaging for guest/restricted feature-role users, whose Dashboard can look nearly empty with no explanation.
-- Context-aware destructive-action warnings in the shared ConfirmDialog (e.g. "You'll lose its 90-day streak") instead of generic delete-confirmation text.
-- "Today at a glance" Dashboard-header indicator — a small ring or "3/7 done today" stat next to the greeting, distinct from the weekly summary strip.
-- Custom app icon/splash screen per accent color for PWA install.
-- Pull-to-refresh on mobile list views.
-- Split pasted comma/newline-separated text into multiple tags in the shared `TagInput` component.
-- "Focus mode" toggle on the Dashboard (collapse to just the Top-3 card).
+Fully triaged 2026-09-04 — see the **UX Polish Batch** section near the top of this file for the 30 approved/specced items (build not yet started) and their disposition. Only one item from the original list wasn't pulled in:
+
+- "Focus mode" toggle on the Dashboard (collapse to just the Top-3 card) — explicitly backlogged 2026-09-04, no build scheduled, still awaiting owner triage like everything else in this section.
+- Group Home Assistant entities by room/area instead of domain-only tabs — approved 2026-09-04, folded into the UX Polish Batch section above (listed there under its own line).
+- User avatar/profile picture — see the UX Polish Batch section's "Deferred" list above; a real architectural question (Profile/Contact merge) is attached to this one, not a simple build.
 
 ### Technical / Architecture / DevOps
 

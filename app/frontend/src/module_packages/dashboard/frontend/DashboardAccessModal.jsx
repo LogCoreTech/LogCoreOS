@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { dashboards as dashboardsApi } from './api'
 import { useAuth } from '../../../lib/auth'
 import TagInput from '../../../components/TagInput'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 export default function DashboardAccessModal({ dashboard, isPool, isOwner, onClose, onSaved }) {
   const { user } = useAuth()
+  useEscapeToClose(onClose)
   const [shared, setShared] = useState(dashboard.shared_with || [])
   const [contributors, setContributors] = useState(dashboard.contributors || [])
   const [hidden, setHidden] = useState(dashboard.hidden_from || [])

@@ -32,12 +32,16 @@ def test_m026_marks_notes_installed_on_upgrade(brain):
     assert mod_store_service.is_installed("notes")
 
 
-def test_m026_noop_on_fresh_install(brain):
+def test_m026_installs_notes_on_fresh_install(brain):
+    """Notes is one of the 4 modules (journal, calendar, notes, goals) that
+    joined the fresh-install default baseline (2026-09-04 UX Polish Batch,
+    item #12), so it should now be installed unconditionally, same as on an
+    upgrading instance. See docs/MEMORY.md's 2026-09-04 entry."""
     assert not (brain / "_system" / "features.json").exists()
 
     run_pending(brain)
 
-    assert not mod_store_service.is_installed("notes")
+    assert mod_store_service.is_installed("notes")
 
 
 def test_install_uninstall_reinstall_round_trip_preserves_data(brain):

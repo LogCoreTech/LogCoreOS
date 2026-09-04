@@ -36,6 +36,7 @@ from routers import (
     suggestions,
     tags,
     update,
+    welcome_back,
 )
 from scheduler import start as start_scheduler
 from services.hosting_service import effective_domain_url
@@ -380,6 +381,7 @@ app.include_router(help.router, prefix="/api/v1/help", tags=["help"])
 app.include_router(ai_usage.router, prefix="/api/v1/ai-usage", tags=["ai-usage"])
 app.include_router(presence.router, prefix="/api/v1/presence", tags=["presence"])
 app.include_router(mod_store.router, prefix="/api/v1/mod-store", tags=["mod-store"])
+app.include_router(welcome_back.router, prefix="/api/v1/welcome-back", tags=["welcome-back"])
 
 # Serve React frontend — must come last
 static_dir = Path(__file__).parent.parent / "frontend" / "dist"

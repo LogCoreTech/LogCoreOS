@@ -75,14 +75,12 @@ def _get_router():
 def m026_backfill_notes_installed_from_existing_data(brain: Path) -> None:
     """Every instance that existed before this migration shipped had notes
     permanently on — mark it installed so upgrading never silently takes the
-    feature away. A genuinely fresh instance has no `_system/features.json`
-    yet, so it correctly skips this and starts with notes NOT installed.
-    Same existence-guard idiom as journal's m015/automations' m019/
-    calendar's m020/household's m022."""
-    features_file = brain / "_system" / "features.json"
-    if not features_file.exists():
-        return
-
+    feature away. Journal, Calendar, Notes, and Goals joined the fresh-install
+    default baseline (2026-09-04 UX Polish Batch, item #12) — unlike the
+    other optional modules, this migration no longer skips on a genuinely
+    fresh instance (no `_system/features.json` yet); it runs unconditionally,
+    once, on any instance, fresh or upgrading. See docs/MEMORY.md's
+    2026-09-04 entry for the full rationale."""
     from services import mod_store_service
     from services.file_service import brain_path
 

@@ -43,15 +43,14 @@ def _get_router():
 def m015_backfill_journal_installed_from_existing_data(brain: Path) -> None:
     """Every instance that existed before this migration shipped had journal
     permanently on — mark it installed so upgrading never silently takes the
-    feature away. A genuinely fresh instance has no `_system/features.json`
-    yet (created during setup, before any migration runs), so it correctly
-    skips this and starts with journal NOT installed — the actual goal
-    (slimming the default install), not a side effect. Same existence-guard
-    idiom migrations/runner.py already uses twice (m007, m008)."""
-    features_file = brain / "_system" / "features.json"
-    if not features_file.exists():
-        return  # fresh install — journal correctly starts uninstalled
-
+    feature away. Journal, Calendar, Notes, and Goals joined the fresh-install
+    default baseline (2026-09-04 UX Polish Batch, item #12) — unlike the other
+    optional modules, this migration no longer skips on a genuinely fresh
+    instance (no `_system/features.json` yet); it runs unconditionally, once,
+    on any instance, fresh or upgrading. See docs/MEMORY.md's 2026-09-04 entry
+    for the full rationale (a fresh instance previously started with only the
+    3 locked modules installed, leaving a new self-hoster to discover the Mod
+    Store cold)."""
     from services import mod_store_service
     from services.file_service import brain_path
 

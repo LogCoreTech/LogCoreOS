@@ -489,6 +489,13 @@ class MeUpdateRequest(BaseModel):
     corner_style: str | None = Field(None, max_length=10)
     shortcuts: dict | None = None  # {"personal": [...], "business": [...]}
     default_dashboard_id: dict | None = None  # {"personal": id|None, "business": id|None}
+    # 2026-09-04 UX Polish Batch settings (items #3, #25 — #6 lives in the
+    # existing suggestions_service.py config instead, not here, see that
+    # service's own this_week_digest entry):
+    command_palette_enabled: bool | None = None
+    command_palette_actions: list[str] | None = None  # module ids to offer as quick-actions
+    welcome_back_ai_summary_enabled: bool | None = None
+    welcome_back_threshold_days: int | None = Field(None, ge=1, le=90)
 
 
 @router.patch("/me")
@@ -511,6 +518,12 @@ def update_me(
         _validate_density(updates["density"])
     if "corner_style" in updates:
         _validate_corner_style(updates["corner_style"])
+    if "command_palette_actions" in updates:
+        cpa = updates["command_palette_actions"]
+        if not isinstance(cpa, list) or not all(isinstance(x, str) for x in cpa):
+            raise HTTPException(
+                status_code=400, detail="command_palette_actions must be a list of module ids"
+            )
     if "shortcuts" in updates:
         sc = updates["shortcuts"]
         if not isinstance(sc, dict):
@@ -561,6 +574,12 @@ def me(current_user: dict = Depends(get_current_user), _rl: None = Depends(_get_
         "corner_style": current_user.get("corner_style", "rounded"),
         "shortcuts": current_user.get("shortcuts", {}),
         "default_dashboard_id": current_user.get("default_dashboard_id", {}),
+        "command_palette_enabled": current_user.get("command_palette_enabled", True),
+        "command_palette_actions": current_user.get("command_palette_actions", []),
+        "welcome_back_ai_summary_enabled": current_user.get(
+            "welcome_back_ai_summary_enabled", False
+        ),
+        "welcome_back_threshold_days": current_user.get("welcome_back_threshold_days", 7),
     }
 
 

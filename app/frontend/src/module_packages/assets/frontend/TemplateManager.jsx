@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { assets as assetsApi } from './api'
 import EmojiPicker from '../../../components/EmojiPicker'
 import TagInput from '../../../components/TagInput'
+import ConfirmDialog from '../../../components/ConfirmDialog'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 const FIELD_TYPES = ['text', 'number', 'date', 'boolean', 'select', 'contact']
 const BLANK_FIELD = { key: '', label: '', type: 'text', options: [], default: '' }
@@ -24,6 +26,9 @@ export default function TemplateManager({ templates, user, onClose, onChanged })
   const [error, setError] = useState('')
   const [members, setMembers] = useState([])
   const [roles, setRoles] = useState([])
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
+
+  useEscapeToClose(onClose)
 
   useEffect(() => {
     assetsApi.members().then(m => setMembers((m || []).map(x => x.name))).catch(() => {})
@@ -117,11 +122,19 @@ export default function TemplateManager({ templates, user, onClose, onChanged })
     } catch (err) { setError(err.message) } finally { setLoading(false) }
   }
 
-  async function remove(t) {
-    if (!confirm(`Delete template "${t.label}"?`)) return
-    setError('')
-    try { await assetsApi.removeTemplate(t.id); await onChanged() }
-    catch (err) { setError(err.message) }
+  function remove(t) {
+    setConfirmState({
+      title: 'Delete template',
+      message: `Delete template "${t.label}"?`,
+      confirmLabel: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmState(null)
+        setError('')
+        try { await assetsApi.removeTemplate(t.id); await onChanged() }
+        catch (err) { setError(err.message) }
+      },
+    })
   }
 
   async function leave(t) {
@@ -341,6 +354,17 @@ export default function TemplateManager({ templates, user, onClose, onChanged })
           </div>
         )}
       </div>
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </div>
   )
 }

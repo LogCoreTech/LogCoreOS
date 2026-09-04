@@ -1,8 +1,10 @@
 """End-to-end verification that a real upgrading instance (one that existed
 before ANY of the 14 converted modules were optional) ends up with every
 formerly-always-on module correctly marked installed after a single
-run_pending() pass — and that a genuinely fresh install correctly leaves
-every optional module NOT installed while the 3 locked ones still are.
+run_pending() pass — and that a genuinely fresh install correctly installs
+only the 3 locked modules plus the 4-module baseline (journal, calendar,
+notes, goals — 2026-09-04 UX Polish Batch, item #12), leaving the remaining
+7 optional modules NOT installed.
 
 This is deliberately broader than any single module's own conversion test:
 each module's own m0XX test proves ITS OWN guard logic works in isolation:
@@ -36,6 +38,14 @@ _OPTIONAL = {
 }
 _ALL_14 = _LOCKED | _OPTIONAL
 
+# 2026-09-04 UX Polish Batch, item #12: a fresh instance no longer starts
+# with only the 3 locked modules — these 4 join the default baseline (their
+# own m015/m020/m026/m031 migrations no longer skip on a fresh instance, see
+# each module's own manifest.py). The remaining 7 optional modules are
+# unaffected and still start uninstalled on a fresh instance.
+_FRESH_INSTALL_BASELINE = {"journal", "calendar", "notes", "goals"}
+_STILL_OPT_IN_ON_FRESH_INSTALL = _OPTIONAL - _FRESH_INSTALL_BASELINE
+
 
 def _seed_pre_existing_instance(brain):
     """Recreate the on-disk state of a real instance that existed before
@@ -60,22 +70,40 @@ def test_upgrading_instance_ends_with_all_14_modules_installed(brain):
     assert not still_missing, f"modules never got marked installed on upgrade: {still_missing}"
 
 
-def test_fresh_install_leaves_optional_modules_uninstalled(brain):
+def test_fresh_install_leaves_opt_in_modules_uninstalled(brain):
     # No features.json, no ha_config.json — a genuinely brand-new instance.
     assert not (brain / "_system" / "features.json").exists()
 
     run_pending(brain)
 
-    still_optional_but_installed = {m for m in _OPTIONAL if mod_store_service.is_installed(m)}
-    assert not still_optional_but_installed, (
-        f"optional modules incorrectly auto-installed on a fresh instance: "
-        f"{still_optional_but_installed}"
+    still_opt_in_but_installed = {
+        m for m in _STILL_OPT_IN_ON_FRESH_INSTALL if mod_store_service.is_installed(m)
+    }
+    assert not still_opt_in_but_installed, (
+        f"opt-in modules incorrectly auto-installed on a fresh instance: "
+        f"{still_opt_in_but_installed}"
     )
     still_locked_but_missing = {m for m in _LOCKED if not mod_store_service.is_installed(m)}
     assert not still_locked_but_missing, (
         f"locked modules must always install regardless of fresh-vs-upgrade: "
         f"{still_locked_but_missing}"
     )
+
+
+def test_fresh_install_gets_the_baseline_modules(brain):
+    """The 2026-09-04 UX Polish Batch item #12 fix: a fresh instance should
+    no longer start with only the 3 locked modules — journal, calendar,
+    notes, and goals join them automatically, no wizard/CLI prompt, no new
+    UI. Everything else optional (home_assistant, automations, household,
+    team, assets, contacts, finance) stays opt-in via the Mod Store."""
+    assert not (brain / "_system" / "features.json").exists()
+
+    run_pending(brain)
+
+    missing_baseline = {m for m in _FRESH_INSTALL_BASELINE if not mod_store_service.is_installed(m)}
+    assert (
+        not missing_baseline
+    ), f"baseline modules not auto-installed on a fresh instance: {missing_baseline}"
 
 
 def test_running_migrations_twice_is_idempotent(brain):

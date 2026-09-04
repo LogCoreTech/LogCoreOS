@@ -3,7 +3,9 @@ import { dashboardTemplates as templatesApi, dashboards as dashboardsApi } from 
 import EmojiPicker from '../../../components/EmojiPicker'
 import TagInput from '../../../components/TagInput'
 import BlockPicker from '../../../components/dashboard/BlockPicker'
+import ConfirmDialog from '../../../components/ConfirmDialog'
 import { BLOCK_REGISTRY } from '../../../components/dashboard/blockRegistry'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 const SUBJECT_TYPES = [
   { value: '', label: 'None — just a reusable block set' },
@@ -29,6 +31,8 @@ export default function DashboardTemplateManager({ templates, user, onClose, onC
   const [error, setError] = useState('')
   const [members, setMembers] = useState([])
   const [roles, setRoles] = useState([])
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
+  useEscapeToClose(onClose)
 
   useEffect(() => {
     dashboardsApi.members().then(m => setMembers((m || []).map(x => x.name))).catch(() => {})
@@ -101,11 +105,19 @@ export default function DashboardTemplateManager({ templates, user, onClose, onC
     } catch (err) { setError(err.message) } finally { setLoading(false) }
   }
 
-  async function remove(t) {
-    if (!confirm(`Delete template "${t.label}"? Dashboards already using it must be deleted or detached first.`)) return
-    setError('')
-    try { await templatesApi.remove(t.id); await onChanged() }
-    catch (err) { setError(err.message) }
+  function remove(t) {
+    setConfirmState({
+      title: 'Delete template',
+      message: `Delete template "${t.label}"? Dashboards already using it must be deleted or detached first.`,
+      confirmLabel: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmState(null)
+        setError('')
+        try { await templatesApi.remove(t.id); await onChanged() }
+        catch (err) { setError(err.message) }
+      },
+    })
   }
 
   async function leave(t) {
@@ -348,6 +360,17 @@ export default function DashboardTemplateManager({ templates, user, onClose, onC
           onClose={() => setBlockEditor(null)}
           templateMode
           subjectType={form.subject_type || null}
+        />
+      )}
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
         />
       )}
     </div>

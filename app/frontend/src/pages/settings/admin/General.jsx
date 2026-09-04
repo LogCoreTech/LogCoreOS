@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { admin as adminApi, update as updateApi } from '../../../lib/api'
 import SettingsPageHeader from '../../../components/settings/SettingsPageHeader'
+import ConfirmDialog from '../../../components/ConfirmDialog'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 const SESSION_OPTIONS = [
   { label: '1 hour',  value: 60     },
@@ -222,6 +224,7 @@ function UpdateSection() {
   const [togglingAuto, setTogglingAuto] = useState(false)
   const [msg, setMsg]               = useState(null)
   const [showResync, setShowResync] = useState(false)
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
   const pollRef                     = useRef(null)
 
   function flash(ok, text) {
@@ -252,22 +255,29 @@ function UpdateSection() {
     return () => clearInterval(pollRef.current)
   }, [status?.update_pending, status?.resync_pending, status?.update_running, showLog])
 
-  async function applyUpdate() {
+  function applyUpdate() {
     if (!status?.daemon_active) {
       flash(false, 'Update daemon is not running. The update cannot be applied. See setup instructions below.')
       return
     }
-    if (!confirm('Apply update now?\n\nThe daemon will back up your Brain, pull the latest code, rebuild, and restart. Rolls back automatically if anything fails.')) return
-    setApplying(true)
-    try {
-      await updateApi.apply()
-      flash(true, 'Update queued — the daemon will apply it within 60 seconds.')
-      loadStatus()
-    } catch (e) {
-      flash(false, e.message || 'Failed to queue update')
-    } finally {
-      setApplying(false)
-    }
+    setConfirmState({
+      title: 'Apply update',
+      message: 'Apply update now?\n\nThe daemon will back up your Brain, pull the latest code, rebuild, and restart. Rolls back automatically if anything fails.',
+      confirmLabel: 'Apply update',
+      onConfirm: async () => {
+        setConfirmState(null)
+        setApplying(true)
+        try {
+          await updateApi.apply()
+          flash(true, 'Update queued — the daemon will apply it within 60 seconds.')
+          loadStatus()
+        } catch (e) {
+          flash(false, e.message || 'Failed to queue update')
+        } finally {
+          setApplying(false)
+        }
+      },
+    })
   }
 
   async function toggleAutoUpdate() {
@@ -450,6 +460,17 @@ function UpdateSection() {
           latestVersion={status.latest_version}
         />
       )}
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </div>
   )
 }
@@ -457,6 +478,7 @@ function UpdateSection() {
 function ResyncModal({ onClose, onQueued, flash, currentVersion, latestVersion }) {
   const [running, setRunning] = useState(false)
   const [copied, setCopied]   = useState(false)
+  useEscapeToClose(onClose)
   const fixCommand = 'git fetch origin --force --tags && git reset --hard origin/master'
   const compareUrl = currentVersion && latestVersion
     ? `https://github.com/LogCoreTech/LogCoreOS/compare/v${currentVersion}...v${latestVersion}`

@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { finance as financeApi } from './api'
 import { toCents, centsToInput, fmtMoney } from '../../../components/finance/money'
+import ConfirmDialog from '../../../components/ConfirmDialog'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 // Edits or deletes both legs of a Transfer together. `book`/`workspace` are
 // the side the row was clicked from; the peer side comes denormalized on the
@@ -15,6 +17,8 @@ export default function TransferEditModal({ book, workspace, tx, onClose, onSave
   const [notes, setNotes] = useState(tx.notes || '')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
+  useEscapeToClose(onClose)
 
   function legIds() {
     return isFromLeg
@@ -49,16 +53,24 @@ export default function TransferEditModal({ book, workspace, tx, onClose, onSave
     }
   }
 
-  async function remove() {
-    if (!window.confirm('Delete this transfer? Both sides will be removed.')) return
-    setBusy(true)
-    try {
-      await financeApi.removeTransfer(tx.transfer_pair_id, legIds())
-      onDeleted()
-    } catch (err) {
-      setError(err.message || 'Delete failed')
-      setBusy(false)
-    }
+  function remove() {
+    setConfirmState({
+      title: 'Delete transfer',
+      message: 'Delete this transfer? Both sides will be removed.',
+      confirmLabel: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmState(null)
+        setBusy(true)
+        try {
+          await financeApi.removeTransfer(tx.transfer_pair_id, legIds())
+          onDeleted()
+        } catch (err) {
+          setError(err.message || 'Delete failed')
+          setBusy(false)
+        }
+      },
+    })
   }
 
   return (
@@ -104,6 +116,17 @@ export default function TransferEditModal({ book, workspace, tx, onClose, onSave
           </div>
         </form>
       </div>
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </div>
   )
 }

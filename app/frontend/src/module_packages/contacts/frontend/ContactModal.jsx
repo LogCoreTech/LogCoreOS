@@ -5,7 +5,9 @@ import ContactPicker from '../../../components/contacts/ContactPicker'
 import { useContactPhotoUrl } from './ContactAvatar'
 import TagInput from '../../../components/TagInput'
 import SectionHeader from './SectionHeader'
+import ConfirmDialog from '../../../components/ConfirmDialog'
 import { tags as tagsApi } from '../../../lib/api'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 const DEFAULT_PRIORITY_ORDER = ['Religion', 'Family', 'Job', 'Personal Growth', 'Hobbies']
 const EDUCATION_LEVELS = [
@@ -532,6 +534,11 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
   // which is always cross-workspace and forced server-side regardless).
   const [keepPersonal, setKeepPersonal] = useState(false)
 
+  // fullPage means this isn't rendered as a .modal-overlay at all (see
+  // shellClass below) — it's a normal page (Profile.jsx), so Escape has
+  // nothing to dismiss and shouldn't trigger onClose.
+  useEscapeToClose(() => { if (!fullPage) onClose() })
+
   useEffect(() => {
     const pool = editing ? isPoolContact : !keepPersonal
     tagsApi.list(pool).then(r => setTagSuggestions(r.tags || [])).catch(() => setTagSuggestions([]))
@@ -542,6 +549,7 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
   const [affiliatedContacts, setAffiliatedContacts] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const setCustom = (k, v) => setForm(f => ({ ...f, custom: { ...f.custom, [k]: v } }))
   const splitList = s => s.split(',').map(x => x.trim()).filter(Boolean)
@@ -647,23 +655,38 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
     } catch (err) { setError(err.message || 'Save failed'); setBusy(false) }
   }
 
-  async function handleDelete() {
-    if (!confirm(`Permanently delete "${contact.name}"? This cannot be undone.`)) return
-    setBusy(true); setError('')
-    try {
-      await contactsApi.remove(contact.id)
-      onSaved(null)
-    } catch (err) { setError(err.message || 'Delete failed'); setBusy(false) }
+  function handleDelete() {
+    setConfirmState({
+      title: 'Delete contact',
+      message: `Permanently delete "${contact.name}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmState(null)
+        setBusy(true); setError('')
+        try {
+          await contactsApi.remove(contact.id)
+          onSaved(null)
+        } catch (err) { setError(err.message || 'Delete failed'); setBusy(false) }
+      },
+    })
   }
 
-  async function handleConvert() {
+  function handleConvert() {
     const poolLabel = workspace === 'business' ? 'Team' : 'Household'
-    if (!confirm(`Make "${contact.name}" a shared ${poolLabel} contact? Everyone with access to ${poolLabel} will be able to see it.`)) return
-    setBusy(true); setError('')
-    try {
-      const updated = await contactsApi.convert(contact.id)
-      onSaved(updated)
-    } catch (err) { setError(err.message || 'Convert failed'); setBusy(false) }
+    setConfirmState({
+      title: 'Make shared',
+      message: `Make "${contact.name}" a shared ${poolLabel} contact? Everyone with access to ${poolLabel} will be able to see it.`,
+      confirmLabel: 'Make shared',
+      onConfirm: async () => {
+        setConfirmState(null)
+        setBusy(true); setError('')
+        try {
+          const updated = await contactsApi.convert(contact.id)
+          onSaved(updated)
+        } catch (err) { setError(err.message || 'Convert failed'); setBusy(false) }
+      },
+    })
   }
 
   async function refreshPhoto() {
@@ -970,6 +993,17 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
             Cancel row sits behind the footer until you force-scroll past it. */}
         {fullPage && <div className="h-20 md:hidden" aria-hidden="true" />}
       </form>
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </>
   )
 

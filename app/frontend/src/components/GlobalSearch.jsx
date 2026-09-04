@@ -4,6 +4,7 @@ import { search as searchApi, tags as tagsApi } from '../lib/api'
 import { ALL_MODULES } from '../lib/constants'
 import { deepLinkUrl } from '../lib/deepLinks'
 import TagInput from './TagInput'
+import useEscapeToClose from '../lib/useEscapeToClose'
 
 // Global, app-wide search — a magnifying-glass icon in the header (Layout.jsx)
 // opens this modal. Modeled directly on DashboardSwitcher.jsx's own
@@ -20,6 +21,8 @@ export default function GlobalSearch({ onClose }) {
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
   const debounceRef = useRef(null)
+
+  useEscapeToClose(onClose)
 
   useEffect(() => {
     Promise.all([tagsApi.list(false).catch(() => ({ tags: [] })), tagsApi.list(true).catch(() => ({ tags: [] }))])

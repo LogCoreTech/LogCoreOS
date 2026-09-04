@@ -5,6 +5,8 @@ import { contacts as contactsApi } from '../../contacts/frontend/api'
 import { fmtMoney, toCents, centsToInput, todayStr } from '../../../components/finance/money'
 import ContactPicker from '../../../components/contacts/ContactPicker'
 import TransactionModal from './TransactionModal'
+import ConfirmDialog from '../../../components/ConfirmDialog'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 const INVOICE_STATUSES = ['draft', 'sent', 'paid', 'void']
 
@@ -199,6 +201,7 @@ function InvoiceModal({ book, invoice, clients, canEdit, prefill, onPrefillConsu
   const [clientName, setClientName] = useState(clients.find(c => c.id === invoice?.client_id)?.name || '')
   const [dealCtx, setDealCtx] = useState(null)          // resolved source deal, when invoice.deal_id set
   const [dealExpenses, setDealExpenses] = useState(null) // Σ expenses across the deal's linked assets
+  useEscapeToClose(onClose)
 
   // Deal → invoice prefill: resolve the contact once and find-or-create the
   // matching book client through the same chooseClient path a manual pick uses.
@@ -265,6 +268,7 @@ function InvoiceModal({ book, invoice, clients, canEdit, prefill, onPrefillConsu
   const [payAccount, setPayAccount] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
 
   function buildLineItems() {
     const out = []
@@ -331,12 +335,20 @@ function InvoiceModal({ book, invoice, clients, canEdit, prefill, onPrefillConsu
     }
   }
 
-  async function remove() {
-    if (!window.confirm(`Delete invoice ${invoice.number}?`)) return
-    try {
-      await financeApi.removeInvoice(book.id, invoice.id)
-      onChanged()
-    } catch (err) { setError(err.message) }
+  function remove() {
+    setConfirmState({
+      title: 'Delete invoice',
+      message: `Delete invoice ${invoice.number}?`,
+      confirmLabel: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmState(null)
+        try {
+          await financeApi.removeInvoice(book.id, invoice.id)
+          onChanged()
+        } catch (err) { setError(err.message) }
+      },
+    })
   }
 
   const accounts = (book.accounts || []).filter(a => !a.archived)
@@ -504,12 +516,25 @@ function InvoiceModal({ book, invoice, clients, canEdit, prefill, onPrefillConsu
           </div>
         )}
       </div>
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </div>
   )
 }
 
 // Printable invoice — client-side print CSS, no server dependency.
 function InvoicePrint({ book, invoice, client, onClose }) {
+  useEscapeToClose(onClose)
+
   useEffect(() => {
     const timer = setTimeout(() => window.print(), 300)
     return () => clearTimeout(timer)

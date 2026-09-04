@@ -34,6 +34,11 @@ _BUILTIN_DEFAULTS: dict[str, dict] = {
         "enabled": True,
         "delivery": ["push"],
     },
+    "this_week_digest": {
+        "enabled": False,  # opt-in, 2026-09-04 UX Polish Batch item #6
+        "cadence": "weekly",  # "daily" | "weekly" — weekly fires Sunday, matching weekly_review
+        "delivery": ["push"],
+    },
     "goal_drift": {
         "enabled": True,
         "days_threshold": 14,
@@ -366,6 +371,51 @@ def _run_weekly_review(user_name: str, cfg: dict, workspace: str = "personal") -
     return {"ok": True, "fired": "weekly_review", "count": len(this_week)}
 
 
+def _run_this_week_digest(user_name: str, cfg: dict, workspace: str = "personal") -> dict:
+    """v1 scope: tasks completed + upcoming calendar events. Finance budget
+    status is a deliberate fast-follow, not included here yet — same reason
+    services/welcome_back_service.py deferred Finance: transactions are
+    per-book, so summarizing "budget status" needs a book-enumeration step
+    this pass doesn't otherwise need. See docs/MEMORY.md's 2026-09-04
+    entry."""
+    from services.events_service import list_events
+
+    week_ago = (today_for_user(user_name) - timedelta(days=7)).isoformat()
+    history = read_json(history_path(user_name, workspace), default={"tasks": []}).get("tasks", [])
+    completed = [t for t in history if (t.get("completed_at") or "") >= week_ago]
+
+    today_iso = today_for_user(user_name).isoformat()
+    week_ahead = (today_for_user(user_name) + timedelta(days=7)).isoformat()
+    upcoming = [
+        e
+        for e in list_events(user_name, workspace)
+        if today_iso <= (e.get("start_date") or "") <= week_ahead
+    ]
+
+    if not completed and not upcoming:
+        return {"ok": False, "reason": "nothing to report"}
+
+    lines = []
+    if completed:
+        lines.append(
+            f"{len(completed)} task{'s' if len(completed) != 1 else ''} completed this week"
+        )
+    if upcoming:
+        lines.append(
+            f"{len(upcoming)} event{'s' if len(upcoming) != 1 else ''} coming up in the next 7 days"
+        )
+    ws_label = f" [{workspace}]" if workspace != "personal" else ""
+    title = f"This week at a glance{ws_label}"
+    body = "\n".join(lines)
+    _deliver(user_name, title, body, "this_week_digest", cfg.get("delivery", ["push"]))
+    return {
+        "ok": True,
+        "fired": "this_week_digest",
+        "completed": len(completed),
+        "upcoming": len(upcoming),
+    }
+
+
 def _run_goal_drift(user_name: str, cfg: dict, workspace: str = "personal") -> dict:
     """Reworked 2026-08-28 when Goals became a real module: compares each
     pending goal's CURRENT computed percent against its own snapshot from
@@ -529,6 +579,11 @@ def run_suggestion_sync(user_name: str, suggestion_id: str, workspace: str = "pe
         if not c.get("enabled", True):
             return {"ok": False, "reason": "disabled"}
         return _run_weekly_review(user_name, c, workspace)
+    if suggestion_id == "this_week_digest":
+        c = cfg["this_week_digest"]
+        if not c.get("enabled", False):
+            return {"ok": False, "reason": "disabled"}
+        return _run_this_week_digest(user_name, c, workspace)
     if suggestion_id == "goal_drift":
         c = cfg["goal_drift"]
         if not c.get("enabled", True):
@@ -567,6 +622,11 @@ async def run_suggestion_async(
         if not c.get("enabled", True):
             return {"ok": False, "reason": "disabled"}
         return _run_weekly_review(user_name, c, workspace)
+    if suggestion_id == "this_week_digest":
+        c = cfg["this_week_digest"]
+        if not c.get("enabled", False):
+            return {"ok": False, "reason": "disabled"}
+        return _run_this_week_digest(user_name, c, workspace)
     if suggestion_id == "goal_drift":
         c = cfg["goal_drift"]
         if not c.get("enabled", True):

@@ -10,6 +10,8 @@ import EmojiPicker from '../../../components/EmojiPicker'
 import AssetTreePicker from '../../../components/AssetTreePicker'
 import AssetView from './AssetView'
 import { AttachmentThumb, formatChanges, FieldInput, CapsSelector } from '../../../components/assetDisplay'
+import ConfirmDialog from '../../../components/ConfirmDialog'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 // Same 6 types (and same backend validation, assets_service._validate_field_defs/
 // _validate_value) TemplateManager.jsx's admin template editor offers — not
@@ -108,6 +110,7 @@ function CustomFieldsEditor({ defs, onDefsChange, fields, onFieldsChange }) {
 function SaveAsTemplateModal({ suggestedLabel, onCancel, onConfirm, busy, error }) {
   const [label, setLabel] = useState(suggestedLabel)
   const [icon, setIcon] = useState('')
+  useEscapeToClose(onCancel)
   return (
     <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={onCancel}>
       <div className="card p-5 w-full max-w-xs space-y-3" onClick={e => e.stopPropagation()}>
@@ -184,9 +187,20 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
   const [members, setMembers] = useState([])
   const [roleNames, setRoleNames] = useState([])
   const [archivePrompt, setArchivePrompt] = useState(false)
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
   const [showParentPicker, setShowParentPicker] = useState(false)
   const [commentsOff, setCommentsOff] = useState(!!asset?.comments_hidden)
   const [shareScope, setShareScope] = useState('all') // 'all' = cascade to children, 'one' = this node only
+
+  // Guarded by mode: in 'view' mode this renders AssetView instead of the
+  // editor overlay below (see the early return further down), and
+  // AssetView.jsx wires its own useEscapeToClose(onClose) — this one only
+  // needs to fire while THIS component's own editor overlay is showing.
+  useEscapeToClose(mode === 'view' ? () => {} : onClose)
+  // The archive-confirmation overlay stacks on top of the editor overlay
+  // above (both render simultaneously, like the confirmState/ConfirmDialog
+  // popup below) — its own Escape close is independent of the editor's.
+  useEscapeToClose(() => setArchivePrompt(false))
 
   const templatesById = Object.fromEntries((templates || []).map(t => [t.id, t]))
   const groupTarget = workspace === 'business' ? 'team' : 'household'
@@ -364,46 +378,68 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
     }
   }
 
-  async function handleLeave() {
-    if (!confirm(`Remove yourself from "${asset.name}"? You can be re-added later.`)) return
-    setLoading(true)
-    try {
-      await assetsApi.leave(asset.id)
-      onSaved()
-      onClose()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
+  function handleLeave() {
+    setConfirmState({
+      title: 'Remove yourself',
+      message: `Remove yourself from "${asset.name}"? You can be re-added later.`,
+      confirmLabel: 'Remove',
+      onConfirm: async () => {
+        setConfirmState(null)
+        setLoading(true)
+        try {
+          await assetsApi.leave(asset.id)
+          onSaved()
+          onClose()
+        } catch (err) {
+          setError(err.message)
+        } finally {
+          setLoading(false)
+        }
+      },
+    })
   }
 
-  async function handleDelete() {
-    if (!confirm(`Permanently delete "${asset.name}"? This cannot be undone.`)) return
-    setLoading(true)
-    try {
-      await assetsApi.remove(asset.id)
-      onSaved()
-      onClose()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
+  function handleDelete() {
+    setConfirmState({
+      title: 'Delete asset',
+      message: `Permanently delete "${asset.name}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmState(null)
+        setLoading(true)
+        try {
+          await assetsApi.remove(asset.id)
+          onSaved()
+          onClose()
+        } catch (err) {
+          setError(err.message)
+        } finally {
+          setLoading(false)
+        }
+      },
+    })
   }
 
-  async function handleConvert() {
-    if (!confirm(`Make "${asset.name}" and everything inside it a shared ${workspace === 'business' ? 'Team' : 'Household'} object? It will no longer belong to your personal store.`)) return
-    setLoading(true)
-    try {
-      await assetsApi.convertToPool(asset.id)
-      onSaved()
-      onClose()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
+  function handleConvert() {
+    setConfirmState({
+      title: 'Make shared',
+      message: `Make "${asset.name}" and everything inside it a shared ${workspace === 'business' ? 'Team' : 'Household'} object? It will no longer belong to your personal store.`,
+      confirmLabel: 'Make shared',
+      onConfirm: async () => {
+        setConfirmState(null)
+        setLoading(true)
+        try {
+          await assetsApi.convertToPool(asset.id)
+          onSaved()
+          onClose()
+        } catch (err) {
+          setError(err.message)
+        } finally {
+          setLoading(false)
+        }
+      },
+    })
   }
 
   // Turn comments off/on for everyone — immediate, edit-level action
@@ -993,6 +1029,17 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
             error={saveAsTemplateError}
             onCancel={() => setShowSaveAsTemplate(false)}
             onConfirm={handleSaveAsTemplate}
+          />
+        )}
+
+        {confirmState && (
+          <ConfirmDialog
+            title={confirmState.title}
+            message={confirmState.message}
+            danger={confirmState.danger}
+            confirmLabel={confirmState.confirmLabel}
+            onConfirm={confirmState.onConfirm}
+            onCancel={() => setConfirmState(null)}
           />
         )}
       </div>

@@ -5,6 +5,7 @@ import { finance as financeApi } from '../../../module_packages/finance/frontend
 import { useAuth } from '../../../lib/auth'
 import { ALL_MODULES } from '../../../lib/constants'
 import SettingsPageHeader from '../../../components/settings/SettingsPageHeader'
+import ConfirmDialog from '../../../components/ConfirmDialog'
 
 const ROLE_COLORS = {
   admin:  'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
@@ -50,6 +51,7 @@ export default function UserDetail() {
   const [showTokenInput, setShowTokenInput] = useState(false)
   const [revealed, setRevealed] = useState(null)
   const [bankBusy, setBankBusy] = useState(false)
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
 
   function flash(ok, text) {
     setMsg({ ok, text })
@@ -218,19 +220,26 @@ export default function UserDetail() {
     }
   }
 
-  async function bankDisconnect() {
+  function bankDisconnect() {
     if (!target) return
-    if (!window.confirm(`Disconnect ${target.name}'s bank connection? Their imported transactions stay.`)) return
-    setBankBusy(true)
-    try {
-      await financeApi.sfDisconnect(userId)
-      flash(true, 'Disconnected.')
-      load()
-    } catch (err) {
-      flash(false, err.message || 'Disconnect failed')
-    } finally {
-      setBankBusy(false)
-    }
+    setConfirmState({
+      title: 'Disconnect account',
+      message: `Disconnect ${target.name}'s bank connection? Their imported transactions stay.`,
+      confirmLabel: 'Disconnect',
+      onConfirm: async () => {
+        setConfirmState(null)
+        setBankBusy(true)
+        try {
+          await financeApi.sfDisconnect(userId)
+          flash(true, 'Disconnected.')
+          load()
+        } catch (err) {
+          flash(false, err.message || 'Disconnect failed')
+        } finally {
+          setBankBusy(false)
+        }
+      },
+    })
   }
 
   if (loading) {
@@ -460,6 +469,17 @@ export default function UserDetail() {
       </div>
 
       <div className="h-20 md:hidden" aria-hidden="true" />
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </div>
   )
 }

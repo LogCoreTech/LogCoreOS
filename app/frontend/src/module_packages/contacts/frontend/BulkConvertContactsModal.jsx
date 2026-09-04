@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { contacts as contactsApi } from './api'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 // Bulk "convert personal contacts into the shared pool" (owner ask,
 // 2026-08-17: "have so many" to move one at a time via ContactModal's own
@@ -14,6 +15,8 @@ export default function BulkConvertContactsModal({ contacts, workspace, onClose,
   const [selected, setSelected] = useState(() => new Set(contacts.map(c => c.id)))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+
+  useEscapeToClose(onClose)
 
   function toggle(id) {
     setSelected(prev => {

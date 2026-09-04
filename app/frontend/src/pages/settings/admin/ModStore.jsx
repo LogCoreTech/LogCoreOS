@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { modStore as modStoreApi } from '../../../lib/api'
 import { useAuth } from '../../../lib/auth'
 import SettingsPageHeader from '../../../components/settings/SettingsPageHeader'
+import ConfirmDialog from '../../../components/ConfirmDialog'
 
 // A module's real state is two signals, not one — see docs/MEMORY.md (2026-08-24):
 // `installed` (the marker, flips the instant Install/Uninstall is clicked) and
@@ -47,6 +48,7 @@ export default function ModStore() {
   const [busyId, setBusyId] = useState(null)
   const [restarting, setRestarting] = useState(false)
   const [msg, setMsg] = useState(null)
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
 
   // Returns the freshly-fetched {modules, active} (not just the state setters)
   // so a caller like the restart poll below can check what actually came back
@@ -93,21 +95,26 @@ export default function ModStore() {
     }
   }
 
-  async function handleUninstall(entry) {
-    if (!window.confirm(
-      `Uninstall ${entry.name}? Its data stays on disk and reinstalling brings it right back, ` +
-      `but the feature disappears for everyone until you do.`
-    )) return
-    setBusyId(entry.id)
-    try {
-      await modStoreApi.uninstall(entry.id)
-      flash(true, `${entry.name} uninstalled — its data was not touched.`)
-      await load()
-    } catch (e) {
-      flash(false, e.message || 'Uninstall failed')
-    } finally {
-      setBusyId(null)
-    }
+  function handleUninstall(entry) {
+    setConfirmState({
+      title: 'Uninstall module',
+      message: `Uninstall ${entry.name}? Its data stays on disk and reinstalling brings it right back, ` +
+        `but the feature disappears for everyone until you do.`,
+      confirmLabel: 'Uninstall',
+      onConfirm: async () => {
+        setConfirmState(null)
+        setBusyId(entry.id)
+        try {
+          await modStoreApi.uninstall(entry.id)
+          flash(true, `${entry.name} uninstalled — its data was not touched.`)
+          await load()
+        } catch (e) {
+          flash(false, e.message || 'Uninstall failed')
+        } finally {
+          setBusyId(null)
+        }
+      },
+    })
   }
 
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
@@ -127,9 +134,15 @@ export default function ModStore() {
       if (result.conflict) {
         const names = result.onlineUsers.join(', ')
         setRestarting(false)
-        if (window.confirm(`${result.message} (${names}). Restart anyway?`)) {
-          await doRestart(true)
-        }
+        setConfirmState({
+          title: 'Restart anyway?',
+          message: `${result.message} (${names}).`,
+          confirmLabel: 'Restart anyway',
+          onConfirm: () => {
+            setConfirmState(null)
+            doRestart(true)
+          },
+        })
         return
       }
       flash(true, 'Restarting… this can take up to a minute.')
@@ -272,6 +285,17 @@ export default function ModStore() {
       )}
 
       <div className="h-20 md:hidden" aria-hidden="true" />
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </div>
   )
 }

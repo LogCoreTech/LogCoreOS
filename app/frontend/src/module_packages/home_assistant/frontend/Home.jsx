@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import HelpButton from '../../../components/HelpButton'
+import ConfirmDialog from '../../../components/ConfirmDialog'
 import { home as homeApi } from './api'
 
 const DOMAIN_TABS = [
@@ -31,6 +32,7 @@ function stateColor(state) {
 function EntityTile({ entity, isFav, onToggleFav, onCall }) {
   const [busy, setBusy] = useState(false)
   const [localState, setLocalState] = useState(entity.state)
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
   const domain = entityDomain(entity.entity_id)
   const attrs = entity.attributes || {}
 
@@ -56,15 +58,23 @@ function EntityTile({ entity, isFav, onToggleFav, onCall }) {
     finally { setBusy(false) }
   }
 
-  async function lockToggle() {
+  function lockToggle() {
     if (busy) return
-    if (!window.confirm(`${localState === 'locked' ? 'Unlock' : 'Lock'} ${friendlyName(entity)}?`)) return
-    setBusy(true)
-    const svc = localState === 'locked' ? 'unlock' : 'lock'
-    setLocalState(svc === 'lock' ? 'locked' : 'unlocked')
-    try { await onCall(entity.entity_id, svc, {}) }
-    catch { setLocalState(entity.state) }
-    finally { setBusy(false) }
+    setConfirmState({
+      title: 'Confirm action',
+      message: `${localState === 'locked' ? 'Unlock' : 'Lock'} ${friendlyName(entity)}?`,
+      confirmLabel: localState === 'locked' ? 'Unlock' : 'Lock',
+      danger: false,
+      onConfirm: async () => {
+        setConfirmState(null)
+        setBusy(true)
+        const svc = localState === 'locked' ? 'unlock' : 'lock'
+        setLocalState(svc === 'lock' ? 'locked' : 'unlocked')
+        try { await onCall(entity.entity_id, svc, {}) }
+        catch { setLocalState(entity.state) }
+        finally { setBusy(false) }
+      },
+    })
   }
 
   async function coverAction(svc) {
@@ -76,6 +86,7 @@ function EntityTile({ entity, isFav, onToggleFav, onCall }) {
   const isOn = localState === 'on'
 
   return (
+    <>
     <div className={`card p-3 flex flex-col gap-2 relative ${busy ? 'opacity-70' : ''}`}>
       {/* Favourite star */}
       <button
@@ -165,6 +176,17 @@ function EntityTile({ entity, isFav, onToggleFav, onCall }) {
         <p className={`text-sm font-semibold ${stateColor(localState)}`}>{localState}</p>
       )}
     </div>
+    {confirmState && (
+      <ConfirmDialog
+        title={confirmState.title}
+        message={confirmState.message}
+        danger={confirmState.danger}
+        confirmLabel={confirmState.confirmLabel}
+        onConfirm={confirmState.onConfirm}
+        onCancel={() => setConfirmState(null)}
+      />
+    )}
+    </>
   )
 }
 

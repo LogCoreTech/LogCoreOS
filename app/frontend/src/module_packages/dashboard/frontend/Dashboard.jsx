@@ -10,6 +10,7 @@ import DashboardSwitcher from './DashboardSwitcher'
 import CreateDashboardModal from './CreateDashboardModal'
 import DashboardTemplateManager from './DashboardTemplateManager'
 import DashboardHero from './DashboardHero'
+import ConfirmDialog from '../../../components/ConfirmDialog'
 import { BLOCK_REGISTRY } from '../../../components/dashboard/blockRegistry'
 import { auth as authApi } from '../../../lib/api'
 import { dashboardTemplates as dashboardTemplatesApi, dashboards as dashboardsApi } from './api'
@@ -70,6 +71,7 @@ export default function Dashboard() {
   const [showTemplateManager, setShowTemplateManager] = useState(false)
   const [templates, setTemplates] = useState([])
   const [saving, setSaving] = useState(false)
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
 
   const loadList = useCallback(async () => {
     const res = await dashboardsApi.list()
@@ -231,13 +233,20 @@ export default function Dashboard() {
     await saveBlocks(nextBlocks)
   }
 
-  async function removeBlock(blockId) {
+  function removeBlock(blockId) {
     if (!current) return
     const block = current.blocks.find(b => b.id === blockId)
     const label = BLOCK_REGISTRY[block?.type]?.label || 'this block'
-    if (!window.confirm(`Remove "${label}" from this dashboard?`)) return
-    const nextBlocks = current.blocks.filter(b => b.id !== blockId)
-    await saveBlocks(nextBlocks)
+    setConfirmState({
+      title: 'Remove block',
+      message: `Remove "${label}" from this dashboard?`,
+      confirmLabel: 'Remove',
+      onConfirm: async () => {
+        setConfirmState(null)
+        const nextBlocks = current.blocks.filter(b => b.id !== blockId)
+        await saveBlocks(nextBlocks)
+      },
+    })
   }
 
   function openBlockConfigEditor(block) {
@@ -292,16 +301,24 @@ export default function Dashboard() {
     await saveBlocks(blocks)
   }
 
-  async function deleteDashboard() {
+  function deleteDashboard() {
     if (!current) return
-    if (!window.confirm(`Delete "${current.name}"? This can't be undone.`)) return
-    try {
-      await dashboardsApi.remove(current.id)
-      const res = await loadList()
-      setSearchParams(res.default_id ? { id: res.default_id } : {})
-    } catch (e) {
-      setError(e.message || 'Failed to delete dashboard')
-    }
+    setConfirmState({
+      title: 'Delete dashboard',
+      message: `Delete "${current.name}"? This can't be undone.`,
+      confirmLabel: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmState(null)
+        try {
+          await dashboardsApi.remove(current.id)
+          const res = await loadList()
+          setSearchParams(res.default_id ? { id: res.default_id } : {})
+        } catch (e) {
+          setError(e.message || 'Failed to delete dashboard')
+        }
+      },
+    })
   }
 
   async function setAsDefault() {
@@ -440,6 +457,17 @@ export default function Dashboard() {
           user={user}
           onClose={() => setShowTemplateManager(false)}
           onChanged={refreshTemplates}
+        />
+      )}
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
         />
       )}
     </div>

@@ -3,6 +3,7 @@ import { dashboardTemplates as templatesApi, dashboards as dashboardsApi } from 
 import EmojiPicker from '../../../components/EmojiPicker'
 import ContactPicker from '../../../components/contacts/ContactPicker'
 import AssetPickerField from '../../../components/AssetPickerField'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 /**
  * Blank dashboard, or one seeded from a template — replaces the old direct
@@ -20,6 +21,8 @@ export default function CreateDashboardModal({ pool = false, onCreated, onClose 
   const [subjectId, setSubjectId] = useState(null)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
+
+  useEscapeToClose(onClose)
 
   useEffect(() => {
     templatesApi.list().then(setTemplates).catch(() => setTemplates([]))

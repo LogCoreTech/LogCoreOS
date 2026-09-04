@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/auth'
 import { WorkspaceProvider } from './lib/workspace'
+import { ToastProvider } from './lib/toast'
 import { MODULE_PACKAGES, isPackageModule } from './lib/moduleRegistry'
 import ErrorBoundary from './components/ErrorBoundary'
 import Layout from './components/Layout'
@@ -71,61 +72,63 @@ export default function App() {
   return (
     <AuthProvider>
       <WorkspaceProvider>
-        <ErrorBoundary>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/setup" element={<Protected><Setup /></Protected>} />
-              <Route element={<Protected><Layout /></Protected>}>
-                {/* Dashboards' own manifest.js declares to: '/' (it's the app's home page,
-                    the one route every user can always reach regardless of role/disabled-
-                    modules state) — deliberately hardcoded and UNWRAPPED by ModuleRoute here,
-                    same as before this module converted. Feeding it through the generic loop
-                    below would double-register '/' wrapped in ModuleRoute, and a user with
-                    `dashboard` in their disabled set would hit ModuleRoute's own
-                    `<Navigate to="/" replace>` while already AT "/" — a self-targeting
-                    redirect loop. No prior converted module ever claimed the root path, so
-                    this exact problem never came up before. */}
-                <Route path="/"         element={<Dashboard />} />
-                {MODULE_PACKAGES.filter(pkg => pkg.to !== '/').map(pkg => {
-                  const Page = lazy(pkg.loadPage)
-                  return (
-                    <Route
-                      key={pkg.id}
-                      path={pkg.to}
-                      element={
-                        <ModuleRoute moduleId={pkg.id}>
-                          <Suspense fallback={<PageSkeleton />}><Page /></Suspense>
-                        </ModuleRoute>
-                      }
-                    />
-                  )
-                })}
-                <Route path="/brain"     element={<Brain />} />
-                <Route path="/profile"   element={<Profile />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/settings/appearance" element={<SettingsAppearance />} />
-                <Route path="/settings/notifications" element={<SettingsNotifications />} />
-                <Route path="/settings/shortcuts" element={<SettingsShortcuts />} />
-                <Route path="/settings/account" element={<SettingsAccount />} />
-                <Route path="/settings/admin" element={<AdminOnly><AdminMenu /></AdminOnly>} />
-                <Route path="/settings/admin/users" element={<AdminOnly><AdminUsers /></AdminOnly>} />
-                <Route path="/settings/admin/users/new" element={<AdminOnly><AdminNewUser /></AdminOnly>} />
-                <Route path="/settings/admin/users/roles" element={<AdminOnly><AdminRoleDefinitions /></AdminOnly>} />
-                <Route path="/settings/admin/users/:userId" element={<AdminOnly><AdminUserDetail /></AdminOnly>} />
-                <Route path="/settings/admin/users/:userId/delete" element={<AdminOnly><AdminUserDeletionReview /></AdminOnly>} />
-                <Route path="/settings/admin/contact-fields" element={<AdminOnly><AdminContactFields /></AdminOnly>} />
-                <Route path="/settings/admin/ai" element={<AdminOnly><AdminAi /></AdminOnly>} />
-                <Route path="/settings/admin/general" element={<AdminOnly><AdminGeneral /></AdminOnly>} />
-                <Route path="/settings/admin/team" element={<AdminOnly><AdminTeam /></AdminOnly>} />
-                <Route path="/settings/admin/household" element={<AdminOnly><AdminHousehold /></AdminOnly>} />
-                <Route path="/settings/admin/hosting" element={<AdminOnly><AdminHosting /></AdminOnly>} />
-                <Route path="/settings/admin/mod-store" element={<AdminOnly><AdminModStore /></AdminOnly>} />
-                <Route path="/help"     element={<Help />} />
-              </Route>
-            </Routes>
-          </BrowserRouter>
-        </ErrorBoundary>
+        <ToastProvider>
+          <ErrorBoundary>
+            <BrowserRouter>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/setup" element={<Protected><Setup /></Protected>} />
+                <Route element={<Protected><Layout /></Protected>}>
+                  {/* Dashboards' own manifest.js declares to: '/' (it's the app's home page,
+                      the one route every user can always reach regardless of role/disabled-
+                      modules state) — deliberately hardcoded and UNWRAPPED by ModuleRoute here,
+                      same as before this module converted. Feeding it through the generic loop
+                      below would double-register '/' wrapped in ModuleRoute, and a user with
+                      `dashboard` in their disabled set would hit ModuleRoute's own
+                      `<Navigate to="/" replace>` while already AT "/" — a self-targeting
+                      redirect loop. No prior converted module ever claimed the root path, so
+                      this exact problem never came up before. */}
+                  <Route path="/"         element={<Dashboard />} />
+                  {MODULE_PACKAGES.filter(pkg => pkg.to !== '/').map(pkg => {
+                    const Page = lazy(pkg.loadPage)
+                    return (
+                      <Route
+                        key={pkg.id}
+                        path={pkg.to}
+                        element={
+                          <ModuleRoute moduleId={pkg.id}>
+                            <Suspense fallback={<PageSkeleton />}><Page /></Suspense>
+                          </ModuleRoute>
+                        }
+                      />
+                    )
+                  })}
+                  <Route path="/brain"     element={<Brain />} />
+                  <Route path="/profile"   element={<Profile />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/settings/appearance" element={<SettingsAppearance />} />
+                  <Route path="/settings/notifications" element={<SettingsNotifications />} />
+                  <Route path="/settings/shortcuts" element={<SettingsShortcuts />} />
+                  <Route path="/settings/account" element={<SettingsAccount />} />
+                  <Route path="/settings/admin" element={<AdminOnly><AdminMenu /></AdminOnly>} />
+                  <Route path="/settings/admin/users" element={<AdminOnly><AdminUsers /></AdminOnly>} />
+                  <Route path="/settings/admin/users/new" element={<AdminOnly><AdminNewUser /></AdminOnly>} />
+                  <Route path="/settings/admin/users/roles" element={<AdminOnly><AdminRoleDefinitions /></AdminOnly>} />
+                  <Route path="/settings/admin/users/:userId" element={<AdminOnly><AdminUserDetail /></AdminOnly>} />
+                  <Route path="/settings/admin/users/:userId/delete" element={<AdminOnly><AdminUserDeletionReview /></AdminOnly>} />
+                  <Route path="/settings/admin/contact-fields" element={<AdminOnly><AdminContactFields /></AdminOnly>} />
+                  <Route path="/settings/admin/ai" element={<AdminOnly><AdminAi /></AdminOnly>} />
+                  <Route path="/settings/admin/general" element={<AdminOnly><AdminGeneral /></AdminOnly>} />
+                  <Route path="/settings/admin/team" element={<AdminOnly><AdminTeam /></AdminOnly>} />
+                  <Route path="/settings/admin/household" element={<AdminOnly><AdminHousehold /></AdminOnly>} />
+                  <Route path="/settings/admin/hosting" element={<AdminOnly><AdminHosting /></AdminOnly>} />
+                  <Route path="/settings/admin/mod-store" element={<AdminOnly><AdminModStore /></AdminOnly>} />
+                  <Route path="/help"     element={<Help />} />
+                </Route>
+              </Routes>
+            </BrowserRouter>
+          </ErrorBoundary>
+        </ToastProvider>
       </WorkspaceProvider>
     </AuthProvider>
   )

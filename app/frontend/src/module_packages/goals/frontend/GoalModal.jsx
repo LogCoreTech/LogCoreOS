@@ -10,6 +10,7 @@ import GoalPicker from './GoalPicker'
 import RecurrenceLog from '../../../components/RecurrenceLog'
 import HistoryCalendar from '../../../components/HistoryCalendar'
 import MetricGraph from '../../../components/MetricGraph'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 const METRIC_LOG_LEGEND = [{ colorClass: 'bg-orange-500', label: 'Logged value' }]
 
@@ -76,6 +77,8 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
   const [manualValue, setManualValue] = useState('')
   const [expandedHistory, setExpandedHistory] = useState(new Set())
   const [metricView, setMetricView] = useState('graph')
+  useEscapeToClose(onClose)
+  useEscapeToClose(() => setShowDelete(false))
 
   function toggleHistory(taskId) {
     setExpandedHistory(prev => {

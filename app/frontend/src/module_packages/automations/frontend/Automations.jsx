@@ -6,6 +6,8 @@ import { auth as authApi } from '../../../lib/api'
 import { useAuth } from '../../../lib/auth'
 import { useWorkspace } from '../../../lib/workspace'
 import TagInput from '../../../components/TagInput'
+import ConfirmDialog from '../../../components/ConfirmDialog'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 function fmt(iso) {
   if (!iso) return 'Never'
@@ -108,6 +110,9 @@ function InboxSettingsModal({ inbox, isBusiness, workflowKeySuggestions, onClose
   const [members, setMembers] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
+
+  useEscapeToClose(onClose)
 
   useEffect(() => {
     if (!isBusiness) return
@@ -131,15 +136,23 @@ function InboxSettingsModal({ inbox, isBusiness, workflowKeySuggestions, onClose
     }
   }
 
-  async function handleDelete() {
-    if (!confirm(`Delete inbox "${inbox.name}"? It must be empty.`)) return
-    try {
-      await api.removeInbox(inbox.id)
-      onSaved()
-      onClose()
-    } catch (err) {
-      setError(err.message)
-    }
+  function handleDelete() {
+    setConfirmState({
+      title: 'Delete inbox',
+      message: `Delete inbox "${inbox.name}"? It must be empty.`,
+      confirmLabel: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmState(null)
+        try {
+          await api.removeInbox(inbox.id)
+          onSaved()
+          onClose()
+        } catch (err) {
+          setError(err.message)
+        }
+      },
+    })
   }
 
   return (
@@ -201,6 +214,17 @@ function InboxSettingsModal({ inbox, isBusiness, workflowKeySuggestions, onClose
           </div>
         </form>
       </div>
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </div>
   )
 }
@@ -211,6 +235,8 @@ function LogsModal({ workflow, onClose }) {
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState('')
   const timerRef              = useRef(null)
+
+  useEscapeToClose(onClose)
 
   async function fetchLogs() {
     try {
@@ -283,6 +309,8 @@ function ImportModal({ defaultScope, isAdmin, onClose, onImported }) {
   const [tags, setTags]     = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState('')
+
+  useEscapeToClose(onClose)
 
   async function submit(e) {
     e.preventDefault()
@@ -380,6 +408,7 @@ function WorkflowCard({ workflow, isAdmin, onDelete, onRun, onToggleActive }) {
   const [runError, setRunError]     = useState('')
   const [deleting, setDeleting]     = useState(false)
   const [active, setActive]         = useState(workflow.active ?? false)
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
 
   const canDelete   = isAdmin || workflow.scope === 'personal'
   const canActivate = isAdmin || workflow.scope === 'personal'
@@ -396,15 +425,23 @@ function WorkflowCard({ workflow, isAdmin, onDelete, onRun, onToggleActive }) {
     }
   }
 
-  async function handleDelete() {
-    if (!confirm(`Delete "${workflow.name}"? This will also remove it from n8n.`)) return
-    setDeleting(true)
-    try {
-      await onDelete(workflow.id)
-    } catch (err) {
-      alert(err.message)
-      setDeleting(false)
-    }
+  function handleDelete() {
+    setConfirmState({
+      title: 'Delete workflow',
+      message: `Delete "${workflow.name}"? This will also remove it from n8n.`,
+      confirmLabel: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmState(null)
+        setDeleting(true)
+        try {
+          await onDelete(workflow.id)
+        } catch (err) {
+          alert(err.message)
+          setDeleting(false)
+        }
+      },
+    })
   }
 
   async function handleToggleActive() {
@@ -488,6 +525,17 @@ function WorkflowCard({ workflow, isAdmin, onDelete, onRun, onToggleActive }) {
       </div>
 
       {logsOpen && <LogsModal workflow={workflow} onClose={() => setLogsOpen(false)} />}
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </>
   )
 }

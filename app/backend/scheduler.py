@@ -115,6 +115,29 @@ def job_weekly_review():
             logger.exception("weekly review failed for %s/%s", user, workspace)
 
 
+def job_this_week_digest():
+    """Runs on the daily cron alongside morning digest, but only actually
+    fires per-user based on their own configured cadence (2026-09-04 UX
+    Polish Batch item #6) — 'daily' fires every day this job runs, 'weekly'
+    only fires on Sunday, matching job_weekly_review's own fixed cron day.
+    A single daily registration (rather than two separate cron jobs) is what
+    lets cadence be a genuine per-user choice instead of an instance-wide
+    one."""
+    from services.suggestions_service import get_config, run_suggestion_sync
+
+    for user, workspace in _all_user_workspace_pairs():
+        try:
+            cfg = get_config(user)
+            c = cfg["this_week_digest"]
+            if not c.get("enabled", False):
+                continue
+            if c.get("cadence", "weekly") == "weekly" and today_for_user(user).weekday() != 6:
+                continue  # weekly cadence fires Sunday only, checked in the user's own timezone
+            run_suggestion_sync(user, "this_week_digest", workspace)
+        except Exception:
+            logger.exception("this week digest failed for %s/%s", user, workspace)
+
+
 def job_goal_drift():
     from services.suggestions_service import get_config, run_suggestion_sync
 
@@ -394,6 +417,11 @@ def start():
     )
     scheduler.add_job(
         job_morning_digest, _cron(hour=settings.morning_digest_hour, minute=0), id="morning"
+    )
+    scheduler.add_job(
+        job_this_week_digest,
+        _cron(hour=settings.morning_digest_hour, minute=0),
+        id="this_week_digest",
     )
     scheduler.add_job(
         job_overdue_check, _cron(hour=settings.overdue_check_hour, minute=0), id="overdue"

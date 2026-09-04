@@ -23,15 +23,18 @@ def test_m020_marks_calendar_installed_on_upgrade(brain):
     assert mod_store_service.is_installed("calendar")
 
 
-def test_m020_noop_on_fresh_install(brain):
-    """No _system/features.json yet means this Brain never went through the
-    always-on-calendar era — it should start with calendar NOT installed,
-    matching the actual goal of slimming the default install."""
+def test_m020_installs_calendar_on_fresh_install(brain):
+    """No _system/features.json yet means this is a genuinely fresh
+    instance — calendar is one of the 4 modules (journal, calendar, notes,
+    goals) that joined the fresh-install default baseline (2026-09-04 UX
+    Polish Batch, item #12), so it should now be installed unconditionally,
+    same as on an upgrading instance. See docs/MEMORY.md's 2026-09-04
+    entry."""
     assert not (brain / "_system" / "features.json").exists()
 
     run_pending(brain)
 
-    assert not mod_store_service.is_installed("calendar")
+    assert mod_store_service.is_installed("calendar")
 
 
 def test_install_uninstall_reinstall_round_trip_preserves_data(brain):

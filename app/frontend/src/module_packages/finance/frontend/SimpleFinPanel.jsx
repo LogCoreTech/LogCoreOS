@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { finance as financeApi } from './api'
 import { fmtMoney } from '../../../components/finance/money'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 // Bank sync panel — connections are admin-managed: members REQUEST a
 // connection (admins get notified and enter the SimpleFIN setup token in
@@ -13,6 +14,7 @@ export default function SimpleFinPanel({ books, isAdmin, workspace, onClose }) {
   const [error, setError] = useState('')
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
+  useEscapeToClose(onClose)
 
   useEffect(() => {
     financeApi.sfStatus().then(s => {

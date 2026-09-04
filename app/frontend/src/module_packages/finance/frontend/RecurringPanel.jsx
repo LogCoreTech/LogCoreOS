@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { finance as financeApi } from './api'
 import { fmtMoney, toCents, centsToInput, todayStr } from '../../../components/finance/money'
+import ConfirmDialog from '../../../components/ConfirmDialog'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 const EMPTY_FORM = { name: '', amount: '', kind: 'expense', account_id: '', category: '', cadence: 'monthly', next_due: '', autopay: false, deductible: false, tax_category: '' }
 
@@ -11,7 +13,10 @@ export default function RecurringPanel({ book, canEdit }) {
   const [plannedForm, setPlannedForm] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
   const today = todayStr()
+  useEscapeToClose(() => setForm(null))
+  useEscapeToClose(() => setPlannedForm(null))
 
   function load() {
     financeApi.recurring(book.id).then(r => setItems(Array.isArray(r) ? r : [])).catch(() => {})
@@ -60,9 +65,17 @@ export default function RecurringPanel({ book, canEdit }) {
     }
   }
 
-  async function removeItem(item) {
-    if (!window.confirm(`Delete "${item.name}"?`)) return
-    try { await financeApi.removeRecurring(book.id, item.id); load() } catch (err) { setError(err.message) }
+  function removeItem(item) {
+    setConfirmState({
+      title: 'Delete recurring item',
+      message: `Delete "${item.name}"?`,
+      confirmLabel: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmState(null)
+        try { await financeApi.removeRecurring(book.id, item.id); load() } catch (err) { setError(err.message) }
+      },
+    })
   }
 
   async function toggleActive(item) {
@@ -303,6 +316,17 @@ export default function RecurringPanel({ book, canEdit }) {
             </form>
           </div>
         </div>
+      )}
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
+        />
       )}
     </div>
   )

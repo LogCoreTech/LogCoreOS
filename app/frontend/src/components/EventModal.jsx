@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { calendar as calendarApi } from '../module_packages/calendar/frontend/api'
 import { tags as tagsApi } from '../lib/api'
 import TagInput from './TagInput'
+import ConfirmDialog from './ConfirmDialog'
+import useEscapeToClose from '../lib/useEscapeToClose'
 
 export const EVENT_COLORS = {
   blue:   '#3b82f6',
@@ -41,6 +43,9 @@ export default function EventModal({ event, defaultDate, onClose, onSave, saveAp
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [tagSuggestions, setTagSuggestions] = useState([])
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
+
+  useEscapeToClose(onClose)
 
   useEffect(() => {
     const pool = !!isHouseholdEvent || shareToPool
@@ -91,17 +96,25 @@ export default function EventModal({ event, defaultDate, onClose, onSave, saveAp
     }
   }
 
-  async function handleDelete() {
-    if (!confirm('Delete this event?')) return
-    setLoading(true)
-    try {
-      await api.remove(event.id)
-      onSave()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
+  function handleDelete() {
+    setConfirmState({
+      title: 'Delete event',
+      message: 'Delete this event?',
+      confirmLabel: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmState(null)
+        setLoading(true)
+        try {
+          await api.remove(event.id)
+          onSave()
+        } catch (err) {
+          setError(err.message)
+        } finally {
+          setLoading(false)
+        }
+      },
+    })
   }
 
   return (
@@ -254,6 +267,17 @@ export default function EventModal({ event, defaultDate, onClose, onSave, saveAp
             </button>
           </div>
         </form>
+
+        {confirmState && (
+          <ConfirmDialog
+            title={confirmState.title}
+            message={confirmState.message}
+            danger={confirmState.danger}
+            confirmLabel={confirmState.confirmLabel}
+            onConfirm={confirmState.onConfirm}
+            onCancel={() => setConfirmState(null)}
+          />
+        )}
       </div>
     </div>
   )

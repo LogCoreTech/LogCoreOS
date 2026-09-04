@@ -4,6 +4,8 @@ import { priorities as prioritiesApi, tags as tagsApi } from '../lib/api'
 import TagInput from './TagInput'
 import RecurrencePicker, { describeRecurrence } from './RecurrencePicker'
 import TaskView from './TaskView'
+import ConfirmDialog from './ConfirmDialog'
+import useEscapeToClose from '../lib/useEscapeToClose'
 
 const PRIORITIES = ['High', 'Medium', 'Low']
 const TYPES = ['todo', 'recurring', 'appointment']
@@ -38,6 +40,13 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [tagSuggestions, setTagSuggestions] = useState([])
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
+
+  // Guarded by mode: in 'view' mode this component renders TaskView instead
+  // of its own modal-overlay below (see the early return past the effects),
+  // and TaskView.jsx wires its own useEscapeToClose(onClose) — this one only
+  // needs to fire while TaskModal's own edit-form overlay is what's showing.
+  useEscapeToClose(mode === 'view' ? () => {} : onClose)
 
   // A pool context is identified by a saveApi override (household's/team's
   // own client) being passed in — mirrors how goal_id linking already tells
@@ -115,18 +124,26 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
     }
   }
 
-  async function handleDelete() {
-    if (!confirm('Delete this task?')) return
-    setLoading(true)
-    try {
-      const api = saveApi || tasksApi
-      await api.remove(task.id)
-      onDelete?.()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
+  function handleDelete() {
+    setConfirmState({
+      title: 'Delete task',
+      message: 'Delete this task?',
+      confirmLabel: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmState(null)
+        setLoading(true)
+        try {
+          const api = saveApi || tasksApi
+          await api.remove(task.id)
+          onDelete?.()
+        } catch (err) {
+          setError(err.message)
+        } finally {
+          setLoading(false)
+        }
+      },
+    })
   }
 
   // Cancel returns to the view for an existing task (matching
@@ -368,6 +385,17 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
             </button>
           </div>
         </form>
+
+        {confirmState && (
+          <ConfirmDialog
+            title={confirmState.title}
+            message={confirmState.message}
+            danger={confirmState.danger}
+            confirmLabel={confirmState.confirmLabel}
+            onConfirm={confirmState.onConfirm}
+            onCancel={() => setConfirmState(null)}
+          />
+        )}
       </div>
     </div>
   )

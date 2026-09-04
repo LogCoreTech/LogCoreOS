@@ -5,6 +5,7 @@ import { automations as automationsApi } from '../../../module_packages/automati
 import { useAuth } from '../../../lib/auth'
 import { isPackageModule } from '../../../lib/moduleRegistry'
 import SettingsPageHeader from '../../../components/settings/SettingsPageHeader'
+import ConfirmDialog from '../../../components/ConfirmDialog'
 
 function HostingSection() {
   const [form, setForm]         = useState({ mode: 'local', domain_url: '', tunnel_token: '' })
@@ -220,6 +221,7 @@ function InfisicalSection() {
   const [saving, setSaving]   = useState(false)
   const [clearing, setClearing] = useState(false)
   const [msg, setMsg]         = useState(null)
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
 
   useEffect(() => {
     infisicalApi.getStatus()
@@ -252,19 +254,26 @@ function InfisicalSection() {
     }
   }
 
-  async function clear() {
-    if (!confirm('Clear the saved Infisical token? The app will revert to local .env on next restart.')) return
-    setClearing(true)
-    setMsg(null)
-    try {
-      await infisicalApi.clearToken()
-      setStatus({ configured: false, source: null })
-      flash(true, 'Token cleared.')
-    } catch (err) {
-      flash(false, err.message || 'Clear failed.')
-    } finally {
-      setClearing(false)
-    }
+  function clear() {
+    setConfirmState({
+      title: 'Clear token',
+      message: 'Clear the saved Infisical token? The app will revert to local .env on next restart.',
+      confirmLabel: 'Clear',
+      onConfirm: async () => {
+        setConfirmState(null)
+        setClearing(true)
+        setMsg(null)
+        try {
+          await infisicalApi.clearToken()
+          setStatus({ configured: false, source: null })
+          flash(true, 'Token cleared.')
+        } catch (err) {
+          flash(false, err.message || 'Clear failed.')
+        } finally {
+          setClearing(false)
+        }
+      },
+    })
   }
 
   const sourceLabel = status.source === 'env'
@@ -327,6 +336,17 @@ function InfisicalSection() {
           {clearing ? 'Clearing…' : 'Clear token (revert to self-hosted .env mode)'}
         </button>
       )}
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </div>
   )
 }
@@ -334,6 +354,7 @@ function InfisicalSection() {
 function AutomationTokenRow() {
   const [token, setToken] = useState(null) // null = hidden
   const [busy, setBusy] = useState(false)
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
 
   async function reveal() {
     setBusy(true)
@@ -345,15 +366,22 @@ function AutomationTokenRow() {
     }
   }
 
-  async function rotate() {
-    if (!confirm('Rotate the automation API token? Existing n8n workflows using it will stop working until updated.')) return
-    setBusy(true)
-    try {
-      const res = await adminApi.rotateAutomationToken()
-      setToken(res.token)
-    } catch { /* ignore */ } finally {
-      setBusy(false)
-    }
+  function rotate() {
+    setConfirmState({
+      title: 'Rotate token',
+      message: 'Rotate the automation API token? Existing n8n workflows using it will stop working until updated.',
+      confirmLabel: 'Rotate',
+      onConfirm: async () => {
+        setConfirmState(null)
+        setBusy(true)
+        try {
+          const res = await adminApi.rotateAutomationToken()
+          setToken(res.token)
+        } catch { /* ignore */ } finally {
+          setBusy(false)
+        }
+      },
+    })
   }
 
   return (
@@ -374,6 +402,17 @@ function AutomationTokenRow() {
           Rotate
         </button>
       </div>
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </div>
   )
 }
@@ -387,6 +426,7 @@ function N8nSection() {
   const [syncing, setSyncing]       = useState(false)
   const [syncingWf, setSyncingWf]   = useState(false)
   const [msg, setMsg]               = useState(null)
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
 
   function flash(ok, text) {
     setMsg({ ok, text })
@@ -420,18 +460,25 @@ function N8nSection() {
     }
   }
 
-  async function syncSecrets() {
-    if (!confirm('Write Infisical secrets to n8n.env and restart n8n?')) return
-    setSyncing(true)
-    setMsg(null)
-    try {
-      const res = await automationsApi.syncSecrets()
-      flash(true, res.message || 'Secrets synced.')
-    } catch (err) {
-      flash(false, err.message || 'Sync failed')
-    } finally {
-      setSyncing(false)
-    }
+  function syncSecrets() {
+    setConfirmState({
+      title: 'Write & restart',
+      message: 'Write Infisical secrets to n8n.env and restart n8n?',
+      confirmLabel: 'Write & restart',
+      onConfirm: async () => {
+        setConfirmState(null)
+        setSyncing(true)
+        setMsg(null)
+        try {
+          const res = await automationsApi.syncSecrets()
+          flash(true, res.message || 'Secrets synced.')
+        } catch (err) {
+          flash(false, err.message || 'Sync failed')
+        } finally {
+          setSyncing(false)
+        }
+      },
+    })
   }
 
   return (
@@ -521,6 +568,17 @@ function N8nSection() {
       </div>
 
       <AutomationTokenRow />
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </div>
   )
 }

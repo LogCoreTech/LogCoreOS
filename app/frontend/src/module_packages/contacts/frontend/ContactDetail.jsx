@@ -6,6 +6,7 @@ import { assets as assetsApi } from '../../assets/frontend/api'
 import { useWorkspace } from '../../../lib/workspace'
 import ContactAvatar from './ContactAvatar'
 import { formatPhone } from './phone'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 const money = cents => `$${((cents || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const toCents = v => Math.round(parseFloat(v || '0') * 100) || 0
@@ -88,6 +89,11 @@ export default function ContactDetail({ contact, fields, pipeline, user, onClose
   const [dealInvs, setDealInvs] = useState([])            // invoices billing the expanded deal
   const [refAssets, setRefAssets] = useState([])          // assets referencing this contact (contact-type fields)
   const [allContacts, setAllContacts] = useState([])      // for resolving affiliated/employer contact names
+
+  // fullPage means this isn't rendered as a .modal-overlay at all (see
+  // cardShell below) — it's a normal page (Profile.jsx), so Escape has
+  // nothing to dismiss and shouldn't trigger onClose's page navigation.
+  useEscapeToClose(() => { if (!fullPage) onClose() })
 
   const load = useCallback(() => {
     contactsApi.interactions(contact.id).then(r => setInteractions(Array.isArray(r) ? r : [])).catch(() => {})

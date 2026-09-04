@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { contacts as contactsApi } from '../module_packages/contacts/frontend/api'
 import { assets as assetsApi } from '../module_packages/assets/frontend/api'
 import ContactPicker from './contacts/ContactPicker'
+import useEscapeToClose from '../lib/useEscapeToClose'
 
 // Shared asset display helpers used by both the read-only AssetView and the
 // AssetModal editor. Kept in their own module so neither component imports the
@@ -173,11 +174,7 @@ export function CapsSelector({ caps, onChange, templateFields }) {
 // so this can't recur regardless of which container ends up embedding
 // AttachmentThumb in the future.
 function ImageLightbox({ url, filename, onClose }) {
-  useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  useEscapeToClose(onClose)
 
   return createPortal(
     // Deliberately NOT .modal-overlay: that class is items-end on mobile (a

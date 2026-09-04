@@ -7,6 +7,7 @@ import { useWorkspace } from '../../../lib/workspace'
 import AssetModal from './AssetModal'
 import TemplateManager from './TemplateManager'
 import AssetTreePicker from '../../../components/AssetTreePicker'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 const OWNER_CHIP = {
   team: '🧑‍🤝‍🧑 Team',
@@ -102,6 +103,8 @@ function AssetRow({ asset, depth, childrenMap, expanded, onToggle, onOpen, onAdd
 function MovePicker({ asset, allAssets, onClose, onMoved }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  useEscapeToClose(onClose)
 
   // Same store, minus self and descendants (can't move under your own child)
   const sameStore = (Array.isArray(allAssets) ? allAssets : []).filter(

@@ -4,7 +4,9 @@ import HelpButton from '../../../components/HelpButton'
 import { notes as notesApi } from './api'
 import { tags as tagsApi } from '../../../lib/api'
 import TagInput from '../../../components/TagInput'
+import ConfirmDialog from '../../../components/ConfirmDialog'
 import { useWorkspace } from '../../../lib/workspace'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 // ── Tree builder ─────────────────────────────────────────────────────────────
 
@@ -119,6 +121,7 @@ function TreeNode({ node, depth, selectedPath, openFolders, onSelectNote, onTogg
 // ── Context menu ──────────────────────────────────────────────────────────────
 
 function ContextMenu({ node, onClose, onRename, onMove, onDelete, onShare, onLeave, onArchive }) {
+  useEscapeToClose(onClose)
   // Own items (no _owner) are always manageable. Pool items (household/team)
   // are collectively visible, not a personal share — "Leave" makes no sense
   // there; instead an admin (or a by-name edit-level contributor) can manage
@@ -168,6 +171,7 @@ function NoteShareModal({ node, onClose, onSaved }) {
   const [access, setAccess] = useState('read')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  useEscapeToClose(onClose)
 
   useEffect(() => {
     notesApi.members().then(r => setMembers(Array.isArray(r) ? r : [])).catch(() => {})
@@ -238,7 +242,9 @@ export default function Notes() {
   const [showArchived, setShowArchived] = useState(false)
   const [tagSuggestions, setTagSuggestions] = useState([])
   const [dragActive, setDragActive] = useState(false)
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
   const [searchParams, setSearchParams] = useSearchParams()
+  useEscapeToClose(() => setModal(null))
 
   // Deep link (?path=<note path>) — dashboard nav-button clicks land here.
   useEffect(() => {
@@ -424,10 +430,17 @@ export default function Notes() {
     }
   }
 
-  async function handleLeave(node) {
-    if (!window.confirm(`Leave "${node.name}"? You'll lose access unless re-shared.`)) return
-    try { await notesApi.leave(node.path); if (note?.path === node.path) setNote(null); load() }
-    catch (e) { setError(e.message || 'Could not leave.') }
+  function handleLeave(node) {
+    setConfirmState({
+      title: 'Leave shared item',
+      message: `Leave "${node.name}"? You'll lose access unless re-shared.`,
+      confirmLabel: 'Leave',
+      onConfirm: async () => {
+        setConfirmState(null)
+        try { await notesApi.leave(node.path); if (note?.path === node.path) setNote(null); load() }
+        catch (e) { setError(e.message || 'Could not leave.') }
+      },
+    })
   }
 
   function toggleFolder(path) {
@@ -917,6 +930,17 @@ export default function Notes() {
             </div>
           </div>
         </div>
+      )}
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
+        />
       )}
     </div>
   )

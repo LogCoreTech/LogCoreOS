@@ -86,19 +86,16 @@ def _search_goals(query: str, tags: list[str], user: dict, workspace: str) -> li
 
 
 def m031_migrate_goals(brain: Path) -> None:
-    """Guarded the same way as every other optional module's own upgrade
-    migration (features.json existence = "this instance existed before
-    Goals became a real module"). Does two things in one pass: marks goals
-    installed, and converts every existing type=="goal" Task (across every
-    real user, both workspaces, and both pool pseudo-users) into a real
-    Goal record, removing it from tasks.json. A genuinely fresh instance has
-    no features.json yet, so it correctly skips both and starts with goals
-    NOT installed — same "slimming the default install" goal every optional
-    module's own migration already follows."""
-    features_file = brain / "_system" / "features.json"
-    if not features_file.exists():
-        return
-
+    """Does two things in one pass: marks goals installed, and converts every
+    existing type=="goal" Task (across every real user, both workspaces, and
+    both pool pseudo-users) into a real Goal record, removing it from
+    tasks.json — a no-op on a genuinely fresh instance with no legacy
+    goal-tasks to convert. Journal, Calendar, Notes, and Goals joined the
+    fresh-install default baseline (2026-09-04 UX Polish Batch, item #12) —
+    unlike the other optional modules, this migration no longer skips on a
+    genuinely fresh instance (no `_system/features.json` yet); it runs
+    unconditionally, once, on any instance, fresh or upgrading. See
+    docs/MEMORY.md's 2026-09-04 entry for the full rationale."""
     from services.file_service import brain_path
 
     if brain != brain_path():

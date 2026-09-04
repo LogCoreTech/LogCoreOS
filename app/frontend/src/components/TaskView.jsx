@@ -5,6 +5,8 @@ import { catColor } from '../lib/constants'
 import { deepLinkUrl } from '../lib/deepLinks'
 import RecurrenceLog from './RecurrenceLog'
 import { describeRecurrence } from './RecurrencePicker'
+import ConfirmDialog from './ConfirmDialog'
+import useEscapeToClose from '../lib/useEscapeToClose'
 
 const PRIORITY_COLOR = {
   High:   'bg-orange-500 text-white',
@@ -30,6 +32,9 @@ export default function TaskView({ task, canEdit, saveApi, onEdit, onClose, onDe
   const [goalTitle, setGoalTitle] = useState(null)
   const [assetTitle, setAssetTitle] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
+
+  useEscapeToClose(onClose)
 
   // Pool context is identified by a saveApi override, same convention
   // TaskModal.jsx already uses for tag-suggestion lookups.
@@ -62,16 +67,24 @@ export default function TaskView({ task, canEdit, saveApi, onEdit, onClose, onDe
     }
   }
 
-  async function handleDelete() {
-    if (!confirm('Delete this task?')) return
-    setLoading(true)
-    try {
-      const api = saveApi || tasksApi
-      await api.remove(task.id)
-      onDelete()
-    } finally {
-      setLoading(false)
-    }
+  function handleDelete() {
+    setConfirmState({
+      title: 'Delete task',
+      message: 'Delete this task?',
+      confirmLabel: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmState(null)
+        setLoading(true)
+        try {
+          const api = saveApi || tasksApi
+          await api.remove(task.id)
+          onDelete()
+        } finally {
+          setLoading(false)
+        }
+      },
+    })
   }
 
   return (
@@ -173,6 +186,17 @@ export default function TaskView({ task, canEdit, saveApi, onEdit, onClose, onDe
             <button type="button" onClick={onEdit} className="btn-primary flex-1">✎ Edit</button>
           )}
         </div>
+
+        {confirmState && (
+          <ConfirmDialog
+            title={confirmState.title}
+            message={confirmState.message}
+            danger={confirmState.danger}
+            confirmLabel={confirmState.confirmLabel}
+            onConfirm={confirmState.onConfirm}
+            onCancel={() => setConfirmState(null)}
+          />
+        )}
       </div>
     </div>
   )

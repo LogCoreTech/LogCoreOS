@@ -22,10 +22,14 @@ def _seed_pre_existing_instance(brain):
     write_json(brain / "_system" / "features.json", {"profile": "personal", "roles": {}})
 
 
-def test_fresh_install_leaves_goals_not_installed(brain):
+def test_fresh_install_installs_goals(brain):
+    """Goals is one of the 4 modules (journal, calendar, notes, goals) that
+    joined the fresh-install default baseline (2026-09-04 UX Polish Batch,
+    item #12) — m031 no longer skips on a genuinely fresh instance. See
+    docs/MEMORY.md's 2026-09-04 entry."""
     assert not (brain / "_system" / "features.json").exists()
     run_pending(brain)
-    assert not mod_store_service.is_installed("goals")
+    assert mod_store_service.is_installed("goals")
 
 
 def test_upgrade_marks_goals_installed(brain):

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 // Groups by the dashboard's own template (the "folder" the owner asked for —
 // makes browsing manageable with a large number of per-client/per-asset
@@ -27,6 +28,7 @@ function groupByTemplate(items) {
 export default function DashboardSwitcher({ items, activeId, onSelect, onCreateNew, onManageTemplates, onClose }) {
   const [query, setQuery] = useState('')
   const [collapsed, setCollapsed] = useState({})
+  useEscapeToClose(onClose)
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()

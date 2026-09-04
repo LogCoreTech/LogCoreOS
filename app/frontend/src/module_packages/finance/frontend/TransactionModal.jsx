@@ -6,6 +6,8 @@ import { toCents, centsToInput, todayStr } from '../../../components/finance/mon
 import ContactPicker from '../../../components/contacts/ContactPicker'
 import TagInput from '../../../components/TagInput'
 import { tags as tagsApi } from '../../../lib/api'
+import ConfirmDialog from '../../../components/ConfirmDialog'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 const KIND_LABELS = { expense: '− Expense', income: '+ Income', transfer: '⇄ Transfer' }
 
@@ -38,6 +40,8 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
   const navigate = useNavigate()
   const [sourceDeal, setSourceDeal] = useState(null) // resolved when the tx carries a deal_id
   const amountRef = useRef(null)
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
+  useEscapeToClose(onClose)
 
   // The Amount field autofocuses on a genuinely new Expense/Income entry (a
   // deliberate "start typing immediately" convenience) — but for Transfer,
@@ -164,16 +168,24 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
     }
   }
 
-  async function remove() {
-    if (!window.confirm('Delete this transaction?')) return
-    setBusy(true)
-    try {
-      await financeApi.removeTransaction(book.id, tx.id)
-      onDeleted()
-    } catch (err) {
-      setError(err.message || 'Delete failed')
-      setBusy(false)
-    }
+  function remove() {
+    setConfirmState({
+      title: 'Delete transaction',
+      message: 'Delete this transaction?',
+      confirmLabel: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmState(null)
+        setBusy(true)
+        try {
+          await financeApi.removeTransaction(book.id, tx.id)
+          onDeleted()
+        } catch (err) {
+          setError(err.message || 'Delete failed')
+          setBusy(false)
+        }
+      },
+    })
   }
 
   return (
@@ -397,6 +409,17 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
           </div>
         </form>
       </div>
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </div>
   )
 }

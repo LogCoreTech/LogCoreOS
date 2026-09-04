@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { finance as financeApi } from '../../module_packages/finance/frontend/api'
 import { fmtMoney } from '../finance/money'
+import ConfirmDialog from '../ConfirmDialog'
 
 const POOL_WORKSPACE = { household: 'personal', team: 'business' }
 
@@ -21,6 +22,7 @@ export default function PoolBankConnections({ pool, accountLabel }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [msg, setMsg] = useState('')
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
 
   async function loadStatus() {
     const s = await financeApi.sfPoolStatus(pool)
@@ -97,20 +99,27 @@ export default function PoolBankConnections({ pool, accountLabel }) {
     }
   }
 
-  async function poolDisconnect() {
-    if (!window.confirm(`Disconnect this ${accountLabel} account? Its imported transactions stay.`)) return
-    setBusy(true); setError('')
-    try {
-      await financeApi.sfPoolDisconnect(pool)
-      setMsg('Disconnected.')
-      setBankAccounts(null)
-      setBooks(null)
-      await loadStatus()
-    } catch (err) {
-      setError(err.message || 'Disconnect failed')
-    } finally {
-      setBusy(false)
-    }
+  function poolDisconnect() {
+    setConfirmState({
+      title: 'Disconnect account',
+      message: `Disconnect this ${accountLabel} account? Its imported transactions stay.`,
+      confirmLabel: 'Disconnect',
+      onConfirm: async () => {
+        setConfirmState(null)
+        setBusy(true); setError('')
+        try {
+          await financeApi.sfPoolDisconnect(pool)
+          setMsg('Disconnected.')
+          setBankAccounts(null)
+          setBooks(null)
+          await loadStatus()
+        } catch (err) {
+          setError(err.message || 'Disconnect failed')
+        } finally {
+          setBusy(false)
+        }
+      },
+    })
   }
 
   async function saveMapping() {
@@ -267,6 +276,17 @@ export default function PoolBankConnections({ pool, accountLabel }) {
         {msg && <p className="text-xs text-green-600 dark:text-green-400">{msg}</p>}
         {error && <p className="text-xs text-red-500">{error}</p>}
       </div>
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </div>
   )
 }

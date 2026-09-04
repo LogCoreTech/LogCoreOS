@@ -4,6 +4,7 @@ import { contacts as contactsApi } from '../../contacts/frontend/api'
 import { assets as assetsApi } from './api'
 import { AttachmentThumb, formatChanges, fieldDisplay, FieldInput } from '../../../components/assetDisplay'
 import { fmtMoney } from '../../../components/finance/money'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 const OWNER_CHIP = { team: '🧑‍🤝‍🧑 Team', household: '🏠 Household' }
 
@@ -38,6 +39,11 @@ export default function AssetView({
   // Per-user, per-open collapse — plain component state, so the section
   // reappears the next time the asset is opened.
   const [commentsCollapsed, setCommentsCollapsed] = useState(false)
+
+  useEscapeToClose(onClose)
+  // The mute popup stacks on top of this view's own overlay — its own
+  // Escape close is independent, same pattern as a confirmState popup.
+  useEscapeToClose(() => setMutePopup(false))
 
   const isForeign = !!asset._owner
   const isPool = asset._owner === 'team' || asset._owner === 'household'

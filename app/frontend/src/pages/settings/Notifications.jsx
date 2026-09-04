@@ -381,11 +381,12 @@ export default function Notifications() {
           </p>
 
           {[
-            { id: 'daily_digest',  label: 'Daily Digest',    desc: 'Your top 3 priorities every morning', showHour: true },
-            { id: 'overdue_alert', label: 'Overdue Alert',   desc: 'Alert when you have overdue tasks',   showHour: true },
-            { id: 'weekly_review', label: 'Weekly Review',   desc: 'Sunday summary of completed tasks',   showHour: false },
-            { id: 'goal_drift',    label: 'Goal Drift',      desc: 'Nudge when goals have no recent progress', showHour: false, showDays: true },
-          ].map(({ id, label, desc, showHour, showDays }) => {
+            { id: 'daily_digest',      label: 'Daily Digest',       desc: 'Your top 3 priorities every morning', showHour: true },
+            { id: 'overdue_alert',     label: 'Overdue Alert',      desc: 'Alert when you have overdue tasks',   showHour: true },
+            { id: 'weekly_review',     label: 'Weekly Review',      desc: 'Sunday summary of completed tasks',   showHour: false },
+            { id: 'this_week_digest',  label: 'This Week at a Glance', desc: 'Tasks completed + upcoming events', showHour: false, showCadence: true },
+            { id: 'goal_drift',        label: 'Goal Drift',         desc: 'Nudge when goals have no recent progress', showHour: false, showDays: true },
+          ].map(({ id, label, desc, showHour, showDays, showCadence }) => {
             const cfg = sugConfig[id] || {}
             const delivery = cfg.delivery || []
             return (
@@ -448,6 +449,19 @@ export default function Notifications() {
                         onChange={e => updateSug(id, { days_threshold: Number(e.target.value) })}
                         className="w-16 input text-xs py-1 px-2"
                       />
+                    </label>
+                  )}
+                  {showCadence && (
+                    <label className="flex items-center gap-1 text-xs ml-auto">
+                      <span className="text-charcoal-400">Cadence:</span>
+                      <select
+                        value={cfg.cadence ?? 'weekly'}
+                        onChange={e => updateSug(id, { cadence: e.target.value })}
+                        className="input text-xs py-1 px-2"
+                      >
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly (Sunday)</option>
+                      </select>
                     </label>
                   )}
                   <button

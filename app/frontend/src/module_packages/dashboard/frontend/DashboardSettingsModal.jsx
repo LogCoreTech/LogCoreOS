@@ -3,6 +3,8 @@ import { dashboards as dashboardsApi } from './api'
 import EmojiPicker from '../../../components/EmojiPicker'
 import ContactPicker from '../../../components/contacts/ContactPicker'
 import AssetPickerField from '../../../components/AssetPickerField'
+import ConfirmDialog from '../../../components/ConfirmDialog'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 /**
  * Per-dashboard options menu — rename, change icon, and the actions that
@@ -20,7 +22,9 @@ export default function DashboardSettingsModal({ dashboard, isOwner, user, works
   const [changingSubject, setChangingSubject] = useState(false)
   const [subjectId, setSubjectId] = useState(dashboard.subject_id || null)
   const [crossWorkspace, setCrossWorkspace] = useState(!!dashboard.cross_workspace)
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
   const otherWorkspace = workspace === 'business' ? 'personal' : 'business'
+  useEscapeToClose(onClose)
 
   const dirty = name.trim() !== dashboard.name || icon !== dashboard.icon
   const isTemplated = !!dashboard.template_id
@@ -76,18 +80,25 @@ export default function DashboardSettingsModal({ dashboard, isOwner, user, works
     }
   }
 
-  async function detach() {
-    if (!window.confirm('Detach from template? This dashboard keeps its current blocks and layout, but stops updating when the template changes, and its blocks become individually editable again.')) return
-    setSaving(true)
-    setError(null)
-    try {
-      await dashboardsApi.detachTemplate(dashboard.id)
-      await onSaved()
-    } catch (e) {
-      setError(e.message || 'Failed to detach')
-    } finally {
-      setSaving(false)
-    }
+  function detach() {
+    setConfirmState({
+      title: 'Detach template',
+      message: 'Detach from template? This dashboard keeps its current blocks and layout, but stops updating when the template changes, and its blocks become individually editable again.',
+      confirmLabel: 'Detach',
+      onConfirm: async () => {
+        setConfirmState(null)
+        setSaving(true)
+        setError(null)
+        try {
+          await dashboardsApi.detachTemplate(dashboard.id)
+          await onSaved()
+        } catch (e) {
+          setError(e.message || 'Failed to detach')
+        } finally {
+          setSaving(false)
+        }
+      },
+    })
   }
 
   return (
@@ -198,6 +209,17 @@ export default function DashboardSettingsModal({ dashboard, isOwner, user, works
           </div>
         </div>
       </div>
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </div>
   )
 }

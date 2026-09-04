@@ -41,18 +41,12 @@ def _search_calendar(query: str, tags: list[str], user: dict, workspace: str) ->
 def m020_backfill_calendar_installed_from_existing_data(brain: Path) -> None:
     """Every instance that existed before this migration shipped had
     calendar permanently on — mark it installed so upgrading never silently
-    takes the feature away. A genuinely fresh instance has no
-    `_system/features.json` yet (created during setup, before any migration
-    runs), so it correctly skips this and starts with calendar NOT
-    installed — the actual goal (slimming the default install). Same
-    existence-guard idiom journal's m015 and automations' m019 use —
-    Calendar, like both of those, was always-on before this system existed,
-    unlike Home Assistant's m016, which had to key on real ha_config.json
-    content instead since Home Assistant was already opt-in."""
-    features_file = brain / "_system" / "features.json"
-    if not features_file.exists():
-        return  # fresh install — calendar correctly starts uninstalled
-
+    takes the feature away. Journal, Calendar, Notes, and Goals joined the
+    fresh-install default baseline (2026-09-04 UX Polish Batch, item #12) —
+    unlike the other optional modules, this migration no longer skips on a
+    genuinely fresh instance (no `_system/features.json` yet); it runs
+    unconditionally, once, on any instance, fresh or upgrading. See
+    docs/MEMORY.md's 2026-09-04 entry for the full rationale."""
     from services import mod_store_service
     from services.file_service import brain_path
 

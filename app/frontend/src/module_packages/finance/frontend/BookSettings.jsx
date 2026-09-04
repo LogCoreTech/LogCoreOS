@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { finance as financeApi } from './api'
 import { fmtMoney, toCents } from '../../../components/finance/money'
+import ConfirmDialog from '../../../components/ConfirmDialog'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 const ACCOUNT_TYPES = ['checking', 'savings', 'credit', 'cash', 'other']
 const CAP_LABELS = [
@@ -218,6 +220,8 @@ export default function BookSettings({ book, onClose, onChanged, onDeletedBook }
   const [csvMap, setCsvMap] = useState({ date_col: '', amount_col: '', payee_col: '', notes_col: '', date_format: '', invert_amounts: false, account_id: '' })
   const [csvResult, setCsvResult] = useState(null)
   const [csvBusy, setCsvBusy] = useState(false)
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
+  useEscapeToClose(onClose)
 
   async function pickCsv(e) {
     const file = e.target.files?.[0]
@@ -308,14 +312,22 @@ export default function BookSettings({ book, onClose, onChanged, onDeletedBook }
     }
   }
 
-  async function removeAccount(acct) {
-    if (!window.confirm(`Delete account "${acct.name}"?`)) return
-    try {
-      await financeApi.removeAccount(book.id, acct.id)
-      setAccounts(accounts.filter(a => a.id !== acct.id))
-    } catch (err) {
-      setError(err.message || 'Delete failed') // 409 when it still has transactions
-    }
+  function removeAccount(acct) {
+    setConfirmState({
+      title: 'Delete account',
+      message: `Delete account "${acct.name}"?`,
+      confirmLabel: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmState(null)
+        try {
+          await financeApi.removeAccount(book.id, acct.id)
+          setAccounts(accounts.filter(a => a.id !== acct.id))
+        } catch (err) {
+          setError(err.message || 'Delete failed') // 409 when it still has transactions
+        }
+      },
+    })
   }
 
   async function archiveBook() {
@@ -327,14 +339,22 @@ export default function BookSettings({ book, onClose, onChanged, onDeletedBook }
     }
   }
 
-  async function deleteBook() {
-    if (!window.confirm(`Delete the book "${book.name}"? This cannot be undone.`)) return
-    try {
-      await financeApi.removeBook(book.id)
-      onDeletedBook()
-    } catch (err) {
-      setError(err.message || 'Delete failed') // 409 while transactions exist
-    }
+  function deleteBook() {
+    setConfirmState({
+      title: 'Delete book',
+      message: `Delete the book "${book.name}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmState(null)
+        try {
+          await financeApi.removeBook(book.id)
+          onDeletedBook()
+        } catch (err) {
+          setError(err.message || 'Delete failed') // 409 while transactions exist
+        }
+      },
+    })
   }
 
   return (
@@ -531,6 +551,17 @@ export default function BookSettings({ book, onClose, onChanged, onDeletedBook }
           <button onClick={saveBook} disabled={busy} className="btn-primary flex-1">{busy ? 'Saving…' : 'Save'}</button>
         </div>
       </div>
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </div>
   )
 }

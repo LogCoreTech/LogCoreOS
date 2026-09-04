@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { features as featuresApi } from '../../../lib/api'
 import { ALL_MODULES } from '../../../lib/constants'
 import SettingsPageHeader from '../../../components/settings/SettingsPageHeader'
+import ConfirmDialog from '../../../components/ConfirmDialog'
 
 export default function RoleDefinitions() {
   const [roles, setRoles] = useState([])
@@ -15,6 +16,7 @@ export default function RoleDefinitions() {
   const [newRoleName, setNewRoleName] = useState('')
   const [newRoleMods, setNewRoleMods] = useState({})
   const [creating, setCreating] = useState(false)
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
 
   function flash(ok, text) {
     setMsg({ ok, text })
@@ -65,18 +67,26 @@ export default function RoleDefinitions() {
         warning = `Delete role "${name}"? ${users.length} user${users.length === 1 ? '' : 's'} currently ${users.length === 1 ? 'has' : 'have'} it — ${names} — and will fall back to "member" (typically more permissive).`
       }
     } catch { /* fall back to the generic warning above */ }
-    if (!window.confirm(warning)) return
-    setDeleting(name)
-    try {
-      await featuresApi.deleteRole(name)
-      setRoleMods(prev => { const n = { ...prev }; delete n[name]; return n })
-      setRoles(prev => prev.filter(r => r !== name))
-      flash(true, `Role "${name}" deleted.`)
-    } catch (err) {
-      flash(false, err.message || 'Failed to delete role')
-    } finally {
-      setDeleting(null)
-    }
+    setConfirmState({
+      title: 'Delete role',
+      message: warning,
+      confirmLabel: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmState(null)
+        setDeleting(name)
+        try {
+          await featuresApi.deleteRole(name)
+          setRoleMods(prev => { const n = { ...prev }; delete n[name]; return n })
+          setRoles(prev => prev.filter(r => r !== name))
+          flash(true, `Role "${name}" deleted.`)
+        } catch (err) {
+          flash(false, err.message || 'Failed to delete role')
+        } finally {
+          setDeleting(null)
+        }
+      },
+    })
   }
 
   async function createRole(e) {
@@ -246,6 +256,17 @@ export default function RoleDefinitions() {
       </div>
 
       <div className="h-20 md:hidden" aria-hidden="true" />
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </div>
   )
 }

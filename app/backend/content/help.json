@@ -64,7 +64,8 @@
         "Enable browser/web push in Settings → Notifications to get alerts on your devices — this works from anywhere, including away from home. Enable it separately on each phone, tablet, or computer you want alerts on; Settings → Notifications lists every device that's enabled it, with its own Remove button, so you can drop one you no longer have without affecting the rest.",
         "For phone notifications at home, install the ntfy app and subscribe to your channel (shown in Settings → Notifications).",
         "Rotate your ntfy channel anytime from Settings → Notifications if you think it's been shared or exposed; you'll need to re-subscribe in the ntfy app with the new channel afterward. LogCore also reminds you here once a channel is over 30 days old.",
-        "Proactive digests (morning summary, overdue alerts, weekly review) are configurable in Settings.",
+        "Proactive digests (morning summary, overdue alerts, weekly review, This Week at a Glance) are configurable in Settings — This Week at a Glance is off by default and lets you pick daily or weekly.",
+        "Been away a while? A welcome-back message greets you next time you open LogCore, with an AI summary of what changed if you've turned that on and have an AI key configured. Set how many days counts as \"away\" in Settings → Notifications.",
         "Want ntfy notifications away from home too, not just Web Push? An admin can give ntfy a public address if you're using a Cloudflare Tunnel: in Cloudflare Zero Trust → Networks → Tunnels → your tunnel → Public Hostname → Add, pick a subdomain (e.g. ntfy.yourdomain.com), and point it at http://localhost:5680. Then use that https:// address as the server in the ntfy app instead of your LAN address. This is optional — everything else works fine without it."
       ],
       "tips": [

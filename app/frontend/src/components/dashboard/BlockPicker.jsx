@@ -14,6 +14,7 @@ import AssetSelectFieldPicker from './AssetSelectFieldPicker'
 import ContactFieldPicker from './ContactFieldPicker'
 import TemplatePicker from './TemplatePicker'
 import TemplateFieldsPicker from './TemplateFieldsPicker'
+import useEscapeToClose from '../../lib/useEscapeToClose'
 
 const CATEGORY_LABELS = {
   live_aggregate: 'Live data',
@@ -289,6 +290,8 @@ export default function BlockPicker({ editingBlock = null, onAdd, onSave, onClos
   const [selected, setSelected] = useState(editingBlock?.type || null)
   const [config, setConfig] = useState(editingBlock?.config || {})
   const [query, setQuery] = useState('')
+
+  useEscapeToClose(onClose)
 
   useEffect(() => {
     if (isEditing) return // no type-grid step to populate in edit mode

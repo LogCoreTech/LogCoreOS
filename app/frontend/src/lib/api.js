@@ -214,6 +214,10 @@ export const presence = {
   ping: () => post('/presence/ping'),
 }
 
+export const welcomeBack = {
+  check: () => get('/welcome-back/check'),
+}
+
 export const push = {
   vapidKey:     ()           => get('/push/vapid-key'),
   subscribe:    (sub)        => post('/push/subscribe', sub),
