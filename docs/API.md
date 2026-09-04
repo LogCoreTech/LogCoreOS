@@ -207,14 +207,26 @@ Update runtime admin settings. All fields optional — only send what changes.
 `session_minutes` (60–129600, default 10080) — a **single instance-wide value**, admin-only, no per-user override. Controls how long every login stays valid (both the JWT `exp` claim and the cookie `max_age`). There used to be a per-user `PATCH /auth/session` self-service endpoint; it was removed in favor of this single admin-controlled setting. Changing it only affects logins from that point forward — already-active sessions are not forcibly invalidated.
 
 ### `GET /auth/admin/ai-settings`
-Get AI provider configuration.
+Get AI provider configuration. Backed by `routers/ai_settings.py` (mounted here, same prefix as `auth.router`, extracted the way `infisical.py`/`features.py` already are).
 
-**Response** `{ "provider": "anthropic", "model": "claude-sonnet-4-6", "api_key_set": true }`
+**Response** `{ "ai_provider": "anthropic", "ai_model": "claude-sonnet-4-6", "ai_api_key_set": true, "ai_base_url": "", "azure_endpoint": "", "azure_deployment": "", "azure_api_version": "", "ai_allow_model_fetch": false }`
 
 ### `PATCH /auth/admin/ai-settings`
-Update AI provider configuration.
+Update AI provider configuration. All fields optional; `ai_api_key` left blank keeps the previously saved key (write-only — never returned by GET). `ai_base_url` is only ever honored for `"custom"` or a not-yet-`docs_verified` provider (see `GET .../ai-provider-catalog`) — for every other known provider the server resolves and stores its own known URL regardless of what's sent, so a malicious/stale value here can't silently repoint requests at the wrong host. `azure_endpoint`/`azure_deployment` are both required when `ai_provider` is `"azure_openai"` (422 otherwise).
 
-**Body** `{ "provider": "anthropic", "model": "claude-sonnet-4-6", "api_key": "sk-..." }`
+**Body** `{ "ai_provider": "groq", "ai_model": "llama-3.3-70b-versatile", "ai_api_key": "gsk_...", "ai_allow_model_fetch": true }`
+
+### `GET /auth/admin/ai-provider-catalog`
+Static picker data for every supported provider — ~25 entries (Anthropic, OpenAI, Azure OpenAI, Groq, Gemini, Mistral, DeepSeek, xAI, Cerebras, Together, Fireworks, OpenRouter, local runners, more via `"custom"`), each with `id`, `label`, `kind` (`"anthropic" | "openai_compatible" | "azure_openai" | "custom"`), `default_base_url` (`null` means the picker shows a free-text URL field), `needs_api_key`, `docs_verified`, and `static_models` (a curated default list — always available, no network call).
+
+**Response** `{ "providers": [{ "id": "groq", "label": "Groq", "kind": "openai_compatible", "default_base_url": "https://api.groq.com/openai/v1", "needs_api_key": true, "docs_verified": true, "static_models": [{ "id": "llama-3.3-70b-versatile", "label": null }] }, ...] }`
+
+### `POST /auth/admin/ai-settings/models`
+Opt-in live "Load Models" fetch against a real provider endpoint. 403s if `ai_allow_model_fetch` isn't enabled in saved settings; 400s for `azure_openai` (Azure's model-list endpoint returns base models, not deployments — deployment name is typed directly). Its own stricter rate-limit bucket (10/60s) since every call makes a real outbound request. A blank `ai_api_key` in the body reuses the persisted key only when `ai_provider` (and, for `"custom"`, `ai_base_url`) matches what's currently saved — never leaks a different provider's saved key to a new target.
+
+**Body** `{ "ai_provider": "anthropic", "ai_api_key": "", "ai_base_url": "" }`
+
+**Response** `{ "provider": "anthropic", "models": [{ "id": "claude-sonnet-4-6", "display_name": "Claude Sonnet 4.6", "max_input_tokens": 200000, "max_output_tokens": 8192 }], "warning": null }` — raw spec fields only, no computed compatibility ranking; `warning` is set when models came back but the provider exposed no capability data at all.
 
 ### `GET /auth/admin/search-settings`
 Get Tavily web search configuration.

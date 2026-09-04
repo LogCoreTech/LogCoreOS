@@ -169,6 +169,8 @@ export const admin = {
   // AI provider settings
   getAiSettings:         ()    => get('/auth/admin/ai-settings'),
   updateAiSettings:      (s)   => patch('/auth/admin/ai-settings', s),
+  getAiProviderCatalog:  ()    => get('/auth/admin/ai-provider-catalog'),
+  loadAiModels:          (req) => post('/auth/admin/ai-settings/models', req),
   // Web search settings
   getSearchSettings:     ()    => get('/auth/admin/search-settings'),
   updateSearchSettings:  (s)   => patch('/auth/admin/search-settings', s),

@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from config import settings
+from services import ai_provider_catalog as catalog
 
 logger = logging.getLogger("logcore.ai_provider")
 
@@ -67,8 +68,15 @@ def _get_config() -> dict:
 def is_ai_configured() -> bool:
     cfg = _get_config()
     provider = cfg.get("ai_provider", "anthropic")
-    if provider == "anthropic":
+    kind = catalog.get_provider(provider).kind
+    if kind == "anthropic":
         return bool(cfg.get("anthropic_api_key") or cfg.get("ai_api_key"))
+    if kind == "azure_openai":
+        return (
+            bool(cfg.get("ai_api_key"))
+            and bool(cfg.get("azure_endpoint"))
+            and bool(cfg.get("azure_deployment"))
+        )
     # openai-compatible: key is optional when a local base_url is set (e.g. Ollama)
     return bool(cfg.get("ai_api_key")) or bool(cfg.get("ai_base_url"))
 
@@ -124,14 +132,25 @@ def _record(user_name: str, workspace: str, input_tokens: int, output_tokens: in
 # ---------------------------------------------------------------------------
 
 
+def _dispatch_kind(provider: str) -> str:
+    """Unlike catalog.get_provider() (which resolves any unrecognized id to
+    "custom" — the right behavior for settings storage/display, never a hard
+    error), dispatch must still reject a genuinely bogus ai_provider value
+    loudly rather than silently treating a typo as a working custom endpoint."""
+    if provider not in catalog.PROVIDERS:
+        raise ValueError(f"Unsupported ai_provider: '{provider}'")
+    return catalog.PROVIDERS[provider].kind
+
+
 def _dispatch(system: str, messages: list[dict], max_tokens: int) -> tuple[str, int, int]:
     cfg = _get_config()
     provider = cfg.get("ai_provider", "anthropic")
-    if provider == "anthropic":
+    kind = _dispatch_kind(provider)
+    if kind == "anthropic":
         return _anthropic(system, messages, max_tokens, cfg)
-    if provider == "openai":
-        return _openai(system, messages, max_tokens, cfg)
-    raise ValueError(f"Unsupported ai_provider: '{provider}'")
+    if kind == "azure_openai":
+        return _azure_openai(system, messages, max_tokens, cfg)
+    return _openai(system, messages, max_tokens, cfg)  # openai_compatible, custom
 
 
 def _dispatch_agent(
@@ -142,11 +161,12 @@ def _dispatch_agent(
 ) -> AgentResponse:
     cfg = _get_config()
     provider = cfg.get("ai_provider", "anthropic")
-    if provider == "anthropic":
+    kind = _dispatch_kind(provider)
+    if kind == "anthropic":
         return _anthropic_agent(system, messages, tools, max_tokens, cfg)
-    if provider == "openai":
-        return _openai_agent(system, messages, tools, max_tokens, cfg)
-    raise ValueError(f"Unsupported ai_provider: '{provider}'")
+    if kind == "azure_openai":
+        return _azure_openai_agent(system, messages, tools, max_tokens, cfg)
+    return _openai_agent(system, messages, tools, max_tokens, cfg)  # openai_compatible, custom
 
 
 # ---------------------------------------------------------------------------
@@ -280,6 +300,124 @@ def _openai_agent(
 
     response = client.chat.completions.create(
         model=cfg.get("ai_model", "gpt-4o"),
+        max_tokens=max_tokens,
+        messages=oai_messages,
+        tools=oai_tools,
+        tool_choice="auto",
+    )
+
+    choice = response.choices[0]
+    msg = choice.message
+
+    text = msg.content or ""
+    tool_calls: list[ToolCall] = []
+    raw_content: list = []
+
+    if text:
+        raw_content.append({"type": "text", "text": text})
+
+    if msg.tool_calls:
+        for tc in msg.tool_calls:
+            try:
+                input_data = json.loads(tc.function.arguments)
+            except (json.JSONDecodeError, TypeError):
+                input_data = {}
+            tool_calls.append(ToolCall(id=tc.id, name=tc.function.name, input=input_data))
+            raw_content.append(
+                {
+                    "type": "tool_use",
+                    "id": tc.id,
+                    "name": tc.function.name,
+                    "input": input_data,
+                }
+            )
+
+    stop_reason = "end_turn"
+    if choice.finish_reason == "tool_calls":
+        stop_reason = "tool_use"
+    elif choice.finish_reason == "length":
+        stop_reason = "max_tokens"
+
+    usage = getattr(response, "usage", None)
+    return AgentResponse(
+        stop_reason=stop_reason,
+        text=text,
+        tool_calls=tool_calls,
+        raw_content=raw_content,
+        input_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+        output_tokens=getattr(usage, "completion_tokens", 0) or 0,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Azure OpenAI implementation — wire-compatible with vanilla OpenAI's chat-
+# completions API (same response shape, same tool-schema translation reused
+# from _openai_agent() below), just a different client-construction/auth
+# shape: a resource endpoint + a deployment name instead of a base_url.
+# ---------------------------------------------------------------------------
+
+_AZURE_DEFAULT_API_VERSION = "2024-06-01"  # conservative GA guess — confirm against
+# Microsoft's current docs before shipping; azure_api_version always overrides this
+# when the admin has set one.
+
+
+def _azure_openai(
+    system: str, messages: list[dict], max_tokens: int, cfg: dict
+) -> tuple[str, int, int]:
+    import openai as _openai
+
+    client = _openai.AzureOpenAI(
+        api_key=cfg.get("ai_api_key") or "",
+        azure_endpoint=cfg.get("azure_endpoint") or "",
+        azure_deployment=cfg.get("azure_deployment") or "",
+        api_version=cfg.get("azure_api_version") or _AZURE_DEFAULT_API_VERSION,
+    )
+    oai_messages = [{"role": "system", "content": system}] + messages
+    response = client.chat.completions.create(
+        model=cfg.get("azure_deployment") or "",
+        max_tokens=max_tokens,
+        messages=oai_messages,
+    )
+    usage = getattr(response, "usage", None)
+    input_tokens = getattr(usage, "prompt_tokens", 0) or 0
+    output_tokens = getattr(usage, "completion_tokens", 0) or 0
+    return response.choices[0].message.content or "", input_tokens, output_tokens
+
+
+def _azure_openai_agent(
+    system: str,
+    messages: list[dict],
+    tools: list[dict],
+    max_tokens: int,
+    cfg: dict,
+) -> AgentResponse:
+    import openai as _openai
+
+    client = _openai.AzureOpenAI(
+        api_key=cfg.get("ai_api_key") or "",
+        azure_endpoint=cfg.get("azure_endpoint") or "",
+        azure_deployment=cfg.get("azure_deployment") or "",
+        api_version=cfg.get("azure_api_version") or _AZURE_DEFAULT_API_VERSION,
+    )
+
+    oai_messages = [{"role": "system", "content": system}]
+    for msg in messages:
+        oai_messages.extend(_anthropic_msg_to_openai(msg))
+
+    oai_tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": t["name"],
+                "description": t["description"],
+                "parameters": t["input_schema"],
+            },
+        }
+        for t in tools
+    ]
+
+    response = client.chat.completions.create(
+        model=cfg.get("azure_deployment") or "",
         max_tokens=max_tokens,
         messages=oai_messages,
         tools=oai_tools,

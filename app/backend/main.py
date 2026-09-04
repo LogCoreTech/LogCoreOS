@@ -18,6 +18,7 @@ from config import settings
 from migrations.runner import run_pending as run_migrations
 from module_registry import register_routers
 from routers import (
+    ai_settings,
     ai_usage,
     auth,
     brain,
@@ -372,6 +373,7 @@ app.include_router(export.router, prefix="/api/v1/user", tags=["export"])
 app.include_router(push.router, prefix="/api/v1/push", tags=["push"])
 app.include_router(suggestions.router, prefix="/api/v1/suggestions", tags=["suggestions"])
 app.include_router(infisical.router, prefix="/api/v1/auth", tags=["infisical"])
+app.include_router(ai_settings.router, prefix="/api/v1/auth", tags=["ai-settings"])
 app.include_router(features.router, prefix="/api/v1/auth", tags=["features"])
 app.include_router(update.router, prefix="/api/v1/update", tags=["update"])
 app.include_router(help.router, prefix="/api/v1/help", tags=["help"])

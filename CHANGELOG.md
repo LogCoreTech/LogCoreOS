@@ -8,6 +8,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Admin → AI Settings is now a full picker instead of free-text fields.** Every field except the API key — provider, model, base URL, Azure's endpoint/deployment/API version — is now a dropdown, covering ~25 named providers (Anthropic, OpenAI, Azure OpenAI, Groq, Gemini, Mistral, DeepSeek, xAI, Cerebras, Together AI, Fireworks, OpenRouter, and local runners: Ollama, LM Studio, vLLM, llama.cpp, text-generation-webui, KoboldCpp, Jan.ai) plus a "Custom" entry for anything else OpenAI-compatible. Every model field still allows typing a model id manually. A new opt-in "Load Models" toggle (off by default) lets any provider's real, current model list be pulled live on demand — never automatic — showing whatever spec data (context/output token limits) the provider actually reports, with no fabricated compatibility score. Azure OpenAI gets its own resource-endpoint/deployment-name/API-version fields instead of the generic model picker. Switching the provider dropdown without saving first and clicking "Load Models" before typing that provider's own key now gives a clear "enter an API key first" message instead of a confusing generic failure.
+- Fixed a real bug in the previous Groq quick-setup preset: it saved an empty base URL, which silently sent requests to real OpenAI's endpoint using a Groq-shaped key instead of Groq's own API. The new picker is server-authoritative for every known provider's base URL, so this class of misconfiguration can't recur.
+
 ### Security
 
 - Pinned a transitive `browserslist` dependency (pulled in via Autoprefixer/ESLint tooling) to a patched version, closing a Dependabot-flagged crash/prototype-pollution bug. Build-tooling only — never runs inside the deployed app — but a free, zero-risk fix.

@@ -2,6 +2,7 @@ import logging
 import re
 import secrets
 import shutil
+from pathlib import Path
 from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -821,59 +822,21 @@ def get_today(current_user: dict = Depends(get_current_user), _rl: None = Depend
 
 
 # ---------------------------------------------------------------------------
-# Admin — AI provider settings
+# Admin — AI provider settings live in routers/ai_settings.py (same mount
+# prefix, so URLs are unchanged) — ai_settings_path() stays here since
+# SearchSettingsRequest below shares the same underlying file.
 # ---------------------------------------------------------------------------
 
-_AI_SETTINGS_PATH = brain_path() / "ai_settings.json"
 
-
-class AiSettingsRequest(BaseModel):
-    ai_provider: Literal["anthropic", "openai"]
-    ai_api_key: str = ""
-    ai_base_url: str = ""
-    ai_model: str = ""
-
-
-@router.get("/admin/ai-settings")
-def get_ai_settings(current_user: dict = Depends(require_admin)):
-    stored = read_json(_AI_SETTINGS_PATH, default={})
-    provider = stored.get("ai_provider", settings.ai_provider)
-    model = stored.get("ai_model", settings.ai_model)
-    base_url = stored.get("ai_base_url", "")
-    # Key is "set" if present in file or in env (for Anthropic)
-    key_set = bool(
-        stored.get("ai_api_key") or (provider == "anthropic" and settings.anthropic_api_key)
-    )
-    return {
-        "ai_provider": provider,
-        "ai_model": model,
-        "ai_api_key_set": key_set,
-        "ai_base_url": base_url,
-    }
-
-
-@router.patch("/admin/ai-settings")
-def update_ai_settings(
-    req: AiSettingsRequest,
-    current_user: dict = Depends(require_admin),
-):
-    stored = read_json(_AI_SETTINGS_PATH, default={})
-    stored["ai_provider"] = req.ai_provider
-    stored["ai_base_url"] = req.ai_base_url
-    if req.ai_model:
-        stored["ai_model"] = req.ai_model
-    if req.ai_api_key:
-        stored["ai_api_key"] = req.ai_api_key
-    write_json(_AI_SETTINGS_PATH, stored)
-    key_set = bool(
-        stored.get("ai_api_key") or (req.ai_provider == "anthropic" and settings.anthropic_api_key)
-    )
-    return {
-        "ai_provider": stored["ai_provider"],
-        "ai_model": stored.get("ai_model", settings.ai_model),
-        "ai_api_key_set": key_set,
-        "ai_base_url": stored.get("ai_base_url", ""),
-    }
+def ai_settings_path() -> Path:
+    # A function, not a module-level constant: brain_path() must be read fresh
+    # on every call, not frozen at import time — a bare `X = brain_path() / …`
+    # here would bind to whatever settings.brain_path was when this module was
+    # FIRST imported, before any test fixture (or, in principle, any other
+    # future re-pointing of the brain path) ever gets a chance to apply. See
+    # routers/setup.py's TEMPLATE_PATH for the exact same bug class, found and
+    # left unfixed there 2026-09-01 — fixed here since new tests hit it directly.
+    return brain_path() / "ai_settings.json"
 
 
 class SearchSettingsRequest(BaseModel):
@@ -882,7 +845,7 @@ class SearchSettingsRequest(BaseModel):
 
 @router.get("/admin/search-settings")
 def get_search_settings(current_user: dict = Depends(require_admin)):
-    stored = read_json(_AI_SETTINGS_PATH, default={})
+    stored = read_json(ai_settings_path(), default={})
     key_set = bool(stored.get("tavily_api_key") or settings.tavily_api_key)
     return {"tavily_key_set": key_set}
 
@@ -892,10 +855,10 @@ def update_search_settings(
     req: SearchSettingsRequest,
     current_user: dict = Depends(require_admin),
 ):
-    stored = read_json(_AI_SETTINGS_PATH, default={})
+    stored = read_json(ai_settings_path(), default={})
     if req.tavily_api_key:
         stored["tavily_api_key"] = req.tavily_api_key
-    write_json(_AI_SETTINGS_PATH, stored)
+    write_json(ai_settings_path(), stored)
     key_set = bool(stored.get("tavily_api_key") or settings.tavily_api_key)
     return {"tavily_key_set": key_set}
 

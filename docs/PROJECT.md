@@ -100,7 +100,7 @@ At the start of every session, the AI reads the Brain in this order:
 
 After loading, the agent scores the user's tasks and surfaces the **top 3 most pressing tasks** using the Life Priorities skill.
 
-**AI Provider:** The App routes all AI calls through `services/ai_provider.py` — a thin abstraction layer so swapping providers requires changing one file, not refactoring the whole codebase. Currently wired to Anthropic. Multi-provider support (local models, OpenAI, Ollama) is Phase 6. The `AI_PROVIDER` and `AI_MODEL` env vars control the active model.
+**AI Provider:** The App routes all AI calls through `services/ai_provider.py` — a thin abstraction layer that dispatches by provider `kind` (`anthropic`, `openai_compatible`, `azure_openai`, `custom`). Admin -> AI Settings offers a picker covering ~25 named providers (Anthropic, OpenAI, Azure OpenAI, Groq, Gemini, Mistral, DeepSeek, xAI, local runners like Ollama/LM Studio/vLLM, and more via a "Custom" escape hatch) plus an opt-in live model-list fetch, backed by `services/ai_provider_catalog.py`. The `AI_PROVIDER`/`AI_MODEL`/`ANTHROPIC_API_KEY` env vars only seed the fallback default before an admin first saves settings there.
 
 ---
 
@@ -606,12 +606,12 @@ Remaining:
 
 ## Phase 6: AI Provider Expansion
 
-Deliver on the vendor-agnostic promise. The abstraction layer (`ai_provider.py`) is already in place — this phase wires up additional providers.
+Deliver on the vendor-agnostic promise. Shipped: Admin -> AI Settings now offers a picker across ~25 named providers (Anthropic, OpenAI, Azure OpenAI, Groq, Gemini, Mistral, DeepSeek, xAI, Cerebras, Together, Fireworks, OpenRouter, local runners — Ollama, LM Studio, vLLM, llama.cpp, text-generation-webui, KoboldCpp, Jan.ai — and more via a "Custom" OpenAI-compatible escape hatch), an opt-in live model-list fetch per provider, and Azure's distinct resource-endpoint/deployment/API-version shape. Every field but the API key is a picker with a "type manually" fallback.
 
-- Local models via Ollama and LM Studio
-- OpenAI and Gemini
-- Any provider with an OpenAI-compatible API
-- Provider selection per-user (one household member uses local, another uses cloud)
+- ~~Local models via Ollama and LM Studio~~ shipped
+- ~~OpenAI and Gemini~~ shipped
+- ~~Any provider with an OpenAI-compatible API~~ shipped (the "Custom" entry)
+- Provider selection per-user (one household member uses local, another uses cloud) — explicitly deferred; the setting is per-instance only for now
 
 The Brain context layer works identically regardless of provider.
 
