@@ -20,6 +20,7 @@ import useFocusTrap from '../../../lib/useFocusTrap'
 import useScrollLock from '../../../lib/useScrollLock'
 import PullToRefreshIndicator from '../../../components/PullToRefreshIndicator'
 import usePullToRefresh from '../../../lib/usePullToRefresh'
+import { handleTabListKeyDown } from '../../../lib/tabListKeyboard'
 
 export default function Finance() {
   const { user } = useAuth()
@@ -28,6 +29,7 @@ export default function Finance() {
   const [books, setBooks] = useState([])
   const [activeId, setActiveId] = useState(searchParams.get('book') || null)
   const [view, setView] = useState(searchParams.get('view') || 'overview')
+  const viewTabRefs = useRef([])
   const [loading, setLoading] = useState(true)
   const [showNewBook, setShowNewBook] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -208,11 +210,21 @@ export default function Finance() {
       ) : (
         <>
           {/* View tabs */}
-          <div className="flex gap-1 bg-charcoal-100 dark:bg-charcoal-800 rounded-lg p-1">
-            {['overview', 'transactions', 'budgets', 'recurring', 'invoices', 'reports'].map(v => (
+          <div role="tablist" aria-label="Book view" className="flex gap-1 bg-charcoal-100 dark:bg-charcoal-800 rounded-lg p-1">
+            {['overview', 'transactions', 'budgets', 'recurring', 'invoices', 'reports'].map((v, i, arr) => (
               <button
                 key={v}
+                ref={el => { viewTabRefs.current[i] = el }}
+                role="tab"
+                aria-selected={view === v}
+                tabIndex={view === v ? 0 : -1}
                 onClick={() => setView(v)}
+                onKeyDown={e => handleTabListKeyDown(e, {
+                  tabs: arr,
+                  activeIndex: i,
+                  onActivate: setView,
+                  refs: viewTabRefs,
+                })}
                 className={`flex-1 py-1 rounded-md text-xs font-medium capitalize transition-colors ${
                   view === v
                     ? 'bg-white dark:bg-charcoal-600 text-charcoal-900 dark:text-gray-100 shadow-sm'

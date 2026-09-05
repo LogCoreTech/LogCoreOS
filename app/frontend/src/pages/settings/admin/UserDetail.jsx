@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { admin as adminApi, features as featuresApi } from '../../../lib/api'
 import { finance as financeApi } from '../../../module_packages/finance/frontend/api'
@@ -6,6 +6,7 @@ import { useAuth } from '../../../lib/auth'
 import { ALL_MODULES } from '../../../lib/constants'
 import SettingsPageHeader from '../../../components/settings/SettingsPageHeader'
 import ConfirmDialog from '../../../components/ConfirmDialog'
+import { handleTabListKeyDown } from '../../../lib/tabListKeyboard'
 
 const ROLE_COLORS = {
   admin:  'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
@@ -42,6 +43,7 @@ export default function UserDetail() {
   const [fRoleSaving, setFRoleSaving] = useState(false)
 
   const [wsTab, setWsTab] = useState('personal')
+  const wsTabRefs = useRef([])
   const [moduleOverrides, setModuleOverrides] = useState({ personal: [], business: [] })
   const [moduleSaving, setModuleSaving] = useState(false)
 
@@ -367,11 +369,21 @@ export default function UserDetail() {
           {/* Module overrides */}
           <div className="card p-5">
             <h2 className="font-semibold mb-3">Module Restrictions</h2>
-            <div className="flex gap-1 bg-charcoal-100 dark:bg-charcoal-800 rounded-lg p-1 mb-3">
-              {['personal', 'business'].map(ws => (
+            <div role="tablist" aria-label="Workspace" className="flex gap-1 bg-charcoal-100 dark:bg-charcoal-800 rounded-lg p-1 mb-3">
+              {['personal', 'business'].map((ws, i, arr) => (
                 <button
                   key={ws}
+                  ref={el => { wsTabRefs.current[i] = el }}
+                  role="tab"
+                  aria-selected={wsTab === ws}
+                  tabIndex={wsTab === ws ? 0 : -1}
                   onClick={() => setWsTab(ws)}
+                  onKeyDown={e => handleTabListKeyDown(e, {
+                    tabs: arr,
+                    activeIndex: i,
+                    onActivate: setWsTab,
+                    refs: wsTabRefs,
+                  })}
                   className={`flex-1 py-1 rounded-md text-xs font-medium capitalize transition-colors ${
                     wsTab === ws
                       ? 'bg-white dark:bg-charcoal-600 text-charcoal-900 dark:text-gray-100 shadow-sm'

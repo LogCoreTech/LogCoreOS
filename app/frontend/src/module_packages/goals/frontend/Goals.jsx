@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { handleTabListKeyDown } from '../../../lib/tabListKeyboard'
 import HelpButton from '../../../components/HelpButton'
 import { goals as goalsApi } from './api'
 import { tasks as tasksApi } from '../../tasks/frontend/api'
@@ -16,6 +17,7 @@ export default function Goals() {
   const [goals, setGoals] = useState([])
   const [categories, setCategories] = useState([])
   const [tab, setTab] = useState('me') // 'me' | 'pool'
+  const tabRefs = useRef([])
   const [filter, setFilter] = useState('pending')
   const [timeframe, setTimeframe] = useState('all')
   const [tagFilter, setTagFilter] = useState(null)
@@ -145,11 +147,21 @@ export default function Goals() {
 
       {/* ME / pool tabs */}
       {poolAvailable && (
-        <div className="flex gap-1 bg-charcoal-100 dark:bg-charcoal-800 rounded-lg p-1">
-          {[['me', 'ME'], ['pool', poolLabel]].map(([t, label]) => (
+        <div role="tablist" aria-label="Goals view" className="flex gap-1 bg-charcoal-100 dark:bg-charcoal-800 rounded-lg p-1">
+          {[['me', 'ME'], ['pool', poolLabel]].map(([t, label], i, arr) => (
             <button
               key={t}
+              ref={el => { tabRefs.current[i] = el }}
+              role="tab"
+              aria-selected={tab === t}
+              tabIndex={tab === t ? 0 : -1}
               onClick={() => setTab(t)}
+              onKeyDown={e => handleTabListKeyDown(e, {
+                tabs: arr.map(([id]) => id),
+                activeIndex: i,
+                onActivate: setTab,
+                refs: tabRefs,
+              })}
               className={`flex-1 py-1.5 rounded-md text-sm font-medium transition-colors ${
                 tab === t
                   ? 'bg-white dark:bg-charcoal-600 text-charcoal-900 dark:text-gray-100 shadow-sm'

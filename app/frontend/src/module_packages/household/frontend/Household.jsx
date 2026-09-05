@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import HelpButton from '../../../components/HelpButton'
 import { shared as sharedApi } from './api'
 import { useAuth } from '../../../lib/auth'
@@ -6,6 +6,7 @@ import TaskModal from '../../../components/TaskModal'
 import EventModal from '../../../components/EventModal'
 import CalendarGrid from '../../../components/CalendarGrid'
 import { catColor } from '../../../lib/constants'
+import { handleTabListKeyDown } from '../../../lib/tabListKeyboard'
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
@@ -40,6 +41,7 @@ export default function Household() {
   const today    = new Date()
 
   const [view, setView]     = useState('calendar')
+  const tabRefs = useRef([])
   const [year, setYear]     = useState(today.getFullYear())
   const [month, setMonth]   = useState(today.getMonth())
   const [tasks, setTasks]   = useState([])
@@ -116,11 +118,21 @@ export default function Household() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 bg-charcoal-100 dark:bg-charcoal-800 rounded-lg p-1">
-        {TABS.map(({ id, label }) => (
+      <div role="tablist" aria-label="Household view" className="flex gap-1 bg-charcoal-100 dark:bg-charcoal-800 rounded-lg p-1">
+        {TABS.map(({ id, label }, i, arr) => (
           <button
             key={id}
+            ref={el => { tabRefs.current[i] = el }}
+            role="tab"
+            aria-selected={view === id}
+            tabIndex={view === id ? 0 : -1}
             onClick={() => setView(id)}
+            onKeyDown={e => handleTabListKeyDown(e, {
+              tabs: arr.map(t => t.id),
+              activeIndex: i,
+              onActivate: setView,
+              refs: tabRefs,
+            })}
             className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
               view === id
                 ? 'bg-white dark:bg-charcoal-600 text-charcoal-900 dark:text-gray-100 shadow-sm'
