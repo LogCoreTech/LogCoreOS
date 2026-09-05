@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import useEscapeToClose from '../lib/useEscapeToClose'
 import useFocusTrap from '../lib/useFocusTrap'
+import useScrollLock from '../lib/useScrollLock'
 
 // Shared confirmation dialog (item #7 of the 2026-09-04 UX Polish Batch) —
 // replaces the app's 34 raw confirm()/window.confirm() call sites with one
@@ -16,6 +18,22 @@ import useFocusTrap from '../lib/useFocusTrap'
 // Parent conditionally mounts this (`{confirmOpen && <ConfirmDialog .../>}`),
 // matching every other modal in this codebase — there's no internal `open`
 // prop to manage.
+//
+// Real bug reported 2026-09-05: this is overwhelmingly opened from WITHIN an
+// already-open edit modal (a Delete button, or #9's "Discard changes?"
+// prompt), and every one of those outer modals is `.modal-card`, which
+// applies `.card`'s `backdrop-blur-sm` — `backdrop-filter` on an ancestor
+// creates a new containing block for `position: fixed` descendants (the
+// same documented nested-modal-clipping bug class as assetDisplay.jsx's
+// ImageLightbox and GoalModal's own Portal), so this dialog's own "fixed"
+// overlay was resolving against the OUTER modal's scrolled box instead of
+// the true viewport — it visually rode along as the outer modal's own
+// content scrolled, instead of staying centered on screen. Fixed at the
+// source, once, here — every current and future call site (nested or not)
+// is automatically correct, rather than patching each of the ~40 call
+// sites individually. createPortal(..., document.body) escapes the DOM
+// tree (and every ancestor's CSS) entirely; useScrollLock stops the
+// background from scrolling underneath while this is open.
 export default function ConfirmDialog({
   title,
   message,
@@ -33,6 +51,7 @@ export default function ConfirmDialog({
 
   useEscapeToClose(onCancel)
   useFocusTrap(cardRef)
+  useScrollLock()
 
   useEffect(() => {
     if (requireTypedText) inputRef.current?.focus()
@@ -42,7 +61,7 @@ export default function ConfirmDialog({
   const typedMatches = !requireTypedText || typedValue === requireTypedText
   const titleId = 'confirm-dialog-title'
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={onCancel}>
       <div
         ref={cardRef}
@@ -95,6 +114,7 @@ export default function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

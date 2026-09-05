@@ -13,6 +13,7 @@ import { AttachmentThumb, formatChanges, FieldInput, CapsSelector } from '../../
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 // Same 6 types (and same backend validation, assets_service._validate_field_defs/
 // _validate_value) TemplateManager.jsx's admin template editor offers — not
@@ -114,7 +115,12 @@ function SaveAsTemplateModal({ suggestedLabel, onCancel, onConfirm, busy, error 
   const cardRef = useRef(null)
   useEscapeToClose(onCancel)
   useFocusTrap(cardRef)
-  return (
+  useScrollLock()
+  // Real bug fixed 2026-09-05: rendered inline inside AssetModal's own
+  // .modal-card (backdrop-blur-sm) before this — the second of 2 leftover
+  // nested-modal-clipping instances flagged in docs/TASKS.md's Product
+  // Backlog (see archivePrompt's own fix above for the full explanation).
+  return createPortal(
     <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={onCancel}>
       <div ref={cardRef} className="card p-5 w-full max-w-xs space-y-3" onClick={e => e.stopPropagation()}>
         <p className="font-semibold">Save as template</p>
@@ -133,7 +139,8 @@ function SaveAsTemplateModal({ suggestedLabel, onCancel, onConfirm, busy, error 
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -239,7 +246,15 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
   // above (both render simultaneously, like the confirmState/ConfirmDialog
   // popup below) — its own Escape close is independent of the editor's.
   useEscapeToClose(() => setArchivePrompt(false))
-  useFocusTrap(archiveCardRef)
+  // `active` tied to `archivePrompt`: this popup only mounts its own card
+  // conditionally (unlike cardRef's editor, always rendered), so without it
+  // the trap's effect (deps [threshold, enabled, containerRef], none of
+  // which ever change on a bare `useFocusTrap(ref)` call) would run once at
+  // mount — while archiveCardRef.current is still null — and never again,
+  // permanently no-oping even once the popup actually opens. Real bug found
+  // and fixed 2026-09-05 alongside this popup's own portal/scroll-lock fix.
+  useFocusTrap(archiveCardRef, archivePrompt)
+  useScrollLock(archivePrompt)
 
   const templatesById = Object.fromEntries((templates || []).map(t => [t.id, t]))
   const groupTarget = workspace === 'business' ? 'team' : 'household'
@@ -1041,7 +1056,13 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
           document.body
         )}
 
-        {archivePrompt && (
+        {archivePrompt && createPortal(
+          // Real bug fixed 2026-09-05: this was rendered inline inside
+          // AssetModal's own .modal-card (backdrop-blur-sm), the exact
+          // nested-modal-clipping bug class documented for ImageLightbox/
+          // GoalModal — a "fixed" child resolves against that blurred
+          // ancestor's box instead of the true viewport. One of 2 leftover
+          // instances flagged in docs/TASKS.md's Product Backlog; fixed now.
           <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={() => setArchivePrompt(false)}>
             <div ref={archiveCardRef} className="card p-5 w-full max-w-xs" onClick={e => e.stopPropagation()}>
               <p className="font-semibold mb-1">Archive “{asset.name}”?</p>
@@ -1060,7 +1081,8 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
         {showSaveAsTemplate && (

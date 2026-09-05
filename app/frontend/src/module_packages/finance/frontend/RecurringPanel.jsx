@@ -4,6 +4,7 @@ import { fmtMoney, toCents, centsToInput, todayStr } from '../../../components/f
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 const EMPTY_FORM = { name: '', amount: '', kind: 'expense', account_id: '', category: '', cadence: 'monthly', next_due: '', autopay: false, deductible: false, tax_category: '' }
 
@@ -19,9 +20,17 @@ export default function RecurringPanel({ book, canEdit }) {
   const formCardRef = useRef(null)
   const plannedCardRef = useRef(null)
   useEscapeToClose(() => setForm(null))
-  useFocusTrap(formCardRef)
+  // `active` tied to `form`: both popups' cards mount conditionally within
+  // this persistent RecurringPanel instance (never remounted), so a bare
+  // useFocusTrap(ref) call would only ever attach once at RecurringPanel's
+  // own mount — while the ref is still null — and never again once a form
+  // actually opens. Same real bug as AssetModal's/AssetView's own popups,
+  // found and fixed together 2026-09-05.
+  useFocusTrap(formCardRef, !!form)
+  useScrollLock(!!form)
   useEscapeToClose(() => setPlannedForm(null))
-  useFocusTrap(plannedCardRef)
+  useFocusTrap(plannedCardRef, !!plannedForm)
+  useScrollLock(!!plannedForm)
 
   function load() {
     financeApi.recurring(book.id).then(r => setItems(Array.isArray(r) ? r : [])).catch(() => {})

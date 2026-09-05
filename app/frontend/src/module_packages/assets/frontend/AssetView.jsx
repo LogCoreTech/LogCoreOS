@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { contacts as contactsApi } from '../../contacts/frontend/api'
 import { assets as assetsApi } from './api'
@@ -6,6 +7,7 @@ import { AttachmentThumb, formatChanges, fieldDisplay, FieldInput } from '../../
 import { fmtMoney } from '../../../components/finance/money'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 const OWNER_CHIP = { team: '🧑‍🤝‍🧑 Team', household: '🏠 Household' }
 
@@ -48,7 +50,14 @@ export default function AssetView({
   // The mute popup stacks on top of this view's own overlay — its own
   // Escape close is independent, same pattern as a confirmState popup.
   useEscapeToClose(() => setMutePopup(false))
-  useFocusTrap(muteCardRef)
+  // `active` tied to `mutePopup`: this popup's own card only mounts
+  // conditionally within this persistent AssetView instance, so a bare
+  // useFocusTrap(ref) call would trap once at AssetView's own mount (while
+  // muteCardRef.current is still null) and never re-attach once the popup
+  // actually opens. Same real bug as AssetModal's archivePrompt/main editor,
+  // found and fixed together 2026-09-05.
+  useFocusTrap(muteCardRef, mutePopup)
+  useScrollLock(mutePopup)
 
   const isForeign = !!asset._owner
   const isPool = asset._owner === 'team' || asset._owner === 'household'
@@ -516,8 +525,14 @@ export default function AssetView({
           )}
         </div>
 
-        {/* Comment-notification mute popup (per-user; covers the whole subtree) */}
-        {mutePopup && (
+        {/* Comment-notification mute popup (per-user; covers the whole subtree).
+            Real bug fixed 2026-09-05: nested inside this component's own
+            .modal-card (backdrop-blur-sm) — the exact nested-modal-clipping
+            bug class (see ConfirmDialog.jsx's own fix for the full
+            explanation) — so it needs its own portal to escape that
+            containing block, same as archivePrompt/SaveAsTemplateModal in
+            AssetModal.jsx. */}
+        {mutePopup && createPortal(
           <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={() => setMutePopup(false)}>
             <div ref={muteCardRef} className="card p-5 w-full max-w-xs" onClick={e => e.stopPropagation()}>
               <p className="font-semibold mb-1">Comment notifications</p>
@@ -541,7 +556,8 @@ export default function AssetView({
                 Close
               </button>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     </div>
