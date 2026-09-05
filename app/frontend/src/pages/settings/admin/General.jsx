@@ -48,8 +48,8 @@ function RegistrationSection() {
         When closed, only admins can create new accounts.
       </p>
 
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
           <p className="text-sm font-medium">Open registration</p>
           <p className="text-xs text-charcoal-400">
             {allowed ? 'Anyone can create an account.' : 'New sign-ups are disabled.'}
@@ -347,8 +347,8 @@ function UpdateSection() {
             </div>
           )}
 
-          <div className="flex items-center justify-between py-1 border-t border-charcoal-100 dark:border-charcoal-800">
-            <div>
+          <div className="flex items-center justify-between gap-3 py-1 border-t border-charcoal-100 dark:border-charcoal-800">
+            <div className="min-w-0">
               <p className="text-sm font-medium">Auto-update</p>
               <p className="text-xs text-charcoal-500 dark:text-charcoal-400">
                 Apply new versions automatically when detected
@@ -357,7 +357,7 @@ function UpdateSection() {
             <button
               onClick={toggleAutoUpdate}
               disabled={togglingAuto}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
                 status.auto_update_enabled ? 'bg-orange-500' : 'bg-charcoal-300 dark:bg-charcoal-600'
               }`}
             >

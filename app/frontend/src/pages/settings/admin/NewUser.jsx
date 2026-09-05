@@ -112,9 +112,9 @@ export default function NewUser() {
         <div>
           <label className="block text-xs font-medium mb-1">Link to an existing contact (optional)</label>
           {selectedContact ? (
-            <div className="input text-sm flex items-center justify-between">
-              <span>{selectedContact.type === 'company' ? '🏢' : '🧑'} {selectedContact.name}</span>
-              <button type="button" onClick={() => setSelectedContact(null)} className="text-charcoal-400 hover:text-red-500 text-xs">Change</button>
+            <div className="input text-sm flex items-center justify-between gap-2">
+              <span className="truncate min-w-0">{selectedContact.type === 'company' ? '🏢' : '🧑'} {selectedContact.name}</span>
+              <button type="button" onClick={() => setSelectedContact(null)} className="text-charcoal-400 hover:text-red-500 text-xs shrink-0">Change</button>
             </div>
           ) : (
             <>

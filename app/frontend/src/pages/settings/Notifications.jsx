@@ -391,12 +391,12 @@ export default function Notifications() {
             const delivery = cfg.delivery || []
             return (
               <div key={id} className="border border-charcoal-200 dark:border-charcoal-700 rounded-xl p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
                     <span className="text-sm font-medium">{label}</span>
                     <p className="text-xs text-charcoal-400 dark:text-charcoal-500">{desc}</p>
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
                     <input
                       type="checkbox"
                       className="sr-only peer"
