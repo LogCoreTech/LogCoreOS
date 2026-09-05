@@ -55,8 +55,16 @@ function deriveShades(hex) {
 
 const DEFAULT_ACCENT = '#f97316' // brand orange (matches the :root default in index.css)
 
+// Item #31, 2026-09-04 UX Polish Batch — the static manifest.json/icon-192.png
+// referenced from index.html are always the brand orange. Once a user's
+// accent is known, point the PWA install metadata at the backend's per-user
+// recolored versions instead (see routers/pwa.py), so "Add to Home Screen"
+// picks up their accent. iOS reads apple-touch-icon directly and ignores the
+// manifest's icons array, so both links need updating, not just one.
 export function applyAccentColor(hex) {
   const el = document.documentElement
+  const manifestLink = document.querySelector('link[rel="manifest"]')
+  const touchIconLink = document.querySelector('link[rel="apple-touch-icon"]')
   if (!hex) {
     // Reset to the brand orange :root defaults by removing the inline overrides
     // (e.g. on logout, so the login page/button never shows the last user's accent).
@@ -65,6 +73,8 @@ export function applyAccentColor(hex) {
     }
     const meta = document.querySelector('meta[name="theme-color"]')
     if (meta) meta.setAttribute('content', DEFAULT_ACCENT)
+    if (manifestLink) manifestLink.setAttribute('href', '/manifest.json')
+    if (touchIconLink) touchIconLink.setAttribute('href', '/icon-192.png')
     return
   }
   for (const [key, val] of Object.entries(deriveShades(hex))) {
@@ -72,6 +82,10 @@ export function applyAccentColor(hex) {
   }
   const meta = document.querySelector('meta[name="theme-color"]')
   if (meta) meta.setAttribute('content', hex)
+  if (manifestLink) manifestLink.setAttribute('href', '/api/v1/pwa/manifest.webmanifest')
+  if (touchIconLink) {
+    touchIconLink.setAttribute('href', `/api/v1/pwa/icon-192.png?accent=${encodeURIComponent(hex)}`)
+  }
 }
 
 export function applyDarkMode(mode, systemPrefersDark) {

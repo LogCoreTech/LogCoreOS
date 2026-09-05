@@ -97,9 +97,15 @@ export default function TaskView({ task, canEdit, saveApi, onEdit, onClose, onDe
   }
 
   function handleDelete() {
+    // Item #29, 2026-09-04 UX Polish Batch — context-aware warning: the
+    // owner's own named example (a streak). Only the highest-value curated
+    // sites got this, not every confirm() in the app.
+    const message = task.streak_count > 0
+      ? `Delete this task? You'll lose its ${task.streak_count}-day streak.`
+      : 'Delete this task?'
     setConfirmState({
       title: 'Delete task',
-      message: 'Delete this task?',
+      message,
       confirmLabel: 'Delete',
       danger: true,
       onConfirm: async () => {

@@ -125,9 +125,15 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
   }
 
   function handleDelete() {
+    // Item #29, 2026-09-04 UX Polish Batch — same context-aware warning
+    // TaskView.jsx's own handleDelete uses (both exist since edit mode can
+    // reach delete directly, not only via the view).
+    const message = task?.streak_count > 0
+      ? `Delete this task? You'll lose its ${task.streak_count}-day streak.`
+      : 'Delete this task?'
     setConfirmState({
       title: 'Delete task',
-      message: 'Delete this task?',
+      message,
       confirmLabel: 'Delete',
       danger: true,
       onConfirm: async () => {

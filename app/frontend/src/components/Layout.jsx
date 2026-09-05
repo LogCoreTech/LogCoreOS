@@ -12,6 +12,7 @@ import { notes as notesApi } from '../module_packages/notes/frontend/api'
 import { deepLinkUrl } from '../lib/deepLinks'
 import WhatsNewBanner from './WhatsNewBanner'
 import WelcomeBackPopup from './WelcomeBackPopup'
+import OfflineBanner from './OfflineBanner'
 import DemoBanner from './DemoBanner'
 import GlobalSearch from './GlobalSearch'
 
@@ -484,6 +485,7 @@ export default function Layout() {
         </header>
 
         {demoMode && <DemoBanner />}
+        <OfflineBanner />
         <WhatsNewBanner />
         <WelcomeBackPopup />
 
