@@ -16,6 +16,8 @@ import { auth as authApi } from '../../../lib/api'
 import { dashboardTemplates as dashboardTemplatesApi, dashboards as dashboardsApi } from './api'
 import { useAuth } from '../../../lib/auth'
 import { useWorkspace } from '../../../lib/workspace'
+import PullToRefreshIndicator from '../../../components/PullToRefreshIndicator'
+import usePullToRefresh from '../../../lib/usePullToRefresh'
 
 function greeting() {
   const h = new Date().getHours()
@@ -332,8 +334,16 @@ export default function Dashboard() {
   const canEdit = current?._access === 'edit' || current?._access === 'contribute'
   const isOwner = current?.owner === user?.name
 
+  // Disabled while editing — react-grid-layout's own block drag/resize
+  // handles live in this same scroll area, and Touch/Pointer events both
+  // fire for one physical gesture, so the two would otherwise compete.
+  const pull = usePullToRefresh(() => loadCurrent(current.id, { resetEditing: false }), {
+    enabled: !editing && !!current,
+  })
+
   return (
     <div key={workspace} className="w-full max-w-5xl mx-auto space-y-4">
+      <PullToRefreshIndicator {...pull} />
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <span className="flex items-center gap-2">

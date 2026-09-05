@@ -31,6 +31,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **The search bar can now jump straight to creating something new.** Enable it and pick which quick-create actions you want in Settings → Shortcuts; they show up when you open search with nothing typed yet.
 - **Lists no longer flash/disappear when they refresh in the background** (completing a task, saving a dashboard block, etc.) — only what actually changed updates now, across Tasks, Notes, Contacts, Goals, Dashboards, Finance, the Brain browser, and several admin pages.
 - Screen readers now announce what icon-only buttons (close, remove, edit) actually do, instead of a bare "button." The toast dismiss button's tap target also grew to the standard accessible minimum size.
+- **Pull down to refresh on Tasks, Contacts, Goals, Finance, Dashboards, and the Brain browser** (mobile only — desktop has no equivalent gesture).
 
 ### Security
 

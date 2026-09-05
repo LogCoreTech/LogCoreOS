@@ -10,6 +10,8 @@ import ContactModal from './ContactModal'
 import ContactAvatar from './ContactAvatar'
 import BulkConvertContactsModal from './BulkConvertContactsModal'
 import { formatPhone } from './phone'
+import PullToRefreshIndicator from '../../../components/PullToRefreshIndicator'
+import usePullToRefresh from '../../../lib/usePullToRefresh'
 
 const TYPE_FILTERS = [
   { id: 'all', label: 'All' },
@@ -166,8 +168,11 @@ export default function Contacts() {
     e.target.value = ''
   }
 
+  const pull = usePullToRefresh(load)
+
   return (
     <div key={workspace} className="w-full max-w-3xl mx-auto space-y-4">
+      <PullToRefreshIndicator {...pull} />
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">Contacts</h1><HelpButton section="contacts" /></span>
         <div className="flex gap-2">

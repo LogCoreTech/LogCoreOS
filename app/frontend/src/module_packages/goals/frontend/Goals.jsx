@@ -7,6 +7,8 @@ import { useWorkspace } from '../../../lib/workspace'
 import { useAuth } from '../../../lib/auth'
 import { catColor } from '../../../lib/constants'
 import GoalModal, { poolTaskApi } from './GoalModal'
+import PullToRefreshIndicator from '../../../components/PullToRefreshIndicator'
+import usePullToRefresh from '../../../lib/usePullToRefresh'
 
 export default function Goals() {
   const { workspace } = useWorkspace()
@@ -126,8 +128,11 @@ export default function Goals() {
     setOpenGoalPool(isPoolGoal(goal))
   }
 
+  const pull = usePullToRefresh(load)
+
   return (
     <div className="space-y-4">
+      <PullToRefreshIndicator {...pull} />
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-2">
           <h1 className="text-2xl font-bold">Goals</h1>

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import HelpButton from '../../../components/HelpButton'
 import EmptyState from '../../../components/EmptyState'
+import PullToRefreshIndicator from '../../../components/PullToRefreshIndicator'
+import usePullToRefresh from '../../../lib/usePullToRefresh'
 import { tasks as tasksApi } from './api'
 import { priorities as prioritiesApi, auth as authApi } from '../../../lib/api'
 import { assets as assetsApi } from '../../assets/frontend/api'
@@ -180,8 +182,11 @@ export default function Tasks() {
     return scoreTask(b, priorityOrder, _todayStr) - scoreTask(a, priorityOrder, _todayStr)
   })
 
+  const pull = usePullToRefresh(load)
+
   return (
     <div className="w-full max-w-2xl mx-auto space-y-5 overflow-x-hidden">
+      <PullToRefreshIndicator {...pull} />
       {/* Header */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">Tasks</h1><HelpButton section="tasks" /></span>

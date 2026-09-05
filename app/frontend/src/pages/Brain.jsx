@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams, useLocation, useNavigate } from 'react-router-dom'
 import { brain as brainApi } from '../lib/api'
+import PullToRefreshIndicator from '../components/PullToRefreshIndicator'
+import usePullToRefresh from '../lib/usePullToRefresh'
 
 export default function Brain() {
   const [files, setFiles] = useState([])
@@ -15,12 +17,15 @@ export default function Brain() {
   const location = useLocation()
   const navigate = useNavigate()
 
-  useEffect(() => {
-    brainApi.list()
+  const loadFiles = useCallback(() => {
+    setLoading(true)
+    return brainApi.list()
       .then(setFiles)
       .catch(() => setError('Could not load files.'))
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => { loadFiles() }, [loadFiles])
 
   useEffect(() => {
     const file = searchParams.get('file')
@@ -59,6 +64,12 @@ export default function Brain() {
       return next
     })
   }
+
+  // Hooks must run unconditionally — called here, before the early return
+  // below, but only rendered into the file-list view further down (and
+  // disabled while an individual file's editor is open, a different scroll
+  // area entirely).
+  const pull = usePullToRefresh(loadFiles, { enabled: !selected })
 
   // ── Editor view ──
   if (selected) {
@@ -114,6 +125,7 @@ export default function Brain() {
   // ── File list view ──
   return (
     <div className="max-w-2xl mx-auto space-y-4">
+      <PullToRefreshIndicator {...pull} />
       <div>
         <button onClick={() => navigate('/settings')} className="btn-ghost text-sm mb-2">← Settings</button>
         <h1 className="text-2xl font-bold">Brain</h1>

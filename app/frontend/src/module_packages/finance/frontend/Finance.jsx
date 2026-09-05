@@ -16,6 +16,8 @@ import ReportsPanel from './ReportsPanel'
 import { fmtMoney, monthStr } from '../../../components/finance/money'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import PullToRefreshIndicator from '../../../components/PullToRefreshIndicator'
+import usePullToRefresh from '../../../lib/usePullToRefresh'
 
 export default function Finance() {
   const { user } = useAuth()
@@ -138,8 +140,11 @@ export default function Finance() {
     } catch { /* surfaced by reload */ }
   }
 
+  const pull = usePullToRefresh(() => load(true))
+
   return (
     <div key={workspace} className="w-full max-w-3xl mx-auto space-y-5 overflow-x-hidden">
+      <PullToRefreshIndicator {...pull} />
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <span className="flex items-center gap-2">
           <h1 className="text-2xl font-bold">Finance</h1>
