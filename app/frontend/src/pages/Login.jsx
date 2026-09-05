@@ -14,6 +14,7 @@ export default function Login() {
   const [registrationOpen, setRegistrationOpen] = useState(null) // null = loading
   const [bgLoaded, setBgLoaded] = useState(false)
   const [demoLoading, setDemoLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const { login, demoMode } = useAuth()
   const navigate = useNavigate()
 
@@ -157,6 +158,7 @@ export default function Login() {
                   value={name}
                   onChange={e => setName(e.target.value)}
                   placeholder="First and Last Name"
+                  autoComplete="name"
                   required
                   className="input"
                 />
@@ -172,6 +174,7 @@ export default function Login() {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="you@example.com"
+                autoComplete="email"
                 required
                 className="input"
               />
@@ -181,15 +184,25 @@ export default function Login() {
               <label className="block text-sm font-medium mb-1 text-charcoal-700 dark:text-charcoal-300">
                 Password
               </label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                minLength={8}
-                className="input"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                  required
+                  minLength={8}
+                  className="input pr-16"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(v => !v)}
+                  className="absolute inset-y-0 right-0 px-3 min-w-[44px] text-xs font-medium text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200"
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
             </div>
 
             {error && <p className="text-red-500 text-sm">{error}</p>}
