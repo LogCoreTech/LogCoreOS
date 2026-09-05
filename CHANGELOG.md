@@ -35,6 +35,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Keyboard focus now stays inside an open modal/dialog instead of tabbing out into the page behind it**, and pressing Tab from the sidebar/header now offers a "Skip to content" link so keyboard users don't have to tab through the whole nav on every page.
 - Replaced the last of the app's old blocking browser popups (Chat, Automations, Contacts, Account, Appearance) with the same non-blocking toast notifications used elsewhere.
 - **Fixed a real bug**: confirmation ("are you sure?") popups could scroll away from the center of the screen along with whatever page or form was open behind them, instead of staying fixed in place — and the page underneath kept scrolling while one was open. Both are fixed now, along with the same issue on a few other popups (Assets' archive-confirm and mute-notifications prompts, Finance's recurring-bill forms).
+- Journal's history drawer can now be closed with Escape, keeps keyboard focus contained while open, and blocks the page behind it from scrolling — matching every other popup in the app.
 
 ### Security
 

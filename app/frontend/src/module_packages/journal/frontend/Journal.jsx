@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import HelpButton from '../../../components/HelpButton'
 import { journal as journalApi } from './api'
 import { tags as tagsApi } from '../../../lib/api'
 import TagInput from '../../../components/TagInput'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 function _todayStr() {
   const d = new Date()
@@ -23,6 +26,18 @@ export default function Journal() {
   const [showHistory, setShowHistory] = useState(false)
   const [entryTags, setEntryTags] = useState([])
   const [tagSuggestions, setTagSuggestions] = useState([])
+  const historyCardRef = useRef(null)
+
+  // Item found 2026-09-05 (owner: "fix the journal things you mentioned") —
+  // this drawer had none of the standard modal protections every other
+  // overlay in the app already has. Not nested inside another modal (Journal
+  // is a top-level page), so no containing-block/portal issue here, just a
+  // gap from Tier 1's own retrofit missing this file. `active` tied to
+  // `showHistory` since the drawer's own card mounts conditionally within
+  // this persistent Journal instance.
+  useEscapeToClose(() => setShowHistory(false))
+  useFocusTrap(historyCardRef, showHistory)
+  useScrollLock(showHistory)
 
   async function loadEntry(d) {
     setLoading(true)
@@ -187,11 +202,12 @@ export default function Journal() {
       {showHistory && (
         <div className="fixed inset-0 z-50 flex">
           <div className="flex-1 bg-black/40" onClick={() => setShowHistory(false)} />
-          <div className="w-80 md:w-96 h-full bg-white dark:bg-charcoal-900 border-l border-charcoal-200 dark:border-charcoal-700 flex flex-col shadow-xl">
+          <div ref={historyCardRef} className="w-80 md:w-96 h-full bg-white dark:bg-charcoal-900 border-l border-charcoal-200 dark:border-charcoal-700 flex flex-col shadow-xl">
             <div className="flex items-center justify-between px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] border-b border-charcoal-200 dark:border-charcoal-700 shrink-0">
               <h3 className="text-sm font-semibold">Journal History</h3>
               <button
                 onClick={() => setShowHistory(false)}
+                aria-label="Close"
                 className="text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200 text-lg leading-none"
               >
                 ✕
