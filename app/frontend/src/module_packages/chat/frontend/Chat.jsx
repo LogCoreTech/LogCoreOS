@@ -8,6 +8,7 @@ import { useAuth } from '../../../lib/auth'
 import { useWorkspace } from '../../../lib/workspace'
 import DashboardGrid from '../../../components/dashboard/DashboardGrid'
 import { BLOCK_REGISTRY } from '../../../components/dashboard/blockRegistry'
+import { useToast } from '../../../lib/toast'
 
 const _DASHBOARD_PREVIEW_TOOLS = new Set(['add_dashboard_block', 'update_dashboard_block'])
 
@@ -488,6 +489,7 @@ function greeting(user) {
 export default function Chat() {
   const { user } = useAuth()
   const { workspace } = useWorkspace()
+  const toast = useToast()
   const hasBothWorkspaces = (user?.workspaces?.length ?? 0) > 1
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -928,7 +930,7 @@ export default function Chat() {
       }
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' }), 50)
     } catch {
-      alert('Failed to load that chat.')
+      toast.error('Failed to load that chat.')
     } finally {
       setHistoryLoading(false)
     }
@@ -944,7 +946,7 @@ export default function Chat() {
       // a future send would try to (and fail to) re-save under a gone chat_id.
       if (session.chat_id === chatId) newChat()
     } catch (err) {
-      alert(err.message || 'Failed to delete chat')
+      toast.error(err.message || 'Failed to delete chat')
     }
   }
 

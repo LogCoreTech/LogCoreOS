@@ -9,6 +9,7 @@ import TagInput from '../../../components/TagInput'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import { useToast } from '../../../lib/toast'
 
 function fmt(iso) {
   if (!iso) return 'Never'
@@ -418,6 +419,7 @@ function WorkflowCard({ workflow, isAdmin, onDelete, onRun, onToggleActive }) {
   const [deleting, setDeleting]     = useState(false)
   const [active, setActive]         = useState(workflow.active ?? false)
   const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
+  const toast = useToast()
 
   const canDelete   = isAdmin || workflow.scope === 'personal'
   const canActivate = isAdmin || workflow.scope === 'personal'
@@ -446,7 +448,7 @@ function WorkflowCard({ workflow, isAdmin, onDelete, onRun, onToggleActive }) {
         try {
           await onDelete(workflow.id)
         } catch (err) {
-          alert(err.message)
+          toast.error(err.message)
           setDeleting(false)
         }
       },
@@ -459,7 +461,7 @@ function WorkflowCard({ workflow, isAdmin, onDelete, onRun, onToggleActive }) {
       const result = await onToggleActive(workflow.id, active)
       setActive(result.active)
     } catch (err) {
-      alert(err.message)
+      toast.error(err.message)
     } finally {
       setToggling(false)
     }

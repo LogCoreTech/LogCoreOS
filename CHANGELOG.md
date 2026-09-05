@@ -33,6 +33,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Screen readers now announce what icon-only buttons (close, remove, edit) actually do, instead of a bare "button." The toast dismiss button's tap target also grew to the standard accessible minimum size.
 - **Pull down to refresh on Tasks, Contacts, Goals, Finance, Dashboards, and the Brain browser** (mobile only — desktop has no equivalent gesture).
 - **Keyboard focus now stays inside an open modal/dialog instead of tabbing out into the page behind it**, and pressing Tab from the sidebar/header now offers a "Skip to content" link so keyboard users don't have to tab through the whole nav on every page.
+- Replaced the last of the app's old blocking browser popups (Chat, Automations, Contacts, Account, Appearance) with the same non-blocking toast notifications used elsewhere.
 
 ### Security
 

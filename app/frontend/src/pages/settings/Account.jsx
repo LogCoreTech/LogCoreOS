@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { auth as authApi, user as userApi } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
+import { useToast } from '../../lib/toast'
 import SettingsPageHeader from '../../components/settings/SettingsPageHeader'
 
 function detectTz() {
@@ -11,6 +12,7 @@ function detectTz() {
 export default function Account() {
   const { updateUserField } = useAuth()
   const navigate = useNavigate()
+  const toast = useToast()
   const [timezone, setTimezone] = useState('')
   const [tzSaved, setTzSaved] = useState(false)
   const [autoSyncTz, setAutoSyncTz] = useState(() => localStorage.getItem('lc_auto_tz') === 'true')
@@ -27,7 +29,7 @@ export default function Account() {
       setTzSaved(true)
       setTimeout(() => setTzSaved(false), 2000)
     } catch (e) {
-      alert(e.message || 'Invalid timezone')
+      toast.error(e.message || 'Invalid timezone')
     }
   }
 
@@ -36,7 +38,7 @@ export default function Account() {
     try {
       await userApi.export()
     } catch (e) {
-      alert(e.message || 'Export failed')
+      toast.error(e.message || 'Export failed')
     } finally {
       setExporting(false)
     }

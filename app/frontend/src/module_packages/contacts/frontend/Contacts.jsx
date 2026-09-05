@@ -12,6 +12,7 @@ import BulkConvertContactsModal from './BulkConvertContactsModal'
 import { formatPhone } from './phone'
 import PullToRefreshIndicator from '../../../components/PullToRefreshIndicator'
 import usePullToRefresh from '../../../lib/usePullToRefresh'
+import { useToast } from '../../../lib/toast'
 
 const TYPE_FILTERS = [
   { id: 'all', label: 'All' },
@@ -23,6 +24,7 @@ export default function Contacts() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const { workspace } = useWorkspace()
+  const toast = useToast()
   const [items, setItems] = useState([])
   const [fields, setFields] = useState([])
   const [pipeline, setPipeline] = useState(['Lead', 'Contacted', 'Proposal', 'Negotiation', 'Won', 'Lost'])
@@ -162,9 +164,9 @@ export default function Contacts() {
         return row
       })
       const res = await contactsApi.csvCommit(rows)
-      alert(`Imported ${res.created}, skipped ${res.skipped}`)
+      toast.success(`Imported ${res.created}, skipped ${res.skipped}`)
       load()
-    } catch (err) { alert(err.message || 'Import failed') }
+    } catch (err) { toast.error(err.message || 'Import failed') }
     e.target.value = ''
   }
 
@@ -280,7 +282,7 @@ export default function Contacts() {
           onDone={res => {
             setShowBulkConvert(false)
             load()
-            alert(`Converted ${res.converted}${res.skipped ? `, skipped ${res.skipped}` : ''}.`)
+            toast.success(`Converted ${res.converted}${res.skipped ? `, skipped ${res.skipped}` : ''}.`)
           }}
         />
       )}

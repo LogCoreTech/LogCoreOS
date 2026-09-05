@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { auth as authApi } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
+import { useToast } from '../../lib/toast'
 import { applyAccentColor, applyDarkMode, applyBackground, applyDensity, applyCornerStyle, getSystemDarkPreference, BACKGROUND_PRESETS } from '../../lib/theme'
 import SettingsPageHeader from '../../components/settings/SettingsPageHeader'
 
@@ -10,6 +11,7 @@ const HEX_RE = /^#[0-9a-fA-F]{6}$/
 
 export default function Appearance() {
   const { user, updateUserField } = useAuth()
+  const toast = useToast()
 
   const [accentColor, setAccentColor]       = useState(() => user?.accentColor  || DEFAULT_ACCENT)
   const [hexInput, setHexInput]             = useState(() => user?.accentColor  || DEFAULT_ACCENT)
@@ -63,7 +65,7 @@ export default function Appearance() {
       if (background !== 'uploaded') updateUserField('background', background || null)
       flash()
     } catch (e) {
-      alert(e.message || 'Failed to save appearance')
+      toast.error(e.message || 'Failed to save appearance')
     }
   }
 
