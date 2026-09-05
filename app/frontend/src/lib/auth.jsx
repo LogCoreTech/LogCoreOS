@@ -64,6 +64,12 @@ export function AuthProvider({ children }) {
         cornerStyle:     me.corner_style || 'rounded',
         shortcuts:       me.shortcuts    || {},
         defaultDashboardId: me.default_dashboard_id || {},
+        commandPaletteEnabled: me.command_palette_enabled !== false,
+        commandPaletteActions: me.command_palette_actions || [],
+        welcomeBackAiSummaryEnabled: me.welcome_back_ai_summary_enabled || false,
+        welcomeBackThresholdDays: me.welcome_back_threshold_days || 7,
+        tasksFilter:     me.tasks_filter     || 'pending',
+        tasksSortMode:   me.tasks_sort_mode  || 'priority',
       }
       // Persist theme prefs too so the pre-React FOUC script in main.jsx can
       // apply the real background/accent before first paint (otherwise the

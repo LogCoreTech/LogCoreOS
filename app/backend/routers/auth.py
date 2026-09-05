@@ -458,6 +458,26 @@ def _validate_corner_style(val: str) -> str:
     return val
 
 
+_VALID_TASKS_FILTERS = frozenset({"all", "pending", "done", "overdue"})
+_VALID_TASKS_SORT_MODES = frozenset({"priority", "date", "alpha"})
+
+
+def _validate_tasks_filter(val: str) -> str:
+    if val not in _VALID_TASKS_FILTERS:
+        raise HTTPException(
+            status_code=400, detail="tasks_filter must be one of: all, pending, done, overdue"
+        )
+    return val
+
+
+def _validate_tasks_sort_mode(val: str) -> str:
+    if val not in _VALID_TASKS_SORT_MODES:
+        raise HTTPException(
+            status_code=400, detail="tasks_sort_mode must be one of: priority, date, alpha"
+        )
+    return val
+
+
 def _validate_background(val: str) -> str:
     if val in ("none", "uploaded"):
         return val
@@ -496,6 +516,11 @@ class MeUpdateRequest(BaseModel):
     command_palette_actions: list[str] | None = None  # module ids to offer as quick-actions
     welcome_back_ai_summary_enabled: bool | None = None
     welcome_back_threshold_days: int | None = Field(None, ge=1, le=90)
+    # Item #22 — the one concrete "resets on every navigation" case actually
+    # found in the app (Tasks' own filter/sort, previously localStorage-only,
+    # now server-side/per-account so it syncs across devices).
+    tasks_filter: str | None = Field(None, max_length=15)
+    tasks_sort_mode: str | None = Field(None, max_length=15)
 
 
 @router.patch("/me")
@@ -518,12 +543,10 @@ def update_me(
         _validate_density(updates["density"])
     if "corner_style" in updates:
         _validate_corner_style(updates["corner_style"])
-    if "command_palette_actions" in updates:
-        cpa = updates["command_palette_actions"]
-        if not isinstance(cpa, list) or not all(isinstance(x, str) for x in cpa):
-            raise HTTPException(
-                status_code=400, detail="command_palette_actions must be a list of module ids"
-            )
+    if "tasks_filter" in updates:
+        _validate_tasks_filter(updates["tasks_filter"])
+    if "tasks_sort_mode" in updates:
+        _validate_tasks_sort_mode(updates["tasks_sort_mode"])
     if "shortcuts" in updates:
         sc = updates["shortcuts"]
         if not isinstance(sc, dict):
@@ -580,6 +603,8 @@ def me(current_user: dict = Depends(get_current_user), _rl: None = Depends(_get_
             "welcome_back_ai_summary_enabled", False
         ),
         "welcome_back_threshold_days": current_user.get("welcome_back_threshold_days", 7),
+        "tasks_filter": current_user.get("tasks_filter", "pending"),
+        "tasks_sort_mode": current_user.get("tasks_sort_mode", "priority"),
     }
 
 

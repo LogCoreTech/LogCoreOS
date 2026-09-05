@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import HelpButton from '../../../components/HelpButton'
 import { tasks as tasksApi } from './api'
-import { priorities as prioritiesApi } from '../../../lib/api'
+import { priorities as prioritiesApi, auth as authApi } from '../../../lib/api'
 import { assets as assetsApi } from '../../assets/frontend/api'
 import { shared as sharedApi } from '../../household/frontend/api'
 import { team as teamApi } from '../../team/frontend/api'
@@ -25,14 +25,17 @@ function fmtDueTime(due_time) {
 }
 
 export default function Tasks() {
-  const { user } = useAuth()
+  const { user, updateUserField } = useAuth()
   const { workspace } = useWorkspace()
   const [taskList, setTaskList] = useState([])
   const [assignedPoolTasks, setAssignedPoolTasks] = useState([])
   const [priorityOrder, setPriorityOrder] = useState([])
-  const [filter, setFilter] = useState('pending')
+  // 2026-09-04 UX Polish Batch item #22 — server-side, per-account (syncs
+  // across devices), replacing the old localStorage-only sort mode and the
+  // filter's previous no-persistence-at-all default.
+  const [filter, setFilter] = useState(() => user?.tasksFilter || 'pending')
   const [tagFilter, setTagFilter] = useState(null)
-  const [sortMode, setSortMode] = useState(() => localStorage.getItem('lc_tasks_sort') || 'priority')
+  const [sortMode, setSortMode] = useState(() => user?.tasksSortMode || 'priority')
   const [editTask, setEditTask] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [showReorder, setShowReorder] = useState(false)
@@ -120,7 +123,12 @@ export default function Tasks() {
 
   function changeSortMode(mode) {
     setSortMode(mode)
-    localStorage.setItem('lc_tasks_sort', mode)
+    authApi.updateMe({ tasks_sort_mode: mode }).then(() => updateUserField('tasksSortMode', mode)).catch(() => {})
+  }
+
+  function changeFilter(f) {
+    setFilter(f)
+    authApi.updateMe({ tasks_filter: f }).then(() => updateUserField('tasksFilter', f)).catch(() => {})
   }
 
   const _today = new Date()
@@ -185,7 +193,7 @@ export default function Tasks() {
         {['pending', 'all', 'done', 'overdue'].map(f => (
           <button
             key={f}
-            onClick={() => setFilter(f)}
+            onClick={() => changeFilter(f)}
             className={`flex-1 py-1 rounded-md text-xs font-medium capitalize transition-colors ${
               filter === f
                 ? 'bg-white dark:bg-charcoal-600 text-charcoal-900 dark:text-gray-100 shadow-sm'

@@ -36,9 +36,6 @@ Full triage of the former "Cross-App UX & Polish" Idea Backlog list (34 items), 
 - [ ] **Warn before discarding unsaved form changes** — dirty-check on every form; when built, wire into the existing `useEscapeToClose(onClose, { hasUnsavedChanges, onUnsavedAttempt })` second-argument shape already reserved for it.
 - [ ] **Visible offline-state banner** instead of scattered per-request error messages.
 - [ ] **Swipe gestures** for common list actions (complete, archive) — swipe-right = primary, swipe-left = secondary.
-- [ ] **Show/hide password toggle** on Login/Register.
-- [ ] **`autoComplete` attributes on auth forms** — confirmed real gap (`pages/Login.jsx`'s email/password inputs have none today).
-- [ ] **Persist list-view filter/sort choices** — server-side per-account (new `auth.json` field via the existing locked `update_json()` helper), not localStorage.
 - [ ] **Plain "Duplicate" action** on Tasks/Events/Transactions — copies everything except completion/streak state; a duplicated pool item stays in the pool, a personal item stays personal.
 - [ ] **"Save & add another"** on create modals — retains shared context fields (category/book/account), clears identifying fields (title/amount); may need smaller buttons on mobile.
 - [ ] **Role-aware empty-state/Getting Started messaging** for guest/restricted feature-role users.
@@ -56,6 +53,8 @@ Full triage of the former "Cross-App UX & Polish" Idea Backlog list (34 items), 
 - App-wide search fast-follow — cross-workspace search (permission-checked via the destination page's own existing access check, auto-switches workspace, shows a toast) + per-provider "show more". Real relevance ranking stays explicitly out of scope (the future RAG project's own job)
 - Onboarding seed data — one "Example: ..." item per module (Tasks, Notes, Journal, Calendar, Goals, Assets, Contacts, Finance) at account creation
 - "Today at a glance" dashboard block (`today_glance`, opt-in via Add Block, `module="dashboard"`-gated)
+- Show/hide password toggle + real `autoComplete` hints on Login/Register
+- Persist list-view filter/sort choices — server-side per-account (`tasks_filter`/`tasks_sort_mode` on `auth.json`), replacing Tasks' old localStorage-only sort and the filter's previous no-persistence default. The only concrete "resets on navigation" case found anywhere in the app — no other module had an unpersisted filter/sort worth migrating
 
 **Declined/dropped this session — do not re-propose without new information:**
 - Native app-store wrapper (Capacitor) — dropped entirely. Doesn't remove the server dependency (this app was never offline-first) and the update-cycle concern is largely avoidable (a WebView pointed at the live domain means only native shell/plugin changes need store review) — but the owner judged it not worth building regardless.
