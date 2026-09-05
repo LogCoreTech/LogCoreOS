@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import HelpButton from '../../../components/HelpButton'
+import EmptyState from '../../../components/EmptyState'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { contacts as contactsApi } from './api'
 import { useAuth } from '../../../lib/auth'
@@ -196,10 +197,20 @@ export default function Contacts() {
       {loading ? (
         <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-16 card animate-pulse" />)}</div>
       ) : !mineMatch && letterGroups.length === 0 ? (
-        <div className="card p-8 text-center text-charcoal-500">
-          <p className="text-4xl mb-2">👥</p>
-          <p>{items.length === 0 ? 'No contacts yet.' : 'No matches.'}</p>
-        </div>
+        items.length === 0 ? (
+          <EmptyState
+            icon="👥"
+            title="No contacts yet"
+            description="Add your first contact to get started."
+            ctaLabel="+ New Contact"
+            onCta={() => setModal({})}
+          />
+        ) : (
+          <div className="card p-8 text-center text-charcoal-500">
+            <p className="text-4xl mb-2">👥</p>
+            <p>No matches.</p>
+          </div>
+        )
       ) : (
         <div className="flex gap-2">
           <div className="flex-1 min-w-0 space-y-2">

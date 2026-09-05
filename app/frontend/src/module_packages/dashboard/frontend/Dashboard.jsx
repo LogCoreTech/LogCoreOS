@@ -385,6 +385,32 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* Item #28, 2026-09-04 UX Polish Batch: a restricted feature-role
+              user's dashboard can genuinely have zero blocks (every block
+              template it might have started with belonged to a module
+              disabled for them) with no explanation otherwise — distinct
+              messaging from a plain new-user empty dashboard. */}
+          {current.blocks.length === 0 && !editing && (
+            <div className="card p-8 text-center text-charcoal-500 dark:text-charcoal-400">
+              {(user?.disabledModules?.length || 0) > 0 ? (
+                <>
+                  <p className="text-2xl mb-2" aria-hidden>🔒</p>
+                  <p className="font-medium text-charcoal-700 dark:text-charcoal-200">Nothing to show here yet</p>
+                  <p className="text-sm mt-1 max-w-sm mx-auto">
+                    Your account has limited module access, so there&apos;s nothing to display by default.
+                    Ask an admin if you think something&apos;s missing.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-2xl mb-2" aria-hidden>📊</p>
+                  <p className="font-medium text-charcoal-700 dark:text-charcoal-200">Your dashboard is empty</p>
+                  <p className="text-sm mt-1">Click Edit Dashboard, then + Add Block to get started.</p>
+                </>
+              )}
+            </div>
+          )}
+
           <DashboardGrid
             blocks={current.blocks}
             editing={editing}

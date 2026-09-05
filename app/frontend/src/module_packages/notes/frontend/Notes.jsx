@@ -631,7 +631,13 @@ export default function Notes() {
           <div className="px-3 py-6 text-center text-sm text-charcoal-400 dark:text-charcoal-500">
             <p className="text-2xl mb-2">📝</p>
             <p>No notes yet.</p>
-            <p className="text-xs mt-1">Click + Note to create one.</p>
+            <button
+              type="button"
+              onClick={() => { setModalInput(''); openModal('newNote') }}
+              className="mt-3 text-xs font-medium text-orange-500 hover:text-orange-600"
+            >
+              + New Note
+            </button>
           </div>
         ) : (
           tree.map(node => (

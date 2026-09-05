@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import HelpButton from '../../../components/HelpButton'
+import EmptyState from '../../../components/EmptyState'
 import { tasks as tasksApi } from './api'
 import { priorities as prioritiesApi, auth as authApi } from '../../../lib/api'
 import { assets as assetsApi } from '../../assets/frontend/api'
@@ -239,10 +240,13 @@ export default function Tasks() {
           {[1,2,3].map(i => <div key={i} className="h-16 card animate-pulse" />)}
         </div>
       ) : sorted.length === 0 ? (
-        <div className="card p-8 text-center text-charcoal-500 dark:text-charcoal-400">
-          <p className="text-4xl mb-2">✓</p>
-          <p>No tasks here.</p>
-        </div>
+        <EmptyState
+          icon="✓"
+          title={filter === 'all' ? 'No tasks yet' : `No ${filter} tasks`}
+          description={filter === 'all' ? 'Add your first task to get started.' : 'Try a different filter, or add a new task.'}
+          ctaLabel="+ New Task"
+          onCta={() => { setEditTask(null); setShowModal(true) }}
+        />
       ) : (
         <div className="space-y-2">
           {sorted.map(task => (

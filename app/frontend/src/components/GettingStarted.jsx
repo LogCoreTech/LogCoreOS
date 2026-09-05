@@ -1,26 +1,42 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { help as helpApi } from '../lib/api'
+import { useAuth } from '../lib/auth'
 
 // First-run checklist shown on the Dashboard. Steps mark themselves done when
 // clicked; the card hides once dismissed or all steps are complete.
+//
+// 2026-09-04 UX Polish Batch item #28 — real gap found and fixed: these
+// steps used to be a fixed list regardless of the viewer's own module
+// access, so a restricted feature-role user (e.g. a "cleaner" role with
+// Tasks/Chat disabled) could see a checklist linking to pages they can't
+// actually reach. `moduleId` (when set) is checked against
+// `user.disabledModules` and that step is filtered out entirely rather than
+// shown as a dead link. `/profile` and `/help` have no module gate (same as
+// their own routes) so always show.
 const STEPS = [
   { id: 'priorities', icon: '⭐', label: 'Set your life priorities', to: '/profile' },
-  { id: 'first-task', icon: '✅', label: 'Create your first task', to: '/tasks' },
-  { id: 'try-chat', icon: '💬', label: 'Ask the AI to plan your day', to: '/chat' },
+  { id: 'first-task', icon: '✅', label: 'Create your first task', to: '/tasks', moduleId: 'tasks' },
+  { id: 'try-chat', icon: '💬', label: 'Ask the AI to plan your day', to: '/chat', moduleId: 'chat' },
   { id: 'read-help', icon: '❔', label: 'Skim the Help guide', to: '/help' },
 ]
 
 export default function GettingStarted() {
   const [state, setState] = useState(null) // { dismissed, done: [] }
+  const { user } = useAuth()
 
   useEffect(() => {
     helpApi.getOnboarding().then(setState).catch(() => {})
   }, [])
 
+  const steps = useMemo(() => {
+    const disabled = new Set(user?.disabledModules || [])
+    return STEPS.filter(s => !s.moduleId || !disabled.has(s.moduleId))
+  }, [user])
+
   if (!state || state.dismissed) return null
   const done = new Set(state.done || [])
-  if (STEPS.every(s => done.has(s.id))) return null
+  if (steps.length === 0 || steps.every(s => done.has(s.id))) return null
 
   function complete(id) {
     if (done.has(id)) return
@@ -33,7 +49,7 @@ export default function GettingStarted() {
     helpApi.setOnboarding({ dismissed: true }).catch(() => {})
   }
 
-  const completed = STEPS.filter(s => done.has(s.id)).length
+  const completed = steps.filter(s => done.has(s.id)).length
 
   return (
     <div className="card p-5 border border-orange-500/30">
@@ -41,7 +57,7 @@ export default function GettingStarted() {
         <div>
           <h2 className="font-semibold">👋 Welcome to LogCore</h2>
           <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mt-0.5">
-            A few steps to get you started ({completed}/{STEPS.length}).
+            A few steps to get you started ({completed}/{steps.length}).
           </p>
         </div>
         <button
@@ -53,7 +69,7 @@ export default function GettingStarted() {
         </button>
       </div>
       <div className="mt-3 space-y-1">
-        {STEPS.map(s => {
+        {steps.map(s => {
           const isDone = done.has(s.id)
           return (
             <Link
