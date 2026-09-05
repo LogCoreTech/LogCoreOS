@@ -67,6 +67,35 @@ export default function TaskView({ task, canEdit, saveApi, onEdit, onClose, onDe
     }
   }
 
+  // Item #23, 2026-09-04 UX Polish Batch — copies everything except
+  // completion/streak state (a fresh copy is always pending, streak-free).
+  // `saveApi` already scopes this to the same store (pool stays pool,
+  // personal stays personal) since it's the exact client this view itself
+  // reads/writes through.
+  async function handleDuplicate() {
+    setLoading(true)
+    try {
+      const api = saveApi || tasksApi
+      await api.add({
+        title: `${task.title} (copy)`,
+        category: task.category,
+        priority: task.priority,
+        type: task.type,
+        recurrence: task.recurrence || null,
+        due_date: task.due_date || null,
+        due_time: task.due_time || null,
+        notes: task.notes || null,
+        assigned_to: task.assigned_to || null,
+        asset_id: task.asset_id || null,
+        goal_id: task.goal_id || null,
+        tags: task.tags || [],
+      })
+      onSave()
+    } finally {
+      setLoading(false)
+    }
+  }
+
   function handleDelete() {
     setConfirmState({
       title: 'Delete task',
@@ -179,6 +208,12 @@ export default function TaskView({ task, canEdit, saveApi, onEdit, onClose, onDe
             <button type="button" onClick={handleDelete} disabled={loading}
               className="px-3 py-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
               Delete
+            </button>
+          )}
+          {canEdit && (
+            <button type="button" onClick={handleDuplicate} disabled={loading}
+              className="px-3 py-2 rounded-lg text-sm font-medium text-charcoal-500 hover:bg-charcoal-100 dark:hover:bg-charcoal-800 transition-colors">
+              Duplicate
             </button>
           )}
           <button type="button" onClick={onClose} className="btn-ghost flex-1">Close</button>

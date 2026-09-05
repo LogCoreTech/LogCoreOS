@@ -36,8 +36,6 @@ Full triage of the former "Cross-App UX & Polish" Idea Backlog list (34 items), 
 - [ ] **Warn before discarding unsaved form changes** — dirty-check on every form; when built, wire into the existing `useEscapeToClose(onClose, { hasUnsavedChanges, onUnsavedAttempt })` second-argument shape already reserved for it.
 - [ ] **Visible offline-state banner** instead of scattered per-request error messages.
 - [ ] **Swipe gestures** for common list actions (complete, archive) — swipe-right = primary, swipe-left = secondary.
-- [ ] **Plain "Duplicate" action** on Tasks/Events/Transactions — copies everything except completion/streak state; a duplicated pool item stays in the pool, a personal item stays personal.
-- [ ] **"Save & add another"** on create modals — retains shared context fields (category/book/account), clears identifying fields (title/amount); may need smaller buttons on mobile.
 - [ ] **Role-aware empty-state/Getting Started messaging** for guest/restricted feature-role users.
 - [ ] **Context-aware destructive-action warnings** in `ConfirmDialog` (e.g. "You'll lose its 90-day streak") — curated highest-value subset (streaks, unread counts, linked-record counts), not all 34 sites. `ConfirmDialog` itself now exists, so this is unblocked.
 - [ ] **Custom app icon/splash screen per accent color** for PWA install — only affects fresh installs going forward.
@@ -55,6 +53,8 @@ Full triage of the former "Cross-App UX & Polish" Idea Backlog list (34 items), 
 - "Today at a glance" dashboard block (`today_glance`, opt-in via Add Block, `module="dashboard"`-gated)
 - Show/hide password toggle + real `autoComplete` hints on Login/Register
 - Persist list-view filter/sort choices — server-side per-account (`tasks_filter`/`tasks_sort_mode` on `auth.json`), replacing Tasks' old localStorage-only sort and the filter's previous no-persistence default. The only concrete "resets on navigation" case found anywhere in the app — no other module had an unpersisted filter/sort worth migrating
+- Plain "Duplicate" action on Tasks (`TaskView.jsx`), Events (`EventModal.jsx`), and Transactions (`TransactionModal.jsx`) — frontend-only, reuses each module's existing create endpoint; copies everything except completion/streak state, and stays in whatever scope (pool vs. personal) the original was in
+- "Save & add another" — scoped to Transactions (`TransactionModal.jsx`), the explicit named use case; retains account/category/date, clears amount/payee/notes/tags. Not extended to other create modals this pass
 
 **Declined/dropped this session — do not re-propose without new information:**
 - Native app-store wrapper (Capacitor) — dropped entirely. Doesn't remove the server dependency (this app was never offline-first) and the update-cycle concern is largely avoidable (a WebView pointed at the live domain means only native shell/plugin changes need store review) — but the owner judged it not worth building regardless.

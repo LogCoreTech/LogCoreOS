@@ -117,6 +117,28 @@ export default function EventModal({ event, defaultDate, onClose, onSave, saveAp
     })
   }
 
+  // Item #23, 2026-09-04 UX Polish Batch — events have no completion/streak
+  // state to strip; the copy uses whichever store (personal vs. pool) this
+  // modal is already editing through.
+  async function handleDuplicate() {
+    setLoading(true)
+    try {
+      await api.add({
+        ...form,
+        title: `${form.title} (copy)`,
+        end_date: form.end_date || null,
+        start_time: form.all_day ? null : (form.start_time || null),
+        end_time: form.all_day ? null : (form.end_time || null),
+        notes: form.notes || null,
+      })
+      onSave()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="modal-overlay">
       <div className="modal-card p-5 max-w-sm">
@@ -259,6 +281,12 @@ export default function EventModal({ event, defaultDate, onClose, onSave, saveAp
               <button type="button" onClick={handleDelete} disabled={loading}
                 className="px-3 py-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
                 Delete
+              </button>
+            )}
+            {editing && (
+              <button type="button" onClick={handleDuplicate} disabled={loading}
+                className="px-3 py-2 rounded-lg text-sm font-medium text-charcoal-500 hover:bg-charcoal-100 dark:hover:bg-charcoal-800 transition-colors">
+                Duplicate
               </button>
             )}
             <button type="button" onClick={onClose} className="btn-ghost flex-1">Cancel</button>

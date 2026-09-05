@@ -272,6 +272,7 @@ export default function Finance() {
           workspace={workspace}
           onClose={() => setTxModal(null)}
           onSaved={() => { setTxModal(null); load() }}
+          onSavedKeepOpen={() => load()}
           onDeleted={() => { setTxModal(null); load() }}
         />
       )}

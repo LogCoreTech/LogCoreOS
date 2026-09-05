@@ -14,7 +14,7 @@ const KIND_LABELS = { expense: '− Expense', income: '+ Income', transfer: '⇄
 // Transfers are create-only here — editing/deleting an existing transfer leg
 // routes to TransferEditModal instead (both legs move together), so `tx` is
 // never a transfer leg by the time it reaches this component.
-export default function TransactionModal({ book, tx, allowedKinds, assets, allBooks, userWorkspaces, workspace, onClose, onSaved, onDeleted }) {
+export default function TransactionModal({ book, tx, allowedKinds, assets, allBooks, userWorkspaces, workspace, onClose, onSaved, onSavedKeepOpen, onDeleted }) {
   const editing = !!tx
   const kinds = allowedKinds?.length ? allowedKinds : ['expense', 'income']
   const accounts = (book?.accounts || []).filter(a => !a.archived || (tx && tx.account_id === a.id))
@@ -109,7 +109,11 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
   const categories = (book?.categories || []).filter(c => c.kind === kind)
   const categoryValid = category === '' || categories.some(c => c.name === category)
 
-  async function submit(e) {
+  // Item #24, 2026-09-04 UX Polish Batch — `keepOpen` retains the shared
+  // context fields (account, category, deductible/tax settings, date) for
+  // fast batch entry, clearing only the identifying ones (amount, payee,
+  // notes, tags) instead of closing the modal.
+  async function submit(e, keepOpen = false) {
     e.preventDefault()
     setError('')
     const cents = toCents(amount)
@@ -160,7 +164,18 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
     try {
       if (editing) await financeApi.updateTransaction(book.id, tx.id, payload)
       else await financeApi.addTransaction(book.id, payload)
-      onSaved()
+      if (keepOpen && !editing) {
+        setAmount('')
+        setPayee('')
+        setPayeeContactId(null)
+        setNotes('')
+        setTags([])
+        setReceipts([])
+        amountRef.current?.focus()
+        ;(onSavedKeepOpen || onSaved)()
+      } else {
+        onSaved()
+      }
     } catch (err) {
       setError(err.message || 'Save failed')
     } finally {
@@ -186,6 +201,34 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
         }
       },
     })
+  }
+
+  // Item #23, 2026-09-04 UX Polish Batch — a transaction has no
+  // completion/streak-equivalent state, so this is a full copy including
+  // date; `editing` here is never a transfer leg (see this file's own
+  // top-of-component comment), so no separate kind guard is needed.
+  async function handleDuplicate() {
+    setBusy(true)
+    try {
+      await financeApi.addTransaction(book.id, {
+        date,
+        amount_cents: kind === 'expense' ? -toCents(amount) : toCents(amount),
+        account_id: accountId,
+        category: categoryValid ? category : '',
+        payee,
+        payee_contact_id: payeeContactId,
+        asset_id: assetId || null,
+        notes,
+        deductible,
+        tax_category: deductible && taxCategory ? taxCategory : null,
+        tags,
+      })
+      onSaved()
+    } catch (err) {
+      setError(err.message || 'Duplicate failed')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -403,8 +446,18 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
                 Delete
               </button>
             )}
+            {editing && (
+              <button type="button" onClick={handleDuplicate} disabled={busy} className="btn-ghost">
+                Duplicate
+              </button>
+            )}
             <div className="flex-1" />
             <button type="button" onClick={onClose} disabled={busy} className="btn-ghost">Cancel</button>
+            {!editing && kind !== 'transfer' && (
+              <button type="button" onClick={e => submit(e, true)} disabled={busy} className="btn-ghost text-xs sm:text-sm">
+                Save & add another
+              </button>
+            )}
             <button type="submit" disabled={busy} className="btn-primary">{busy ? 'Saving…' : 'Save'}</button>
           </div>
         </form>
