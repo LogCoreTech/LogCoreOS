@@ -90,6 +90,14 @@ def m026_backfill_notes_installed_from_existing_data(brain: Path) -> None:
     mod_store_service.mark_installed("notes", by="migration:m026")
 
 
+def _on_new_user(brain: Path, user_name: str) -> None:
+    """2026-09-04 UX Polish Batch item #11 — one seeded example note per new
+    user, prefixed "Example: " so it's obviously safe to delete."""
+    from services.seed_data_service import seed_note
+
+    seed_note(user_name)
+
+
 MODULE = ModuleManifest(
     id="notes",
     display_name="Notes",
@@ -99,6 +107,7 @@ MODULE = ModuleManifest(
     router_prefix="/api/v1/notes",
     router_tags=["notes"],
     get_router=_get_router,
+    on_new_user=_on_new_user,
     owned_brain_paths=["Notes"],
     owned_agent_tools=[
         "list_notes",

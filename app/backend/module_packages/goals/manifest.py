@@ -132,6 +132,14 @@ def m031_migrate_goals(brain: Path) -> None:
         write_json(tpath, tdata)
 
 
+def _on_new_user(brain: Path, user_name: str) -> None:
+    """2026-09-04 UX Polish Batch item #11 — one seeded example goal per new
+    user, prefixed "Example: " so it's obviously safe to delete."""
+    from services.seed_data_service import seed_goal
+
+    seed_goal(user_name)
+
+
 MODULE = ModuleManifest(
     id="goals",
     display_name="Goals",
@@ -141,6 +149,7 @@ MODULE = ModuleManifest(
     router_prefix="/api/v1/goals",
     router_tags=["goals"],
     get_router=_get_router,
+    on_new_user=_on_new_user,
     owned_brain_paths=["Goals"],
     owned_agent_tools=[
         "list_goals",

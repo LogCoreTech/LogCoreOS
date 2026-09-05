@@ -99,6 +99,7 @@ def _load_all_resolvers() -> None:
         _ai_usage,
         _custom_fields,
         _freeform,
+        _today_glance,
     )
 
     logger = logging.getLogger("logcore.dashboard_blocks")

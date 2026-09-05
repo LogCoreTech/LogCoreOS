@@ -272,6 +272,14 @@ def m030_backfill_finance_installed_from_existing_data(brain: Path) -> None:
     mod_store_service.mark_installed("finance", by="migration:m030")
 
 
+def _on_new_user(brain: Path, user_name: str) -> None:
+    """2026-09-04 UX Polish Batch item #11 — one seeded example (empty) book
+    per new user, prefixed "Example: " so it's obviously safe to delete."""
+    from services.seed_data_service import seed_finance_book
+
+    seed_finance_book(user_name)
+
+
 MODULE = ModuleManifest(
     id="finance",
     display_name="Finance",
@@ -281,6 +289,7 @@ MODULE = ModuleManifest(
     router_prefix="/api/v1/finance",
     router_tags=[],
     get_router=_get_router,
+    on_new_user=_on_new_user,
     owned_brain_paths=["Finance"],
     owned_agent_tools=[
         "list_finance_books",

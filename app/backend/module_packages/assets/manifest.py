@@ -120,6 +120,15 @@ def m028_backfill_assets_installed_from_existing_data(brain: Path) -> None:
     mod_store_service.mark_installed("assets", by="migration:m028")
 
 
+def _on_new_user(brain: Path, user_name: str) -> None:
+    """2026-09-04 UX Polish Batch item #11 — one seeded example (blank, no
+    template) asset per new user, prefixed "Example: " so it's obviously
+    safe to delete."""
+    from services.seed_data_service import seed_asset
+
+    seed_asset(user_name)
+
+
 MODULE = ModuleManifest(
     id="assets",
     display_name="Assets",
@@ -129,6 +138,7 @@ MODULE = ModuleManifest(
     router_prefix="/api/v1/assets",
     router_tags=["assets"],
     get_router=_get_router,
+    on_new_user=_on_new_user,
     owned_brain_paths=["Assets"],
     owned_agent_tools=[
         "list_asset_templates",

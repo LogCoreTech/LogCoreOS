@@ -121,6 +121,14 @@ def m032_migrate_recurrence_to_structured_rule(brain: Path) -> None:
             write_json(tpath, tdata)
 
 
+def _on_new_user(brain: Path, user_name: str) -> None:
+    """2026-09-04 UX Polish Batch item #11 — one seeded example task per new
+    user, prefixed "Example: " so it's obviously safe to delete."""
+    from services.seed_data_service import seed_task
+
+    seed_task(user_name)
+
+
 MODULE = ModuleManifest(
     id="tasks",
     display_name="Tasks",
@@ -130,6 +138,7 @@ MODULE = ModuleManifest(
     router_prefix="/api/v1/tasks",
     router_tags=["tasks"],
     get_router=_get_router,
+    on_new_user=_on_new_user,
     uninstallable=True,
     # Redundant with routers/brain.py's/agent_service.py's own unconditional
     # {"Tasks"} skip (Tasks stores JSON, not markdown — structurally

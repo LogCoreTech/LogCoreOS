@@ -10,6 +10,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **New accounts now start with a real example item** in Tasks, Notes, Journal, Calendar, Goals, Assets, Contacts, and Finance (whichever of those modules are installed on your instance) — each clearly prefixed "Example" so it's obvious it's safe to delete, instead of every module starting completely blank.
+- **App-wide search can now also search your other workspace** (a checkbox appears if you have both Personal and Business) — clicking a result from the other workspace switches you into it automatically. Search results that were silently capped now show a "show more" link per module when there's more to see.
+- **A new "Today at a Glance" dashboard block** — a small "3/7 done today" stat, available from Add Block.
 - **A welcome-back message greets you after being away.** Configurable how many days counts as "away" (default 7) in Settings → Notifications. If you've turned on the AI summary option and have an AI key configured, it also summarizes what changed across Tasks, Journal, Notes, and Calendar while you were gone (Finance/Contacts/Assets coming in a later pass).
 - **"This Week at a Glance"** joins the existing Proactive Suggestions in Settings → Notifications — a digest of tasks completed and upcoming events, off by default, with your choice of daily or weekly delivery.
 - **New instances now start with Journal, Calendar, Notes, and Goals already installed**, alongside the always-on Tasks/Chat/Dashboards — previously a fresh instance started with only those 3, leaving every other module to be discovered cold in Admin → Mod Store.

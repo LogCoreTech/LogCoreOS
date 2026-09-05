@@ -56,6 +56,14 @@ def m020_backfill_calendar_installed_from_existing_data(brain: Path) -> None:
     mod_store_service.mark_installed("calendar", by="migration:m020")
 
 
+def _on_new_user(brain: Path, user_name: str) -> None:
+    """2026-09-04 UX Polish Batch item #11 — one seeded example event per new
+    user, prefixed "Example: " so it's obviously safe to delete."""
+    from services.seed_data_service import seed_calendar_event
+
+    seed_calendar_event(user_name)
+
+
 MODULE = ModuleManifest(
     id="calendar",
     display_name="Calendar",
@@ -65,6 +73,7 @@ MODULE = ModuleManifest(
     router_prefix="/api/v1/calendar",
     router_tags=["calendar"],
     get_router=_get_router,
+    on_new_user=_on_new_user,
     owned_brain_paths=["Calendar"],
     owned_agent_tools=[],  # no AI chat tools exist for calendar today — not adding new ones as part of converting what's already there
     read_only_agent_tools=[],

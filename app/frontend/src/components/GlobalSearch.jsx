@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { search as searchApi, tags as tagsApi } from '../lib/api'
 import { ALL_MODULES } from '../lib/constants'
 import { deepLinkUrl } from '../lib/deepLinks'
+import { useAuth } from '../lib/auth'
+import { useWorkspace } from '../lib/workspace'
+import { useToast } from '../lib/toast'
 import TagInput from './TagInput'
 import useEscapeToClose from '../lib/useEscapeToClose'
 
@@ -13,14 +16,30 @@ import useEscapeToClose from '../lib/useEscapeToClose'
 // instead of an in-memory list — search_service.search() already returns []
 // for an empty query with no tags, so there's nothing to debounce/fetch until
 // the caller has actually typed or picked a tag.
+//
+// 2026-09-04 UX Polish Batch item #10 (fast-follow): cross-workspace search
+// (only offered when the user actually has more than one workspace) and a
+// per-provider "show more" link once a group's real total (provider_totals)
+// exceeds what's shown. Clicking a cross-workspace result auto-switches the
+// active workspace (with a toast confirming it) before navigating — the
+// destination page's own existing access check is the real permission
+// check, same as any other navigation in this app; this never adds a
+// second, separate one.
 export default function GlobalSearch({ onClose }) {
   const [query, setQuery] = useState('')
   const [selectedTags, setSelectedTags] = useState([])
   const [tagSuggestions, setTagSuggestions] = useState([])
   const [results, setResults] = useState([])
+  const [providerTotals, setProviderTotals] = useState({})
   const [loading, setLoading] = useState(false)
+  const [crossWorkspace, setCrossWorkspace] = useState(false)
+  const [showMoreLoading, setShowMoreLoading] = useState(null) // provider key currently fetching
   const navigate = useNavigate()
   const debounceRef = useRef(null)
+  const { user } = useAuth()
+  const { workspace, switchWorkspace } = useWorkspace()
+  const toast = useToast()
+  const hasMultipleWorkspaces = (user?.workspaces || []).length > 1
 
   useEscapeToClose(onClose)
 
@@ -40,17 +59,24 @@ export default function GlobalSearch({ onClose }) {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     if (!query.trim() && selectedTags.length === 0) {
       setResults([])
+      setProviderTotals({})
       return
     }
     setLoading(true)
     debounceRef.current = setTimeout(() => {
-      searchApi.query(query.trim(), selectedTags)
-        .then(r => setResults(r.results || []))
-        .catch(() => setResults([]))
+      searchApi.query(query.trim(), selectedTags, { crossWorkspace })
+        .then(r => {
+          setResults(r.results || [])
+          setProviderTotals(r.provider_totals || {})
+        })
+        .catch(() => {
+          setResults([])
+          setProviderTotals({})
+        })
         .finally(() => setLoading(false))
     }, 250)
     return () => clearTimeout(debounceRef.current)
-  }, [query, selectedTags])
+  }, [query, selectedTags, crossWorkspace])
 
   const grouped = useMemo(() => {
     const byModule = new Map()
@@ -58,16 +84,44 @@ export default function GlobalSearch({ onClose }) {
       if (!byModule.has(r._module)) byModule.set(r._module, [])
       byModule.get(r._module).push(r)
     }
-    return [...byModule.entries()].map(([moduleId, items]) => ({
-      moduleId,
-      module: ALL_MODULES.find(m => m.id === moduleId),
-      items,
-    }))
-  }, [results])
+    return [...byModule.entries()].map(([moduleId, items]) => {
+      // A module can own more than one search provider (e.g. Household owns
+      // tasks/goals/events separately) — track each provider's own real
+      // total vs. how many of its own results are actually shown here, so
+      // "show more" only fires for a provider that's genuinely truncated.
+      const shownByProvider = new Map()
+      for (const item of items) {
+        shownByProvider.set(item._provider, (shownByProvider.get(item._provider) || 0) + 1)
+      }
+      const moreByProvider = [...shownByProvider.entries()]
+        .map(([providerKey, shown]) => ({ providerKey, remaining: (providerTotals[providerKey] || 0) - shown }))
+        .filter(p => p.remaining > 0)
+      return {
+        moduleId,
+        module: ALL_MODULES.find(m => m.id === moduleId),
+        items,
+        moreByProvider,
+      }
+    })
+  }, [results, providerTotals])
 
-  function openResult(moduleId, recordId) {
+  function showMore(providerKey) {
+    setShowMoreLoading(providerKey)
+    searchApi.query(query.trim(), selectedTags, { crossWorkspace, provider: providerKey })
+      .then(r => {
+        const rest = (r.results || [])
+        setResults(prev => [...prev.filter(item => item._provider !== providerKey), ...rest])
+      })
+      .finally(() => setShowMoreLoading(null))
+  }
+
+  function openResult(r) {
     onClose()
-    navigate(deepLinkUrl(moduleId, recordId))
+    if (r._workspace !== workspace) {
+      switchWorkspace(r._workspace)
+      toast.success(`Switched to ${r._workspace === 'business' ? 'Business' : 'Personal'} workspace`)
+    }
+    navigate(deepLinkUrl(r._module, r.record_id))
   }
 
   const hasQuery = query.trim() || selectedTags.length > 0
@@ -95,6 +149,17 @@ export default function GlobalSearch({ onClose }) {
             placeholder="Filter by tag…"
           />
         </div>
+        {hasMultipleWorkspaces && (
+          <label className="flex items-center gap-1.5 text-xs text-charcoal-500 dark:text-charcoal-400 mb-3 cursor-pointer">
+            <input
+              type="checkbox"
+              className="accent-orange-500"
+              checked={crossWorkspace}
+              onChange={e => setCrossWorkspace(e.target.checked)}
+            />
+            Also search my other workspace
+          </label>
+        )}
         <div className="space-y-3 max-h-[50vh] overflow-y-auto">
           {!hasQuery && (
             <p className="text-sm text-charcoal-400 py-2">Type to search, or filter by a tag above.</p>
@@ -111,14 +176,31 @@ export default function GlobalSearch({ onClose }) {
               <div className="space-y-1">
                 {g.items.map(r => (
                   <button
-                    key={r.record_id}
-                    onClick={() => openResult(g.moduleId, r.record_id)}
+                    key={`${r._workspace}-${r.record_id}`}
+                    onClick={() => openResult(r)}
                     className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-charcoal-100 dark:hover:bg-charcoal-800"
                   >
-                    <span className="text-sm block truncate">{r.title}</span>
+                    <span className="text-sm flex items-center gap-1.5 truncate">
+                      {r.title}
+                      {crossWorkspace && r._workspace !== workspace && (
+                        <span className="shrink-0 text-[10px] px-1 py-0.5 rounded bg-charcoal-100 dark:bg-charcoal-700 text-charcoal-500 dark:text-charcoal-400 normal-case">
+                          {r._workspace === 'business' ? 'Business' : 'Personal'}
+                        </span>
+                      )}
+                    </span>
                     {r.snippet && (
                       <span className="text-xs text-charcoal-400 block truncate">{r.snippet}</span>
                     )}
+                  </button>
+                ))}
+                {g.moreByProvider.map(({ providerKey, remaining }) => (
+                  <button
+                    key={providerKey}
+                    onClick={() => showMore(providerKey)}
+                    disabled={showMoreLoading === providerKey}
+                    className="w-full text-left px-2 py-1 text-xs text-orange-500 hover:text-orange-600 disabled:opacity-50"
+                  >
+                    {showMoreLoading === providerKey ? 'Loading…' : `Show ${remaining} more…`}
                   </button>
                 ))}
               </div>

@@ -140,10 +140,12 @@ export const tags = {
 // App-wide search fan-out (2026-08-29) — see services/search_service.py's
 // own docstring for why this stays core, same shape as `tags` above.
 export const search = {
-  query: (q, tags = []) => {
+  query: (q, tags = [], { crossWorkspace = false, provider = null } = {}) => {
     const params = new URLSearchParams()
     if (q) params.set('q', q)
     for (const t of tags) params.append('tags', t)
+    if (crossWorkspace) params.set('cross_workspace', 'true')
+    if (provider) params.set('provider', provider)
     return get(`/search?${params.toString()}`)
   },
 }

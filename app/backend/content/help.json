@@ -16,7 +16,8 @@
       "tips": [
         "Not sure where something belongs? Ask the AI in Chat — it knows every module and will point you to the right one.",
         "Your data never leaves your server unless you explicitly export or share it.",
-        "In the search bar, filter by tag alongside your search text — tags are shared across every module they exist on, so tagging something once makes it findable everywhere."
+        "In the search bar, filter by tag alongside your search text — tags are shared across every module they exist on, so tagging something once makes it findable everywhere.",
+        "If you have both a Personal and a Business workspace, check \"Also search my other workspace\" in the search bar to search both at once — clicking a result from the other one switches you into it automatically. If a module's results were capped, a \"show more\" link appears under that module's group."
       ],
       "modules": []
     },

@@ -151,6 +151,23 @@ export function AiUsageMeBlock({ data }) {
   )
 }
 
+// "Today at a glance" (item #30, 2026-09-04 UX Polish Batch) — a small
+// "3/7 done today" stat, distinct from the This Week digest suggestion and
+// the weekly summary strip. Opt-in via Add Block, not auto-placed.
+export function TodayGlanceBlock({ data }) {
+  if (!data) return <Empty text="No task data." />
+  const { done, total } = data
+  if (total === 0) return <p className="text-sm text-charcoal-400">Nothing due today.</p>
+  return (
+    <div className="text-center">
+      <p className="text-3xl font-semibold">
+        {done}/{total}
+      </p>
+      <p className="text-xs text-charcoal-400 mt-1">done today</p>
+    </div>
+  )
+}
+
 export function AiUsageOverviewBlock({ data }) {
   const rows = data?.users || []
   if (!rows.length) return <Empty text="No usage data." />

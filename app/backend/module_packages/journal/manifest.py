@@ -88,6 +88,9 @@ def _on_new_user(brain: Path, user_name: str) -> None:
     a signup that happens weeks after journal was installed still gets a
     Journal/ folder, not just users who existed at install time."""
     _ensure_journal_folder(user_name)
+    from services.seed_data_service import seed_journal_entry
+
+    seed_journal_entry(user_name)
 
 
 MODULE = ModuleManifest(

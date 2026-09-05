@@ -4,7 +4,7 @@ import {
   HeadingDividerBlock,
   LinkButtonBlock, NavButtonBlock,
   RecentAiActionsBlock,
-  StatusButtonBlock, TextBlock,
+  StatusButtonBlock, TextBlock, TodayGlanceBlock,
 } from './blocks'
 import { MODULE_PACKAGES } from '../../lib/moduleRegistry'
 
@@ -31,6 +31,7 @@ export const BLOCK_REGISTRY = {
   ai_usage_me: { Component: AiUsageMeBlock, icon: '🤖', label: 'AI Usage — My Usage', defaultLayout: { w: 9, h: 6 } },
   ai_usage_overview: { Component: AiUsageOverviewBlock, icon: '🛡️', label: 'AI Usage — All Users', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
   recent_ai_actions: { Component: RecentAiActionsBlock, icon: '🕘', label: 'Recent AI Actions', defaultLayout: { w: 12, h: 9 }, shape: 'list' },
+  today_glance: { Component: TodayGlanceBlock, icon: '📆', label: 'Today at a Glance', defaultLayout: { w: 6, h: 6 } },
   text_block: { Component: TextBlock, icon: '📄', label: 'Text', defaultLayout: { w: 12, h: 6 } },
   link_button: { Component: LinkButtonBlock, icon: '🔘', label: 'Custom Link/Button', defaultLayout: { w: 6, h: 3 } },
   heading_divider: { Component: HeadingDividerBlock, icon: '➖', label: 'Heading/Divider', defaultLayout: { w: 12, h: 3 } },

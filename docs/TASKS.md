@@ -23,19 +23,16 @@ Keep this up to date. When a task is completed, **remove it** rather than checki
 
 ---
 
-## UX Polish Batch — owner-approved 2026-09-04, Tier 1+2 shipped, Tier 3+4 in progress
+## UX Polish Batch — owner-approved 2026-09-04, Tier 1+2+3 shipped, Tier 4 in progress
 
-Full triage of the former "Cross-App UX & Polish" Idea Backlog list (34 items), dispositioned item-by-item with the owner via a structured interview (2026-09-04), then scoped into 4 dependency-ordered tiers via a second interview round in plan mode. Tier 1 (foundation) and Tier 2 fully built, tested (backend suite 1315 passed), and verified — see `docs/Daily Notes/2026-09-04.md`'s matching entry for the full build writeup. Remaining items below are Tier 3/4, not yet built.
+Full triage of the former "Cross-App UX & Polish" Idea Backlog list (34 items), dispositioned item-by-item with the owner via a structured interview (2026-09-04), then scoped into 4 dependency-ordered tiers via a second interview round in plan mode. Tiers 1-3 fully built, tested (backend suite 1334 passed, 0 failed), and verified — see `docs/Daily Notes/2026-09-04.md`'s matching entries for the full build writeup. Remaining items below are Tier 4, not yet built.
 
 - [ ] **Bulk actions** — multi-select archive/delete/tag across Tasks, Notes, Assets, Contacts. Bulk-delete must route through the soft-delete/trash-bin item below once it exists, never a hard delete.
 - [ ] **Soft-delete / trash bin** — the single biggest gap in this backlog, and the largest remaining item. 30-day restore window, one shared Trash page respecting each module's own access rules, a new scheduler purge job. Every module's delete path — including every AI delete tool, not just human UI deletes — must route through it; this is the actual fix for the AI & Chat Agent backlog's #1 flagged finding (Auto mode destructive actions, no undo).
-- [ ] **App-wide search fast-follow** — cross-workspace search (permission-checked, auto-switches workspace, shows a toast) + per-provider "show more" pagination. Real relevance ranking is explicitly NOT part of this item (belongs to the future RAG project).
-- [ ] **Onboarding seed data** — one example item (prefixed "Example: ...") per module at account creation, via the existing per-module `on_new_user()` hook — Tasks, Notes, Journal, Calendar, Goals, Assets, Contacts, Finance.
-- [ ] **"Today at a glance" dashboard block** — opt-in via Add Block, needs an explicit `module=` gate before shipping (likely `dashboard` itself).
 - [ ] **Accessibility (a11y) pass** — baked into Tier 1/2's new components already (ConfirmDialog/Toast/WelcomeBackPopup all have real ARIA/keyboard/focus handling); what's left is an audit of pre-existing pages built before this batch, plus real touch-target sizing (44×44px) on new interactive elements.
 - [ ] **Purpose-built empty states with a CTA per module** — one shared `EmptyState` component, custom copy per module.
 - [ ] **Command palette / quick-add (Cmd+K)** — settings storage exists (`command_palette_enabled`/`command_palette_actions` on `auth.json`, `PATCH /auth/me`), but the actual "create" mode on `GlobalSearch.jsx` and the Settings → Shortcuts customization UI are NOT built yet.
-- [ ] **A shared toast/snackbar component** — `lib/toast.jsx` (`ToastProvider`/`useToast`) is built and mounted app-wide, but not yet adopted by any specific feature. #10 (search workspace-switch) is its first intended real caller.
+- [ ] **A shared toast/snackbar component** — `lib/toast.jsx` (`ToastProvider`/`useToast`) is built, mounted app-wide, and now has its first real caller (`GlobalSearch.jsx`'s cross-workspace switch confirmation) — still worth adopting more broadly (save confirmations, etc.) as other Tier 4 items land.
 - [ ] **Warn before discarding unsaved form changes** — dirty-check on every form; when built, wire into the existing `useEscapeToClose(onClose, { hasUnsavedChanges, onUnsavedAttempt })` second-argument shape already reserved for it.
 - [ ] **Visible offline-state banner** instead of scattered per-request error messages.
 - [ ] **Swipe gestures** for common list actions (complete, archive) — swipe-right = primary, swipe-left = secondary.
@@ -51,11 +48,14 @@ Full triage of the former "Cross-App UX & Polish" Idea Backlog list (34 items), 
 
 **Group Home Assistant entities by room/area** — removed from this batch (real scope: `ha_service.get_areas()` returns only a flat area-name list and is called from nowhere in the frontend; no entity-to-area mapping exists). Re-scope alongside other Home Assistant module backlog work.
 
-**Shipped, Tier 1+2 (2026-09-04):**
+**Shipped, Tier 1+2+3 (2026-09-04):**
 - ConfirmDialog (all 34 `confirm()` sites migrated), Toast/snackbar infrastructure, Escape-to-close (retrofitted into ~40 existing modals)
 - Progressive module/nav disclosure — fresh instances now auto-install Journal/Calendar/Notes/Goals alongside the always-on Tasks/Chat/Dashboards
 - Welcome-back popup with optional AI summary
 - "This week at a glance" as a 5th `suggestions_service.py` builtin (daily/weekly cadence)
+- App-wide search fast-follow — cross-workspace search (permission-checked via the destination page's own existing access check, auto-switches workspace, shows a toast) + per-provider "show more". Real relevance ranking stays explicitly out of scope (the future RAG project's own job)
+- Onboarding seed data — one "Example: ..." item per module (Tasks, Notes, Journal, Calendar, Goals, Assets, Contacts, Finance) at account creation
+- "Today at a glance" dashboard block (`today_glance`, opt-in via Add Block, `module="dashboard"`-gated)
 
 **Declined/dropped this session — do not re-propose without new information:**
 - Native app-store wrapper (Capacitor) — dropped entirely. Doesn't remove the server dependency (this app was never offline-first) and the update-cycle concern is largely avoidable (a WebView pointed at the live domain means only native shell/plugin changes need store review) — but the owner judged it not worth building regardless.

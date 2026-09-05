@@ -253,6 +253,15 @@ def m029_backfill_contacts_installed_from_existing_data(brain: Path) -> None:
     mod_store_service.mark_installed("contacts", by="migration:m029")
 
 
+def _on_new_user(brain: Path, user_name: str) -> None:
+    """2026-09-04 UX Polish Batch item #11 — one seeded example contact per
+    new user (distinct from their own self-contact), prefixed "Example: " so
+    it's obviously safe to delete."""
+    from services.seed_data_service import seed_contact
+
+    seed_contact(user_name)
+
+
 MODULE = ModuleManifest(
     id="contacts",
     display_name="Contacts",
@@ -262,6 +271,7 @@ MODULE = ModuleManifest(
     router_prefix="/api/v1/contacts",
     router_tags=["contacts"],
     get_router=_get_router,
+    on_new_user=_on_new_user,
     owned_brain_paths=["Contacts"],
     owned_agent_tools=[
         "list_contacts",
