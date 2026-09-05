@@ -8,6 +8,7 @@ import { describeRecurrence } from './RecurrencePicker'
 import ConfirmDialog from './ConfirmDialog'
 import useEscapeToClose from '../lib/useEscapeToClose'
 import useFocusTrap from '../lib/useFocusTrap'
+import useScrollLock from '../lib/useScrollLock'
 
 const PRIORITY_COLOR = {
   High:   'bg-orange-500 text-white',
@@ -38,6 +39,7 @@ export default function TaskView({ task, canEdit, saveApi, onEdit, onClose, onDe
 
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
 
   // Pool context is identified by a saveApi override, same convention
   // TaskModal.jsx already uses for tag-suggestion lookups.

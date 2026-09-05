@@ -9,6 +9,7 @@ import { tags as tagsApi } from '../../../lib/api'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 const KIND_LABELS = { expense: '− Expense', income: '+ Income', transfer: '⇄ Transfer' }
 
@@ -76,6 +77,7 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
     onUnsavedAttempt: () => confirmDiscard(onClose),
   })
   useFocusTrap(cardRef)
+  useScrollLock()
 
   // The Amount field autofocuses on a genuinely new Expense/Income entry (a
   // deliberate "start typing immediately" convenience) — but for Transfer,
@@ -452,6 +454,7 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
                         } catch (err) { setError(err.message) }
                       }}
                       className="text-red-500 shrink-0"
+                      aria-label="Remove receipt"
                     >×</button>
                   </div>
                 ))}

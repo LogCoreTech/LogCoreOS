@@ -36,6 +36,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Replaced the last of the app's old blocking browser popups (Chat, Automations, Contacts, Account, Appearance) with the same non-blocking toast notifications used elsewhere.
 - **Fixed a real bug**: confirmation ("are you sure?") popups could scroll away from the center of the screen along with whatever page or form was open behind them, instead of staying fixed in place — and the page underneath kept scrolling while one was open. Both are fixed now, along with the same issue on a few other popups (Assets' archive-confirm and mute-notifications prompts, Finance's recurring-bill forms).
 - Journal's history drawer can now be closed with Escape, keeps keyboard focus contained while open, and blocks the page behind it from scrolling — matching every other popup in the app.
+- Every popup in the app now consistently blocks background scrolling while open, including a few (the mobile "All Modules" drawer, Chat's own history drawer, Tasks' reorder-priorities popup) that had never gotten any of these protections at all. A second pass over icon-only buttons caught about two dozen more missing screen-reader labels the first pass's narrower search had missed.
 
 ### Security
 

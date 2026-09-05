@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import HelpButton from '../../../components/HelpButton'
 import EmptyState from '../../../components/EmptyState'
 import PullToRefreshIndicator from '../../../components/PullToRefreshIndicator'
 import usePullToRefresh from '../../../lib/usePullToRefresh'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 import { tasks as tasksApi } from './api'
 import { priorities as prioritiesApi, auth as authApi } from '../../../lib/api'
 import { assets as assetsApi } from '../../assets/frontend/api'
@@ -42,6 +45,12 @@ export default function Tasks() {
   const [editTask, setEditTask] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [showReorder, setShowReorder] = useState(false)
+  const reorderCardRef = useRef(null)
+  // Found 2026-09-05 while systematically checking every popup in the app —
+  // this reorder modal had none of the standard modal protections.
+  useEscapeToClose(() => setShowReorder(false))
+  useFocusTrap(reorderCardRef, showReorder)
+  useScrollLock(showReorder)
   const [tempOrder, setTempOrder] = useState([])
   const [dragIdx, setDragIdx] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -280,7 +289,7 @@ export default function Tasks() {
       {/* Reorder Today modal */}
       {showReorder && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-end md:items-center justify-center p-4">
-          <div className="card p-5 w-full max-w-sm">
+          <div ref={reorderCardRef} className="card p-5 w-full max-w-sm">
             <h3 className="font-semibold mb-1">Reorder Today&apos;s Priorities</h3>
             <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-4">
               Use the arrows or drag to change order for today only. Resets tomorrow.

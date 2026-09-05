@@ -6,6 +6,7 @@ import AssetPickerField from '../../../components/AssetPickerField'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 /**
  * Per-dashboard options menu — rename, change icon, and the actions that
@@ -28,6 +29,7 @@ export default function DashboardSettingsModal({ dashboard, isOwner, user, works
   const cardRef = useRef(null)
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
 
   const dirty = name.trim() !== dashboard.name || icon !== dashboard.icon
   const isTemplated = !!dashboard.template_id

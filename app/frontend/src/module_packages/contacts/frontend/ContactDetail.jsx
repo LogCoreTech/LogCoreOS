@@ -8,6 +8,7 @@ import ContactAvatar from './ContactAvatar'
 import { formatPhone } from './phone'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 const money = cents => `$${((cents || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const toCents = v => Math.round(parseFloat(v || '0') * 100) || 0
@@ -99,6 +100,7 @@ export default function ContactDetail({ contact, fields, pipeline, user, onClose
   // Same fullPage guard as Escape above — a fullPage render is normal page
   // content, not a modal, so Tab should never be trapped there.
   useFocusTrap(cardRef, !fullPage)
+  useScrollLock(!fullPage)
 
   const load = useCallback(() => {
     contactsApi.interactions(contact.id).then(r => setInteractions(Array.isArray(r) ? r : [])).catch(() => {})
@@ -427,7 +429,7 @@ export default function ContactDetail({ contact, fields, pipeline, user, onClose
                           className="btn-ghost text-xs" title="Create invoice in Finance"
                         >🧾</button>
                       )}
-                      {canEdit && <button onClick={() => contactsApi.removeDeal(contact.id, d.id).then(load)} className="btn-ghost text-xs text-red-500">×</button>}
+                      {canEdit && <button onClick={() => contactsApi.removeDeal(contact.id, d.id).then(load)} aria-label="Remove deal" className="btn-ghost text-xs text-red-500">×</button>}
                     </div>
                     {expandedDeal === d.id && (() => {
                       const jp = (fin?.deals || []).find(x => x.deal_id === d.id)
@@ -445,7 +447,7 @@ export default function ContactDetail({ contact, fields, pipeline, user, onClose
                                     {a ? a.name : '(asset)'}
                                   </button>
                                   {canContribute && (
-                                    <button onClick={() => unlinkAssetFromDeal(d.id, aid)} className="text-red-500" title="Unlink">×</button>
+                                    <button onClick={() => unlinkAssetFromDeal(d.id, aid)} className="text-red-500" title="Unlink" aria-label="Unlink">×</button>
                                   )}
                                 </span>
                               )

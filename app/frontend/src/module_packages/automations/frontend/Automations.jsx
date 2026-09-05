@@ -9,6 +9,7 @@ import TagInput from '../../../components/TagInput'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 import { useToast } from '../../../lib/toast'
 
 function fmt(iso) {
@@ -117,6 +118,7 @@ function InboxSettingsModal({ inbox, isBusiness, workflowKeySuggestions, onClose
 
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
 
   useEffect(() => {
     if (!isBusiness) return
@@ -243,6 +245,7 @@ function LogsModal({ workflow, onClose }) {
 
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
 
   async function fetchLogs() {
     try {
@@ -320,6 +323,7 @@ function ImportModal({ defaultScope, isAdmin, onClose, onImported }) {
 
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
 
   async function submit(e) {
     e.preventDefault()

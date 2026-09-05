@@ -16,6 +16,7 @@ import TemplatePicker from './TemplatePicker'
 import TemplateFieldsPicker from './TemplateFieldsPicker'
 import useEscapeToClose from '../../lib/useEscapeToClose'
 import useFocusTrap from '../../lib/useFocusTrap'
+import useScrollLock from '../../lib/useScrollLock'
 
 const CATEGORY_LABELS = {
   live_aggregate: 'Live data',
@@ -295,6 +296,7 @@ export default function BlockPicker({ editingBlock = null, onAdd, onSave, onClos
 
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
 
   useEffect(() => {
     if (isEditing) return // no type-grid step to populate in edit mode

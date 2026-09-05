@@ -13,6 +13,7 @@ import MetricGraph from '../../../components/MetricGraph'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 const METRIC_LOG_LEGEND = [{ colorClass: 'bg-orange-500', label: 'Logged value' }]
 
@@ -112,6 +113,7 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
     onUnsavedAttempt: () => confirmDiscard(onClose),
   })
   useFocusTrap(cardRef)
+  useScrollLock()
   useEscapeToClose(() => setShowDelete(false))
   // showDelete's popup mounts/unmounts inside this same persistent GoalModal
   // instance (see the `{showDelete && (...)}` block below) rather than via a
@@ -119,6 +121,7 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
   // forces the trap to re-attach to deleteCardRef.current each time that
   // popup actually opens.
   useFocusTrap(deleteCardRef, showDelete)
+  useScrollLock(showDelete)
 
   function toggleHistory(taskId) {
     setExpandedHistory(prev => {

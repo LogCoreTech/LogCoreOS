@@ -196,7 +196,7 @@ export default function Calendar() {
 
       {/* Month nav */}
       <div className="flex items-center justify-between">
-        <button onClick={prev} className="btn-ghost px-3 py-1.5 text-sm">‹</button>
+        <button onClick={prev} aria-label="Previous month" className="btn-ghost px-3 py-1.5 text-sm">‹</button>
         <div className="flex items-center gap-3">
           <span className="font-semibold text-base">{MONTHS[month]} {year}</span>
           <button
@@ -206,7 +206,7 @@ export default function Calendar() {
             Today
           </button>
         </div>
-        <button onClick={next} className="btn-ghost px-3 py-1.5 text-sm">›</button>
+        <button onClick={next} aria-label="Next month" className="btn-ghost px-3 py-1.5 text-sm">›</button>
       </div>
 
       {/* Calendar grid — full-bleed on mobile, card on desktop */}

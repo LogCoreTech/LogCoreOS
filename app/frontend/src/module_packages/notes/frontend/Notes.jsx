@@ -8,6 +8,7 @@ import ConfirmDialog from '../../../components/ConfirmDialog'
 import { useWorkspace } from '../../../lib/workspace'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 // ── Tree builder ─────────────────────────────────────────────────────────────
 
@@ -125,6 +126,7 @@ function ContextMenu({ node, onClose, onRename, onMove, onDelete, onShare, onLea
   const cardRef = useRef(null)
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
   // Own items (no _owner) are always manageable. Pool items (household/team)
   // are collectively visible, not a personal share — "Leave" makes no sense
   // there; instead an admin (or a by-name edit-level contributor) can manage
@@ -177,6 +179,7 @@ function NoteShareModal({ node, onClose, onSaved }) {
   const cardRef = useRef(null)
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
 
   useEffect(() => {
     notesApi.members().then(r => setMembers(Array.isArray(r) ? r : [])).catch(() => {})
@@ -258,6 +261,7 @@ export default function Notes() {
   // block's own fresh modalCardRef.current instead of staying attached to
   // whichever block was open before.
   useFocusTrap(modalCardRef, !!modal)
+  useScrollLock(!!modal)
 
   // Deep link (?path=<note path>) — dashboard nav-button clicks land here.
   useEffect(() => {

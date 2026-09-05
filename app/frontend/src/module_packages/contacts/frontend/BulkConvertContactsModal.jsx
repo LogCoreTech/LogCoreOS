@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { contacts as contactsApi } from './api'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 // Bulk "convert personal contacts into the shared pool" (owner ask,
 // 2026-08-17: "have so many" to move one at a time via ContactModal's own
@@ -20,6 +21,7 @@ export default function BulkConvertContactsModal({ contacts, workspace, onClose,
 
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
 
   function toggle(id) {
     setSelected(prev => {

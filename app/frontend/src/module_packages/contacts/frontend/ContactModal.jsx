@@ -9,6 +9,7 @@ import ConfirmDialog from '../../../components/ConfirmDialog'
 import { tags as tagsApi } from '../../../lib/api'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 const DEFAULT_PRIORITY_ORDER = ['Religion', 'Family', 'Job', 'Personal Growth', 'Hobbies']
 const EDUCATION_LEVELS = [
@@ -150,7 +151,7 @@ function AffiliationEditor({ contactId, affiliated, onChange }) {
           {affiliated.map(a => (
             <span key={a.id} className="badge bg-charcoal-100 dark:bg-charcoal-700 flex items-center gap-1">
               {a.type === 'company' ? '🏢' : '🧑'} {a.name}
-              <button type="button" onClick={() => remove(a.id)} className="text-red-500" title="Unlink">×</button>
+              <button type="button" onClick={() => remove(a.id)} className="text-red-500" title="Unlink" aria-label="Unlink">×</button>
             </span>
           ))}
         </div>
@@ -308,7 +309,7 @@ function CareerHistoryEditor({ career, onChange }) {
               <button type="button" onClick={() => setEditingPast(c)} className="flex-1 min-w-0 truncate text-left hover:text-orange-500">
                 {c.title || '(untitled)'}{companyNames[c.company_id] ? ` · ${companyNames[c.company_id]}` : ''} ({c.start_date || '?'}–{c.end_date || '?'})
               </button>
-              <button type="button" onClick={() => removePast(c)} className="text-red-500 shrink-0">×</button>
+              <button type="button" onClick={() => removePast(c)} aria-label="Remove past role" className="text-red-500 shrink-0">×</button>
             </div>
           ))}
         </div>
@@ -435,7 +436,7 @@ function PrioritiesEditor({ order, workspace, onChange }) {
         <input type="text" value={customCat} onChange={e => setCustomCat(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCustom())}
           placeholder="Add category…" className="input" />
-        <button type="button" onClick={addCustom} className="btn-primary px-3">+</button>
+        <button type="button" onClick={addCustom} aria-label="Add category" className="btn-primary px-3">+</button>
       </div>
     </div>
   )
@@ -586,6 +587,7 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
   // Same fullPage guard as Escape above — a fullPage render is normal page
   // content, not a modal, so Tab should never be trapped there.
   useFocusTrap(cardRef, !fullPage)
+  useScrollLock(!fullPage)
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const setCustom = (k, v) => setForm(f => ({ ...f, custom: { ...f.custom, [k]: v } }))

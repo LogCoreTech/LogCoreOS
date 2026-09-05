@@ -17,6 +17,7 @@ import { fmtMoney, monthStr } from '../../../components/finance/money'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 import PullToRefreshIndicator from '../../../components/PullToRefreshIndicator'
 import usePullToRefresh from '../../../lib/usePullToRefresh'
 
@@ -600,6 +601,7 @@ function NewBookModal({ workspace, isAdmin, onClose, onCreated }) {
   const cardRef = useRef(null)
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
 
   async function submit(e) {
     e.preventDefault()

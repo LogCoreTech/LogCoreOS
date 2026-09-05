@@ -3,6 +3,7 @@ import { finance as financeApi } from './api'
 import { fmtMoney } from '../../../components/finance/money'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 // Bank sync panel — connections are admin-managed: members REQUEST a
 // connection (admins get notified and enter the SimpleFIN setup token in
@@ -18,6 +19,7 @@ export default function SimpleFinPanel({ books, isAdmin, workspace, onClose }) {
   const cardRef = useRef(null)
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
 
   useEffect(() => {
     financeApi.sfStatus().then(s => {

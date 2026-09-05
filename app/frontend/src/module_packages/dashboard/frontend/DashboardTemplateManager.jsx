@@ -7,6 +7,7 @@ import ConfirmDialog from '../../../components/ConfirmDialog'
 import { BLOCK_REGISTRY } from '../../../components/dashboard/blockRegistry'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 const SUBJECT_TYPES = [
   { value: '', label: 'None — just a reusable block set' },
@@ -36,6 +37,7 @@ export default function DashboardTemplateManager({ templates, user, onClose, onC
   const cardRef = useRef(null)
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
 
   useEffect(() => {
     dashboardsApi.members().then(m => setMembers((m || []).map(x => x.name))).catch(() => {})

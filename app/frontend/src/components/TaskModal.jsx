@@ -7,6 +7,7 @@ import TaskView from './TaskView'
 import ConfirmDialog from './ConfirmDialog'
 import useEscapeToClose from '../lib/useEscapeToClose'
 import useFocusTrap from '../lib/useFocusTrap'
+import useScrollLock from '../lib/useScrollLock'
 
 const PRIORITIES = ['High', 'Medium', 'Low']
 const TYPES = ['todo', 'recurring', 'appointment']
@@ -82,6 +83,7 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
   // this same persistent instance switches back into 'edit' mode, instead of
   // staying attached to whatever containerRef.current was at first mount.
   useFocusTrap(cardRef, mode !== 'view')
+  useScrollLock(mode !== 'view')
 
   // A pool context is identified by a saveApi override (household's/team's
   // own client) being passed in — mirrors how goal_id linking already tells

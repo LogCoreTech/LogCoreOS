@@ -4,6 +4,7 @@ import { toCents, centsToInput, fmtMoney } from '../../../components/finance/mon
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 // Edits or deletes both legs of a Transfer together. `book`/`workspace` are
 // the side the row was clicked from; the peer side comes denormalized on the
@@ -22,6 +23,7 @@ export default function TransferEditModal({ book, workspace, tx, onClose, onSave
   const cardRef = useRef(null)
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
 
   function legIds() {
     return isFromLeg

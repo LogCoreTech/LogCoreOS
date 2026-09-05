@@ -168,7 +168,7 @@ export default function RecurringPanel({ book, canEdit }) {
                         {item.active ? '⏸' : '▶'}
                       </button>
                       <button onClick={() => openForm(item)} aria-label="Edit" className="btn-ghost text-xs px-1.5">✎</button>
-                      <button onClick={() => removeItem(item)} className="btn-ghost text-xs px-1.5 text-red-500">×</button>
+                      <button onClick={() => removeItem(item)} aria-label="Remove" className="btn-ghost text-xs px-1.5 text-red-500">×</button>
                     </div>
                   )}
                 </div>
@@ -213,7 +213,7 @@ export default function RecurringPanel({ book, canEdit }) {
                   {fmtMoney(item.amount_cents, book.currency)}
                 </span>
                 {canEdit && (
-                  <button onClick={() => removePlanned(item)} className="btn-ghost text-xs px-1.5 text-red-500 shrink-0">×</button>
+                  <button onClick={() => removePlanned(item)} aria-label="Remove" className="btn-ghost text-xs px-1.5 text-red-500 shrink-0">×</button>
                 )}
               </div>
             ))}

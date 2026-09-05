@@ -5,6 +5,7 @@ import ContactPicker from '../../../components/contacts/ContactPicker'
 import AssetPickerField from '../../../components/AssetPickerField'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 /**
  * Blank dashboard, or one seeded from a template — replaces the old direct
@@ -26,6 +27,7 @@ export default function CreateDashboardModal({ pool = false, onCreated, onClose 
 
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
 
   useEffect(() => {
     templatesApi.list().then(setTemplates).catch(() => setTemplates([]))

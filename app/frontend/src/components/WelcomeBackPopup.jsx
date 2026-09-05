@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { welcomeBack as welcomeBackApi } from '../lib/api'
 import useEscapeToClose from '../lib/useEscapeToClose'
 import useFocusTrap from '../lib/useFocusTrap'
+import useScrollLock from '../lib/useScrollLock'
 
 // Middle-screen "welcome back" popup (item #25, 2026-09-04 UX Polish Batch) —
 // checked once per app load, shown only if the backend says the user has
@@ -30,6 +31,7 @@ export default function WelcomeBackPopup() {
   // attached to nothing from the very first render, when there was no card
   // to find yet.
   useFocusTrap(cardRef, !!(state && state.show))
+  useScrollLock(!!(state && state.show))
 
   if (!state || !state.show) return null
 

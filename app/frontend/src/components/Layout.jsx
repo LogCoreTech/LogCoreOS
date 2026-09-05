@@ -15,6 +15,9 @@ import WelcomeBackPopup from './WelcomeBackPopup'
 import OfflineBanner from './OfflineBanner'
 import DemoBanner from './DemoBanner'
 import GlobalSearch from './GlobalSearch'
+import useEscapeToClose from '../lib/useEscapeToClose'
+import useFocusTrap from '../lib/useFocusTrap'
+import useScrollLock from '../lib/useScrollLock'
 
 // Shared by the sidebar's main nav loop and its new Pinned section
 // (2026-08-18) so the active/inactive styling can't drift between the two.
@@ -218,6 +221,14 @@ export default function Layout() {
   const navigate = useNavigate()
   const location = useLocation()
   const [showDrawer, setShowDrawer] = useState(false)
+  const drawerCardRef = useRef(null)
+  // Found 2026-09-05 while systematically checking every popup in the app —
+  // this mobile "All Modules" drawer had none of the standard modal
+  // protections. `active` tied to `showDrawer` since its own card mounts
+  // conditionally within this persistent Layout instance.
+  useEscapeToClose(() => setShowDrawer(false))
+  useFocusTrap(drawerCardRef, showDrawer)
+  useScrollLock(showDrawer)
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('lc_sidebar') === 'collapsed')
   const [searchOpen, setSearchOpen] = useState(false)
 
@@ -561,11 +572,12 @@ export default function Layout() {
             className="fixed inset-0 bg-black/50 z-50 md:hidden"
             onClick={() => setShowDrawer(false)}
           />
-          <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-charcoal-950 z-50 md:hidden rounded-t-2xl shadow-xl pb-[env(safe-area-inset-bottom)]">
+          <div ref={drawerCardRef} className="fixed bottom-0 left-0 right-0 bg-white dark:bg-charcoal-950 z-50 md:hidden rounded-t-2xl shadow-xl pb-[env(safe-area-inset-bottom)]">
             <div className="flex items-center justify-between px-5 pt-5 pb-3">
               <h3 className="font-semibold text-base">All Modules</h3>
               <button
                 onClick={() => setShowDrawer(false)}
+                aria-label="Close"
                 className="text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200 text-xl leading-none"
               >
                 ✕

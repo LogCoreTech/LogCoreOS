@@ -4,12 +4,14 @@ import { useAuth } from '../../../lib/auth'
 import TagInput from '../../../components/TagInput'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 export default function DashboardAccessModal({ dashboard, isPool, isOwner, onClose, onSaved }) {
   const { user } = useAuth()
   const cardRef = useRef(null)
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
   const [shared, setShared] = useState(dashboard.shared_with || [])
   const [contributors, setContributors] = useState(dashboard.contributors || [])
   const [hidden, setHidden] = useState(dashboard.hidden_from || [])

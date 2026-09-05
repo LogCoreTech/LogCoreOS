@@ -4,6 +4,7 @@ import SettingsPageHeader from '../../../components/settings/SettingsPageHeader'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 const SESSION_OPTIONS = [
   { label: '1 hour',  value: 60     },
@@ -482,6 +483,7 @@ function ResyncModal({ onClose, onQueued, flash, currentVersion, latestVersion }
   const cardRef = useRef(null)
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
   const fixCommand = 'git fetch origin --force --tags && git reset --hard origin/master'
   const compareUrl = currentVersion && latestVersion
     ? `https://github.com/LogCoreTech/LogCoreOS/compare/v${currentVersion}...v${latestVersion}`

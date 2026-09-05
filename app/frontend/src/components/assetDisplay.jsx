@@ -5,6 +5,7 @@ import { assets as assetsApi } from '../module_packages/assets/frontend/api'
 import ContactPicker from './contacts/ContactPicker'
 import useEscapeToClose from '../lib/useEscapeToClose'
 import useFocusTrap from '../lib/useFocusTrap'
+import useScrollLock from '../lib/useScrollLock'
 
 // Shared asset display helpers used by both the read-only AssetView and the
 // AssetModal editor. Kept in their own module so neither component imports the
@@ -178,6 +179,7 @@ function ImageLightbox({ url, filename, onClose }) {
   const cardRef = useRef(null)
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
 
   return createPortal(
     // Deliberately NOT .modal-overlay: that class is items-end on mobile (a

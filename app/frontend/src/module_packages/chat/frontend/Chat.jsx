@@ -9,6 +9,9 @@ import { useWorkspace } from '../../../lib/workspace'
 import DashboardGrid from '../../../components/dashboard/DashboardGrid'
 import { BLOCK_REGISTRY } from '../../../components/dashboard/blockRegistry'
 import { useToast } from '../../../lib/toast'
+import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 const _DASHBOARD_PREVIEW_TOOLS = new Set(['add_dashboard_block', 'update_dashboard_block'])
 
@@ -534,6 +537,13 @@ export default function Chat() {
   const [showModeDrawer, setShowModeDrawer] = useState(false)
   const [showMemoryPopup, setShowMemoryPopup] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
+  const historyCardRef = useRef(null)
+  // Found 2026-09-05 while systematically checking every popup in the app —
+  // this Chats drawer had none of the standard modal protections (same gap
+  // as Journal.jsx's near-identical history drawer, fixed the same day).
+  useEscapeToClose(() => setShowHistory(false))
+  useFocusTrap(historyCardRef, showHistory)
+  useScrollLock(showHistory)
   const [sessions, setSessions] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [usage, setUsage] = useState(null) // { mode, pct } — null until loaded
@@ -1264,13 +1274,14 @@ export default function Chat() {
       {showHistory && (
         <div className="fixed inset-0 z-50 flex">
           <div className="flex-1 bg-black/40" onClick={() => setShowHistory(false)} />
-          <div className="w-80 md:w-96 h-full bg-white dark:bg-charcoal-900 border-l border-charcoal-200 dark:border-charcoal-700 flex flex-col shadow-xl">
+          <div ref={historyCardRef} className="w-80 md:w-96 h-full bg-white dark:bg-charcoal-900 border-l border-charcoal-200 dark:border-charcoal-700 flex flex-col shadow-xl">
 
             {/* Drawer header */}
             <div className="flex items-center justify-between px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] border-b border-charcoal-200 dark:border-charcoal-700 shrink-0">
               <h3 className="text-sm font-semibold">Chats</h3>
               <button
                 onClick={() => setShowHistory(false)}
+                aria-label="Close"
                 className="text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200 text-lg leading-none"
               >
                 ✕

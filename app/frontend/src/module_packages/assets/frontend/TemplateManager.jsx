@@ -5,6 +5,7 @@ import TagInput from '../../../components/TagInput'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 const FIELD_TYPES = ['text', 'number', 'date', 'boolean', 'select', 'contact']
 const BLANK_FIELD = { key: '', label: '', type: 'text', options: [], default: '' }
@@ -32,6 +33,7 @@ export default function TemplateManager({ templates, user, onClose, onChanged })
 
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
 
   useEffect(() => {
     assetsApi.members().then(m => setMembers((m || []).map(x => x.name))).catch(() => {})

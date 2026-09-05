@@ -9,6 +9,7 @@ import { useToast } from '../lib/toast'
 import TagInput from './TagInput'
 import useEscapeToClose from '../lib/useEscapeToClose'
 import useFocusTrap from '../lib/useFocusTrap'
+import useScrollLock from '../lib/useScrollLock'
 
 // Global, app-wide search — a magnifying-glass icon in the header (Layout.jsx)
 // opens this modal. Modeled directly on DashboardSwitcher.jsx's own
@@ -45,6 +46,7 @@ export default function GlobalSearch({ onClose }) {
 
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
 
   useEffect(() => {
     Promise.all([tagsApi.list(false).catch(() => ({ tags: [] })), tagsApi.list(true).catch(() => ({ tags: [] }))])

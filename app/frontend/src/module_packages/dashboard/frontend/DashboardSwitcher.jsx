@@ -1,6 +1,7 @@
 import { useMemo, useState, useRef } from 'react'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 // Groups by the dashboard's own template (the "folder" the owner asked for —
 // makes browsing manageable with a large number of per-client/per-asset
@@ -32,6 +33,7 @@ export default function DashboardSwitcher({ items, activeId, onSelect, onCreateN
   const cardRef = useRef(null)
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()

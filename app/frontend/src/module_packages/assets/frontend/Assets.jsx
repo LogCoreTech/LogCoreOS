@@ -9,6 +9,7 @@ import TemplateManager from './TemplateManager'
 import AssetTreePicker from '../../../components/AssetTreePicker'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 const OWNER_CHIP = {
   team: '🧑‍🤝‍🧑 Team',
@@ -108,6 +109,7 @@ function MovePicker({ asset, allAssets, onClose, onMoved }) {
 
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
 
   // Same store, minus self and descendants (can't move under your own child)
   const sameStore = (Array.isArray(allAssets) ? allAssets : []).filter(

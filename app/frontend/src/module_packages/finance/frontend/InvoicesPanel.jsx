@@ -8,6 +8,7 @@ import TransactionModal from './TransactionModal'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 const INVOICE_STATUSES = ['draft', 'sent', 'paid', 'void']
 
@@ -205,6 +206,7 @@ function InvoiceModal({ book, invoice, clients, canEdit, prefill, onPrefillConsu
   const cardRef = useRef(null)
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
 
   // Deal → invoice prefill: resolve the contact once and find-or-create the
   // matching book client through the same chooseClient path a manual pick uses.
@@ -446,7 +448,7 @@ function InvoiceModal({ book, invoice, clients, canEdit, prefill, onPrefillConsu
                   <input className="input w-24" placeholder="Unit $" inputMode="decimal" value={item.unit}
                     onChange={e => setItems(items.map((it, i) => i === idx ? { ...it, unit: e.target.value } : it))} />
                   <button type="button" onClick={() => setItems(items.filter((_it, i) => i !== idx))}
-                    disabled={items.length === 1} className="btn-ghost px-2 text-red-500 disabled:opacity-30">×</button>
+                    disabled={items.length === 1} aria-label="Remove item" className="btn-ghost px-2 text-red-500 disabled:opacity-30">×</button>
                 </div>
               ))}
             </div>
@@ -495,7 +497,7 @@ function InvoiceModal({ book, invoice, clients, canEdit, prefill, onPrefillConsu
                         <button onClick={async () => {
                           try { await financeApi.removePayment(book.id, invoice.id, p.id); onChanged() }
                           catch (err) { setError(err.message) }
-                        }} className="text-red-500">×</button>
+                        }} aria-label="Remove payment" className="text-red-500">×</button>
                       )}
                     </span>
                   </div>
@@ -539,6 +541,7 @@ function InvoicePrint({ book, invoice, client, onClose }) {
   const cardRef = useRef(null)
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
 
   useEffect(() => {
     const timer = setTimeout(() => window.print(), 300)

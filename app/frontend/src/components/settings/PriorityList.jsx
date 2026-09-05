@@ -55,7 +55,7 @@ export default function PriorityList({ label, pool, setter, newVal, setNewVal, d
           // (same bug class as TagInput.jsx, fixed 2026-08-18) — dropped
           // rather than shrunk, the button next to it is the same size regardless.
           placeholder="Add category…" className="input" />
-        <button onClick={() => poolAdd(pool, setter, newVal, setNewVal)} className="btn-primary px-3 text-sm">+</button>
+        <button onClick={() => poolAdd(pool, setter, newVal, setNewVal)} aria-label="Add category" className="btn-primary px-3 text-sm">+</button>
       </div>
     </div>
   )

@@ -5,6 +5,7 @@ import TagInput from './TagInput'
 import ConfirmDialog from './ConfirmDialog'
 import useEscapeToClose from '../lib/useEscapeToClose'
 import useFocusTrap from '../lib/useFocusTrap'
+import useScrollLock from '../lib/useScrollLock'
 
 export const EVENT_COLORS = {
   blue:   '#3b82f6',
@@ -74,6 +75,7 @@ export default function EventModal({ event, defaultDate, onClose, onSave, saveAp
     onUnsavedAttempt: () => confirmDiscard(onClose),
   })
   useFocusTrap(cardRef)
+  useScrollLock()
 
   useEffect(() => {
     const pool = !!isHouseholdEvent || shareToPool

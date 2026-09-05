@@ -4,6 +4,7 @@ import { fmtMoney, toCents } from '../../../components/finance/money'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
+import useScrollLock from '../../../lib/useScrollLock'
 
 const ACCOUNT_TYPES = ['checking', 'savings', 'credit', 'cash', 'other']
 const CAP_LABELS = [
@@ -146,7 +147,7 @@ function SharingSection({ book }) {
                 </span>
               )}
               <button onClick={() => setRows(rows.filter((_r, i) => i !== idx))}
-                className="btn-ghost px-2 text-red-500">×</button>
+                aria-label="Remove share" className="btn-ghost px-2 text-red-500">×</button>
             </div>
             {row.access === 'contribute' && (
               <div className="flex flex-wrap gap-x-3 gap-y-1">
@@ -174,7 +175,7 @@ function SharingSection({ book }) {
         {hidden.map(h => (
           <span key={h} className="badge bg-charcoal-100 text-charcoal-600 dark:bg-charcoal-700 dark:text-charcoal-300 inline-flex items-center gap-1">
             {h}
-            <button onClick={() => setHidden(hidden.filter(x => x !== h))} className="hover:text-red-500 leading-none">×</button>
+            <button onClick={() => setHidden(hidden.filter(x => x !== h))} aria-label="Remove" className="hover:text-red-500 leading-none">×</button>
           </span>
         ))}
         <select className="input w-32 text-xs" value={hiddenInput}
@@ -225,6 +226,7 @@ export default function BookSettings({ book, onClose, onChanged, onDeletedBook }
   const cardRef = useRef(null)
   useEscapeToClose(onClose)
   useFocusTrap(cardRef)
+  useScrollLock()
 
   async function pickCsv(e) {
     const file = e.target.files?.[0]
@@ -395,7 +397,7 @@ export default function BookSettings({ book, onClose, onChanged, onDeletedBook }
                 <button onClick={() => toggleAccountArchived(a)} className="btn-ghost text-xs px-2" title={a.archived ? 'Unarchive' : 'Archive'}>
                   {a.archived ? '↩' : '🗄'}
                 </button>
-                <button onClick={() => removeAccount(a)} className="btn-ghost text-xs px-2 text-red-500" title="Delete">×</button>
+                <button onClick={() => removeAccount(a)} className="btn-ghost text-xs px-2 text-red-500" title="Delete" aria-label="Delete">×</button>
               </div>
             ))}
             {accounts.length === 0 && (
@@ -410,7 +412,7 @@ export default function BookSettings({ book, onClose, onChanged, onDeletedBook }
             </select>
             <input className="input w-24" placeholder="0.00" inputMode="decimal" value={newAcct.opening}
               onChange={e => setNewAcct({ ...newAcct, opening: e.target.value })} title="Opening balance" />
-            <button onClick={addAccount} disabled={busy} className="btn-ghost shrink-0">＋</button>
+            <button onClick={addAccount} disabled={busy} aria-label="Add account" className="btn-ghost shrink-0">＋</button>
           </div>
         </div>
 
@@ -426,7 +428,7 @@ export default function BookSettings({ book, onClose, onChanged, onDeletedBook }
               }`}>
                 {c.name}
                 <button onClick={() => setCategories(categories.filter(x => x.name !== c.name))}
-                  className="hover:text-red-500 leading-none" title="Remove (transactions become uncategorized)">×</button>
+                  className="hover:text-red-500 leading-none" title="Remove (transactions become uncategorized)" aria-label="Remove category">×</button>
               </span>
             ))}
           </div>
@@ -438,7 +440,7 @@ export default function BookSettings({ book, onClose, onChanged, onDeletedBook }
               <option value="expense">expense</option>
               <option value="income">income</option>
             </select>
-            <button onClick={addCategory} className="btn-ghost shrink-0">＋</button>
+            <button onClick={addCategory} aria-label="Add category" className="btn-ghost shrink-0">＋</button>
           </div>
           <p className="text-[11px] text-charcoal-400 dark:text-charcoal-500 mt-1">
             Category changes apply when you hit Save. Removing one relabels its transactions to Uncategorized.
@@ -452,7 +454,7 @@ export default function BookSettings({ book, onClose, onChanged, onDeletedBook }
             {taxCats.map(t => (
               <span key={t} className="badge bg-charcoal-100 text-charcoal-700 dark:bg-charcoal-700 dark:text-charcoal-300 inline-flex items-center gap-1">
                 {t}
-                <button onClick={() => setTaxCats(taxCats.filter(x => x !== t))} className="hover:text-red-500 leading-none">×</button>
+                <button onClick={() => setTaxCats(taxCats.filter(x => x !== t))} aria-label="Remove tax category" className="hover:text-red-500 leading-none">×</button>
               </span>
             ))}
             {taxCats.length === 0 && (
@@ -476,7 +478,7 @@ export default function BookSettings({ book, onClose, onChanged, onDeletedBook }
               const trimmed = newTaxCat.trim()
               if (trimmed && !taxCats.includes(trimmed)) setTaxCats([...taxCats, trimmed])
               setNewTaxCat('')
-            }} className="btn-ghost shrink-0">＋</button>
+            }} aria-label="Add tax category" className="btn-ghost shrink-0">＋</button>
             <input className="input w-24 uppercase" title="Invoice number prefix" value={invoicePrefix}
               onChange={e => setInvoicePrefix(e.target.value)} maxLength={10} />
           </div>
