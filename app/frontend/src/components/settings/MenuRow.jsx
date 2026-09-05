@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 
 export default function MenuRow({ icon, label, subtitle, to, onClick, disabled, trailing }) {
-  const classes = `w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
+  const classes = `w-full flex items-center gap-3 px-4 py-3 text-left transition-colors overflow-hidden ${
     disabled
       ? 'opacity-50 cursor-not-allowed'
       : 'hover:bg-charcoal-50 dark:hover:bg-charcoal-800'

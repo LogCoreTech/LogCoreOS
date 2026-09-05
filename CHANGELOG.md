@@ -38,6 +38,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Journal's history drawer can now be closed with Escape, keeps keyboard focus contained while open, and blocks the page behind it from scrolling — matching every other popup in the app.
 - Every popup in the app now consistently blocks background scrolling while open, including a few (the mobile "All Modules" drawer, Chat's own history drawer, Tasks' reorder-priorities popup) that had never gotten any of these protections at all. A second pass over icon-only buttons caught about two dozen more missing screen-reader labels the first pass's narrower search had missed.
 - **Fixed a real bug**: on mobile, Settings → Notifications' proactive-suggestion toggles (and a couple of similar rows elsewhere in Settings) could push the whole page wider than the screen instead of wrapping their description text, causing sideways scrolling.
+- Fixed the same sideways-scrolling issue on the main Settings page itself — the Shortcuts row's description was the longest in the app and could push the page wider on narrow phones; shortened it and hardened every Settings menu row against this regardless of description length.
 
 ### Security
 
