@@ -43,6 +43,22 @@ export const ALL_MODULES = [
 
 export const DEFAULT_SHORTCUTS = ['dashboard', 'tasks', 'chat']
 
+// Item #3, 2026-09-04 UX Polish Batch — the command palette's "create" mode
+// quick-actions. Only modules with one obvious, single "new record" action —
+// the same 6-of-8 set #11's onboarding seed data uses, minus Journal (no
+// discrete create-modal — an entry is just today's date, edited inline) and
+// Goals (no query-param deep-link plumbing exists there yet). Assets/Contacts/
+// Finance seeded data proves these 6 are exactly the modules with a real,
+// single "＋ New X" gesture already built.
+export const QUICK_CREATE_ACTIONS = [
+  { module: 'tasks',    label: 'New Task' },
+  { module: 'notes',    label: 'New Note' },
+  { module: 'calendar', label: 'New Event' },
+  { module: 'assets',   label: 'New Asset' },
+  { module: 'contacts', label: 'New Contact' },
+  { module: 'finance',  label: 'New Transaction' },
+]
+
 // Read shortcuts from the server-side user object for a specific workspace.
 export function getShortcutsForUser(user, workspace = 'personal') {
   const saved = user?.shortcuts?.[workspace]

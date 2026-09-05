@@ -27,6 +27,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Fixed a real bug in the previous Groq quick-setup preset: it saved an empty base URL, which silently sent requests to real OpenAI's endpoint using a Groq-shaped key instead of Groq's own API. The new picker is server-authoritative for every known provider's base URL, so this class of misconfiguration can't recur.
 - **The PWA "Add to Home Screen" icon now matches your accent color.** Only affects a fresh install going forward — an already-installed icon on a phone/desktop won't retroactively update.
 - **A banner now appears when your device loses connectivity**, instead of scattered per-request error messages.
+- **Closing a Task, Event, Asset, Contact, Transaction, or Goal form with unsaved changes now asks first** instead of silently discarding what you typed — via Escape, the X button, Cancel, or (for Goals) clicking outside.
+- **The search bar can now jump straight to creating something new.** Enable it and pick which quick-create actions you want in Settings → Shortcuts; they show up when you open search with nothing typed yet.
 
 ### Security
 

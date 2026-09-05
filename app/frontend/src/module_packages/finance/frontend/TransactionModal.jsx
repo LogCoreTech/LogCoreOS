@@ -41,7 +41,37 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
   const [sourceDeal, setSourceDeal] = useState(null) // resolved when the tx carries a deal_id
   const amountRef = useRef(null)
   const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
-  useEscapeToClose(onClose)
+
+  // Item #9, 2026-09-04 UX Polish Batch — warn before discarding unsaved
+  // changes. Captured once at mount, combining every separate useState slot
+  // that together makes up this transaction's editable fields (there's no
+  // single `form` object here — each field is its own useState).
+  const snapshot = () => JSON.stringify({
+    kind, amount, date, accountId, category, payee, payeeContactId, assetId,
+    notes, tags, deductible, taxCategory, toBookId, toAccountId,
+  })
+  const [initialFormJson] = useState(snapshot)
+  const hasUnsavedChanges = snapshot() !== initialFormJson
+
+  function confirmDiscard(onConfirm) {
+    setConfirmState({
+      title: 'Discard changes?',
+      message: 'You have unsaved changes. Discard them?',
+      confirmLabel: 'Discard',
+      danger: true,
+      onConfirm: () => { setConfirmState(null); onConfirm() },
+    })
+  }
+
+  function attemptClose() {
+    if (hasUnsavedChanges) confirmDiscard(onClose)
+    else onClose()
+  }
+
+  useEscapeToClose(onClose, {
+    hasUnsavedChanges,
+    onUnsavedAttempt: () => confirmDiscard(onClose),
+  })
 
   // The Amount field autofocuses on a genuinely new Expense/Income entry (a
   // deliberate "start typing immediately" convenience) — but for Transfer,
@@ -452,7 +482,7 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
               </button>
             )}
             <div className="flex-1" />
-            <button type="button" onClick={onClose} disabled={busy} className="btn-ghost">Cancel</button>
+            <button type="button" onClick={attemptClose} disabled={busy} className="btn-ghost">Cancel</button>
             {!editing && kind !== 'transfer' && (
               <button type="button" onClick={e => submit(e, true)} disabled={busy} className="btn-ghost text-xs sm:text-sm">
                 Save & add another

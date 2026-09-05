@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { search as searchApi, tags as tagsApi } from '../lib/api'
-import { ALL_MODULES } from '../lib/constants'
-import { deepLinkUrl } from '../lib/deepLinks'
+import { ALL_MODULES, QUICK_CREATE_ACTIONS } from '../lib/constants'
+import { deepLinkUrl, quickCreateUrl } from '../lib/deepLinks'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
 import { useToast } from '../lib/toast'
@@ -115,6 +115,22 @@ export default function GlobalSearch({ onClose }) {
       .finally(() => setShowMoreLoading(null))
   }
 
+  // Item #3, 2026-09-04 UX Polish Batch — "create" mode surfaces as this
+  // modal's own empty state (typing anything replaces it with real results)
+  // rather than a second overlay. Filtered live to the user's own selected
+  // actions AND their currently-enabled modules, never a static list.
+  const quickActions = user?.commandPaletteEnabled !== false
+    ? QUICK_CREATE_ACTIONS.filter(a =>
+        (user?.commandPaletteActions || []).includes(a.module) &&
+        !(user?.disabledModules || []).includes(a.module)
+      )
+    : []
+
+  function openQuickCreate(moduleId) {
+    onClose()
+    navigate(quickCreateUrl(moduleId))
+  }
+
   function openResult(r) {
     onClose()
     if (r._workspace !== workspace) {
@@ -162,7 +178,28 @@ export default function GlobalSearch({ onClose }) {
         )}
         <div className="space-y-3 max-h-[50vh] overflow-y-auto">
           {!hasQuery && (
-            <p className="text-sm text-charcoal-400 py-2">Type to search, or filter by a tag above.</p>
+            <>
+              <p className="text-sm text-charcoal-400 py-2">Type to search, or filter by a tag above.</p>
+              {quickActions.length > 0 && (
+                <div className="pb-2">
+                  <p className="px-1 py-1 text-xs font-semibold uppercase tracking-wide text-charcoal-500 dark:text-charcoal-400">
+                    Create new
+                  </p>
+                  <div className="flex flex-wrap gap-2 px-1">
+                    {quickActions.map(action => (
+                      <button
+                        key={action.module}
+                        type="button"
+                        onClick={() => openQuickCreate(action.module)}
+                        className="px-3 py-1.5 rounded-lg border border-charcoal-200 dark:border-charcoal-700 text-xs hover:border-orange-500 hover:text-orange-500 transition-colors"
+                      >
+                        + {action.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
           {hasQuery && !loading && results.length === 0 && (
             <p className="text-sm text-charcoal-400 py-2">No results found.</p>

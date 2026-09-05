@@ -57,6 +57,15 @@ export default function Tasks() {
     setSearchParams(searchParams, { replace: true })
   }, [loading, taskList, searchParams, setSearchParams])
 
+  // Item #3, 2026-09-04 UX Polish Batch — command palette "create" mode.
+  useEffect(() => {
+    if (searchParams.get('create') !== '1') return
+    setEditTask(null)
+    setShowModal(true)
+    searchParams.delete('create')
+    setSearchParams(searchParams, { replace: true })
+  }, [searchParams, setSearchParams])
+
   async function load() {
     setLoading(true)
     const [all, prio, pool, assetsRes] = await Promise.allSettled([

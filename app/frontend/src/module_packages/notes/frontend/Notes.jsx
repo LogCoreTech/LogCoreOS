@@ -255,6 +255,16 @@ export default function Notes() {
     setSearchParams(searchParams, { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, searchParams])
+
+  // Item #3, 2026-09-04 UX Polish Batch — command palette "create" mode.
+  useEffect(() => {
+    if (searchParams.get('create') !== '1') return
+    setModalInput('')
+    openModal('newNote')
+    searchParams.delete('create')
+    setSearchParams(searchParams, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
   const [overFolder, setOverFolder] = useState(null)   // folder path ('' = root) under the pointer
   const autoSaveTimer = useRef(null)
   const textareaRef = useRef(null)

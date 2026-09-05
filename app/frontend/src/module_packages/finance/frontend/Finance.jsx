@@ -114,6 +114,17 @@ export default function Finance() {
     setSearchParams({}, { replace: true })
   }, [searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Item #3, 2026-09-04 UX Polish Batch — command palette "+ New Transaction".
+  // Waits for a real book to resolve first (the load()/deep-link effects
+  // above) — TransactionModal always needs an active book, and one isn't
+  // guaranteed yet on the very first render.
+  useEffect(() => {
+    if (searchParams.get('create') !== '1' || !active) return
+    setTxModal({ tx: null })
+    searchParams.delete('create')
+    setSearchParams(searchParams, { replace: true })
+  }, [searchParams, active]) // eslint-disable-line react-hooks/exhaustive-deps
+
   function selectBook(id) {
     setActiveId(id)
     setView('overview')

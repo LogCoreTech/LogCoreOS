@@ -534,11 +534,6 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
   // which is always cross-workspace and forced server-side regardless).
   const [keepPersonal, setKeepPersonal] = useState(false)
 
-  // fullPage means this isn't rendered as a .modal-overlay at all (see
-  // shellClass below) — it's a normal page (Profile.jsx), so Escape has
-  // nothing to dismiss and shouldn't trigger onClose.
-  useEscapeToClose(() => { if (!fullPage) onClose() })
-
   useEffect(() => {
     const pool = editing ? isPoolContact : !keepPersonal
     tagsApi.list(pool).then(r => setTagSuggestions(r.tags || [])).catch(() => setTagSuggestions([]))
@@ -550,6 +545,43 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
+
+  // Item #9, 2026-09-04 UX Polish Batch — warn before discarding unsaved
+  // changes. Captured once at mount, combining every separate useState slot
+  // that together makes up this contact's editable record. Excludes
+  // photoExt/affiliatedIds/affiliatedContacts — those already persist
+  // immediately via their own dedicated endpoints (see PhotoUploader/
+  // AffiliationEditor above), so closing the modal never loses them.
+  const snapshot = () => JSON.stringify({
+    form, phones, careerHistory, locations, hours, coreValues, tags,
+    hiddenSections, priorityOrder, keepPersonal, crossWorkspace,
+  })
+  const [initialFormJson] = useState(snapshot)
+  const hasUnsavedChanges = snapshot() !== initialFormJson
+
+  function confirmDiscard(onConfirm) {
+    setConfirmState({
+      title: 'Discard changes?',
+      message: 'You have unsaved changes. Discard them?',
+      confirmLabel: 'Discard',
+      danger: true,
+      onConfirm: () => { setConfirmState(null); onConfirm() },
+    })
+  }
+
+  function attemptClose() {
+    if (hasUnsavedChanges) confirmDiscard(onClose)
+    else onClose()
+  }
+
+  // fullPage means this isn't rendered as a .modal-overlay at all (see
+  // shellClass below) — it's a normal page (Profile.jsx), so Escape has
+  // nothing to dismiss and shouldn't trigger onClose.
+  useEscapeToClose(() => { if (!fullPage) attemptClose() }, {
+    hasUnsavedChanges,
+    onUnsavedAttempt: () => confirmDiscard(onClose),
+  })
+
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const setCustom = (k, v) => setForm(f => ({ ...f, custom: { ...f.custom, [k]: v } }))
   const splitList = s => s.split(',').map(x => x.trim()).filter(Boolean)
@@ -701,7 +733,7 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
   const body = (
     <>
       {fullPage ? (
-        <button type="button" onClick={onClose} className="text-sm text-charcoal-500 hover:text-orange-500 transition-colors mb-2">← Back</button>
+        <button type="button" onClick={attemptClose} className="text-sm text-charcoal-500 hover:text-orange-500 transition-colors mb-2">← Back</button>
       ) : null}
       <h3 className="font-semibold mb-4">{editing ? 'Edit contact' : 'New contact'}</h3>
       <form onSubmit={submit} className="space-y-3">
@@ -984,7 +1016,7 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
               → {workspace === 'business' ? 'Team' : 'Household'}
             </button>
           )}
-          <button type="button" onClick={onClose} className="btn-ghost flex-1">Cancel</button>
+          <button type="button" onClick={attemptClose} className="btn-ghost flex-1">Cancel</button>
           <button type="submit" disabled={busy || hasInvalidEmail} className="btn-primary flex-1">{busy ? 'Saving…' : 'Save'}</button>
         </div>
         {/* fullPage renders as normal page content inside <main>, which the

@@ -42,11 +42,38 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
   const [tagSuggestions, setTagSuggestions] = useState([])
   const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
 
+  // Item #9, 2026-09-04 UX Polish Batch — warn before discarding unsaved
+  // changes. Captured once at mount (not on every task/defaultType change)
+  // so a real edit always compares against the form's true starting point.
+  const [initialFormJson] = useState(() => JSON.stringify(form))
+  const hasUnsavedChanges = mode === 'edit' && JSON.stringify(form) !== initialFormJson
+
+  function confirmDiscard(onConfirm) {
+    setConfirmState({
+      title: 'Discard changes?',
+      message: 'You have unsaved changes. Discard them?',
+      confirmLabel: 'Discard',
+      danger: true,
+      onConfirm: () => { setConfirmState(null); onConfirm() },
+    })
+  }
+
+  // The X button's own close attempt — Escape uses the same guard via
+  // useEscapeToClose's onUnsavedAttempt below, Cancel has its own (it may
+  // return to view mode instead of a full close, see handleCancel).
+  function attemptClose() {
+    if (hasUnsavedChanges) confirmDiscard(onClose)
+    else onClose()
+  }
+
   // Guarded by mode: in 'view' mode this component renders TaskView instead
   // of its own modal-overlay below (see the early return past the effects),
   // and TaskView.jsx wires its own useEscapeToClose(onClose) — this one only
   // needs to fire while TaskModal's own edit-form overlay is what's showing.
-  useEscapeToClose(mode === 'view' ? () => {} : onClose)
+  useEscapeToClose(mode === 'view' ? () => {} : onClose, {
+    hasUnsavedChanges,
+    onUnsavedAttempt: () => confirmDiscard(onClose),
+  })
 
   // A pool context is identified by a saveApi override (household's/team's
   // own client) being passed in — mirrors how goal_id linking already tells
@@ -154,10 +181,12 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
 
   // Cancel returns to the view for an existing task (matching
   // AssetModal.jsx's own handleCancel exactly); a brand-new task has no
-  // view to return to, so it just closes.
+  // view to return to, so it just closes. Item #9: guarded the same way as
+  // Escape/X when there are unsaved changes.
   function handleCancel() {
-    if (editing) setMode('view')
-    else onClose()
+    const proceed = () => { if (editing) setMode('view'); else onClose() }
+    if (hasUnsavedChanges) confirmDiscard(proceed)
+    else proceed()
   }
 
   if (mode === 'view' && task) {
@@ -179,7 +208,7 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
       <div className="modal-card p-5 max-w-sm">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">{editing ? 'Edit Task' : 'Add Task'}</h2>
-          <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+          <button onClick={attemptClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
         </div>
 
         <form onSubmit={submit} className="space-y-4">

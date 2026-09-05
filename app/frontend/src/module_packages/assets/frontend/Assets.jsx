@@ -180,6 +180,14 @@ export default function Assets() {
     setSearchParams(searchParams, { replace: true })
   }, [loaded, items, searchParams, setSearchParams])
 
+  // Item #3, 2026-09-04 UX Polish Batch — command palette "create" mode.
+  useEffect(() => {
+    if (searchParams.get('create') !== '1') return
+    setModal({ creating: true })
+    searchParams.delete('create')
+    setSearchParams(searchParams, { replace: true })
+  }, [searchParams, setSearchParams])
+
   async function load() {
     setError('')
     try {

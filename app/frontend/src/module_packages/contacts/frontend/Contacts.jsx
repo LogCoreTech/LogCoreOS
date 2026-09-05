@@ -89,6 +89,14 @@ export default function Contacts() {
     setSearchParams(searchParams, { replace: true })
   }, [loading, items, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Item #3, 2026-09-04 UX Polish Batch — command palette "create" mode.
+  useEffect(() => {
+    if (searchParams.get('create') !== '1') return
+    setModal({})
+    searchParams.delete('create')
+    setSearchParams(searchParams, { replace: true })
+  }, [searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const q = search.trim().toLowerCase()
   const matches = c => (!q ||
     (c.name || '').toLowerCase().includes(q) ||

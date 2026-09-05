@@ -192,11 +192,42 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
   const [commentsOff, setCommentsOff] = useState(!!asset?.comments_hidden)
   const [shareScope, setShareScope] = useState('all') // 'all' = cascade to children, 'one' = this node only
 
+  // Item #9, 2026-09-04 UX Polish Batch — warn before discarding unsaved
+  // changes. Captured once at mount. Includes customFieldDefs (a blank
+  // asset's own field definitions, not part of `form`) and access/shareScope
+  // (sharing edits are only persisted when Save is pressed — see the
+  // "Sharing is saved when you press Save below" note further down — so
+  // losing them here is real data loss too, unlike archive/comments-toggle
+  // which already call the API immediately).
+  const [initialFormJson] = useState(() => JSON.stringify({ form, customFieldDefs, access, shareScope }))
+  const hasUnsavedChanges = mode === 'edit' && JSON.stringify({ form, customFieldDefs, access, shareScope }) !== initialFormJson
+
+  function confirmDiscard(onConfirm) {
+    setConfirmState({
+      title: 'Discard changes?',
+      message: 'You have unsaved changes. Discard them?',
+      confirmLabel: 'Discard',
+      danger: true,
+      onConfirm: () => { setConfirmState(null); onConfirm() },
+    })
+  }
+
+  // The X button's own close attempt — Escape uses the same guard via
+  // useEscapeToClose's onUnsavedAttempt below, Cancel has its own (it may
+  // return to view mode instead of a full close, see handleCancel).
+  function attemptClose() {
+    if (hasUnsavedChanges) confirmDiscard(onClose)
+    else onClose()
+  }
+
   // Guarded by mode: in 'view' mode this renders AssetView instead of the
   // editor overlay below (see the early return further down), and
   // AssetView.jsx wires its own useEscapeToClose(onClose) — this one only
   // needs to fire while THIS component's own editor overlay is showing.
-  useEscapeToClose(mode === 'view' ? () => {} : onClose)
+  useEscapeToClose(mode === 'view' ? () => {} : onClose, {
+    hasUnsavedChanges,
+    onUnsavedAttempt: () => confirmDiscard(onClose),
+  })
   // The archive-confirmation overlay stacks on top of the editor overlay
   // above (both render simultaneously, like the confirmState/ConfirmDialog
   // popup below) — its own Escape close is independent of the editor's.
@@ -278,9 +309,11 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
 
   // Cancel out of the editor: an existing asset was opened in the read view, so
   // return there; a brand-new (or just-created) asset closes the modal.
+  // Item #9: guarded the same way as Escape/X when there are unsaved changes.
   function handleCancel() {
-    if (initialAsset) setMode('view')
-    else onClose()
+    const proceed = () => { if (initialAsset) setMode('view'); else onClose() }
+    if (hasUnsavedChanges) confirmDiscard(proceed)
+    else proceed()
   }
 
   // Parent options: same-store assets only, excluding self and own descendants
@@ -557,7 +590,7 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
               </span>
             )}
           </h2>
-          <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+          <button onClick={attemptClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
         </div>
 
         <form onSubmit={submit} className="space-y-4">

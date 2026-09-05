@@ -75,6 +75,15 @@ export default function Calendar() {
     setSearchParams(searchParams, { replace: true })
   }, [loading, events, searchParams, setSearchParams])
 
+  // Item #3, 2026-09-04 UX Polish Batch — command palette "create" mode.
+  useEffect(() => {
+    if (searchParams.get('create') !== '1') return
+    setEditEvent(null)
+    setShowEventModal(true)
+    searchParams.delete('create')
+    setSearchParams(searchParams, { replace: true })
+  }, [searchParams, setSearchParams])
+
   const poolEventApi = {
     add:    body       => poolApi.addSharedEvent(body),
     update: (id, body) => poolApi.updateSharedEvent(id, body),

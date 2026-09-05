@@ -10,6 +10,7 @@ import GoalPicker from './GoalPicker'
 import RecurrenceLog from '../../../components/RecurrenceLog'
 import HistoryCalendar from '../../../components/HistoryCalendar'
 import MetricGraph from '../../../components/MetricGraph'
+import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 
 const METRIC_LOG_LEGEND = [{ colorClass: 'bg-orange-500', label: 'Logged value' }]
@@ -77,7 +78,36 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
   const [manualValue, setManualValue] = useState('')
   const [expandedHistory, setExpandedHistory] = useState(new Set())
   const [metricView, setMetricView] = useState('graph')
-  useEscapeToClose(onClose)
+  const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
+
+  // Item #9, 2026-09-04 UX Polish Batch — warn before discarding unsaved
+  // changes. Unlike TaskModal/AssetModal (which get the full record
+  // synchronously via props), an existing goal's real form data only lands
+  // after load()'s async fetch resolves — so the baseline is (re-)captured
+  // inside load() itself below, not at raw mount, or every existing goal
+  // would read as "changed" the instant Edit is pressed.
+  const [initialFormJson, setInitialFormJson] = useState(() => JSON.stringify(form))
+  const hasUnsavedChanges = editing && JSON.stringify(form) !== initialFormJson
+
+  function confirmDiscard(onConfirm) {
+    setConfirmState({
+      title: 'Discard changes?',
+      message: 'You have unsaved changes. Discard them?',
+      confirmLabel: 'Discard',
+      danger: true,
+      onConfirm: () => { setConfirmState(null); onConfirm() },
+    })
+  }
+
+  function attemptClose() {
+    if (hasUnsavedChanges) confirmDiscard(onClose)
+    else onClose()
+  }
+
+  useEscapeToClose(onClose, {
+    hasUnsavedChanges,
+    onUnsavedAttempt: () => confirmDiscard(onClose),
+  })
   useEscapeToClose(() => setShowDelete(false))
 
   function toggleHistory(taskId) {
@@ -95,7 +125,7 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
     try {
       const d = await goalsApi.get(goalId, pool)
       setDetail(d)
-      setForm({
+      const loaded = {
         title: d.goal.title,
         notes: d.goal.notes || '',
         category: d.goal.category || '',
@@ -103,7 +133,9 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
         parent_id: d.goal.parent_id,
         metric: d.goal.metric || null,
         tags: d.goal.tags || [],
-      })
+      }
+      setForm(loaded)
+      setInitialFormJson(JSON.stringify(loaded))
     } finally {
       setLoading(false)
     }
@@ -146,6 +178,17 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
     } finally {
       setSaving(false)
     }
+  }
+
+  // Cancel out of the edit form: an existing goal returns to its read view
+  // (mirrors TaskModal/AssetModal's own handleCancel); a brand-new goal has
+  // no view to return to, but it also has no Cancel button (see the
+  // `{detail && ...}` guard around it below), so this only ever needs the
+  // "return to view" branch. Item #9: guarded when there are unsaved edits.
+  function handleCancelEdit() {
+    const proceed = () => setEditing(false)
+    if (hasUnsavedChanges) confirmDiscard(proceed)
+    else proceed()
   }
 
   async function toggleDone() {
@@ -208,11 +251,11 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
 
   return (
     <Portal>
-      <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-overlay" onClick={attemptClose}>
         <div className="modal-card max-w-lg max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold">{goalId ? (editing ? 'Edit Goal' : goal?.title) : 'New Goal'}</h2>
-            <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-600">✕</button>
+            <button onClick={attemptClose} className="text-charcoal-400 hover:text-charcoal-600">✕</button>
           </div>
 
           {loading ? (
@@ -245,7 +288,7 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
               <MetricPicker value={form.metric} onChange={m => setForm({ ...form, metric: m })} />
               {error && <p className="text-sm text-red-500">{error}</p>}
               <div className="flex justify-end gap-2 pt-2">
-                {detail && <button type="button" className="btn-ghost" onClick={() => setEditing(false)}>Cancel</button>}
+                {detail && <button type="button" className="btn-ghost" onClick={handleCancelEdit}>Cancel</button>}
                 <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
               </div>
             </form>
@@ -481,6 +524,19 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
                   </div>
                 </div>
               </div>
+            </Portal>
+          )}
+
+          {confirmState && (
+            <Portal>
+              <ConfirmDialog
+                title={confirmState.title}
+                message={confirmState.message}
+                danger={confirmState.danger}
+                confirmLabel={confirmState.confirmLabel}
+                onConfirm={confirmState.onConfirm}
+                onCancel={() => setConfirmState(null)}
+              />
             </Portal>
           )}
         </div>

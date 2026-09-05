@@ -67,6 +67,14 @@ export const MODULE_SECTIONS = {
   ],
 }
 
+// Item #3, 2026-09-04 UX Polish Batch — the command palette's "create" mode.
+// One fixed literal query key works for every module (unlike RECORD_PARAM,
+// which varies per module since it also carries an id) — a create link never
+// carries an id at all.
+export function quickCreateUrl(module) {
+  return `${MODULE_ROUTES[module] || '/'}?create=1`
+}
+
 export function deepLinkUrl(module, recordId, section) {
   // Settings isn't a real module (no ALL_MODULES entry, no require_module
   // gate) and its sections are already full paths, not a query-param view —

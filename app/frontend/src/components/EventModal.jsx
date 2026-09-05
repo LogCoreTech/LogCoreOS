@@ -45,7 +45,32 @@ export default function EventModal({ event, defaultDate, onClose, onSave, saveAp
   const [tagSuggestions, setTagSuggestions] = useState([])
   const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
 
-  useEscapeToClose(onClose)
+  // Item #9, 2026-09-04 UX Polish Batch — warn before discarding unsaved
+  // changes. Captured once at mount (shareToPool included since it's a real
+  // save-destination choice, not just UI state) so a real edit always
+  // compares against the form's true starting point.
+  const [initialFormJson] = useState(() => JSON.stringify({ form, shareToPool }))
+  const hasUnsavedChanges = JSON.stringify({ form, shareToPool }) !== initialFormJson
+
+  function confirmDiscard(onConfirm) {
+    setConfirmState({
+      title: 'Discard changes?',
+      message: 'You have unsaved changes. Discard them?',
+      confirmLabel: 'Discard',
+      danger: true,
+      onConfirm: () => { setConfirmState(null); onConfirm() },
+    })
+  }
+
+  function attemptClose() {
+    if (hasUnsavedChanges) confirmDiscard(onClose)
+    else onClose()
+  }
+
+  useEscapeToClose(onClose, {
+    hasUnsavedChanges,
+    onUnsavedAttempt: () => confirmDiscard(onClose),
+  })
 
   useEffect(() => {
     const pool = !!isHouseholdEvent || shareToPool
@@ -151,7 +176,7 @@ export default function EventModal({ event, defaultDate, onClose, onSave, saveAp
               </span>
             )}
           </div>
-          <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+          <button onClick={attemptClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
         </div>
 
         <form onSubmit={submit} className="space-y-4">
@@ -289,7 +314,7 @@ export default function EventModal({ event, defaultDate, onClose, onSave, saveAp
                 Duplicate
               </button>
             )}
-            <button type="button" onClick={onClose} className="btn-ghost flex-1">Cancel</button>
+            <button type="button" onClick={attemptClose} className="btn-ghost flex-1">Cancel</button>
             <button type="submit" disabled={loading} className="btn-primary flex-1">
               {loading ? 'Saving…' : editing ? 'Save Changes' : shareToPool ? `Add to ${poolLabel}` : 'Add Event'}
             </button>
