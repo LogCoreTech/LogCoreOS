@@ -208,7 +208,7 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
       <div className="modal-card p-5 max-w-sm">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">{editing ? 'Edit Task' : 'Add Task'}</h2>
-          <button onClick={attemptClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+          <button onClick={attemptClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
         </div>
 
         <form onSubmit={submit} className="space-y-4">

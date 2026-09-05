@@ -90,7 +90,7 @@ export default function ContactFields() {
           </p>
         </div>
 
-        {loading ? (
+        {loading && fields.length === 0 ? (
           <p className="text-sm text-charcoal-400">Loading…</p>
         ) : (
           <div className="space-y-2">
@@ -119,7 +119,7 @@ export default function ContactFields() {
                   </select>
                   <button type="button" onClick={() => moveField(i, -1)} className="text-charcoal-400 hover:text-orange-500 px-0.5" title="Move up">↑</button>
                   <button type="button" onClick={() => moveField(i, 1)} className="text-charcoal-400 hover:text-orange-500 px-0.5" title="Move down">↓</button>
-                  <button type="button" onClick={() => removeField(i)} className="text-red-400 hover:text-red-500 px-0.5">✕</button>
+                  <button type="button" onClick={() => removeField(i)} aria-label="Remove field" className="text-red-400 hover:text-red-500 px-0.5">✕</button>
                 </div>
                 {f.type === 'select' && (
                   <TagInput value={f.options || []} onChange={options => setField(i, { options })} placeholder="Add an option…" />

@@ -196,7 +196,7 @@ export default function ContactDetail({ contact, fields, pipeline, user, onClose
           </div>
           <div className="flex gap-2 shrink-0">
             {canEdit && <button onClick={onEdit} className="btn-ghost text-sm">✎ Edit</button>}
-            {!fullPage && <button onClick={onClose} className="btn-ghost text-sm">✕</button>}
+            {!fullPage && <button onClick={onClose} aria-label="Close" className="btn-ghost text-sm">✕</button>}
           </div>
         </div>
 

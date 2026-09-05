@@ -89,7 +89,7 @@ function CustomFieldsEditor({ defs, onDefsChange, fields, onFieldsChange }) {
               <select value={def.type} onChange={e => updateDef(i, { type: e.target.value })} className="input !py-1 !w-24">
                 {FIELD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
-              <button type="button" onClick={() => remove(i)} className="text-charcoal-400 hover:text-red-500 text-sm px-1 shrink-0">✕</button>
+              <button type="button" onClick={() => remove(i)} aria-label="Remove" className="text-charcoal-400 hover:text-red-500 text-sm px-1 shrink-0">✕</button>
             </div>
             {def.type === 'select' && (
               <TagInput value={def.options || []} onChange={options => updateDef(i, { options })} placeholder="Add an option…" />
@@ -590,7 +590,7 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
               </span>
             )}
           </h2>
-          <button onClick={attemptClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+          <button onClick={attemptClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
         </div>
 
         <form onSubmit={submit} className="space-y-4">
@@ -729,7 +729,7 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
                 {orphanedKeys.map(k => (
                   <div key={k} className="flex items-center gap-2">
                     <span className="truncate">{k}: {String(form.fields[k])}</span>
-                    <button type="button" onClick={() => setFieldValue(k, null)} className="text-red-400 hover:text-red-500" title="Remove leftover value">✕</button>
+                    <button type="button" onClick={() => setFieldValue(k, null)} className="text-red-400 hover:text-red-500" title="Remove leftover value" aria-label="Remove leftover value">✕</button>
                   </div>
                 ))}
               </div>
@@ -865,7 +865,7 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
                           <option value="contribute">contribute</option>
                           <option value="edit">edit</option>
                         </select>
-                        <button type="button" onClick={() => setAccess(a => ({ ...a, shared_with: a.shared_with.filter((_, j) => j !== i) }))} className="text-red-400 hover:text-red-500">✕</button>
+                        <button type="button" onClick={() => setAccess(a => ({ ...a, shared_with: a.shared_with.filter((_, j) => j !== i) }))} aria-label="Remove" className="text-red-400 hover:text-red-500">✕</button>
                       </div>
                       {s.access === 'contribute' && (
                         <CapsSelector
@@ -897,7 +897,7 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
                           <option value={groupTarget}>{groupTarget === 'team' ? '🧑‍🤝‍🧑 Whole team' : '🏠 Whole household'}</option>
                           {members.filter(m => m !== user?.name).map(m => <option key={m} value={m}>{m}</option>)}
                         </select>
-                        <button type="button" onClick={() => setAccess(a => ({ ...a, contributors: a.contributors.filter((_, j) => j !== i) }))} className="text-red-400 hover:text-red-500">✕</button>
+                        <button type="button" onClick={() => setAccess(a => ({ ...a, contributors: a.contributors.filter((_, j) => j !== i) }))} aria-label="Remove" className="text-red-400 hover:text-red-500">✕</button>
                       </div>
                       <CapsSelector
                         caps={c.caps}

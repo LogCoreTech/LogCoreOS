@@ -153,7 +153,7 @@ export default function RecurringPanel({ book, canEdit }) {
                       <button onClick={() => toggleActive(item)} className="btn-ghost text-xs px-1.5" title={item.active ? 'Pause' : 'Resume'}>
                         {item.active ? '⏸' : '▶'}
                       </button>
-                      <button onClick={() => openForm(item)} className="btn-ghost text-xs px-1.5">✎</button>
+                      <button onClick={() => openForm(item)} aria-label="Edit" className="btn-ghost text-xs px-1.5">✎</button>
                       <button onClick={() => removeItem(item)} className="btn-ghost text-xs px-1.5 text-red-500">×</button>
                     </div>
                   )}

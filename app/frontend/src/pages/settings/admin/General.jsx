@@ -514,7 +514,7 @@ function ResyncModal({ onClose, onQueued, flash, currentVersion, latestVersion }
       <div className="modal-card max-w-lg" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold">Fix Update Divergence</h2>
-          <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-600">✕</button>
+          <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-600">✕</button>
         </div>
 
         <div className="space-y-3 text-sm">

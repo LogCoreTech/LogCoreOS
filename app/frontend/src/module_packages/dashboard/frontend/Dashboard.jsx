@@ -358,7 +358,7 @@ export default function Dashboard() {
 
       {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
 
-      {loading ? (
+      {loading && !current ? (
         <div className="space-y-3">
           {[1, 2, 3].map(i => <div key={i} className="h-24 bg-charcoal-100 dark:bg-charcoal-700 rounded-lg animate-pulse" />)}
         </div>

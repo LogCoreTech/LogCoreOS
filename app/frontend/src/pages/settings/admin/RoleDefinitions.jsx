@@ -177,7 +177,7 @@ export default function RoleDefinitions() {
           </form>
         )}
 
-        {loading ? (
+        {loading && roles.length === 0 ? (
           <p className="text-sm text-charcoal-400">Loading…</p>
         ) : (
           <div className="space-y-2">

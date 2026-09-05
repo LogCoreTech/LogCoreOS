@@ -60,7 +60,7 @@ function PhoneEditor({ phones, onChange }) {
           <input className="input !w-16 shrink-0" placeholder="ext." maxLength={6}
             value={p.extension || ''}
             onChange={e => update(i, { extension: e.target.value.replace(/\D/g, '').slice(0, 6) })} />
-          <button type="button" onClick={() => remove(i)} className="text-charcoal-400 hover:text-red-500 text-sm px-1 shrink-0">✕</button>
+          <button type="button" onClick={() => remove(i)} aria-label="Remove" className="text-charcoal-400 hover:text-red-500 text-sm px-1 shrink-0">✕</button>
         </div>
       ))}
       <button type="button" onClick={add} className="text-sm text-orange-500 hover:text-orange-600 font-medium">+ Add phone</button>
@@ -337,7 +337,7 @@ function LocationsEditor({ locations, onChange }) {
             value={l.label || ''} onChange={e => update(i, { label: e.target.value })} />
           <input className="input flex-1 min-w-0" placeholder="Address"
             value={l.address || ''} onChange={e => update(i, { address: e.target.value })} />
-          <button type="button" onClick={() => remove(i)} className="text-charcoal-400 hover:text-red-500 text-sm px-1 shrink-0">✕</button>
+          <button type="button" onClick={() => remove(i)} aria-label="Remove" className="text-charcoal-400 hover:text-red-500 text-sm px-1 shrink-0">✕</button>
         </div>
       ))}
       <button type="button" onClick={add} className="text-sm text-orange-500 hover:text-orange-600 font-medium">+ Add location</button>
@@ -426,7 +426,7 @@ function PrioritiesEditor({ order, workspace, onChange }) {
             <span className="flex-1 min-w-0 truncate">{cat}</span>
             <button type="button" onClick={() => move(i, i - 1)} disabled={i === 0} className="text-charcoal-400 hover:text-orange-500 disabled:opacity-20 text-xs px-1">▲</button>
             <button type="button" onClick={() => move(i, i + 1)} disabled={i === order.length - 1} className="text-charcoal-400 hover:text-orange-500 disabled:opacity-20 text-xs px-1">▼</button>
-            <button type="button" onClick={() => removeCat(cat)} disabled={order.length <= 1} className="text-charcoal-400 hover:text-red-500 disabled:opacity-20 text-xs">✕</button>
+            <button type="button" onClick={() => removeCat(cat)} disabled={order.length <= 1} aria-label="Remove" className="text-charcoal-400 hover:text-red-500 disabled:opacity-20 text-xs">✕</button>
           </li>
         ))}
       </ul>

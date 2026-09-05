@@ -97,7 +97,7 @@ export default function GoalPicker({ value, onChange, excludeId, pool = false, l
           onFocus={() => setOpen(true)}
         />
         {value && (
-          <button type="button" className="btn-ghost px-2 text-xs shrink-0" onClick={clear}>✕</button>
+          <button type="button" className="btn-ghost px-2 text-xs shrink-0" onClick={clear} aria-label="Clear">✕</button>
         )}
       </div>
       {open && matches.length > 0 && (

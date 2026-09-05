@@ -93,7 +93,7 @@ export default function InvoicesPanel({ book, canEdit, assets, prefill, onPrefil
           <button onClick={() => setInvoiceModal({ invoice: null })} className="btn-primary text-xs shrink-0">
             Continue
           </button>
-          <button onClick={onPrefillConsumed} className="btn-ghost text-xs shrink-0" title="Dismiss">✕</button>
+          <button onClick={onPrefillConsumed} className="btn-ghost text-xs shrink-0" title="Dismiss" aria-label="Dismiss">✕</button>
         </div>
       )}
 

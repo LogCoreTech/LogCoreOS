@@ -151,6 +151,7 @@ export default function Shortcuts() {
                     <span className="flex-1 text-sm">{mod.label}</span>
                     <button
                       onClick={() => toggleShortcut(ws, id)}
+                      aria-label="Remove shortcut"
                       className="text-charcoal-400 hover:text-red-500 text-xs"
                     >✕</button>
                     <span className="text-charcoal-300 dark:text-charcoal-600">⠿</span>

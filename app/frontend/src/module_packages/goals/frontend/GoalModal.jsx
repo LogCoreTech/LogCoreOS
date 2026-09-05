@@ -255,7 +255,7 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
         <div className="modal-card max-w-lg max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold">{goalId ? (editing ? 'Edit Goal' : goal?.title) : 'New Goal'}</h2>
-            <button onClick={attemptClose} className="text-charcoal-400 hover:text-charcoal-600">✕</button>
+            <button onClick={attemptClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-600">✕</button>
           </div>
 
           {loading ? (
@@ -408,7 +408,7 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
                   <div className="flex gap-2 items-end mt-2">
                     <div className="flex-1"><GoalPicker label="Pick a goal to move under this one" value={linkGoalId} onChange={setLinkGoalId} excludeId={goalId} pool={pool} /></div>
                     <button className="btn-ghost text-xs px-2 py-2" onClick={linkExistingGoal}>Link</button>
-                    <button className="btn-ghost text-xs px-2 py-2" onClick={() => { setShowSubgoalLink(false); setLinkGoalId(null) }}>✕</button>
+                    <button className="btn-ghost text-xs px-2 py-2" onClick={() => { setShowSubgoalLink(false); setLinkGoalId(null) }} aria-label="Cancel">✕</button>
                   </div>
                 )}
               </div>
@@ -565,7 +565,7 @@ function TaskLinkPicker({ pool, workspace, value, onChange, onLink, onCancel }) 
         {listFn && <TaskPicker label="Pick a task" value={value} onChange={onChange} listFn={listFn} />}
       </div>
       <button className="btn-ghost text-xs px-2 py-2" onClick={onLink}>Link</button>
-      <button className="btn-ghost text-xs px-2 py-2" onClick={onCancel}>✕</button>
+      <button className="btn-ghost text-xs px-2 py-2" onClick={onCancel} aria-label="Cancel">✕</button>
     </div>
   )
 }

@@ -191,7 +191,7 @@ function NoteShareModal({ node, onClose, onSaved }) {
       <div className="modal-card p-5 max-w-sm">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">Share &ldquo;{node.name}&rdquo;</h2>
-          <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+          <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
         </div>
         <div className="space-y-3">
           <p className="text-xs text-charcoal-500 dark:text-charcoal-400">
@@ -633,7 +633,7 @@ export default function Notes() {
           dragActive && overFolder === '' ? 'ring-2 ring-inset ring-orange-500/60 rounded-lg' : ''
         }`}
       >
-        {loading ? (
+        {loading && tree.length === 0 ? (
           <div className="space-y-1 px-2">
             {[1,2,3].map(i => <div key={i} className="h-8 rounded-lg bg-charcoal-100 dark:bg-charcoal-800 animate-pulse" />)}
           </div>
@@ -792,7 +792,7 @@ export default function Notes() {
           <div className="modal-card p-5 max-w-sm">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold">New Note</h2>
-              <button onClick={() => setModal(null)} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+              <button onClick={() => setModal(null)} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
             </div>
             <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-2">
               {selectedPath && items.find(i => i.path === selectedPath && i.type === 'folder')
@@ -823,7 +823,7 @@ export default function Notes() {
           <div className="modal-card p-5 max-w-sm">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold">New Folder</h2>
-              <button onClick={() => setModal(null)} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+              <button onClick={() => setModal(null)} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
             </div>
             <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-2">
               {selectedPath && items.find(i => i.path === selectedPath && i.type === 'folder')
@@ -854,7 +854,7 @@ export default function Notes() {
           <div className="modal-card p-5 max-w-sm">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold">Rename {modal.item?.type === 'folder' ? 'Folder' : 'Note'}</h2>
-              <button onClick={() => setModal(null)} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+              <button onClick={() => setModal(null)} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
             </div>
             <input
               autoFocus
@@ -879,7 +879,7 @@ export default function Notes() {
           <div className="modal-card p-5 max-w-sm">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold">Move Note</h2>
-              <button onClick={() => setModal(null)} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+              <button onClick={() => setModal(null)} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
             </div>
             <p className="text-sm text-charcoal-600 dark:text-charcoal-300 mb-2">
               Move <strong>{modal.item?.name}</strong> to:
@@ -911,7 +911,7 @@ export default function Notes() {
           <div className="modal-card p-5 max-w-sm">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold">Delete Note?</h2>
-              <button onClick={() => setModal(null)} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+              <button onClick={() => setModal(null)} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
             </div>
             <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mb-4">
               <strong>{modal.item?.path}</strong> will be permanently deleted.
@@ -932,7 +932,7 @@ export default function Notes() {
           <div className="modal-card p-5 max-w-sm">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold">Delete Folder?</h2>
-              <button onClick={() => setModal(null)} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+              <button onClick={() => setModal(null)} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
             </div>
             <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mb-4">
               <strong>{modal.item?.path}</strong> and all its contents will be permanently deleted.

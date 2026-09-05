@@ -200,7 +200,7 @@ export default function Goals() {
         </button>
       )}
 
-      {loading ? (
+      {loading && filtered.length === 0 ? (
         <div className="space-y-2">
           {[1, 2, 3].map(i => <div key={i} className="h-16 bg-charcoal-100 dark:bg-charcoal-800 rounded-lg animate-pulse" />)}
         </div>

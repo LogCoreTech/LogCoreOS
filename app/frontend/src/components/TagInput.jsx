@@ -60,7 +60,7 @@ export default function TagInput({
             className="inline-flex items-center gap-1 bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 text-xs px-2 py-0.5 rounded-full"
           >
             {tag}
-            <button type="button" onClick={() => removeAt(i)} className="hover:text-red-500">✕</button>
+            <button type="button" onClick={() => removeAt(i)} aria-label="Remove tag" className="hover:text-red-500">✕</button>
           </span>
         ))}
         <input

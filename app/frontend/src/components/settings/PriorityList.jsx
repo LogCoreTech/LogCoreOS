@@ -42,7 +42,7 @@ export default function PriorityList({ label, pool, setter, newVal, setNewVal, d
                 className="text-charcoal-400 hover:text-orange-500 disabled:opacity-20 leading-none px-1 text-xs">▼</button>
             </div>
             <button type="button" onClick={() => poolRemove(pool, setter, cat)} disabled={pool.length <= 1}
-              className="text-charcoal-400 hover:text-red-500 disabled:opacity-20 text-xs shrink-0">✕</button>
+              aria-label="Remove category" className="text-charcoal-400 hover:text-red-500 disabled:opacity-20 text-xs shrink-0">✕</button>
             <span className="text-charcoal-300 dark:text-charcoal-600 cursor-grab hidden md:block">⠿</span>
           </li>
         ))}

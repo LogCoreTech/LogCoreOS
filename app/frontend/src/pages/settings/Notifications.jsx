@@ -520,6 +520,7 @@ export default function Notifications() {
                         </button>
                         <button
                           onClick={() => deleteCustomSug(s.id)}
+                          aria-label="Delete"
                           className="text-xs text-red-400 hover:text-red-500"
                         >✕</button>
                       </div>

@@ -127,7 +127,7 @@ export default function TaskView({ task, canEdit, saveApi, onEdit, onClose, onDe
       <div className="modal-card p-5 max-w-sm max-h-[85vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">{task.title}</h2>
-          <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+          <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
         </div>
 
         <div className="space-y-4">

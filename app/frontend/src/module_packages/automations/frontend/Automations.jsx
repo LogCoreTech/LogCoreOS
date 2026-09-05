@@ -56,7 +56,7 @@ function InboxItemRow({ item, canAct, canManage, onStatus, onDelete }) {
             <a href={item.url} target="_blank" rel="noopener noreferrer" className="btn-ghost text-xs px-1.5 py-0.5" title="Open source link">↗</a>
           )}
           {canManage && (
-            <button onClick={() => onDelete(item.id)} className="text-charcoal-300 hover:text-red-500 text-xs px-1" title="Delete item">✕</button>
+            <button onClick={() => onDelete(item.id)} className="text-charcoal-300 hover:text-red-500 text-xs px-1" title="Delete item" aria-label="Delete item">✕</button>
           )}
         </div>
       </div>
@@ -160,7 +160,7 @@ function InboxSettingsModal({ inbox, isBusiness, workflowKeySuggestions, onClose
       <div className="modal-card p-5 max-w-md" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-1">
           <h2 className="font-semibold">{editing ? 'Inbox settings' : 'New inbox'}</h2>
-          <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+          <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
         </div>
         <p className="text-xs text-charcoal-400 mb-4">
           {isBusiness
@@ -268,7 +268,7 @@ function LogsModal({ workflow, onClose }) {
       >
         <div className="flex items-center justify-between p-4 border-b border-charcoal-100 dark:border-charcoal-800">
           <h3 className="font-semibold">{workflow.name} — Logs</h3>
-          <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-600">✕</button>
+          <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-600">✕</button>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {loading && <p className="text-sm text-charcoal-400">Loading…</p>}
@@ -337,7 +337,7 @@ function ImportModal({ defaultScope, isAdmin, onClose, onImported }) {
       >
         <div className="flex items-center justify-between p-4 border-b border-charcoal-100 dark:border-charcoal-800">
           <h3 className="font-semibold">Import Workflow</h3>
-          <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-600">✕</button>
+          <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-600">✕</button>
         </div>
         <form onSubmit={submit} className="p-4 space-y-4">
           <div>

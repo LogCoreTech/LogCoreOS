@@ -260,7 +260,7 @@ function ActionsEditor({ config, setConfig, recordKind }) {
               className="input !py-1 flex-1 text-xs min-w-0"
             />
             <ColorSwatchPicker value={a.color} onChange={color => update(i, { color })} />
-            <button type="button" onClick={() => remove(i)} className="text-red-400 hover:text-red-500 px-0.5 shrink-0">✕</button>
+            <button type="button" onClick={() => remove(i)} aria-label="Remove" className="text-red-400 hover:text-red-500 px-0.5 shrink-0">✕</button>
           </div>
         ))}
         <div className="flex gap-2">
@@ -326,7 +326,7 @@ export default function BlockPicker({ editingBlock = null, onAdd, onSave, onClos
       <div className="modal-card max-w-lg" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">{isEditing ? 'Edit block config' : 'Add block'}</h2>
-          <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-600">✕</button>
+          <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-600">✕</button>
         </div>
 
         {!selected ? (

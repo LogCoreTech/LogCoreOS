@@ -190,7 +190,7 @@ export default function Finance() {
         </div>
       )}
 
-      {loading ? (
+      {loading && !active ? (
         <div className="space-y-3">{[1, 2].map(i => <div key={i} className="h-24 card animate-pulse" />)}</div>
       ) : !active ? (
         <div className="card p-8 text-center text-charcoal-500 dark:text-charcoal-400">

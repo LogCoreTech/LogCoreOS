@@ -328,7 +328,7 @@ function TeamTaskCard({ task, canEdit, today, onDone, onEdit }) {
 
       {/* Edit — pool managers only */}
       {canEdit && (
-        <button onClick={onEdit} className="text-charcoal-400 hover:text-orange-500 p-1 text-xs shrink-0">✎</button>
+        <button onClick={onEdit} aria-label="Edit" className="text-charcoal-400 hover:text-orange-500 p-1 text-xs shrink-0">✎</button>
       )}
     </div>
   )

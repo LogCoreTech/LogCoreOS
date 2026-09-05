@@ -228,7 +228,7 @@ export default function AssetView({
                 🔔
               </button>
             )}
-            <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+            <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
           </div>
         </div>
 

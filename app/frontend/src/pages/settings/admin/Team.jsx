@@ -64,7 +64,7 @@ export default function Team() {
           </p>
         </div>
 
-        {loading ? (
+        {loading && team.length === 0 ? (
           <div className="space-y-2">
             {[1, 2, 3].map(i => <div key={i} className="h-8 bg-charcoal-100 dark:bg-charcoal-800 rounded animate-pulse" />)}
           </div>

@@ -138,7 +138,7 @@ function MovePicker({ asset, allAssets, onClose, onMoved }) {
       <div className="modal-card p-4 max-w-sm" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-sm">Move “{asset.name}” to…</h2>
-          <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+          <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
         </div>
         {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
         <AssetTreePicker

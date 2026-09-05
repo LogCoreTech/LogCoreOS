@@ -202,7 +202,7 @@ export default function Contacts() {
         ))}
       </div>
 
-      {loading ? (
+      {loading && items.length === 0 ? (
         <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-16 card animate-pulse" />)}</div>
       ) : !mineMatch && letterGroups.length === 0 ? (
         items.length === 0 ? (

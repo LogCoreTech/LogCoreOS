@@ -106,7 +106,7 @@ export default function DashboardSettingsModal({ dashboard, isOwner, user, works
       <div className="modal-card max-w-md" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">Dashboard Settings</h2>
-          <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-600">✕</button>
+          <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-600">✕</button>
         </div>
 
         <div className="space-y-4">

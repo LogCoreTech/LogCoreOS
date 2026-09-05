@@ -174,7 +174,7 @@ export default function TemplateManager({ templates, user, onClose, onChanged })
       <div className="modal-card p-5 max-w-lg">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">{title}</h2>
-          <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+          <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
         </div>
 
         {view.mode === 'list' && (
@@ -195,7 +195,7 @@ export default function TemplateManager({ templates, user, onClose, onChanged })
                   <>
                     <button onClick={() => startShare(t)} className="btn-ghost text-xs px-2 py-1">Share</button>
                     <button onClick={() => startEdit(t)} className="btn-ghost text-xs px-2 py-1">Edit</button>
-                    <button onClick={() => remove(t)} className="text-red-400 hover:text-red-500 text-xs px-1">✕</button>
+                    <button onClick={() => remove(t)} aria-label="Remove" className="text-red-400 hover:text-red-500 text-xs px-1">✕</button>
                   </>
                 } />
               ))}
@@ -218,7 +218,7 @@ export default function TemplateManager({ templates, user, onClose, onChanged })
                 <Row key={t.id} t={t} actions={isAdmin ? (
                   <>
                     <button onClick={() => startEdit(t)} className="btn-ghost text-xs px-2 py-1">Edit</button>
-                    <button onClick={() => remove(t)} className="text-red-400 hover:text-red-500 text-xs px-1">✕</button>
+                    <button onClick={() => remove(t)} aria-label="Remove" className="text-red-400 hover:text-red-500 text-xs px-1">✕</button>
                   </>
                 ) : <span className="text-[10px] text-charcoal-400">available</span>} />
               ))}
@@ -324,7 +324,7 @@ export default function TemplateManager({ templates, user, onClose, onChanged })
                       </select>
                       <button type="button" onClick={() => moveField(i, -1)} className="text-charcoal-400 hover:text-orange-500 px-0.5" title="Move up">↑</button>
                       <button type="button" onClick={() => moveField(i, 1)} className="text-charcoal-400 hover:text-orange-500 px-0.5" title="Move down">↓</button>
-                      <button type="button" onClick={() => setForm(fm => ({ ...fm, fields: fm.fields.filter((_, j) => j !== i) }))} className="text-red-400 hover:text-red-500 px-0.5">✕</button>
+                      <button type="button" onClick={() => setForm(fm => ({ ...fm, fields: fm.fields.filter((_, j) => j !== i) }))} aria-label="Remove field" className="text-red-400 hover:text-red-500 px-0.5">✕</button>
                     </div>
                     {f.type === 'select' && (
                       <TagInput value={f.options || []} onChange={options => setField(i, { options })} placeholder="Add an option…" />

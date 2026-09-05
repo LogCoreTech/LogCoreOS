@@ -147,7 +147,7 @@ export default function GlobalSearch({ onClose }) {
       <div className="modal-card max-w-lg" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold">Search</h2>
-          <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-600">✕</button>
+          <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-600">✕</button>
         </div>
         <input
           className="input w-full mb-2"

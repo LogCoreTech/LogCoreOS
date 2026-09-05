@@ -29,6 +29,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **A banner now appears when your device loses connectivity**, instead of scattered per-request error messages.
 - **Closing a Task, Event, Asset, Contact, Transaction, or Goal form with unsaved changes now asks first** instead of silently discarding what you typed — via Escape, the X button, Cancel, or (for Goals) clicking outside.
 - **The search bar can now jump straight to creating something new.** Enable it and pick which quick-create actions you want in Settings → Shortcuts; they show up when you open search with nothing typed yet.
+- **Lists no longer flash/disappear when they refresh in the background** (completing a task, saving a dashboard block, etc.) — only what actually changed updates now, across Tasks, Notes, Contacts, Goals, Dashboards, Finance, the Brain browser, and several admin pages.
+- Screen readers now announce what icon-only buttons (close, remove, edit) actually do, instead of a bare "button." The toast dismiss button's tap target also grew to the standard accessible minimum size.
 
 ### Security
 

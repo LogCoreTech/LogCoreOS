@@ -33,7 +33,7 @@ export default function Users() {
       </div>
 
       <div className="card divide-y divide-charcoal-100 dark:divide-charcoal-800">
-        {loading ? (
+        {loading && users.length === 0 ? (
           <p className="text-sm text-charcoal-400 p-4">Loading…</p>
         ) : users.length === 0 ? (
           <p className="text-sm text-charcoal-400 p-4">No users yet.</p>

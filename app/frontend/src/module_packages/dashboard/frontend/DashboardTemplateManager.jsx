@@ -181,7 +181,7 @@ export default function DashboardTemplateManager({ templates, user, onClose, onC
       <div className="modal-card p-5 max-w-lg">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">{title}</h2>
-          <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+          <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
         </div>
 
         {view.mode === 'list' && (
@@ -201,7 +201,7 @@ export default function DashboardTemplateManager({ templates, user, onClose, onC
                   <>
                     <button onClick={() => startShare(t)} className="btn-ghost text-xs px-2 py-1">Share</button>
                     <button onClick={() => startEdit(t)} className="btn-ghost text-xs px-2 py-1">Edit</button>
-                    <button onClick={() => remove(t)} className="text-red-400 hover:text-red-500 text-xs px-1">✕</button>
+                    <button onClick={() => remove(t)} aria-label="Remove" className="text-red-400 hover:text-red-500 text-xs px-1">✕</button>
                   </>
                 } />
               ))}
@@ -220,7 +220,7 @@ export default function DashboardTemplateManager({ templates, user, onClose, onC
                 <Row key={t.id} t={t} actions={isAdmin ? (
                   <>
                     <button onClick={() => startEdit(t)} className="btn-ghost text-xs px-2 py-1">Edit</button>
-                    <button onClick={() => remove(t)} className="text-red-400 hover:text-red-500 text-xs px-1">✕</button>
+                    <button onClick={() => remove(t)} aria-label="Remove" className="text-red-400 hover:text-red-500 text-xs px-1">✕</button>
                   </>
                 ) : <span className="text-[10px] text-charcoal-400">available</span>} />
               ))}
@@ -328,7 +328,7 @@ export default function DashboardTemplateManager({ templates, user, onClose, onC
                       <button type="button" onClick={() => moveBlock(i, -1)} className="text-charcoal-400 hover:text-orange-500 px-0.5 shrink-0" title="Move up">↑</button>
                       <button type="button" onClick={() => moveBlock(i, 1)} className="text-charcoal-400 hover:text-orange-500 px-0.5 shrink-0" title="Move down">↓</button>
                       <button type="button" onClick={() => setBlockEditor({ index: i })} className="text-charcoal-400 hover:text-orange-500 px-1 shrink-0 text-xs">Edit</button>
-                      <button type="button" onClick={() => removeBlock(i)} className="text-red-400 hover:text-red-500 px-0.5 shrink-0">✕</button>
+                      <button type="button" onClick={() => removeBlock(i)} aria-label="Remove block" className="text-red-400 hover:text-red-500 px-0.5 shrink-0">✕</button>
                     </div>
                   )
                 })}

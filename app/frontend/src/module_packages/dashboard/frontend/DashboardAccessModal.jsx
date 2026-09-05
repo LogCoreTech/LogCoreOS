@@ -71,7 +71,7 @@ export default function DashboardAccessModal({ dashboard, isPool, isOwner, onClo
       <div className="modal-card max-w-md" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">Share &quot;{dashboard.name}&quot;</h2>
-          <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-600">✕</button>
+          <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-600">✕</button>
         </div>
 
         {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
@@ -81,7 +81,7 @@ export default function DashboardAccessModal({ dashboard, isPool, isOwner, onClo
           {entries.map((s, i) => (
             <div key={i} className="flex items-center justify-between text-sm">
               <span>{s.target} <span className="text-charcoal-400">({s.access})</span></span>
-              <button onClick={() => removeEntry(i)} className="text-charcoal-400 hover:text-red-500">✕</button>
+              <button onClick={() => removeEntry(i)} aria-label="Remove entry" className="text-charcoal-400 hover:text-red-500">✕</button>
             </div>
           ))}
         </div>

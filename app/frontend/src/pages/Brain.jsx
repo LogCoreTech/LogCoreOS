@@ -124,7 +124,7 @@ export default function Brain() {
 
       {error && <p className="text-red-500 text-sm">{error}</p>}
 
-      {loading ? (
+      {loading && files.length === 0 ? (
         <div className="space-y-2">
           {[1, 2, 3].map(i => <div key={i} className="h-14 card animate-pulse" />)}
         </div>
