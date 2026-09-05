@@ -8,6 +8,7 @@ import { useWorkspace } from '../lib/workspace'
 import { useToast } from '../lib/toast'
 import TagInput from './TagInput'
 import useEscapeToClose from '../lib/useEscapeToClose'
+import useFocusTrap from '../lib/useFocusTrap'
 
 // Global, app-wide search — a magnifying-glass icon in the header (Layout.jsx)
 // opens this modal. Modeled directly on DashboardSwitcher.jsx's own
@@ -40,8 +41,10 @@ export default function GlobalSearch({ onClose }) {
   const { workspace, switchWorkspace } = useWorkspace()
   const toast = useToast()
   const hasMultipleWorkspaces = (user?.workspaces || []).length > 1
+  const cardRef = useRef(null)
 
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
 
   useEffect(() => {
     Promise.all([tagsApi.list(false).catch(() => ({ tags: [] })), tagsApi.list(true).catch(() => ({ tags: [] }))])
@@ -144,7 +147,7 @@ export default function GlobalSearch({ onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card max-w-lg" onClick={e => e.stopPropagation()}>
+      <div ref={cardRef} className="modal-card max-w-lg" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold">Search</h2>
           <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-600">✕</button>

@@ -3,6 +3,7 @@ import { admin as adminApi, update as updateApi } from '../../../lib/api'
 import SettingsPageHeader from '../../../components/settings/SettingsPageHeader'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 
 const SESSION_OPTIONS = [
   { label: '1 hour',  value: 60     },
@@ -478,7 +479,9 @@ function UpdateSection() {
 function ResyncModal({ onClose, onQueued, flash, currentVersion, latestVersion }) {
   const [running, setRunning] = useState(false)
   const [copied, setCopied]   = useState(false)
+  const cardRef = useRef(null)
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
   const fixCommand = 'git fetch origin --force --tags && git reset --hard origin/master'
   const compareUrl = currentVersion && latestVersion
     ? `https://github.com/LogCoreTech/LogCoreOS/compare/v${currentVersion}...v${latestVersion}`
@@ -511,7 +514,7 @@ function ResyncModal({ onClose, onQueued, flash, currentVersion, latestVersion }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card max-w-lg" onClick={e => e.stopPropagation()}>
+      <div ref={cardRef} className="modal-card max-w-lg" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold">Fix Update Divergence</h2>
           <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-600">✕</button>

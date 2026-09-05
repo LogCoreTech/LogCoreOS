@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { tasks as tasksApi } from '../module_packages/tasks/frontend/api'
 import { priorities as prioritiesApi, tags as tagsApi } from '../lib/api'
 import TagInput from './TagInput'
@@ -6,6 +6,7 @@ import RecurrencePicker, { describeRecurrence } from './RecurrencePicker'
 import TaskView from './TaskView'
 import ConfirmDialog from './ConfirmDialog'
 import useEscapeToClose from '../lib/useEscapeToClose'
+import useFocusTrap from '../lib/useFocusTrap'
 
 const PRIORITIES = ['High', 'Medium', 'Low']
 const TYPES = ['todo', 'recurring', 'appointment']
@@ -41,6 +42,7 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
   const [error, setError] = useState('')
   const [tagSuggestions, setTagSuggestions] = useState([])
   const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
+  const cardRef = useRef(null)
 
   // Item #9, 2026-09-04 UX Polish Batch — warn before discarding unsaved
   // changes. Captured once at mount (not on every task/defaultType change)
@@ -74,6 +76,12 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
     hasUnsavedChanges,
     onUnsavedAttempt: () => confirmDiscard(onClose),
   })
+  // In 'view' mode this component returns <TaskView/> instead of its own
+  // modal-card below (TaskView wires its own trap) — tying `active` to mode
+  // makes the effect re-run (and pick up the freshly-mounted card) each time
+  // this same persistent instance switches back into 'edit' mode, instead of
+  // staying attached to whatever containerRef.current was at first mount.
+  useFocusTrap(cardRef, mode !== 'view')
 
   // A pool context is identified by a saveApi override (household's/team's
   // own client) being passed in — mirrors how goal_id linking already tells
@@ -205,7 +213,7 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card p-5 max-w-sm">
+      <div ref={cardRef} className="modal-card p-5 max-w-sm">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">{editing ? 'Edit Task' : 'Add Task'}</h2>
           <button onClick={attemptClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>

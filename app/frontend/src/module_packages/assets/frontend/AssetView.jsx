@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { contacts as contactsApi } from '../../contacts/frontend/api'
 import { assets as assetsApi } from './api'
 import { AttachmentThumb, formatChanges, fieldDisplay, FieldInput } from '../../../components/assetDisplay'
 import { fmtMoney } from '../../../components/finance/money'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 
 const OWNER_CHIP = { team: '🧑‍🤝‍🧑 Team', household: '🏠 Household' }
 
@@ -39,11 +40,15 @@ export default function AssetView({
   // Per-user, per-open collapse — plain component state, so the section
   // reappears the next time the asset is opened.
   const [commentsCollapsed, setCommentsCollapsed] = useState(false)
+  const cardRef = useRef(null)
+  const muteCardRef = useRef(null)
 
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
   // The mute popup stacks on top of this view's own overlay — its own
   // Escape close is independent, same pattern as a confirmState popup.
   useEscapeToClose(() => setMutePopup(false))
+  useFocusTrap(muteCardRef)
 
   const isForeign = !!asset._owner
   const isPool = asset._owner === 'team' || asset._owner === 'household'
@@ -188,7 +193,7 @@ export default function AssetView({
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card p-5 max-w-md">
+      <div ref={cardRef} className="modal-card p-5 max-w-md">
         {/* Header */}
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="min-w-0">
@@ -514,7 +519,7 @@ export default function AssetView({
         {/* Comment-notification mute popup (per-user; covers the whole subtree) */}
         {mutePopup && (
           <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={() => setMutePopup(false)}>
-            <div className="card p-5 w-full max-w-xs" onClick={e => e.stopPropagation()}>
+            <div ref={muteCardRef} className="card p-5 w-full max-w-xs" onClick={e => e.stopPropagation()}>
               <p className="font-semibold mb-1">Comment notifications</p>
               <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mb-4">
                 Applies to “{asset.name}” and everything inside it. Only affects you.

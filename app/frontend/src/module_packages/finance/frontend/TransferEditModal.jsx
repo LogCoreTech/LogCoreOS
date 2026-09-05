@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { finance as financeApi } from './api'
 import { toCents, centsToInput, fmtMoney } from '../../../components/finance/money'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 
 // Edits or deletes both legs of a Transfer together. `book`/`workspace` are
 // the side the row was clicked from; the peer side comes denormalized on the
@@ -18,7 +19,9 @@ export default function TransferEditModal({ book, workspace, tx, onClose, onSave
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
+  const cardRef = useRef(null)
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
 
   function legIds() {
     return isFromLeg
@@ -75,7 +78,7 @@ export default function TransferEditModal({ book, workspace, tx, onClose, onSave
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card max-w-md w-full p-5">
+      <div ref={cardRef} className="modal-card max-w-md w-full p-5">
         <h3 className="font-semibold mb-4">⇄ Edit transfer</h3>
 
         <div className="text-sm space-y-1 mb-4 p-3 rounded-lg bg-charcoal-50 dark:bg-charcoal-800">

@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { contacts as contactsApi } from './api'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 
 // Bulk "convert personal contacts into the shared pool" (owner ask,
 // 2026-08-17: "have so many" to move one at a time via ContactModal's own
@@ -15,8 +16,10 @@ export default function BulkConvertContactsModal({ contacts, workspace, onClose,
   const [selected, setSelected] = useState(() => new Set(contacts.map(c => c.id)))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const cardRef = useRef(null)
 
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
 
   function toggle(id) {
     setSelected(prev => {
@@ -46,7 +49,7 @@ export default function BulkConvertContactsModal({ contacts, workspace, onClose,
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card max-w-md p-5">
+      <div ref={cardRef} className="modal-card max-w-md p-5">
         <h2 className="font-semibold mb-1">Convert to {poolLabel}</h2>
         <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-3">
           Everyone with access to {poolLabel} will be able to see whichever contacts you convert.

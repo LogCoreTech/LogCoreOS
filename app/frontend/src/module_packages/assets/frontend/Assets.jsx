@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import HelpButton from '../../../components/HelpButton'
 import { useSearchParams } from 'react-router-dom'
 import { assets as assetsApi } from './api'
@@ -8,6 +8,7 @@ import AssetModal from './AssetModal'
 import TemplateManager from './TemplateManager'
 import AssetTreePicker from '../../../components/AssetTreePicker'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 
 const OWNER_CHIP = {
   team: '🧑‍🤝‍🧑 Team',
@@ -103,8 +104,10 @@ function AssetRow({ asset, depth, childrenMap, expanded, onToggle, onOpen, onAdd
 function MovePicker({ asset, allAssets, onClose, onMoved }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const cardRef = useRef(null)
 
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
 
   // Same store, minus self and descendants (can't move under your own child)
   const sameStore = (Array.isArray(allAssets) ? allAssets : []).filter(
@@ -135,7 +138,7 @@ function MovePicker({ asset, allAssets, onClose, onMoved }) {
 
   return (
     <div className="modal-overlay z-[55]" onClick={onClose}>
-      <div className="modal-card p-4 max-w-sm" onClick={e => e.stopPropagation()}>
+      <div ref={cardRef} className="modal-card p-4 max-w-sm" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-sm">Move “{asset.name}” to…</h2>
           <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>

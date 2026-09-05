@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { finance as financeApi } from '../../finance/frontend/api'
 import { tags as tagsApi } from '../../../lib/api'
@@ -12,6 +12,7 @@ import AssetView from './AssetView'
 import { AttachmentThumb, formatChanges, FieldInput, CapsSelector } from '../../../components/assetDisplay'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 
 // Same 6 types (and same backend validation, assets_service._validate_field_defs/
 // _validate_value) TemplateManager.jsx's admin template editor offers — not
@@ -110,10 +111,12 @@ function CustomFieldsEditor({ defs, onDefsChange, fields, onFieldsChange }) {
 function SaveAsTemplateModal({ suggestedLabel, onCancel, onConfirm, busy, error }) {
   const [label, setLabel] = useState(suggestedLabel)
   const [icon, setIcon] = useState('')
+  const cardRef = useRef(null)
   useEscapeToClose(onCancel)
+  useFocusTrap(cardRef)
   return (
     <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={onCancel}>
-      <div className="card p-5 w-full max-w-xs space-y-3" onClick={e => e.stopPropagation()}>
+      <div ref={cardRef} className="card p-5 w-full max-w-xs space-y-3" onClick={e => e.stopPropagation()}>
         <p className="font-semibold">Save as template</p>
         <p className="text-xs text-charcoal-500 dark:text-charcoal-400">
           This asset&apos;s custom fields become a reusable template — future assets can start from it too, and this one switches to using it.
@@ -224,14 +227,19 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
   // editor overlay below (see the early return further down), and
   // AssetView.jsx wires its own useEscapeToClose(onClose) — this one only
   // needs to fire while THIS component's own editor overlay is showing.
+  const cardRef = useRef(null)
+  const archiveCardRef = useRef(null)
+
   useEscapeToClose(mode === 'view' ? () => {} : onClose, {
     hasUnsavedChanges,
     onUnsavedAttempt: () => confirmDiscard(onClose),
   })
+  useFocusTrap(cardRef)
   // The archive-confirmation overlay stacks on top of the editor overlay
   // above (both render simultaneously, like the confirmState/ConfirmDialog
   // popup below) — its own Escape close is independent of the editor's.
   useEscapeToClose(() => setArchivePrompt(false))
+  useFocusTrap(archiveCardRef)
 
   const templatesById = Object.fromEntries((templates || []).map(t => [t.id, t]))
   const groupTarget = workspace === 'business' ? 'team' : 'household'
@@ -580,7 +588,7 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card p-5 max-w-md">
+      <div ref={cardRef} className="modal-card p-5 max-w-md">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">
             {readOnly ? 'View Asset' : editing ? 'Edit Asset' : 'New Asset'}
@@ -1035,7 +1043,7 @@ export default function AssetModal({ asset: initialAsset, templates, allAssets: 
 
         {archivePrompt && (
           <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={() => setArchivePrompt(false)}>
-            <div className="card p-5 w-full max-w-xs" onClick={e => e.stopPropagation()}>
+            <div ref={archiveCardRef} className="card p-5 w-full max-w-xs" onClick={e => e.stopPropagation()}>
               <p className="font-semibold mb-1">Archive “{asset.name}”?</p>
               <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mb-4">
                 It has {activeDescendants} active item{activeDescendants !== 1 ? 's' : ''} inside.

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { goals as goalsApi } from './api'
 import { tags as tagsApi } from '../../../lib/api'
@@ -12,6 +12,7 @@ import HistoryCalendar from '../../../components/HistoryCalendar'
 import MetricGraph from '../../../components/MetricGraph'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 
 const METRIC_LOG_LEGEND = [{ colorClass: 'bg-orange-500', label: 'Logged value' }]
 
@@ -79,6 +80,8 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
   const [expandedHistory, setExpandedHistory] = useState(new Set())
   const [metricView, setMetricView] = useState('graph')
   const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
+  const cardRef = useRef(null)
+  const deleteCardRef = useRef(null)
 
   // Item #9, 2026-09-04 UX Polish Batch — warn before discarding unsaved
   // changes. Unlike TaskModal/AssetModal (which get the full record
@@ -108,7 +111,14 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
     hasUnsavedChanges,
     onUnsavedAttempt: () => confirmDiscard(onClose),
   })
+  useFocusTrap(cardRef)
   useEscapeToClose(() => setShowDelete(false))
+  // showDelete's popup mounts/unmounts inside this same persistent GoalModal
+  // instance (see the `{showDelete && (...)}` block below) rather than via a
+  // separate component the parent mounts fresh — tying `active` to showDelete
+  // forces the trap to re-attach to deleteCardRef.current each time that
+  // popup actually opens.
+  useFocusTrap(deleteCardRef, showDelete)
 
   function toggleHistory(taskId) {
     setExpandedHistory(prev => {
@@ -252,7 +262,7 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
   return (
     <Portal>
       <div className="modal-overlay" onClick={attemptClose}>
-        <div className="modal-card max-w-lg max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div ref={cardRef} className="modal-card max-w-lg max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold">{goalId ? (editing ? 'Edit Goal' : goal?.title) : 'New Goal'}</h2>
             <button onClick={attemptClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-600">✕</button>
@@ -504,7 +514,7 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
           {showDelete && (
             <Portal>
               <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                <div className="card p-5 w-full max-w-sm space-y-3">
+                <div ref={deleteCardRef} className="card p-5 w-full max-w-sm space-y-3">
                   <h2 className="font-semibold">Delete Goal?</h2>
                   {detail.subgoals.length > 0 && (
                     <label className="flex items-start gap-2 text-sm">

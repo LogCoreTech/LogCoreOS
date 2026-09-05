@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { dashboardTemplates as templatesApi, dashboards as dashboardsApi } from './api'
 import EmojiPicker from '../../../components/EmojiPicker'
 import TagInput from '../../../components/TagInput'
@@ -6,6 +6,7 @@ import BlockPicker from '../../../components/dashboard/BlockPicker'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import { BLOCK_REGISTRY } from '../../../components/dashboard/blockRegistry'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 
 const SUBJECT_TYPES = [
   { value: '', label: 'None — just a reusable block set' },
@@ -32,7 +33,9 @@ export default function DashboardTemplateManager({ templates, user, onClose, onC
   const [members, setMembers] = useState([])
   const [roles, setRoles] = useState([])
   const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
+  const cardRef = useRef(null)
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
 
   useEffect(() => {
     dashboardsApi.members().then(m => setMembers((m || []).map(x => x.name))).catch(() => {})
@@ -178,7 +181,7 @@ export default function DashboardTemplateManager({ templates, user, onClose, onC
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card p-5 max-w-lg">
+      <div ref={cardRef} className="modal-card p-5 max-w-lg">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">{title}</h2>
           <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>

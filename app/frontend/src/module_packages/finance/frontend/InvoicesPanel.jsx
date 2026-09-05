@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { finance as financeApi } from './api'
 import { contacts as contactsApi } from '../../contacts/frontend/api'
@@ -7,6 +7,7 @@ import ContactPicker from '../../../components/contacts/ContactPicker'
 import TransactionModal from './TransactionModal'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 
 const INVOICE_STATUSES = ['draft', 'sent', 'paid', 'void']
 
@@ -201,7 +202,9 @@ function InvoiceModal({ book, invoice, clients, canEdit, prefill, onPrefillConsu
   const [clientName, setClientName] = useState(clients.find(c => c.id === invoice?.client_id)?.name || '')
   const [dealCtx, setDealCtx] = useState(null)          // resolved source deal, when invoice.deal_id set
   const [dealExpenses, setDealExpenses] = useState(null) // Σ expenses across the deal's linked assets
+  const cardRef = useRef(null)
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
 
   // Deal → invoice prefill: resolve the contact once and find-or-create the
   // matching book client through the same chooseClient path a manual pick uses.
@@ -360,7 +363,7 @@ function InvoiceModal({ book, invoice, clients, canEdit, prefill, onPrefillConsu
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card max-w-lg w-full p-5 space-y-4 overflow-y-auto">
+      <div ref={cardRef} className="modal-card max-w-lg w-full p-5 space-y-4 overflow-y-auto">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold">{editing ? `Invoice ${invoice.number}` : 'New invoice'}</h3>
           {editing && (
@@ -533,7 +536,9 @@ function InvoiceModal({ book, invoice, clients, canEdit, prefill, onPrefillConsu
 
 // Printable invoice — client-side print CSS, no server dependency.
 function InvoicePrint({ book, invoice, client, onClose }) {
+  const cardRef = useRef(null)
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
 
   useEffect(() => {
     const timer = setTimeout(() => window.print(), 300)
@@ -541,7 +546,7 @@ function InvoicePrint({ book, invoice, client, onClose }) {
   }, [])
 
   return (
-    <div className="fixed inset-0 z-[100] bg-white text-black overflow-y-auto print:static" id="invoice-print">
+    <div ref={cardRef} className="fixed inset-0 z-[100] bg-white text-black overflow-y-auto print:static" id="invoice-print">
       <style>{`
         @media print {
           body * { visibility: hidden; }

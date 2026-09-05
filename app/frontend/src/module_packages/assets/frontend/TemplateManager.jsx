@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { assets as assetsApi } from './api'
 import EmojiPicker from '../../../components/EmojiPicker'
 import TagInput from '../../../components/TagInput'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 
 const FIELD_TYPES = ['text', 'number', 'date', 'boolean', 'select', 'contact']
 const BLANK_FIELD = { key: '', label: '', type: 'text', options: [], default: '' }
@@ -27,8 +28,10 @@ export default function TemplateManager({ templates, user, onClose, onChanged })
   const [members, setMembers] = useState([])
   const [roles, setRoles] = useState([])
   const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
+  const cardRef = useRef(null)
 
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
 
   useEffect(() => {
     assetsApi.members().then(m => setMembers((m || []).map(x => x.name))).catch(() => {})
@@ -171,7 +174,7 @@ export default function TemplateManager({ templates, user, onClose, onChanged })
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card p-5 max-w-lg">
+      <div ref={cardRef} className="modal-card p-5 max-w-lg">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">{title}</h2>
           <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>

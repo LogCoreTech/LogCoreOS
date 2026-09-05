@@ -8,6 +8,7 @@ import { useWorkspace } from '../../../lib/workspace'
 import TagInput from '../../../components/TagInput'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 
 function fmt(iso) {
   if (!iso) return 'Never'
@@ -111,8 +112,10 @@ function InboxSettingsModal({ inbox, isBusiness, workflowKeySuggestions, onClose
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
+  const cardRef = useRef(null)
 
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
 
   useEffect(() => {
     if (!isBusiness) return
@@ -157,7 +160,7 @@ function InboxSettingsModal({ inbox, isBusiness, workflowKeySuggestions, onClose
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card p-5 max-w-md" onClick={e => e.stopPropagation()}>
+      <div ref={cardRef} className="modal-card p-5 max-w-md" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-1">
           <h2 className="font-semibold">{editing ? 'Inbox settings' : 'New inbox'}</h2>
           <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
@@ -235,8 +238,10 @@ function LogsModal({ workflow, onClose }) {
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState('')
   const timerRef              = useRef(null)
+  const cardRef                = useRef(null)
 
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
 
   async function fetchLogs() {
     try {
@@ -263,6 +268,7 @@ function LogsModal({ workflow, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div
+        ref={cardRef}
         className="bg-white dark:bg-charcoal-900 rounded-xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
@@ -309,8 +315,10 @@ function ImportModal({ defaultScope, isAdmin, onClose, onImported }) {
   const [tags, setTags]     = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState('')
+  const cardRef = useRef(null)
 
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
 
   async function submit(e) {
     e.preventDefault()
@@ -332,6 +340,7 @@ function ImportModal({ defaultScope, isAdmin, onClose, onImported }) {
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div
+        ref={cardRef}
         className="bg-white dark:bg-charcoal-900 rounded-xl shadow-xl w-full max-w-md"
         onClick={e => e.stopPropagation()}
       >

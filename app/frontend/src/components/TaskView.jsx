@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { tasks as tasksApi } from '../module_packages/tasks/frontend/api'
 import { catColor } from '../lib/constants'
@@ -7,6 +7,7 @@ import RecurrenceLog from './RecurrenceLog'
 import { describeRecurrence } from './RecurrencePicker'
 import ConfirmDialog from './ConfirmDialog'
 import useEscapeToClose from '../lib/useEscapeToClose'
+import useFocusTrap from '../lib/useFocusTrap'
 
 const PRIORITY_COLOR = {
   High:   'bg-orange-500 text-white',
@@ -33,8 +34,10 @@ export default function TaskView({ task, canEdit, saveApi, onEdit, onClose, onDe
   const [assetTitle, setAssetTitle] = useState(null)
   const [loading, setLoading] = useState(false)
   const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
+  const cardRef = useRef(null)
 
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
 
   // Pool context is identified by a saveApi override, same convention
   // TaskModal.jsx already uses for tag-suggestion lookups.
@@ -124,7 +127,7 @@ export default function TaskView({ task, canEdit, saveApi, onEdit, onClose, onDe
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card p-5 max-w-sm max-h-[85vh] overflow-y-auto">
+      <div ref={cardRef} className="modal-card p-5 max-w-sm max-h-[85vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">{task.title}</h2>
           <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>

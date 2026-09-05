@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { welcomeBack as welcomeBackApi } from '../lib/api'
 import useEscapeToClose from '../lib/useEscapeToClose'
+import useFocusTrap from '../lib/useFocusTrap'
 
 // Middle-screen "welcome back" popup (item #25, 2026-09-04 UX Polish Batch) —
 // checked once per app load, shown only if the backend says the user has
@@ -19,13 +20,23 @@ export default function WelcomeBackPopup() {
   }, [])
 
   const dismiss = () => setState(false)
+  const cardRef = useRef(null)
   useEscapeToClose(dismiss)
+  // Layout.jsx mounts this component unconditionally and it decides its own
+  // visibility internally (the `if (!state || !state.show) return null`
+  // below) rather than being conditionally mounted/unmounted by a parent —
+  // so `active` must be tied to that same visibility, or the trap's effect
+  // (which only re-runs when its dependencies actually change) would stay
+  // attached to nothing from the very first render, when there was no card
+  // to find yet.
+  useFocusTrap(cardRef, !!(state && state.show))
 
   if (!state || !state.show) return null
 
   return (
     <div className="modal-overlay" onClick={dismiss}>
       <div
+        ref={cardRef}
         className="modal-card max-w-sm text-center"
         role="dialog"
         aria-modal="true"

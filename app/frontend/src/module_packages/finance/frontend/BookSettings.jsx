@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { finance as financeApi } from './api'
 import { fmtMoney, toCents } from '../../../components/finance/money'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 
 const ACCOUNT_TYPES = ['checking', 'savings', 'credit', 'cash', 'other']
 const CAP_LABELS = [
@@ -221,7 +222,9 @@ export default function BookSettings({ book, onClose, onChanged, onDeletedBook }
   const [csvResult, setCsvResult] = useState(null)
   const [csvBusy, setCsvBusy] = useState(false)
   const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
+  const cardRef = useRef(null)
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
 
   async function pickCsv(e) {
     const file = e.target.files?.[0]
@@ -359,7 +362,7 @@ export default function BookSettings({ book, onClose, onChanged, onDeletedBook }
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card max-w-lg w-full p-5 space-y-5 overflow-y-auto">
+      <div ref={cardRef} className="modal-card max-w-lg w-full p-5 space-y-5 overflow-y-auto">
         <h3 className="font-semibold">Book settings</h3>
 
         {/* Book meta */}

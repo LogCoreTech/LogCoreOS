@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import HelpButton from '../../../components/HelpButton'
 import { useSearchParams } from 'react-router-dom'
 import { finance as financeApi } from './api'
@@ -16,6 +16,7 @@ import ReportsPanel from './ReportsPanel'
 import { fmtMoney, monthStr } from '../../../components/finance/money'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 import PullToRefreshIndicator from '../../../components/PullToRefreshIndicator'
 import usePullToRefresh from '../../../lib/usePullToRefresh'
 
@@ -596,7 +597,9 @@ function NewBookModal({ workspace, isAdmin, onClose, onCreated }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const poolLabel = workspace === 'business' ? 'team' : 'household'
+  const cardRef = useRef(null)
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
 
   async function submit(e) {
     e.preventDefault()
@@ -612,7 +615,7 @@ function NewBookModal({ workspace, isAdmin, onClose, onCreated }) {
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card max-w-sm w-full p-5">
+      <div ref={cardRef} className="modal-card max-w-sm w-full p-5">
         <h3 className="font-semibold mb-4">New book</h3>
         <form onSubmit={submit} className="space-y-3">
           <div className="grid grid-cols-[1fr_4rem] gap-2">

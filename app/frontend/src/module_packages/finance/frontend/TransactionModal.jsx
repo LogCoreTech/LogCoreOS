@@ -8,6 +8,7 @@ import TagInput from '../../../components/TagInput'
 import { tags as tagsApi } from '../../../lib/api'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 
 const KIND_LABELS = { expense: '− Expense', income: '+ Income', transfer: '⇄ Transfer' }
 
@@ -68,10 +69,13 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
     else onClose()
   }
 
+  const cardRef = useRef(null)
+
   useEscapeToClose(onClose, {
     hasUnsavedChanges,
     onUnsavedAttempt: () => confirmDiscard(onClose),
   })
+  useFocusTrap(cardRef)
 
   // The Amount field autofocuses on a genuinely new Expense/Income entry (a
   // deliberate "start typing immediately" convenience) — but for Transfer,
@@ -263,7 +267,7 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card max-w-md w-full p-5">
+      <div ref={cardRef} className="modal-card max-w-md w-full p-5">
         <h3 className="font-semibold mb-4">{editing ? 'Edit transaction' : 'Add transaction'}</h3>
 
         {/* Source chips — where this transaction came from */}

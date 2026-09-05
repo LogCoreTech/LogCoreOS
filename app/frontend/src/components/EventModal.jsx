@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { calendar as calendarApi } from '../module_packages/calendar/frontend/api'
 import { tags as tagsApi } from '../lib/api'
 import TagInput from './TagInput'
 import ConfirmDialog from './ConfirmDialog'
 import useEscapeToClose from '../lib/useEscapeToClose'
+import useFocusTrap from '../lib/useFocusTrap'
 
 export const EVENT_COLORS = {
   blue:   '#3b82f6',
@@ -44,6 +45,7 @@ export default function EventModal({ event, defaultDate, onClose, onSave, saveAp
   const [error, setError]     = useState('')
   const [tagSuggestions, setTagSuggestions] = useState([])
   const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
+  const cardRef = useRef(null)
 
   // Item #9, 2026-09-04 UX Polish Batch — warn before discarding unsaved
   // changes. Captured once at mount (shareToPool included since it's a real
@@ -71,6 +73,7 @@ export default function EventModal({ event, defaultDate, onClose, onSave, saveAp
     hasUnsavedChanges,
     onUnsavedAttempt: () => confirmDiscard(onClose),
   })
+  useFocusTrap(cardRef)
 
   useEffect(() => {
     const pool = !!isHouseholdEvent || shareToPool
@@ -166,7 +169,7 @@ export default function EventModal({ event, defaultDate, onClose, onSave, saveAp
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card p-5 max-w-sm">
+      <div ref={cardRef} className="modal-card p-5 max-w-sm">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <h2 className="font-semibold">{editing ? 'Edit Event' : 'Add Event'}</h2>

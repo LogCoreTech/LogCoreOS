@@ -32,6 +32,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Lists no longer flash/disappear when they refresh in the background** (completing a task, saving a dashboard block, etc.) — only what actually changed updates now, across Tasks, Notes, Contacts, Goals, Dashboards, Finance, the Brain browser, and several admin pages.
 - Screen readers now announce what icon-only buttons (close, remove, edit) actually do, instead of a bare "button." The toast dismiss button's tap target also grew to the standard accessible minimum size.
 - **Pull down to refresh on Tasks, Contacts, Goals, Finance, Dashboards, and the Brain browser** (mobile only — desktop has no equivalent gesture).
+- **Keyboard focus now stays inside an open modal/dialog instead of tabbing out into the page behind it**, and pressing Tab from the sidebar/header now offers a "Skip to content" link so keyboard users don't have to tab through the whole nav on every page.
 
 ### Security
 

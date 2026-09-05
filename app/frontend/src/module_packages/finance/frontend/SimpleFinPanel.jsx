@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { finance as financeApi } from './api'
 import { fmtMoney } from '../../../components/finance/money'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 
 // Bank sync panel — connections are admin-managed: members REQUEST a
 // connection (admins get notified and enter the SimpleFIN setup token in
@@ -14,7 +15,9 @@ export default function SimpleFinPanel({ books, isAdmin, workspace, onClose }) {
   const [error, setError] = useState('')
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
+  const cardRef = useRef(null)
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
 
   useEffect(() => {
     financeApi.sfStatus().then(s => {
@@ -92,7 +95,7 @@ export default function SimpleFinPanel({ books, isAdmin, workspace, onClose }) {
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card max-w-lg w-full p-5 space-y-4 overflow-y-auto">
+      <div ref={cardRef} className="modal-card max-w-lg w-full p-5 space-y-4 overflow-y-auto">
         <h3 className="font-semibold">🏦 Bank sync</h3>
 
         {!status ? (

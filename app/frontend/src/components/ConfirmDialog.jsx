@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import useEscapeToClose from '../lib/useEscapeToClose'
+import useFocusTrap from '../lib/useFocusTrap'
 
 // Shared confirmation dialog (item #7 of the 2026-09-04 UX Polish Batch) —
 // replaces the app's 34 raw confirm()/window.confirm() call sites with one
@@ -28,8 +29,10 @@ export default function ConfirmDialog({
   const [typedValue, setTypedValue] = useState('')
   const confirmBtnRef = useRef(null)
   const inputRef = useRef(null)
+  const cardRef = useRef(null)
 
   useEscapeToClose(onCancel)
+  useFocusTrap(cardRef)
 
   useEffect(() => {
     if (requireTypedText) inputRef.current?.focus()
@@ -42,6 +45,7 @@ export default function ConfirmDialog({
   return (
     <div className="modal-overlay" onClick={onCancel}>
       <div
+        ref={cardRef}
         className="modal-card max-w-sm"
         role="alertdialog"
         aria-modal="true"

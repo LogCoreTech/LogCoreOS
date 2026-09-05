@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 
 // Groups by the dashboard's own template (the "folder" the owner asked for —
 // makes browsing manageable with a large number of per-client/per-asset
@@ -28,7 +29,9 @@ function groupByTemplate(items) {
 export default function DashboardSwitcher({ items, activeId, onSelect, onCreateNew, onManageTemplates, onClose }) {
   const [query, setQuery] = useState('')
   const [collapsed, setCollapsed] = useState({})
+  const cardRef = useRef(null)
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -53,7 +56,7 @@ export default function DashboardSwitcher({ items, activeId, onSelect, onCreateN
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card max-w-md" onClick={e => e.stopPropagation()}>
+      <div ref={cardRef} className="modal-card max-w-md" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold">Your dashboards</h2>
           <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-600">✕</button>

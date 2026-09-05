@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { dashboards as dashboardsApi } from './api'
 import EmojiPicker from '../../../components/EmojiPicker'
 import ContactPicker from '../../../components/contacts/ContactPicker'
 import AssetPickerField from '../../../components/AssetPickerField'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 
 /**
  * Per-dashboard options menu — rename, change icon, and the actions that
@@ -24,7 +25,9 @@ export default function DashboardSettingsModal({ dashboard, isOwner, user, works
   const [crossWorkspace, setCrossWorkspace] = useState(!!dashboard.cross_workspace)
   const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
   const otherWorkspace = workspace === 'business' ? 'personal' : 'business'
+  const cardRef = useRef(null)
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
 
   const dirty = name.trim() !== dashboard.name || icon !== dashboard.icon
   const isTemplated = !!dashboard.template_id
@@ -103,7 +106,7 @@ export default function DashboardSettingsModal({ dashboard, isOwner, user, works
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card max-w-md" onClick={e => e.stopPropagation()}>
+      <div ref={cardRef} className="modal-card max-w-md" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">Dashboard Settings</h2>
           <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-600">✕</button>

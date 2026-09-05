@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { dashboards as dashboardsApi } from './api'
 import { useAuth } from '../../../lib/auth'
 import TagInput from '../../../components/TagInput'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 
 export default function DashboardAccessModal({ dashboard, isPool, isOwner, onClose, onSaved }) {
   const { user } = useAuth()
+  const cardRef = useRef(null)
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
   const [shared, setShared] = useState(dashboard.shared_with || [])
   const [contributors, setContributors] = useState(dashboard.contributors || [])
   const [hidden, setHidden] = useState(dashboard.hidden_from || [])
@@ -68,7 +71,7 @@ export default function DashboardAccessModal({ dashboard, isPool, isOwner, onClo
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card max-w-md" onClick={e => e.stopPropagation()}>
+      <div ref={cardRef} className="modal-card max-w-md" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">Share &quot;{dashboard.name}&quot;</h2>
           <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-600">✕</button>

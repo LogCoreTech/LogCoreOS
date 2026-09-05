@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { contacts as contactsApi } from '../module_packages/contacts/frontend/api'
 import { assets as assetsApi } from '../module_packages/assets/frontend/api'
 import ContactPicker from './contacts/ContactPicker'
 import useEscapeToClose from '../lib/useEscapeToClose'
+import useFocusTrap from '../lib/useFocusTrap'
 
 // Shared asset display helpers used by both the read-only AssetView and the
 // AssetModal editor. Kept in their own module so neither component imports the
@@ -174,7 +175,9 @@ export function CapsSelector({ caps, onChange, templateFields }) {
 // so this can't recur regardless of which container ends up embedding
 // AttachmentThumb in the future.
 function ImageLightbox({ url, filename, onClose }) {
+  const cardRef = useRef(null)
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
 
   return createPortal(
     // Deliberately NOT .modal-overlay: that class is items-end on mobile (a
@@ -183,6 +186,7 @@ function ImageLightbox({ url, filename, onClose }) {
     // reusing it left a square/non-tall image sitting in the bottom half of
     // the screen on mobile instead of centered (reported 2026-08-15).
     <div
+      ref={cardRef}
       className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center"
       style={{
         padding: '1rem',

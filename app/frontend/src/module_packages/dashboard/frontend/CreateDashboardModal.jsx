@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { dashboardTemplates as templatesApi, dashboards as dashboardsApi } from './api'
 import EmojiPicker from '../../../components/EmojiPicker'
 import ContactPicker from '../../../components/contacts/ContactPicker'
 import AssetPickerField from '../../../components/AssetPickerField'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 
 /**
  * Blank dashboard, or one seeded from a template — replaces the old direct
@@ -21,8 +22,10 @@ export default function CreateDashboardModal({ pool = false, onCreated, onClose 
   const [subjectId, setSubjectId] = useState(null)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
+  const cardRef = useRef(null)
 
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
 
   useEffect(() => {
     templatesApi.list().then(setTemplates).catch(() => setTemplates([]))
@@ -64,7 +67,7 @@ export default function CreateDashboardModal({ pool = false, onCreated, onClose 
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card max-w-md" onClick={e => e.stopPropagation()}>
+      <div ref={cardRef} className="modal-card max-w-md" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold">New Dashboard</h2>
           <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-600">✕</button>

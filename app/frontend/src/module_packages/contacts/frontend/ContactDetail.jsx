@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { finance as financeApi } from '../../finance/frontend/api'
 import { contacts as contactsApi } from './api'
@@ -7,6 +7,7 @@ import { useWorkspace } from '../../../lib/workspace'
 import ContactAvatar from './ContactAvatar'
 import { formatPhone } from './phone'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 
 const money = cents => `$${((cents || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const toCents = v => Math.round(parseFloat(v || '0') * 100) || 0
@@ -89,11 +90,15 @@ export default function ContactDetail({ contact, fields, pipeline, user, onClose
   const [dealInvs, setDealInvs] = useState([])            // invoices billing the expanded deal
   const [refAssets, setRefAssets] = useState([])          // assets referencing this contact (contact-type fields)
   const [allContacts, setAllContacts] = useState([])      // for resolving affiliated/employer contact names
+  const cardRef = useRef(null)
 
   // fullPage means this isn't rendered as a .modal-overlay at all (see
   // cardShell below) — it's a normal page (Profile.jsx), so Escape has
   // nothing to dismiss and shouldn't trigger onClose's page navigation.
   useEscapeToClose(() => { if (!fullPage) onClose() })
+  // Same fullPage guard as Escape above — a fullPage render is normal page
+  // content, not a modal, so Tab should never be trapped there.
+  useFocusTrap(cardRef, !fullPage)
 
   const load = useCallback(() => {
     contactsApi.interactions(contact.id).then(r => setInteractions(Array.isArray(r) ? r : [])).catch(() => {})
@@ -177,7 +182,7 @@ export default function ContactDetail({ contact, fields, pipeline, user, onClose
 
   return (
     <div className={fullPage ? '' : 'modal-overlay'}>
-      <div className={cardShell}>
+      <div ref={cardRef} className={cardShell}>
         {fullPage && (
           <button onClick={onClose} className="text-sm text-charcoal-500 hover:text-orange-500 transition-colors mb-2">← Back</button>
         )}

@@ -7,6 +7,7 @@ import TagInput from '../../../components/TagInput'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import { useWorkspace } from '../../../lib/workspace'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 
 // ── Tree builder ─────────────────────────────────────────────────────────────
 
@@ -121,7 +122,9 @@ function TreeNode({ node, depth, selectedPath, openFolders, onSelectNote, onTogg
 // ── Context menu ──────────────────────────────────────────────────────────────
 
 function ContextMenu({ node, onClose, onRename, onMove, onDelete, onShare, onLeave, onArchive }) {
+  const cardRef = useRef(null)
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
   // Own items (no _owner) are always manageable. Pool items (household/team)
   // are collectively visible, not a personal share — "Leave" makes no sense
   // there; instead an admin (or a by-name edit-level contributor) can manage
@@ -159,7 +162,7 @@ function ContextMenu({ node, onClose, onRename, onMove, onDelete, onShare, onLea
   // how a menu/dropdown is expected to behave everywhere else.
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card p-1 w-44" onClick={e => e.stopPropagation()}>{items}</div>
+      <div ref={cardRef} className="modal-card p-1 w-44" onClick={e => e.stopPropagation()}>{items}</div>
     </div>
   )
 }
@@ -171,7 +174,9 @@ function NoteShareModal({ node, onClose, onSaved }) {
   const [access, setAccess] = useState('read')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const cardRef = useRef(null)
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
 
   useEffect(() => {
     notesApi.members().then(r => setMembers(Array.isArray(r) ? r : [])).catch(() => {})
@@ -188,7 +193,7 @@ function NoteShareModal({ node, onClose, onSaved }) {
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card p-5 max-w-sm">
+      <div ref={cardRef} className="modal-card p-5 max-w-sm">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">Share &ldquo;{node.name}&rdquo;</h2>
           <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
@@ -244,7 +249,15 @@ export default function Notes() {
   const [dragActive, setDragActive] = useState(false)
   const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
   const [searchParams, setSearchParams] = useSearchParams()
+  const modalCardRef = useRef(null)
   useEscapeToClose(() => setModal(null))
+  // `modal` drives which of the six mutually-exclusive form blocks below is
+  // mounted at any moment inside this one persistent component — passing it
+  // as `active` (rather than the hook's default) forces useFocusTrap's effect
+  // to re-run each time a different block mounts, so the trap picks up that
+  // block's own fresh modalCardRef.current instead of staying attached to
+  // whichever block was open before.
+  useFocusTrap(modalCardRef, !!modal)
 
   // Deep link (?path=<note path>) — dashboard nav-button clicks land here.
   useEffect(() => {
@@ -789,7 +802,7 @@ export default function Notes() {
       )}
       {modal?.type === 'newNote' && (
         <div className="modal-overlay">
-          <div className="modal-card p-5 max-w-sm">
+          <div ref={modalCardRef} className="modal-card p-5 max-w-sm">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold">New Note</h2>
               <button onClick={() => setModal(null)} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
@@ -820,7 +833,7 @@ export default function Notes() {
 
       {modal?.type === 'newFolder' && (
         <div className="modal-overlay">
-          <div className="modal-card p-5 max-w-sm">
+          <div ref={modalCardRef} className="modal-card p-5 max-w-sm">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold">New Folder</h2>
               <button onClick={() => setModal(null)} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
@@ -851,7 +864,7 @@ export default function Notes() {
 
       {modal?.type === 'rename' && (
         <div className="modal-overlay">
-          <div className="modal-card p-5 max-w-sm">
+          <div ref={modalCardRef} className="modal-card p-5 max-w-sm">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold">Rename {modal.item?.type === 'folder' ? 'Folder' : 'Note'}</h2>
               <button onClick={() => setModal(null)} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
@@ -876,7 +889,7 @@ export default function Notes() {
 
       {modal?.type === 'move' && (
         <div className="modal-overlay">
-          <div className="modal-card p-5 max-w-sm">
+          <div ref={modalCardRef} className="modal-card p-5 max-w-sm">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold">Move Note</h2>
               <button onClick={() => setModal(null)} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
@@ -908,7 +921,7 @@ export default function Notes() {
 
       {modal?.type === 'deleteNote' && (
         <div className="modal-overlay">
-          <div className="modal-card p-5 max-w-sm">
+          <div ref={modalCardRef} className="modal-card p-5 max-w-sm">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold">Delete Note?</h2>
               <button onClick={() => setModal(null)} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
@@ -929,7 +942,7 @@ export default function Notes() {
 
       {modal?.type === 'deleteFolder' && (
         <div className="modal-overlay">
-          <div className="modal-card p-5 max-w-sm">
+          <div ref={modalCardRef} className="modal-card p-5 max-w-sm">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold">Delete Folder?</h2>
               <button onClick={() => setModal(null)} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>

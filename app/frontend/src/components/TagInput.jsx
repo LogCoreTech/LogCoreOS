@@ -51,7 +51,7 @@ export default function TagInput({
   return (
     <div className="relative">
       <div
-        className="input flex flex-wrap gap-1.5 items-center min-h-[2.25rem] cursor-text"
+        className="input flex flex-wrap gap-1.5 items-center min-h-[2.25rem] cursor-text focus-within:ring-2 focus-within:ring-orange-500"
         onClick={() => inputRef.current?.focus()}
       >
         {value.map((tag, i) => (

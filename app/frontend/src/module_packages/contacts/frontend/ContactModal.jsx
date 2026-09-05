@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { contacts as contactsApi } from './api'
 import { useWorkspace } from '../../../lib/workspace'
 import ContactPicker from '../../../components/contacts/ContactPicker'
@@ -8,6 +8,7 @@ import SectionHeader from './SectionHeader'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import { tags as tagsApi } from '../../../lib/api'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 
 const DEFAULT_PRIORITY_ORDER = ['Religion', 'Family', 'Job', 'Personal Growth', 'Hobbies']
 const EDUCATION_LEVELS = [
@@ -545,6 +546,7 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
+  const cardRef = useRef(null)
 
   // Item #9, 2026-09-04 UX Polish Batch — warn before discarding unsaved
   // changes. Captured once at mount, combining every separate useState slot
@@ -581,6 +583,9 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
     hasUnsavedChanges,
     onUnsavedAttempt: () => confirmDiscard(onClose),
   })
+  // Same fullPage guard as Escape above — a fullPage render is normal page
+  // content, not a modal, so Tab should never be trapped there.
+  useFocusTrap(cardRef, !fullPage)
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const setCustom = (k, v) => setForm(f => ({ ...f, custom: { ...f.custom, [k]: v } }))
@@ -1040,11 +1045,11 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
   )
 
   if (fullPage) {
-    return <div className={shellClass}>{body}</div>
+    return <div ref={cardRef} className={shellClass}>{body}</div>
   }
   return (
     <div className="modal-overlay">
-      <div className={shellClass}>{body}</div>
+      <div ref={cardRef} className={shellClass}>{body}</div>
     </div>
   )
 }

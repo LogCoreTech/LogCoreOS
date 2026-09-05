@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { finance as financeApi } from './api'
 import { fmtMoney, toCents, centsToInput, todayStr } from '../../../components/finance/money'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
+import useFocusTrap from '../../../lib/useFocusTrap'
 
 const EMPTY_FORM = { name: '', amount: '', kind: 'expense', account_id: '', category: '', cadence: 'monthly', next_due: '', autopay: false, deductible: false, tax_category: '' }
 
@@ -15,8 +16,12 @@ export default function RecurringPanel({ book, canEdit }) {
   const [busy, setBusy] = useState(false)
   const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
   const today = todayStr()
+  const formCardRef = useRef(null)
+  const plannedCardRef = useRef(null)
   useEscapeToClose(() => setForm(null))
+  useFocusTrap(formCardRef)
   useEscapeToClose(() => setPlannedForm(null))
+  useFocusTrap(plannedCardRef)
 
   function load() {
     financeApi.recurring(book.id).then(r => setItems(Array.isArray(r) ? r : [])).catch(() => {})
@@ -212,7 +217,7 @@ export default function RecurringPanel({ book, canEdit }) {
       {/* Recurring form modal */}
       {form && (
         <div className="modal-overlay">
-          <div className="modal-card max-w-md w-full p-5">
+          <div ref={formCardRef} className="modal-card max-w-md w-full p-5">
             <h3 className="font-semibold mb-4">{form.id ? 'Edit recurring item' : 'New recurring item'}</h3>
             <form onSubmit={saveForm} className="space-y-3">
               <input className="input" placeholder="Name (Netflix, Rent, Paycheck…)" value={form.name}
@@ -272,7 +277,7 @@ export default function RecurringPanel({ book, canEdit }) {
       {/* Planned form modal */}
       {plannedForm && (
         <div className="modal-overlay">
-          <div className="modal-card max-w-md w-full p-5">
+          <div ref={plannedCardRef} className="modal-card max-w-md w-full p-5">
             <h3 className="font-semibold mb-4">New planned item</h3>
             <form onSubmit={savePlanned} className="space-y-3">
               <input className="input" placeholder="Name (tax refund, car repair…)" value={plannedForm.name}

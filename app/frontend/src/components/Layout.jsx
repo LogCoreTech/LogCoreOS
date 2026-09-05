@@ -322,6 +322,15 @@ export default function Layout() {
 
   return (
     <>
+    {/* Accessibility audit finding, 2026-09-05 (item #1) — a keyboard user
+        had to Tab through the entire nav (sidebar or mobile header) on every
+        page before reaching real content. Visually hidden until focused. */}
+    <a
+      href="#main-content"
+      className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-orange-500 focus:text-white focus:text-sm focus:font-medium"
+    >
+      Skip to content
+    </a>
     <div className="flex h-full overflow-hidden">
 
       {/* Sidebar — desktop only */}
@@ -497,7 +506,10 @@ export default function Layout() {
             real mobile Safari as it did in this environment's own testing.
             Back to the single-element version; the scrollbar cosmetic issue
             is deferred rather than risking another round of this. */}
-        <main className="flex-1 min-h-0 overflow-y-scroll overflow-x-hidden overscroll-y-contain p-4 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:p-6 flex flex-col">
+        {/* tabIndex={-1}: not part of the normal Tab order, but focusable
+            programmatically — some browsers won't actually move focus to a
+            same-page anchor's target unless it's focusable at all. */}
+        <main id="main-content" tabIndex={-1} className="flex-1 min-h-0 overflow-y-scroll overflow-x-hidden overscroll-y-contain p-4 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:p-6 flex flex-col">
           <Outlet />
         </main>
       </div>

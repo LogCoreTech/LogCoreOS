@@ -15,6 +15,7 @@ import ContactFieldPicker from './ContactFieldPicker'
 import TemplatePicker from './TemplatePicker'
 import TemplateFieldsPicker from './TemplateFieldsPicker'
 import useEscapeToClose from '../../lib/useEscapeToClose'
+import useFocusTrap from '../../lib/useFocusTrap'
 
 const CATEGORY_LABELS = {
   live_aggregate: 'Live data',
@@ -290,8 +291,10 @@ export default function BlockPicker({ editingBlock = null, onAdd, onSave, onClos
   const [selected, setSelected] = useState(editingBlock?.type || null)
   const [config, setConfig] = useState(editingBlock?.config || {})
   const [query, setQuery] = useState('')
+  const cardRef = useRef(null)
 
   useEscapeToClose(onClose)
+  useFocusTrap(cardRef)
 
   useEffect(() => {
     if (isEditing) return // no type-grid step to populate in edit mode
@@ -323,7 +326,7 @@ export default function BlockPicker({ editingBlock = null, onAdd, onSave, onClos
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card max-w-lg" onClick={e => e.stopPropagation()}>
+      <div ref={cardRef} className="modal-card max-w-lg" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">{isEditing ? 'Edit block config' : 'Add block'}</h2>
           <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-600">✕</button>
