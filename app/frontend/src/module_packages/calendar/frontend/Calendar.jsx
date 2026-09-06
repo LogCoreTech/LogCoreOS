@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import HelpButton from '../../../components/HelpButton'
+import TrashLink from '../../../components/TrashLink'
 import { calendar as calendarApi } from './api'
 import { shared as sharedApi } from '../../household/frontend/api'
 import { team as teamApi } from '../../team/frontend/api'
@@ -154,7 +155,7 @@ export default function Calendar() {
     <div className="w-full max-w-4xl mx-auto space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">Calendar</h1><HelpButton section="calendar" /></span>
+        <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">Calendar</h1><HelpButton section="calendar" /><TrashLink module="calendar" /></span>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex gap-1">
             {['High', 'Medium', 'Low'].map(p => (

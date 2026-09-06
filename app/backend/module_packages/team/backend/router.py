@@ -103,7 +103,7 @@ def delete_team_task(
 ):
     _validate_task_id(task_id)
     _ensure_team()
-    if not task_service.delete_task(_TEAM, task_id):
+    if not task_service.delete_task(_TEAM, task_id, deleted_by=current_user["name"]):
         raise HTTPException(status_code=404, detail="Task not found")
     return {"ok": True}
 
@@ -158,5 +158,5 @@ def delete_team_event(
     _rl: None = Depends(_write_limit),
 ):
     _validate_event_id(event_id)
-    if not events_service.delete_event(_TEAM, event_id):
+    if not events_service.delete_event(_TEAM, event_id, deleted_by=current_user["name"]):
         raise HTTPException(status_code=404, detail="Event not found")

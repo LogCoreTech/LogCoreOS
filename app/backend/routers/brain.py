@@ -22,6 +22,8 @@ _ALWAYS_SKIP = {
     "Contacts",  # managed by contacts module, JSON + binary photo files, not editable here
     "Finance",  # managed by finance module, JSON + binary receipt files, not editable here
     "Goals",  # managed by goals module, JSON not markdown, not editable here
+    "Trash",  # soft-deleted records — this raw viewer/editor would otherwise be a
+    # backdoor around the dedicated Trash/restore flow (routers/trash.py)
     # ws_path()'s "business" base is a literal subfolder of the "personal" base
     # (brain/USERS/{name}/Business/), not a sibling — so a plain recursive walk
     # or path resolution against the personal base would otherwise reach straight

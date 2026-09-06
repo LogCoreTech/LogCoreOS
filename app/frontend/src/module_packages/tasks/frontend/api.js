@@ -12,4 +12,5 @@ export const tasks = {
   add:      (task)                         => post('/tasks', task),
   update:   (id, updates)                  => patch(`/tasks/${id}`, updates),
   remove:   (id)                           => del(`/tasks/${id}`),
+  bulkDelete: (ids)                        => post('/tasks/bulk-delete', { ids }),
 }

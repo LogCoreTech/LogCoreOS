@@ -98,5 +98,7 @@ def delete_event(
     _rl: None = Depends(_write_limit),
 ):
     _validate_event_id(event_id)
-    if not events_service.delete_event(current_user["name"], event_id, workspace):
+    if not events_service.delete_event(
+        current_user["name"], event_id, workspace, deleted_by=current_user["name"]
+    ):
         raise HTTPException(status_code=404, detail="Event not found")

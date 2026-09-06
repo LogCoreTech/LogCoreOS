@@ -441,6 +441,8 @@ def delete_rule(
 ):
     store_user, _book, access = _find_or_404(current_user, workspace, book_id)
     _require_edit(access)
-    if not finance_service.delete_rule(store_user, workspace, book_id, rule_id):
+    if not finance_service.delete_rule(
+        store_user, workspace, book_id, rule_id, deleted_by=current_user["name"]
+    ):
         raise HTTPException(status_code=404, detail="Rule not found")
     return {"ok": True}

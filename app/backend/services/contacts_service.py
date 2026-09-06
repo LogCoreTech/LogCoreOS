@@ -1177,7 +1177,7 @@ def clear_contact_photo(store_user: str, workspace: str, contact_id: str) -> dic
     return None
 
 
-def delete_contact(store_user: str, workspace: str, contact_id: str) -> bool:
+def delete_contact(store_user: str, workspace: str, contact_id: str, deleted_by: str = "") -> bool:
     contacts = list_contacts(store_user, workspace)
     target = next((c for c in contacts if c["id"] == contact_id), None)
     if target is None:
@@ -1186,12 +1186,47 @@ def delete_contact(store_user: str, workspace: str, contact_id: str) -> bool:
         raise ValueError(
             "A user's own contact can't be deleted directly — delete the account instead"
         )
+
+    from module_packages.contacts.backend import trash_handlers
+    from services import trash_service
+
+    # Interactions/deals stay hard-deleted (2026-09-05 owner decision — no
+    # independent restore UX, access fully inherited from the parent
+    # contact) — snapshotted into the payload ONLY so the Trash preview and
+    # a restore's response can plainly say this history is gone, not so
+    # they can be brought back.
+    trashed_interactions = [
+        x for x in _list_interactions(store_user, workspace) if x.get("contact_id") == contact_id
+    ]
+    trashed_deals = [
+        d for d in _list_deals(store_user, workspace) if d.get("contact_id") == contact_id
+    ]
+    payload = {
+        **target,
+        "_trashed_interactions": trashed_interactions,
+        "_trashed_deals": trashed_deals,
+    }
+
+    move_path = None
     if target.get("photo_ext"):
         from services.file_service import contact_photo_path
 
-        contact_photo_path(store_user, workspace, contact_id, target["photo_ext"]).unlink(
-            missing_ok=True
-        )
+        move_path = contact_photo_path(store_user, workspace, contact_id, target["photo_ext"])
+
+    title, subtitle = trash_handlers.describe("contact", payload)
+    trash_service.soft_delete(
+        store_user=store_user,
+        workspace=workspace,
+        module="contacts",
+        record_type="contact",
+        original_id=contact_id,
+        payload=payload,
+        deleted_by=deleted_by,
+        title=title,
+        subtitle=subtitle,
+        move_path=move_path,
+    )
+
     remaining = [c for c in contacts if c["id"] != contact_id]
     _save_contacts(store_user, workspace, remaining)
     # Cascade delete this contact's interactions + deals in the same store.

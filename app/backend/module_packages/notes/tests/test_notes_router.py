@@ -25,6 +25,8 @@ from fastapi import HTTPException
 from module_packages.notes.backend.router import (
     AccessRequest,
     ArchiveRequest,
+    BulkDeleteItem,
+    BulkDeleteRequest,
     FolderCreate,
     LeaveRequest,
     MoveItem,
@@ -32,6 +34,7 @@ from module_packages.notes.backend.router import (
     NoteUpdate,
     ShareEntry,
     ShareRespond,
+    bulk_delete_notes,
     create_folder,
     create_note,
     delete_note,
@@ -89,6 +92,69 @@ def test_delete_note(users):
     # create_default=True) — check the deleted note specifically, not that
     # the list is empty.
     assert not any(n["path"] == "Recipe" for n in list_notes(users["alice"], "personal"))
+
+
+def test_bulk_delete_notes_and_folders(users):
+    create_note(NoteCreate(path="A"), users["alice"], "personal")
+    create_note(NoteCreate(path="B"), users["alice"], "personal")
+    create_folder(FolderCreate(path="Empty Folder"), users["alice"], "personal")
+
+    result = bulk_delete_notes(
+        BulkDeleteRequest(
+            items=[
+                BulkDeleteItem(path="A", type="note"),
+                BulkDeleteItem(path="B", type="note"),
+                BulkDeleteItem(path="Empty Folder", type="folder"),
+            ]
+        ),
+        users["alice"],
+        "personal",
+    )
+
+    assert set(result["deleted"]) == {"A", "B", "Empty Folder"}
+    assert result["failed"] == []
+
+
+def test_bulk_delete_drops_items_nested_under_a_selected_folder(users):
+    """Selecting a folder does not implicitly select its descendants in the
+    UI, but if both are selected anyway, the nested one is dropped rather
+    than attempted twice — delete_folder() already cascades."""
+    create_folder(FolderCreate(path="Projects"), users["alice"], "personal")
+    create_note(NoteCreate(path="Projects/Plan"), users["alice"], "personal")
+
+    result = bulk_delete_notes(
+        BulkDeleteRequest(
+            items=[
+                BulkDeleteItem(path="Projects", type="folder"),
+                BulkDeleteItem(path="Projects/Plan", type="note"),
+            ]
+        ),
+        users["alice"],
+        "personal",
+    )
+
+    assert result["deleted"] == ["Projects"]
+    assert result["failed"] == []
+    with pytest.raises(HTTPException):
+        get_note("Projects/Plan", users["alice"], "personal")
+
+
+def test_bulk_delete_reports_partial_failure(users):
+    create_note(NoteCreate(path="Real"), users["alice"], "personal")
+
+    result = bulk_delete_notes(
+        BulkDeleteRequest(
+            items=[
+                BulkDeleteItem(path="Real", type="note"),
+                BulkDeleteItem(path="Nope", type="note"),
+            ]
+        ),
+        users["alice"],
+        "personal",
+    )
+
+    assert result["deleted"] == ["Real"]
+    assert result["failed"] == [{"path": "Nope", "error": "Not found"}]
 
 
 def test_create_note_duplicate_path_409(users):

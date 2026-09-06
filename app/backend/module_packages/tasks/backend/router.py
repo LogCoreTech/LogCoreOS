@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 from routers._task_models import TaskCreateBase, TaskUpdateBase
 from routers.auth import get_current_user, get_workspace, require_module
@@ -120,6 +121,40 @@ def delete_task(
     workspace: str = Depends(get_workspace),
 ):
     _validate_task_id(task_id)
-    if not task_service.delete_task(current_user["name"], task_id, workspace):
+    if not task_service.delete_task(
+        current_user["name"], task_id, workspace, deleted_by=current_user["name"]
+    ):
         raise HTTPException(status_code=404, detail="Task not found")
     return {"ok": True}
+
+
+class BulkDeleteRequest(BaseModel):
+    ids: list[str]
+
+
+@router.post("/bulk-delete")
+def bulk_delete_tasks(
+    req: BulkDeleteRequest,
+    current_user: dict = Depends(_require_tasks),
+    workspace: str = Depends(get_workspace),
+):
+    """UX Polish Batch #4 — bulk-delete always routes through the same
+    soft-delete-backed delete_task() the single-item endpoint uses. Personal
+    tasks only (this router never resolves pool tasks — Household/Team have
+    their own bulk-delete on their own routers if that's ever needed), so no
+    per-item access resolution beyond the existing module gate is required."""
+    deleted: list[str] = []
+    failed: list[dict] = []
+    for task_id in req.ids:
+        try:
+            UUID(task_id)
+        except ValueError:
+            failed.append({"id": task_id, "error": "Invalid task ID format"})
+            continue
+        if task_service.delete_task(
+            current_user["name"], task_id, workspace, deleted_by=current_user["name"]
+        ):
+            deleted.append(task_id)
+        else:
+            failed.append({"id": task_id, "error": "Task not found"})
+    return {"deleted": deleted, "failed": failed}

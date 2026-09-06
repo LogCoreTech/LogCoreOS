@@ -168,7 +168,9 @@ def delete_client(
         raise HTTPException(
             status_code=409, detail="Client has invoices — archive them instead of deleting."
         )
-    if not invoicing.delete_client(store_user, workspace, book_id, client_id):
+    if not invoicing.delete_client(
+        store_user, workspace, book_id, client_id, deleted_by=current_user["name"]
+    ):
         raise HTTPException(status_code=404, detail="Client not found")
     return {"ok": True}
 
@@ -271,7 +273,9 @@ def delete_invoice(
     store_user, _book, access = _find_or_404(current_user, workspace, book_id)
     _require_edit(access)
     _validate_uuid(invoice_id, "invoice ID")
-    if not invoicing.delete_invoice(store_user, workspace, book_id, invoice_id):
+    if not invoicing.delete_invoice(
+        store_user, workspace, book_id, invoice_id, deleted_by=current_user["name"]
+    ):
         raise HTTPException(status_code=404, detail="Invoice not found")
     return {"ok": True}
 
@@ -317,7 +321,9 @@ def delete_payment(
     _require_edit(access)
     _validate_uuid(invoice_id, "invoice ID")
     _validate_uuid(payment_id, "payment ID")
-    result = invoicing.delete_payment(store_user, workspace, book_id, invoice_id, payment_id)
+    result = invoicing.delete_payment(
+        store_user, workspace, book_id, invoice_id, payment_id, deleted_by=current_user["name"]
+    )
     if not result:
         raise HTTPException(status_code=404, detail="Payment not found")
     return result

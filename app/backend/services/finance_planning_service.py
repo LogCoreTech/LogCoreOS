@@ -296,12 +296,32 @@ def update_recurring(
     return None
 
 
-def delete_recurring(store_user: str, workspace: str, book_id: str, item_id: str) -> bool:
+def delete_recurring(
+    store_user: str, workspace: str, book_id: str, item_id: str, deleted_by: str = ""
+) -> bool:
     items = list_recurring(store_user, workspace, book_id)
-    remaining = [i for i in items if i["id"] != item_id]
-    if len(remaining) == len(items):
+    item = next((i for i in items if i["id"] == item_id), None)
+    if item is None:
         return False
-    _save_recurring(store_user, workspace, book_id, remaining)
+
+    from module_packages.finance.backend import trash_handlers
+    from services import trash_service
+
+    title, subtitle = trash_handlers.describe("recurring", item)
+    trash_service.soft_delete(
+        store_user=store_user,
+        workspace=workspace,
+        module="finance",
+        record_type="recurring",
+        original_id=item_id,
+        payload=item,
+        deleted_by=deleted_by,
+        title=title,
+        subtitle=subtitle,
+        original_location={"book_id": book_id},
+    )
+
+    _save_recurring(store_user, workspace, book_id, [i for i in items if i["id"] != item_id])
     return True
 
 
@@ -511,12 +531,32 @@ def update_planned(
     return None
 
 
-def delete_planned(store_user: str, workspace: str, book_id: str, item_id: str) -> bool:
+def delete_planned(
+    store_user: str, workspace: str, book_id: str, item_id: str, deleted_by: str = ""
+) -> bool:
     items = list_planned(store_user, workspace, book_id)
-    remaining = [i for i in items if i["id"] != item_id]
-    if len(remaining) == len(items):
+    item = next((i for i in items if i["id"] == item_id), None)
+    if item is None:
         return False
-    _save_planned(store_user, workspace, book_id, remaining)
+
+    from module_packages.finance.backend import trash_handlers
+    from services import trash_service
+
+    title, subtitle = trash_handlers.describe("planned", item)
+    trash_service.soft_delete(
+        store_user=store_user,
+        workspace=workspace,
+        module="finance",
+        record_type="planned",
+        original_id=item_id,
+        payload=item,
+        deleted_by=deleted_by,
+        title=title,
+        subtitle=subtitle,
+        original_location={"book_id": book_id},
+    )
+
+    _save_planned(store_user, workspace, book_id, [i for i in items if i["id"] != item_id])
     return True
 
 

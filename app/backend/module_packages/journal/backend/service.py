@@ -104,11 +104,31 @@ def upsert_entry(user_name: str, date: str, content: str, workspace: str = "pers
     return {"date": date, "content": content}
 
 
-def delete_entry(user_name: str, date: str, workspace: str = "personal") -> bool:
+def delete_entry(
+    user_name: str, date: str, workspace: str = "personal", deleted_by: str = ""
+) -> bool:
     _validate_date(date)
     path = _entry_path(user_name, date, workspace)
     if not path.exists():
         return False
-    path.unlink()
+
+    from module_packages.journal.backend import trash_handlers
+    from services import trash_service
+
+    tags = get_entry_tags(user_name, date, workspace)
+    title, subtitle = trash_handlers.describe("journal_entry", {"date": date})
+    trash_service.soft_delete(
+        store_user=user_name,
+        workspace=workspace,
+        module="journal",
+        record_type="journal_entry",
+        original_id=date,
+        payload=None,
+        deleted_by=deleted_by,
+        title=title,
+        subtitle=subtitle,
+        original_location={"tags": tags},
+        move_path=path,
+    )
     set_entry_tags(user_name, date, [], workspace)
     return True

@@ -105,6 +105,7 @@ MODULE = ModuleManifest(
         "get_dashboard_block_catalog",
     ],
     owned_block_types=[],
+    owned_trash_types=["dashboard"],
     migrations=[
         (
             "dashboard:m027_mark_dashboard_installed_unconditionally",

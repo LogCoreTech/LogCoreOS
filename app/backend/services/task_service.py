@@ -145,7 +145,29 @@ def update_task(
     return found
 
 
-def delete_task(user_name: str, task_id: str, workspace: str = "personal") -> bool:
+def delete_task(
+    user_name: str, task_id: str, workspace: str = "personal", deleted_by: str = ""
+) -> bool:
+    task = get_task(user_name, task_id, workspace)
+    if task is None:
+        return False
+
+    from module_packages.tasks.backend import trash_handlers
+    from services import trash_service
+
+    title, subtitle = trash_handlers.describe("task", task)
+    trash_service.soft_delete(
+        store_user=user_name,
+        workspace=workspace,
+        module="tasks",
+        record_type="task",
+        original_id=task_id,
+        payload=task,
+        deleted_by=deleted_by,
+        title=title,
+        subtitle=subtitle,
+    )
+
     deleted = False
 
     def _delete(data: dict) -> dict:

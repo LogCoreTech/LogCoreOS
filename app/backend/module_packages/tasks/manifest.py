@@ -167,6 +167,7 @@ MODULE = ModuleManifest(
         "get_week_snapshot",
     ],
     owned_block_types=["top3_tasks", "due_today", "streaks", "single_task"],
+    owned_trash_types=["task"],
     owned_search_providers=[
         SearchProviderSpec(key="tasks", label="Tasks", resolve=_search_tasks),
     ],

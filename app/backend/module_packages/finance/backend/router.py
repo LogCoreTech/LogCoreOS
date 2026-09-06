@@ -356,7 +356,7 @@ def delete_book(
             status_code=409,
             detail="Book still has transactions — archive it instead, or delete them first.",
         )
-    finance_service.delete_book(store_user, workspace, book_id)
+    finance_service.delete_book(store_user, workspace, book_id, deleted_by=current_user["name"])
     return {"ok": True}
 
 
@@ -423,7 +423,9 @@ def delete_account(
             status_code=409,
             detail="Account still has transactions — archive it instead.",
         )
-    if not finance_service.delete_account(store_user, workspace, book_id, account_id):
+    if not finance_service.delete_account(
+        store_user, workspace, book_id, account_id, deleted_by=current_user["name"]
+    ):
         raise HTTPException(status_code=404, detail="Account not found")
     return {"ok": True}
 
@@ -553,7 +555,9 @@ def delete_transaction(
         _require_contribute_own_tx(current_user, workspace, store_user, book, tx_id, None)
     else:
         _require_edit(access)
-    if not finance_service.delete_transaction(store_user, workspace, book_id, tx_id):
+    if not finance_service.delete_transaction(
+        store_user, workspace, book_id, tx_id, deleted_by=current_user["name"]
+    ):
         raise HTTPException(status_code=404, detail="Transaction not found")
     return {"ok": True}
 
@@ -624,7 +628,9 @@ def delete_receipt(
     _require_edit(access)
     _validate_id(tx_id, "transaction ID")
     _validate_id(receipt_id, "receipt ID")
-    if not finance_service.delete_receipt(store_user, workspace, book_id, tx_id, receipt_id):
+    if not finance_service.delete_receipt(
+        store_user, workspace, book_id, tx_id, receipt_id, deleted_by=current_user["name"]
+    ):
         raise HTTPException(status_code=404, detail="Receipt not found")
 
 

@@ -78,6 +78,7 @@ MODULE = ModuleManifest(
     owned_agent_tools=[],  # no AI chat tools exist for calendar today — not adding new ones as part of converting what's already there
     read_only_agent_tools=[],
     owned_block_types=["upcoming_events", "single_event"],
+    owned_trash_types=["event"],
     owned_search_providers=[
         SearchProviderSpec(key="events", label="Calendar", resolve=_search_calendar),
     ],

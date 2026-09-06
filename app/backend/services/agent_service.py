@@ -44,6 +44,7 @@ def _brain_skip(user: dict) -> set[str]:
         "Contacts",
         "Finance",
         "Goals",
+        "Trash",  # soft-deleted records, structurally mixed JSON+markdown+binary per module
     } | brain_paths_for_disabled(disabled)
 
 
@@ -610,6 +611,13 @@ def _execute_tool(
                 raw = inputs["path"].lstrip("/")
                 parts = raw.split("/")
                 if any(p in ("", ".", "..") for p in parts) or not raw.endswith(".md"):
+                    return {"error": "Access denied"}
+                # Unlike list_brain_files/search_brain, this branch previously never
+                # consulted _brain_skip() at all — a caller who already knew (or
+                # guessed) a skipped module's exact relative path could read it
+                # directly even though it never appeared in a listing or search
+                # result. Same skip-set, same reasoning, applied here too.
+                if any(part in _brain_skip(user) for part in parts[:-1]):
                     return {"error": "Access denied"}
                 base = ws_path(user["name"], workspace)
                 candidate = (base / raw).resolve()

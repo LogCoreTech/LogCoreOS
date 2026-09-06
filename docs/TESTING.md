@@ -77,6 +77,12 @@ def test_create_thing_stores_file(brain):
 
 ---
 
+## Test filenames must be unique across the whole repo, not just within their own directory
+
+`module_packages/*/tests/` directories have no `__init__.py` (matching every module's own package convention), so pytest's default "prepend" import mode imports each test file as a top-level module named after its bare filename — two different packages both naming a file `test_trash_handlers.py` collide at collection time ("import file mismatch"), even though they live in unrelated directories. Found 2026-09-05 while giving 5 different modules (tasks/calendar/goals/journal/notes) each their own trash-registry test file with the same generic name. **Rule: prefix every `module_packages/<id>/tests/` file with that module's own id** (`test_tasks_trash_handlers.py`, not `test_trash_handlers.py`) — the existing router-test files already follow this (`test_goals_router.py`, `test_contacts_router.py`), a bare `test_router.py` would hit the identical collision the moment a second module needed one.
+
+---
+
 ## Why No Mocks for the Filesystem
 
 Tests use real filesystem operations via the `brain` fixture — **not** mock file objects. This is intentional: a mock file system that passes all tests but breaks on a real POSIX `os.replace()` call is worse than no test at all. Integration with the real filesystem is the guarantee that matters.

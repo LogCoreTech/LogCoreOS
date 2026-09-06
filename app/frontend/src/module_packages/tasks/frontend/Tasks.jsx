@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import HelpButton from '../../../components/HelpButton'
+import TrashLink from '../../../components/TrashLink'
 import EmptyState from '../../../components/EmptyState'
+import ConfirmDialog from '../../../components/ConfirmDialog'
+import SelectCheckbox from '../../../components/SelectCheckbox'
+import BulkActionBar from '../../../components/BulkActionBar'
+import useBulkSelect from '../../../lib/useBulkSelect'
 import PullToRefreshIndicator from '../../../components/PullToRefreshIndicator'
 import usePullToRefresh from '../../../lib/usePullToRefresh'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
 import useScrollLock from '../../../lib/useScrollLock'
+import { useToast } from '../../../lib/toast'
 import { tasks as tasksApi } from './api'
 import { priorities as prioritiesApi, auth as authApi } from '../../../lib/api'
 import { assets as assetsApi } from '../../assets/frontend/api'
@@ -57,6 +63,29 @@ export default function Tasks() {
   const [assetList, setAssetList] = useState([])
   const assetsEnabled = !user?.disabledModules?.includes('assets')
   const [searchParams, setSearchParams] = useSearchParams()
+  const toast = useToast()
+  const bulkSelect = useBulkSelect()
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+
+  async function handleBulkDelete() {
+    setConfirmBulkDelete(false)
+    setBulkDeleting(true)
+    try {
+      const result = await tasksApi.bulkDelete([...bulkSelect.selected])
+      if (result.failed?.length) {
+        toast.error(`${result.deleted.length} deleted, ${result.failed.length} couldn't be deleted.`)
+      } else {
+        toast.success(`${result.deleted.length} task${result.deleted.length === 1 ? '' : 's'} deleted`)
+      }
+      bulkSelect.stop()
+      load()
+    } catch (err) {
+      toast.error(err.message || 'Bulk delete failed.')
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
 
   // Deep link (?task=<id>) — dashboard nav-button clicks land here.
   useEffect(() => {
@@ -198,8 +227,14 @@ export default function Tasks() {
       <PullToRefreshIndicator {...pull} />
       {/* Header */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">Tasks</h1><HelpButton section="tasks" /></span>
+        <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">Tasks</h1><HelpButton section="tasks" /><TrashLink module="tasks" /></span>
         <div className="flex gap-2 shrink-0">
+          <button
+            onClick={() => (bulkSelect.active ? bulkSelect.stop() : bulkSelect.setActive(true))}
+            className="btn-ghost text-sm whitespace-nowrap md:hidden"
+          >
+            {bulkSelect.active ? 'Cancel' : 'Select'}
+          </button>
           <button
             onClick={() => setShowReorder(true)}
             className="btn-ghost text-sm whitespace-nowrap"
@@ -211,6 +246,14 @@ export default function Tasks() {
           </button>
         </div>
       </div>
+
+      <BulkActionBar
+        count={bulkSelect.count}
+        onCancel={bulkSelect.stop}
+        actions={[
+          { label: 'Delete', variant: 'danger', busy: bulkDeleting, onClick: () => setConfirmBulkDelete(true) },
+        ]}
+      />
 
       {/* Filter tabs */}
       <div className="flex gap-1 bg-charcoal-100 dark:bg-charcoal-800 rounded-lg p-1">
@@ -281,9 +324,24 @@ export default function Tasks() {
               onDone={() => toggleDone(task)}
               onOpen={() => { setEditTask(task); setShowModal(true) }}
               onTagClick={t => setTagFilter(t)}
+              selectable={!task._source}
+              selectActive={bulkSelect.active}
+              selected={bulkSelect.isSelected(task)}
+              onToggleSelect={() => bulkSelect.toggle(task)}
             />
           ))}
         </div>
+      )}
+
+      {confirmBulkDelete && (
+        <ConfirmDialog
+          title="Delete selected tasks?"
+          message={`${bulkSelect.count} task${bulkSelect.count === 1 ? '' : 's'} will be moved to Trash.`}
+          danger
+          confirmLabel="Delete"
+          onConfirm={handleBulkDelete}
+          onCancel={() => setConfirmBulkDelete(false)}
+        />
       )}
 
       {/* Reorder Today modal */}
@@ -353,7 +411,7 @@ export default function Tasks() {
   )
 }
 
-function TaskCard({ task, catColor, today, onDone, onOpen, onTagClick }) {
+function TaskCard({ task, catColor, today, onDone, onOpen, onTagClick, selectable, selectActive, selected, onToggleSelect }) {
   const overdue = task.due_date && task.due_date < today && task.status === 'pending'
 
   return (
@@ -361,6 +419,14 @@ function TaskCard({ task, catColor, today, onDone, onOpen, onTagClick }) {
       onClick={onOpen}
       className={`card p-3 flex items-start gap-3 overflow-hidden cursor-pointer hover:border-orange-400 transition-colors ${overdue ? 'border-red-500/40' : ''}`}
     >
+      {selectable && (
+        <SelectCheckbox
+          checked={selected}
+          onChange={onToggleSelect}
+          label={`Select ${task.title}`}
+          className={selectActive ? 'inline-flex' : 'hidden md:inline-flex'}
+        />
+      )}
       <button
         onClick={e => { e.stopPropagation(); onDone() }}
         className={`mt-0.5 shrink-0 w-5 h-5 rounded transition-colors flex items-center justify-center text-white text-xs ${

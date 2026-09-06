@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import HelpButton from '../../../components/HelpButton'
+import TrashLink from '../../../components/TrashLink'
 import GettingStarted from '../../../components/GettingStarted'
 import DashboardGrid, { MOBILE_COLS } from '../../../components/dashboard/DashboardGrid'
 import BlockPicker from '../../../components/dashboard/BlockPicker'
@@ -349,6 +350,7 @@ export default function Dashboard() {
           <span className="flex items-center gap-2">
             <h1 className="text-2xl font-bold">Good {greeting()}, {user?.name?.split(' ')[0]}</h1>
             <HelpButton section="dashboard" />
+            <TrashLink module="dashboard" />
           </span>
           <p className="text-charcoal-500 dark:text-charcoal-400 text-sm mt-0.5">{todayDate}</p>
         </div>

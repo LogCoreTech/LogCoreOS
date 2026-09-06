@@ -161,6 +161,7 @@ MODULE = ModuleManifest(
         "my_assets_summary",
         "collection",
     ],
+    owned_trash_types=["asset"],
     owned_search_providers=[
         SearchProviderSpec(key="assets", label="Assets", resolve=_search_assets),
     ],

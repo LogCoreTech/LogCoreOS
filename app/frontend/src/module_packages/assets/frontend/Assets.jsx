@@ -1,9 +1,15 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import HelpButton from '../../../components/HelpButton'
+import TrashLink from '../../../components/TrashLink'
+import ConfirmDialog from '../../../components/ConfirmDialog'
+import SelectCheckbox from '../../../components/SelectCheckbox'
+import BulkActionBar from '../../../components/BulkActionBar'
+import useBulkSelect from '../../../lib/useBulkSelect'
 import { useSearchParams } from 'react-router-dom'
 import { assets as assetsApi } from './api'
 import { useAuth } from '../../../lib/auth'
 import { useWorkspace } from '../../../lib/workspace'
+import { useToast } from '../../../lib/toast'
 import AssetModal from './AssetModal'
 import TemplateManager from './TemplateManager'
 import AssetTreePicker from '../../../components/AssetTreePicker'
@@ -18,7 +24,7 @@ const OWNER_CHIP = {
 
 // Recursive tree row — module level per the MEMORY.md rule (components defined
 // inside components remount on every parent render).
-function AssetRow({ asset, depth, childrenMap, expanded, onToggle, onOpen, onAddChild, onMove, templatesByKey }) {
+function AssetRow({ asset, depth, childrenMap, expanded, onToggle, onOpen, onAddChild, onMove, templatesByKey, isAdmin, selectActive, isSelected, onToggleSelect }) {
   const children = childrenMap[asset.id] || []
   const isOpen = expanded.has(asset.id)
   const template = asset._template || templatesByKey[asset.template]
@@ -28,10 +34,22 @@ function AssetRow({ asset, depth, childrenMap, expanded, onToggle, onOpen, onAdd
   const canAddChild = canEdit ||
     (asset._access === 'contribute' && (asset._caps?.add || []).includes('children'))
   const pad = ['pl-0', 'pl-5', 'pl-10', 'pl-14', 'pl-20', 'pl-24'][Math.min(depth, 5)]
+  // Mirrors delete_asset()'s own gate — own personal assets are always
+  // deletable by their owner, pool assets are admin-only — so a checkbox
+  // never appears on an item bulk-delete is guaranteed to fail on.
+  const selectable = !asset._owner || isAdmin
 
   return (
     <>
       <div className={`flex items-center gap-2 py-2 px-2 rounded-lg hover:bg-charcoal-50 dark:hover:bg-charcoal-800 transition-colors group ${pad}`}>
+        {selectable && (
+          <SelectCheckbox
+            checked={isSelected(asset)}
+            onChange={() => onToggleSelect(asset)}
+            label={`Select ${asset.name}`}
+            className={selectActive ? 'inline-flex' : 'hidden md:inline-flex'}
+          />
+        )}
         <button
           onClick={() => children.length && onToggle(asset.id)}
           className={`w-6 text-xl leading-none text-charcoal-400 shrink-0 ${children.length ? 'hover:text-orange-500' : 'opacity-0'}`}
@@ -94,6 +112,10 @@ function AssetRow({ asset, depth, childrenMap, expanded, onToggle, onOpen, onAdd
           onAddChild={onAddChild}
           onMove={onMove}
           templatesByKey={templatesByKey}
+          isAdmin={isAdmin}
+          selectActive={selectActive}
+          isSelected={isSelected}
+          onToggleSelect={onToggleSelect}
         />
       ))}
     </>
@@ -160,6 +182,11 @@ function MovePicker({ asset, allAssets, onClose, onMoved }) {
 export default function Assets() {
   const { user } = useAuth()
   const { workspace } = useWorkspace()
+  const toast = useToast()
+  const isAdmin = user?.role === 'admin'
+  const bulkSelect = useBulkSelect()
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   const [templates, setTemplates] = useState([])
   const [items, setItems] = useState([])
@@ -214,6 +241,25 @@ export default function Assets() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load() }, [workspace, showArchived])
 
+  async function handleBulkDelete() {
+    setConfirmBulkDelete(false)
+    setBulkDeleting(true)
+    try {
+      const result = await assetsApi.bulkDelete([...bulkSelect.selected])
+      if (result.failed?.length) {
+        toast.error(`${result.deleted.length} deleted, ${result.failed.length} couldn't be deleted.`)
+      } else {
+        toast.success(`${result.deleted.length} asset${result.deleted.length === 1 ? '' : 's'} deleted`)
+      }
+      bulkSelect.stop()
+      load()
+    } catch (err) {
+      toast.error(err.message || 'Bulk delete failed.')
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
   const templatesByKey = useMemo(
     () => Object.fromEntries(templates.map(t => [t.key, t])),
     [templates]
@@ -262,8 +308,14 @@ export default function Assets() {
   return (
     <div className="w-full max-w-3xl mx-auto space-y-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <span className="flex items-center gap-2"><h1 className="text-xl font-bold">Assets</h1><HelpButton section="assets" /></span>
+        <span className="flex items-center gap-2"><h1 className="text-xl font-bold">Assets</h1><HelpButton section="assets" /><TrashLink module="assets" /></span>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => (bulkSelect.active ? bulkSelect.stop() : bulkSelect.setActive(true))}
+            className="btn-ghost text-xs px-3 py-1.5 md:hidden"
+          >
+            {bulkSelect.active ? 'Cancel' : 'Select'}
+          </button>
           <button onClick={() => setShowTemplates(true)} className="btn-ghost text-xs px-3 py-1.5">
             Templates
           </button>
@@ -272,6 +324,14 @@ export default function Assets() {
           </button>
         </div>
       </div>
+
+      <BulkActionBar
+        count={bulkSelect.count}
+        onCancel={bulkSelect.stop}
+        actions={[
+          { label: 'Delete', variant: 'danger', busy: bulkDeleting, onClick: () => setConfirmBulkDelete(true) },
+        ]}
+      />
 
       {/* Search + filter */}
       {items.length > 0 && (
@@ -359,10 +419,25 @@ export default function Assets() {
                 onAddChild={asset => setModal({ creating: true, parentId: asset.id })}
                 onMove={asset => setMoveAsset(asset)}
                 templatesByKey={templatesByKey}
+                isAdmin={isAdmin}
+                selectActive={bulkSelect.active}
+                isSelected={bulkSelect.isSelected}
+                onToggleSelect={bulkSelect.toggle}
               />
             </div>
           ))}
         </div>
+      )}
+
+      {confirmBulkDelete && (
+        <ConfirmDialog
+          title="Delete selected assets?"
+          message={`${bulkSelect.count} asset${bulkSelect.count === 1 ? '' : 's'} will be moved to Trash.`}
+          danger
+          confirmLabel="Delete"
+          onConfirm={handleBulkDelete}
+          onCancel={() => setConfirmBulkDelete(false)}
+        />
       )}
 
       {modal && (

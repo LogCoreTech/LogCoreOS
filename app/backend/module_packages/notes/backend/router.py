@@ -182,7 +182,9 @@ def delete_note(
 ):
     store_user = _resolve(current_user, workspace, path, "edit")
     try:
-        deleted = notes_service.delete_note(store_user, path, workspace)
+        deleted = notes_service.delete_note(
+            store_user, path, workspace, deleted_by=current_user["name"]
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if not deleted:
@@ -218,10 +220,78 @@ def delete_folder(
 ):
     store_user = _resolve(current_user, workspace, path, "edit")
     try:
-        notes_service.delete_folder(store_user, path, workspace)
+        notes_service.delete_folder(store_user, path, workspace, deleted_by=current_user["name"])
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"ok": True}
+
+
+class BulkDeleteItem(BaseModel):
+    path: str = Field(..., min_length=1, max_length=500)
+    type: str = Field(..., pattern="^(note|folder)$")
+
+
+class BulkDeleteRequest(BaseModel):
+    items: list[BulkDeleteItem]
+
+
+@router.post("/bulk-delete")
+def bulk_delete_notes(
+    req: BulkDeleteRequest,
+    current_user: dict = Depends(_require_notes),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_write_limit),
+):
+    """UX Polish Batch #4 — selecting a folder does not implicitly select its
+    descendants (no tri-state tree UI), so a selected item nested under
+    another selected folder is dropped before processing here (defense in
+    depth — the frontend already does this dedup too) — delete_folder()
+    already cascades server-side, and attempting a redundant delete on an
+    already-gone child would just report a confusing spurious failure.
+    Per-item access mirrors _resolve() above exactly, just reporting a
+    failure instead of aborting the whole batch."""
+    folder_paths = {item.path for item in req.items if item.type == "folder"}
+
+    def _is_nested(path: str) -> bool:
+        return any(path != fp and path.startswith(f"{fp}/") for fp in folder_paths)
+
+    survivors = [item for item in req.items if not _is_nested(item.path)]
+
+    deleted: list[str] = []
+    failed: list[dict] = []
+    for item in survivors:
+        try:
+            found = notes_service.find_note_store(
+                current_user["name"],
+                current_user.get("feature_role", "member"),
+                current_user.get("role") == "admin",
+                workspace,
+                item.path,
+            )
+            if not found:
+                failed.append({"path": item.path, "error": "Not found"})
+                continue
+            store_user, access = found
+            if not notes_service.meets(access, "edit"):
+                failed.append(
+                    {"path": item.path, "error": "You don't have access to change this note."}
+                )
+                continue
+            if item.type == "folder":
+                ok = notes_service.delete_folder(
+                    store_user, item.path, workspace, deleted_by=current_user["name"]
+                )
+            else:
+                ok = notes_service.delete_note(
+                    store_user, item.path, workspace, deleted_by=current_user["name"]
+                )
+            if ok:
+                deleted.append(item.path)
+            else:
+                failed.append({"path": item.path, "error": "Not found"})
+        except ValueError as exc:
+            failed.append({"path": item.path, "error": str(exc)})
+    return {"deleted": deleted, "failed": failed}
 
 
 @router.post("/move")

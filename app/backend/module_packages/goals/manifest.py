@@ -162,6 +162,7 @@ MODULE = ModuleManifest(
     ],
     read_only_agent_tools=["list_goals", "get_goal"],
     owned_block_types=["goals_progress"],
+    owned_trash_types=["goal"],
     owned_search_providers=[
         SearchProviderSpec(key="goals", label="Goals", resolve=_search_goals),
     ],

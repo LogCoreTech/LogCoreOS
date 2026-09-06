@@ -19,6 +19,7 @@ export const notes = {
   remove:       (path)                     => del(`/notes/file/${encodePath(path)}`),
   createFolder: (path)                     => post('/notes/folder', { path }),
   removeFolder: (path)                     => del(`/notes/folder/${encodePath(path)}`),
+  bulkDelete:   (items)                    => post('/notes/bulk-delete', { items }),
   move:         (from_path, to_path, type) => post('/notes/move', { from_path, to_path, type }),
   updateAccess: (data)                     => put('/notes/access', data),
   respondShare: (notifId, accept)          => post('/notes/shares/respond', { notif_id: notifId, accept }),

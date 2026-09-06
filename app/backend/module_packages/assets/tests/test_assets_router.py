@@ -27,11 +27,13 @@ from module_packages.assets.backend.router import (
     AccessUpdate,
     AssetCreate,
     AssetUpdate,
+    BulkDeleteRequest,
     ContributorEntry,
     ConvertRequest,
     ShareEntry,
     TemplateCreate,
     archive_asset,
+    bulk_delete_assets,
     convert_asset,
     create_asset,
     create_template,
@@ -110,6 +112,50 @@ def test_delete_asset(users):
 
     result = list_assets(None, False, users["alice"], "personal")
     assert not any(a["id"] == created["id"] for a in result)
+
+
+def test_bulk_delete_parent_and_child_same_request_succeeds_via_depth_order(users):
+    """delete_asset() has no cascade at all (raises if the target still has
+    children) — a same-request parent+child selection must succeed by
+    processing the child first, not by the frontend pre-filtering."""
+    parent = create_asset(AssetCreate(name="Parent"), users["alice"], "personal")
+    child = create_asset(
+        AssetCreate(name="Child", parent_id=parent["id"]), users["alice"], "personal"
+    )
+
+    result = bulk_delete_assets(
+        BulkDeleteRequest(ids=[parent["id"], child["id"]]), users["alice"], "personal"
+    )
+
+    assert set(result["deleted"]) == {parent["id"], child["id"]}
+    assert result["failed"] == []
+
+
+def test_bulk_delete_reports_partial_failure(users):
+    disposable = create_asset(AssetCreate(name="Disposable"), users["alice"], "personal")
+
+    result = bulk_delete_assets(
+        BulkDeleteRequest(
+            ids=[disposable["id"], "not-a-uuid", "11111111-1111-1111-1111-111111111111"]
+        ),
+        users["alice"],
+        "personal",
+    )
+
+    assert result["deleted"] == [disposable["id"]]
+    errors = {f["id"]: f["error"] for f in result["failed"]}
+    assert errors["not-a-uuid"] == "Invalid asset ID format"
+    assert errors["11111111-1111-1111-1111-111111111111"] == "Asset not found"
+
+
+def test_bulk_delete_pool_asset_blocked_for_non_admin(users):
+    pool_asset = create_asset(AssetCreate(name="Pool Item"), users["alice"], "personal")
+    convert_asset(pool_asset["id"], ConvertRequest(target="pool"), users["alice"], "personal")
+
+    result = bulk_delete_assets(BulkDeleteRequest(ids=[pool_asset["id"]]), users["bob"], "personal")
+
+    assert result["deleted"] == []
+    assert result["failed"][0]["error"] == "Only an admin can delete this asset"
 
 
 # convert_asset's admin-only gate is Depends(require_admin) itself (not an

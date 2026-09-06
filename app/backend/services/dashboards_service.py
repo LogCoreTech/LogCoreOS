@@ -773,17 +773,36 @@ def leave_share(viewer: str, owner: str, workspace: str, dashboard_id: str) -> b
 
 
 def delete_dashboard(
-    viewer: str, workspace: str, dashboard_id: str, is_admin: bool = False
+    viewer: str,
+    workspace: str,
+    dashboard_id: str,
+    is_admin: bool = False,
+    deleted_by: str = "",
 ) -> None:
     """Raises ValueError('not_found') or ValueError('floor_of_one')."""
     store = _load(viewer, workspace)
-    if not any(d["id"] == dashboard_id for d in store["dashboards"]):
-        raise ValueError("not_found")
-    owned = [d for d in store["dashboards"] if d["id"] == dashboard_id]
-    if not owned:
+    dashboard = next((d for d in store["dashboards"] if d["id"] == dashboard_id), None)
+    if dashboard is None:
         raise ValueError("not_found")
     if len(store["dashboards"]) == 1:
         raise ValueError("floor_of_one")
+
+    from module_packages.dashboard.backend import trash_handlers
+    from services import trash_service
+
+    title, subtitle = trash_handlers.describe("dashboard", dashboard)
+    trash_service.soft_delete(
+        store_user=viewer,
+        workspace=workspace,
+        module="dashboard",
+        record_type="dashboard",
+        original_id=dashboard_id,
+        payload=dashboard,
+        deleted_by=deleted_by,
+        title=title,
+        subtitle=subtitle,
+    )
+
     store["dashboards"] = [d for d in store["dashboards"] if d["id"] != dashboard_id]
     _save(viewer, workspace, store)
     dashboard_index.remove_dashboard(viewer, workspace, dashboard_id)

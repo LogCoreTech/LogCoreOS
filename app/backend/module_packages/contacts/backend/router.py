@@ -764,10 +764,66 @@ def delete_contact(
             store_user,
             contacts_service.effective_workspace(store_user, contact, workspace),
             contact_id,
+            deleted_by=current_user["name"],
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"ok": True}
+
+
+class BulkDeleteRequest(BaseModel):
+    ids: list[str]
+
+
+@router.post("/bulk-delete")
+def bulk_delete_contacts(
+    req: BulkDeleteRequest,
+    current_user: dict = Depends(_require_contacts),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_write_limit),
+):
+    """UX Polish Batch #4 — same per-item access resolution as the
+    single-item delete above (pool contacts admin-only, personal contacts
+    need edit access), just never letting one item's failure abort the rest
+    of the batch — a pool multi-select must not assume uniform access
+    across every selected item."""
+    deleted: list[str] = []
+    failed: list[dict] = []
+    for contact_id in req.ids:
+        try:
+            _validate_id(contact_id, "contact ID")
+            found = contacts_service.find_contact(
+                current_user["name"],
+                current_user.get("feature_role", "member"),
+                current_user.get("role") == "admin",
+                workspace,
+                contact_id,
+            )
+            if not found:
+                failed.append({"id": contact_id, "error": "Contact not found"})
+                continue
+            store_user, contact, access = found
+            if contacts_service.is_pool(store_user):
+                if current_user.get("role") != "admin":
+                    failed.append({"id": contact_id, "error": "Only admins delete pool contacts"})
+                    continue
+            elif access != "edit":
+                failed.append(
+                    {"id": contact_id, "error": "You don't have edit access to this contact."}
+                )
+                continue
+            contacts_service.delete_contact(
+                store_user,
+                contacts_service.effective_workspace(store_user, contact, workspace),
+                contact_id,
+                deleted_by=current_user["name"],
+            )
+            deleted.append(contact_id)
+        except HTTPException as exc:
+            failed.append({"id": contact_id, "error": exc.detail})
+        except ValueError as exc:
+            failed.append({"id": contact_id, "error": str(exc)})
+    return {"deleted": deleted, "failed": failed}
 
 
 # ---------------------------------------------------------------------------

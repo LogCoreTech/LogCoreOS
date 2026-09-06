@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { handleTabListKeyDown } from '../../../lib/tabListKeyboard'
 import HelpButton from '../../../components/HelpButton'
+import TrashLink from '../../../components/TrashLink'
 import { goals as goalsApi } from './api'
 import { tasks as tasksApi } from '../../tasks/frontend/api'
 import { priorities as prioritiesApi } from '../../../lib/api'
@@ -139,6 +140,7 @@ export default function Goals() {
         <span className="flex items-center gap-2">
           <h1 className="text-2xl font-bold">Goals</h1>
           <HelpButton section="goals" />
+          <TrashLink module="goals" />
         </span>
         <button onClick={() => setShowCreate(true)} className="btn-primary text-sm">
           + Add Goal

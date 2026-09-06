@@ -53,6 +53,7 @@ export const assets = {
   create:         (data)            => post('/assets', data),
   update:         (id, data)        => patch(`/assets/${id}`, data),
   remove:         (id)              => del(`/assets/${id}`),
+  bulkDelete:     (ids)             => post('/assets/bulk-delete', { ids }),
   archive:        (id, cascade = false) => post(`/assets/${id}/archive${cascade ? '?cascade=true' : ''}`, {}),
   unarchive:      (id, cascade = false) => post(`/assets/${id}/unarchive${cascade ? '?cascade=true' : ''}`, {}),
   members:        ()               => get('/assets/members'),

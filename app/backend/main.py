@@ -36,6 +36,7 @@ from routers import (
     setup,
     suggestions,
     tags,
+    trash,
     update,
     welcome_back,
 )
@@ -384,6 +385,7 @@ app.include_router(presence.router, prefix="/api/v1/presence", tags=["presence"]
 app.include_router(mod_store.router, prefix="/api/v1/mod-store", tags=["mod-store"])
 app.include_router(welcome_back.router, prefix="/api/v1/welcome-back", tags=["welcome-back"])
 app.include_router(pwa.router, prefix="/api/v1/pwa", tags=["pwa"])
+app.include_router(trash.router, prefix="/api/v1/trash", tags=["trash"])
 
 # Serve React frontend — must come last
 static_dir = Path(__file__).parent.parent / "frontend" / "dist"

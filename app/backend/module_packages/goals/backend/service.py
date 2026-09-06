@@ -158,6 +158,7 @@ def delete_goal(
     workspace: str = "personal",
     cascade: bool = False,
     delete_linked_tasks: bool = False,
+    deleted_by: str = "",
 ) -> dict | None:
     """Delete a goal per the owner's chosen scope. Returns None if not found,
     else {"deleted_goal_ids": [...], "affected_task_ids": [...]}.
@@ -170,38 +171,59 @@ def delete_goal(
     at any of the deleted goal ids — True deletes them too, False (default)
     just clears goal_id so they stay as ordinary tasks, matching the
     existing precedent that nothing else in this app cascade-deletes a Task
-    when the thing it's linked to goes away."""
-    result: dict | None = None
+    when the thing it's linked to goes away.
+
+    Every deleted goal record gets its own trash entry (soft_delete per
+    record_type="goal", not one entry per delete_goal() call), written
+    BEFORE the actual removal below — same index-before-removal ordering
+    every other module's delete function follows. A restore brings the raw
+    goal record back exactly as it was, but does NOT undo the
+    re-parenting/goal_id-clearing side effects below; those already happened
+    to OTHER records by the time a restore could run."""
+    goals = list_goals(store_user, workspace)
+    by_id = _by_id(goals)
+    target = by_id.get(goal_id)
+    if target is None:
+        return None
+
+    to_delete = collect_subtree_ids(goals, goal_id) if cascade else {goal_id}
+
+    from module_packages.goals.backend import trash_handlers
+    from services import trash_service
+
+    for gid in to_delete:
+        goal = by_id[gid]
+        title, subtitle = trash_handlers.describe("goal", goal)
+        trash_service.soft_delete(
+            store_user=store_user,
+            workspace=workspace,
+            module="goals",
+            record_type="goal",
+            original_id=gid,
+            payload=goal,
+            deleted_by=deleted_by,
+            title=title,
+            subtitle=subtitle,
+        )
 
     def _delete(store: dict) -> dict:
-        nonlocal result
-        goals = store["goals"]
-        by_id = _by_id(goals)
-        target = by_id.get(goal_id)
-        if target is None:
-            return store
-
+        current = store["goals"]
         if cascade:
-            to_delete = collect_subtree_ids(goals, goal_id)
-            store["goals"] = [g for g in goals if g["id"] not in to_delete]
+            store["goals"] = [g for g in current if g["id"] not in to_delete]
         else:
-            to_delete = {goal_id}
             new_parent = target.get("parent_id")
             new_goals = []
-            for g in goals:
+            for g in current:
                 if g["id"] == goal_id:
                     continue
                 if g.get("parent_id") == goal_id:
                     g = {**g, "parent_id": new_parent}
                 new_goals.append(g)
             store["goals"] = new_goals
-
-        result = {"deleted_goal_ids": sorted(to_delete)}
         return store
 
     update_json(goals_path(store_user, workspace), _delete, default={"goals": []})
-    if result is None:
-        return None
+    result: dict[str, Any] = {"deleted_goal_ids": sorted(to_delete)}
 
     from services import task_service
 
@@ -211,7 +233,7 @@ def delete_goal(
         if t.get("goal_id") in result["deleted_goal_ids"]:
             affected_task_ids.append(t["id"])
             if delete_linked_tasks:
-                task_service.delete_task(store_user, t["id"], workspace)
+                task_service.delete_task(store_user, t["id"], workspace, deleted_by=deleted_by)
             else:
                 task_service.update_task(store_user, t["id"], {"goal_id": None}, workspace)
     result["affected_task_ids"] = affected_task_ids

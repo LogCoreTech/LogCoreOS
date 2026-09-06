@@ -92,8 +92,14 @@ def test_delete_event_returns_true(brain):
 
 def test_delete_event_removes_from_list(brain):
     ev = add_event(USER, _make_event())
-    delete_event(USER, ev["id"])
+    delete_event(USER, ev["id"], deleted_by=USER)
     assert get_event(USER, ev["id"]) is None
+
+    from services.file_service import read_json as _read_json
+    from services.trash_service import _trash_json_path
+
+    data = _read_json(_trash_json_path(USER, "personal"))
+    assert any(e["original_id"] == ev["id"] for e in data["entries"])
 
 
 def test_delete_event_missing_returns_false(brain):

@@ -65,7 +65,29 @@ def update_event(
     return None
 
 
-def delete_event(user_name: str, event_id: str, workspace: str = "personal") -> bool:
+def delete_event(
+    user_name: str, event_id: str, workspace: str = "personal", deleted_by: str = ""
+) -> bool:
+    event = get_event(user_name, event_id, workspace)
+    if event is None:
+        return False
+
+    from module_packages.calendar.backend import trash_handlers
+    from services import trash_service
+
+    title, subtitle = trash_handlers.describe("event", event)
+    trash_service.soft_delete(
+        store_user=user_name,
+        workspace=workspace,
+        module="calendar",
+        record_type="event",
+        original_id=event_id,
+        payload=event,
+        deleted_by=deleted_by,
+        title=title,
+        subtitle=subtitle,
+    )
+
     data = read_json(events_path(user_name, workspace), default={"events": []})
     original_len = len(data["events"])
     data["events"] = [e for e in data["events"] if e["id"] != event_id]

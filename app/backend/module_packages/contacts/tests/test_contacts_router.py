@@ -26,11 +26,13 @@ from fastapi import HTTPException
 
 from module_packages.contacts.backend.router import (
     AccessRequest,
+    BulkDeleteRequest,
     ContactCreate,
     ContactUpdate,
     InteractionCreate,
     ShareEntry,
     archive_contact,
+    bulk_delete_contacts,
     convert_contact_to_pool,
     create_contact,
     delete_contact,
@@ -116,6 +118,36 @@ def test_delete_pool_contact_blocked_for_non_admin(users):
     with pytest.raises(HTTPException) as exc:
         delete_contact(created["id"], users["bob"], "personal")
     assert exc.value.status_code == 403
+
+
+def test_bulk_delete_success(users):
+    a = create_contact(ContactCreate(name="A", pool=False), users["alice"], "personal")
+    b = create_contact(ContactCreate(name="B", pool=False), users["alice"], "personal")
+
+    result = bulk_delete_contacts(
+        BulkDeleteRequest(ids=[a["id"], b["id"]]), users["alice"], "personal"
+    )
+
+    assert set(result["deleted"]) == {a["id"], b["id"]}
+    assert result["failed"] == []
+
+
+def test_bulk_delete_reports_partial_failure_not_bypassed_or_dropped(users):
+    """A pool multi-select shouldn't assume uniform access across every
+    selected item — items bob can't delete must come back in `failed`, not
+    silently skipped or silently allowed."""
+    mine = create_contact(ContactCreate(name="Bob's Own", pool=False), users["bob"], "personal")
+    pool_contact = create_contact(ContactCreate(name="Pool Vendor"), users["alice"], "personal")
+
+    result = bulk_delete_contacts(
+        BulkDeleteRequest(ids=[mine["id"], pool_contact["id"]]), users["bob"], "personal"
+    )
+
+    assert result["deleted"] == [mine["id"]]
+    assert result["failed"][0]["id"] == pool_contact["id"]
+    assert result["failed"][0]["error"] == "Only admins delete pool contacts"
+    # Confirmed not silently allowed either — still exists.
+    assert get_contact(pool_contact["id"], users["alice"], "personal") is not None
 
 
 def test_convert_to_pool_is_self_service_not_admin_only(users):

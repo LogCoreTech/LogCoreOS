@@ -283,6 +283,7 @@ MODULE = ModuleManifest(
     ],
     read_only_agent_tools=["list_contacts", "get_contact"],
     owned_block_types=["linked_deals", "contacts_list", "linked_assets"],
+    owned_trash_types=["contact"],
     owned_metric_providers=[
         MetricProviderSpec(
             key="number_field",

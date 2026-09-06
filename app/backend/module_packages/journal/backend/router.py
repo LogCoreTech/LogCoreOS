@@ -87,6 +87,8 @@ def delete_entry(
     _rl: None = Depends(_write_limit),
 ):
     _check_date(date)
-    if not journal_service.delete_entry(current_user["name"], date, workspace):
+    if not journal_service.delete_entry(
+        current_user["name"], date, workspace, deleted_by=current_user["name"]
+    ):
         raise HTTPException(status_code=404, detail="Entry not found")
     return {"ok": True}

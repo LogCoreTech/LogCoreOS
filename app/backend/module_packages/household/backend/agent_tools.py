@@ -191,7 +191,7 @@ def execute(name: str, inputs: dict, user: dict, workspace: str = "personal"):
     if name == "delete_shared_task":
         if user.get("role") != "admin":
             return {"error": "Admin access required"}
-        ok = task_service.delete_task("_household", inputs["task_id"])
+        ok = task_service.delete_task("_household", inputs["task_id"], deleted_by=user["name"])
         return {"deleted": ok}
 
     return None

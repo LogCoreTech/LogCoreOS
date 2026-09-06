@@ -96,13 +96,33 @@ def update_client(
     return None
 
 
-def delete_client(store_user: str, workspace: str, book_id: str, client_id: str) -> bool:
+def delete_client(
+    store_user: str, workspace: str, book_id: str, client_id: str, deleted_by: str = ""
+) -> bool:
     """Callers must first check client_has_invoices() — archive instead."""
     clients = list_clients(store_user, workspace, book_id)
-    remaining = [c for c in clients if c["id"] != client_id]
-    if len(remaining) == len(clients):
+    client = next((c for c in clients if c["id"] == client_id), None)
+    if client is None:
         return False
-    _save_clients(store_user, workspace, book_id, remaining)
+
+    from module_packages.finance.backend import trash_handlers
+    from services import trash_service
+
+    title, subtitle = trash_handlers.describe("client", client)
+    trash_service.soft_delete(
+        store_user=store_user,
+        workspace=workspace,
+        module="finance",
+        record_type="client",
+        original_id=client_id,
+        payload=client,
+        deleted_by=deleted_by,
+        title=title,
+        subtitle=subtitle,
+        original_location={"book_id": book_id},
+    )
+
+    _save_clients(store_user, workspace, book_id, [c for c in clients if c["id"] != client_id])
     return True
 
 
@@ -289,12 +309,32 @@ def update_invoice(
     return None
 
 
-def delete_invoice(store_user: str, workspace: str, book_id: str, invoice_id: str) -> bool:
+def delete_invoice(
+    store_user: str, workspace: str, book_id: str, invoice_id: str, deleted_by: str = ""
+) -> bool:
     invoices = _raw_invoices(store_user, workspace, book_id)
-    remaining = [i for i in invoices if i["id"] != invoice_id]
-    if len(remaining) == len(invoices):
+    invoice = next((i for i in invoices if i["id"] == invoice_id), None)
+    if invoice is None:
         return False
-    _save_invoices(store_user, workspace, book_id, remaining)
+
+    from module_packages.finance.backend import trash_handlers
+    from services import trash_service
+
+    title, subtitle = trash_handlers.describe("invoice", invoice)
+    trash_service.soft_delete(
+        store_user=store_user,
+        workspace=workspace,
+        module="finance",
+        record_type="invoice",
+        original_id=invoice_id,
+        payload=invoice,
+        deleted_by=deleted_by,
+        title=title,
+        subtitle=subtitle,
+        original_location={"book_id": book_id},
+    )
+
+    _save_invoices(store_user, workspace, book_id, [i for i in invoices if i["id"] != invoice_id])
     return True
 
 
@@ -390,7 +430,12 @@ def _deal_single_asset(viewer: str, workspace: str, deal_id: str | None) -> str 
 
 
 def delete_payment(
-    store_user: str, workspace: str, book_id: str, invoice_id: str, payment_id: str
+    store_user: str,
+    workspace: str,
+    book_id: str,
+    invoice_id: str,
+    payment_id: str,
+    deleted_by: str = "",
 ) -> dict | None:
     """Remove a payment record. The linked transaction (if any) stays — delete
     it from the ledger separately if it was a mistake."""
@@ -399,10 +444,28 @@ def delete_payment(
         if invoice["id"] != invoice_id:
             continue
         payments = invoice.get("payments", [])
-        remaining = [p for p in payments if p["id"] != payment_id]
-        if len(remaining) == len(payments):
+        payment = next((p for p in payments if p["id"] == payment_id), None)
+        if payment is None:
             return None
-        invoice["payments"] = remaining
+
+        from module_packages.finance.backend import trash_handlers
+        from services import trash_service
+
+        title, subtitle = trash_handlers.describe("payment", payment)
+        trash_service.soft_delete(
+            store_user=store_user,
+            workspace=workspace,
+            module="finance",
+            record_type="payment",
+            original_id=payment_id,
+            payload=payment,
+            deleted_by=deleted_by,
+            title=title,
+            subtitle=subtitle,
+            original_location={"book_id": book_id, "invoice_id": invoice_id},
+        )
+
+        invoice["payments"] = [p for p in payments if p["id"] != payment_id]
         if invoice.get("status") == "paid" and annotate_invoice(invoice)["balance_cents"] > 0:
             invoice["status"] = "sent"
         invoice["updated_at"] = _now()

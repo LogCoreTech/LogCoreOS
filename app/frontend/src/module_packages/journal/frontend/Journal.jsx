@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import HelpButton from '../../../components/HelpButton'
+import TrashLink from '../../../components/TrashLink'
 import { journal as journalApi } from './api'
 import { tags as tagsApi } from '../../../lib/api'
 import TagInput from '../../../components/TagInput'
@@ -113,7 +114,7 @@ export default function Journal() {
     <div className="max-w-2xl mx-auto w-full flex flex-col flex-1 min-h-0">
       {/* Header */}
       <div className="flex items-center justify-between mb-4 shrink-0">
-        <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">Journal</h1><HelpButton section="journal" /></span>
+        <span className="flex items-center gap-2"><h1 className="text-2xl font-bold">Journal</h1><HelpButton section="journal" /><TrashLink module="journal" /></span>
         <button
           onClick={() => setShowHistory(true)}
           className="btn-ghost text-xs px-3 py-1.5"

@@ -23,12 +23,9 @@ Keep this up to date. When a task is completed, **remove it** rather than checki
 
 ---
 
-## UX Polish Batch — owner-approved 2026-09-04, everything shipped except bulk actions/trash bin
+## UX Polish Batch — fully shipped 2026-09-05
 
-Full triage of the former "Cross-App UX & Polish" Idea Backlog list (34 items), dispositioned item-by-item with the owner via a structured interview (2026-09-04), then scoped into 4 dependency-ordered tiers via a second interview round in plan mode. Tiers 1-3 fully built, tested (backend suite 1334 passed, 0 failed), and verified — see `docs/Daily Notes/2026-09-04.md`'s matching entries for the full build writeup. Every Tier 4 item is now shipped except the two below, deliberately held for a joint design session per the owner's own explicit instruction ("wait till all the other unrelated items are complete then come back and lets flesh it out together").
-
-- [ ] **Bulk actions** — multi-select archive/delete/tag across Tasks, Notes, Assets, Contacts. Bulk-delete must route through the soft-delete/trash-bin item below once it exists, never a hard delete.
-- [ ] **Soft-delete / trash bin** — the single biggest gap in this backlog, and the largest remaining item. 30-day restore window, one shared Trash page respecting each module's own access rules, a new scheduler purge job. Every module's delete path — including every AI delete tool, not just human UI deletes — must route through it; this is the actual fix for the AI & Chat Agent backlog's #1 flagged finding (Auto mode destructive actions, no undo).
+Full triage of the former "Cross-App UX & Polish" Idea Backlog list (34 items), dispositioned item-by-item with the owner via a structured interview (2026-09-04), then scoped into 4 dependency-ordered tiers via a second interview round in plan mode. All 4 tiers now shipped and tested (backend suite 1443 passed; frontend `eslint --max-warnings 0` + `vite build` both clean across the whole `src` tree) — see `docs/Daily Notes/2026-09-04.md` and `2026-09-05.md` for the full build writeup, `docs/MEMORY.md` for the architecture decisions, and `CHANGELOG.md` for the user-facing description of every item. Not live-verified in a browser (no automation available in this environment) — flagged plainly per this project's own standard.
 
 **Group Home Assistant entities by room/area** — removed from this batch (real scope: `ha_service.get_areas()` returns only a flat area-name list and is called from nowhere in the frontend; no entity-to-area mapping exists). Re-scope alongside other Home Assistant module backlog work.
 

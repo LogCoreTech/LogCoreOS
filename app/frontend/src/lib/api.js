@@ -207,6 +207,13 @@ export const brain = {
   saveFile: (path, content)       => request('PUT', `/brain/files/${path}`, { content }),
 }
 
+export const trash = {
+  list:    ()                          => get('/trash'),
+  restore: (store_user, entry_id)      => post('/trash/restore', { store_user, entry_id }),
+  purge:   (store_user, entry_id)      => post('/trash/purge', { store_user, entry_id }),
+  bulk:    (items, action)             => post('/trash/bulk', { items, action }),
+}
+
 // App-wide online/offline presence (2026-08-17) — Layout.jsx pings this on
 // an interval while any page is open and visible. Distinct from
 // chat.presence above, which is a per-conversation "I'm looking at this

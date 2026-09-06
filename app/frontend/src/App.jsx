@@ -8,6 +8,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 import Layout from './components/Layout'
 import Dashboard from './module_packages/dashboard/frontend/Dashboard'
 import Brain from './pages/Brain'
+import Trash from './pages/Trash'
 import Settings from './pages/Settings'
 import SettingsAppearance from './pages/settings/Appearance'
 import SettingsNotifications from './pages/settings/Notifications'
@@ -104,6 +105,7 @@ export default function App() {
                     )
                   })}
                   <Route path="/brain"     element={<Brain />} />
+                  <Route path="/trash"     element={<Trash />} />
                   <Route path="/profile"   element={<Profile />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/settings/appearance" element={<SettingsAppearance />} />

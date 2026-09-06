@@ -104,6 +104,7 @@ MODULE = ModuleManifest(
     get_router=_get_router,
     owned_brain_paths=["Journal"],
     owned_agent_tools=["read_journal_entry", "write_journal_entry", "list_journal_entries"],
+    owned_trash_types=["journal_entry"],
     read_only_agent_tools=["read_journal_entry", "list_journal_entries"],
     owned_block_types=["journal_entry"],
     owned_search_providers=[

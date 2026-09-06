@@ -279,6 +279,7 @@ def delete_goal(
         store_ws,
         cascade=cascade,
         delete_linked_tasks=delete_linked_tasks,
+        deleted_by=current_user["name"],
     )
     if result is None:
         raise HTTPException(status_code=404, detail="Goal not found")

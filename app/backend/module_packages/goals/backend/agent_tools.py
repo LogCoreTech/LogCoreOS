@@ -148,6 +148,7 @@ def execute(name: str, inputs: dict, user: dict, workspace: str = "personal"):
             workspace,
             cascade=bool(inputs.get("cascade", False)),
             delete_linked_tasks=bool(inputs.get("delete_linked_tasks", False)),
+            deleted_by=user["name"],
         )
         if result is None:
             return {"error": f"Goal {inputs['goal_id']!r} not found"}

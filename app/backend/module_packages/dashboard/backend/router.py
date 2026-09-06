@@ -607,6 +607,7 @@ def delete_dashboard(
             found["store_workspace"],
             dashboard_id,
             current_user.get("role") == "admin",
+            deleted_by=current_user["name"],
         )
     except ValueError as e:
         if str(e) == "floor_of_one":

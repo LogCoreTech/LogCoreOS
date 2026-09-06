@@ -213,7 +213,9 @@ def execute(name: str, inputs: dict, user: dict, workspace: str = "personal"):
         )
         if err:
             return err
-        ok = notes_service.delete_note(store_user, inputs["path"], workspace)
+        ok = notes_service.delete_note(
+            store_user, inputs["path"], workspace, deleted_by=user["name"]
+        )
         return {"deleted": ok}
 
     if name == "move_note":

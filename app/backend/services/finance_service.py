@@ -722,21 +722,36 @@ def _strip_entries(record: dict, user_name: str) -> bool:
     return changed
 
 
-def delete_book(store_user: str, workspace: str, book_id: str) -> bool:
+def delete_book(store_user: str, workspace: str, book_id: str, deleted_by: str = "") -> bool:
     data = _load(store_user, workspace)
     books = data.get("books", [])
-    if not any(b["id"] == book_id for b in books):
+    book = next((b for b in books if b["id"] == book_id), None)
+    if book is None:
         return False
-    data["books"] = [b for b in books if b["id"] != book_id]
-    _save(store_user, workspace, data)
-    # Remove the book's data directory (shards). Receipts arrive in a later
-    # phase and live under the same dir, so this covers them too.
+
+    from module_packages.finance.backend import trash_handlers
+    from services import trash_service
+
+    # The book's whole data directory (shards, rules, receipts) moves as one
+    # unit into Trash — replaces the old shutil.rmtree with a rename.
     ws = store_workspace(store_user, workspace)
     book_dir = finance_book_dir(store_user, book_id, ws)
-    if book_dir.exists():
-        import shutil
+    title, subtitle = trash_handlers.describe("book", book)
+    trash_service.soft_delete(
+        store_user=store_user,
+        workspace=workspace,
+        module="finance",
+        record_type="book",
+        original_id=book_id,
+        payload=book,
+        deleted_by=deleted_by,
+        title=title,
+        subtitle=subtitle,
+        move_path=book_dir,
+    )
 
-        shutil.rmtree(book_dir, ignore_errors=True)
+    data["books"] = [b for b in books if b["id"] != book_id]
+    _save(store_user, workspace, data)
     return True
 
 
@@ -838,15 +853,36 @@ def update_account(
     return None
 
 
-def delete_account(store_user: str, workspace: str, book_id: str, account_id: str) -> bool:
+def delete_account(
+    store_user: str, workspace: str, book_id: str, account_id: str, deleted_by: str = ""
+) -> bool:
     """Remove an account. Callers must first check account_has_transactions()."""
     data = _load(store_user, workspace)
     for i, book in enumerate(data.get("books", [])):
         if book["id"] != book_id:
             continue
         accounts = book.get("accounts", [])
-        if not any(a["id"] == account_id for a in accounts):
+        account = next((a for a in accounts if a["id"] == account_id), None)
+        if account is None:
             return False
+
+        from module_packages.finance.backend import trash_handlers
+        from services import trash_service
+
+        title, subtitle = trash_handlers.describe("account", account)
+        trash_service.soft_delete(
+            store_user=store_user,
+            workspace=workspace,
+            module="finance",
+            record_type="account",
+            original_id=account_id,
+            payload=account,
+            deleted_by=deleted_by,
+            title=title,
+            subtitle=subtitle,
+            original_location={"book_id": book_id},
+        )
+
         book["accounts"] = [a for a in accounts if a["id"] != account_id]
         book["updated_at"] = _now()
         data["books"][i] = book
@@ -1127,20 +1163,38 @@ def update_transaction(
     return None
 
 
-def delete_transaction(store_user: str, workspace: str, book_id: str, tx_id: str) -> bool:
+def delete_transaction(
+    store_user: str, workspace: str, book_id: str, tx_id: str, deleted_by: str = ""
+) -> bool:
     for year in _shard_years(store_user, workspace, book_id):
         shard = _read_shard(store_user, workspace, book_id, year)
         transactions = shard.get("transactions", [])
-        remaining = [t for t in transactions if t["id"] != tx_id]
-        if len(remaining) != len(transactions):
-            shard["transactions"] = remaining
-            _write_shard(store_user, workspace, book_id, year, shard)
-            receipts = _receipts_dir(store_user, workspace, book_id, tx_id)
-            if receipts.exists():
-                import shutil
+        tx = next((t for t in transactions if t["id"] == tx_id), None)
+        if tx is None:
+            continue
 
-                shutil.rmtree(receipts, ignore_errors=True)
-            return True
+        from module_packages.finance.backend import trash_handlers
+        from services import trash_service
+
+        receipts = _receipts_dir(store_user, workspace, book_id, tx_id)
+        title, subtitle = trash_handlers.describe("transaction", tx)
+        trash_service.soft_delete(
+            store_user=store_user,
+            workspace=workspace,
+            module="finance",
+            record_type="transaction",
+            original_id=tx_id,
+            payload=tx,
+            deleted_by=deleted_by,
+            title=title,
+            subtitle=subtitle,
+            original_location={"book_id": book_id, "year": year},
+            move_path=receipts,
+        )
+
+        shard["transactions"] = [t for t in transactions if t["id"] != tx_id]
+        _write_shard(store_user, workspace, book_id, year, shard)
+        return True
     return False
 
 
@@ -1379,7 +1433,7 @@ def get_receipt(
 
 
 def delete_receipt(
-    store_user: str, workspace: str, book_id: str, tx_id: str, receipt_id: str
+    store_user: str, workspace: str, book_id: str, tx_id: str, receipt_id: str, deleted_by: str = ""
 ) -> bool:
     tx = get_transaction(store_user, workspace, book_id, tx_id)
     if not tx:
@@ -1388,10 +1442,27 @@ def delete_receipt(
     meta = next((a for a in attachments if a["id"] == receipt_id), None)
     if not meta:
         return False
+
+    from module_packages.finance.backend import trash_handlers
+    from services import trash_service
+
     ext = RECEIPT_TYPES.get(meta["mime"], "bin")
     path = _receipts_dir(store_user, workspace, book_id, tx_id) / f"{receipt_id}.{ext}"
-    if path.exists():
-        path.unlink()
+    title, subtitle = trash_handlers.describe("receipt", meta)
+    trash_service.soft_delete(
+        store_user=store_user,
+        workspace=workspace,
+        module="finance",
+        record_type="receipt",
+        original_id=receipt_id,
+        payload=meta,
+        deleted_by=deleted_by,
+        title=title,
+        subtitle=subtitle,
+        original_location={"book_id": book_id, "tx_id": tx_id},
+        move_path=path,
+    )
+
     attachments = [a for a in attachments if a["id"] != receipt_id]
     _update_tx_attachments(store_user, workspace, book_id, tx_id, attachments)
     return True
@@ -1496,14 +1567,34 @@ def apply_rules(store_user: str, workspace: str, book: dict, payee: str) -> str:
     return ""
 
 
-def delete_rule(store_user: str, workspace: str, book_id: str, rule_id: str) -> bool:
+def delete_rule(
+    store_user: str, workspace: str, book_id: str, rule_id: str, deleted_by: str = ""
+) -> bool:
     path = _rules_file(store_user, workspace, book_id)
     data = read_json(path, default={"rules": []})
     rules = data.get("rules", [])
-    remaining = [r for r in rules if r.get("id") != rule_id]
-    if len(remaining) == len(rules):
+    rule = next((r for r in rules if r.get("id") == rule_id), None)
+    if rule is None:
         return False
-    data["rules"] = remaining
+
+    from module_packages.finance.backend import trash_handlers
+    from services import trash_service
+
+    title, subtitle = trash_handlers.describe("rule", rule)
+    trash_service.soft_delete(
+        store_user=store_user,
+        workspace=workspace,
+        module="finance",
+        record_type="rule",
+        original_id=rule_id,
+        payload=rule,
+        deleted_by=deleted_by,
+        title=title,
+        subtitle=subtitle,
+        original_location={"book_id": book_id},
+    )
+
+    data["rules"] = [r for r in rules if r.get("id") != rule_id]
     write_json(path, data)
     return True
 

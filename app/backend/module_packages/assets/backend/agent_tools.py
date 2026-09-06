@@ -311,7 +311,10 @@ def execute(name: str, inputs: dict, user: dict, workspace: str = "personal"):
         if found is None:
             return {"error": f"Asset {inputs['asset_id']!r} not found"}
         ok = assets_service.delete_asset(
-            found["store"], inputs["asset_id"], workspace=found["store_workspace"]
+            found["store"],
+            inputs["asset_id"],
+            workspace=found["store_workspace"],
+            deleted_by=user["name"],
         )
         return {"deleted": ok}
 

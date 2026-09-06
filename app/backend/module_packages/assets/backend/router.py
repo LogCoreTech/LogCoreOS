@@ -743,11 +743,97 @@ def delete_asset(
         raise HTTPException(status_code=403, detail="Only an admin can delete this asset")
     try:
         if not assets_service.delete_asset(
-            found["store"], asset_id, workspace=found["store_workspace"]
+            found["store"],
+            asset_id,
+            workspace=found["store_workspace"],
+            deleted_by=current_user["name"],
         ):
             raise HTTPException(status_code=404, detail="Asset not found")
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
+
+
+class BulkDeleteRequest(BaseModel):
+    ids: list[str]
+
+
+@router.post("/bulk-delete")
+def bulk_delete_assets(
+    req: BulkDeleteRequest,
+    current_user: dict = Depends(_require_assets),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_write_limit),
+):
+    """UX Polish Batch #4 — assets_service.delete_asset() has no cascade at
+    all (raises if the target still has children), unlike Notes' own
+    delete_folder(). A same-request parent+child selection is resolved by
+    depth: deepest (leaf) items first, so a child is already gone by the
+    time its parent's own delete_asset() call runs."""
+    is_admin = current_user.get("role") == "admin"
+    pool_edit = current_user.get("pool_edit") or []
+    viewer_role = current_user.get("feature_role") or ""
+
+    resolved: list[tuple[str, dict]] = []
+    failed: list[dict] = []
+    for asset_id in req.ids:
+        try:
+            _validate_asset_id(asset_id)
+        except HTTPException as exc:
+            failed.append({"id": asset_id, "error": exc.detail})
+            continue
+        found = assets_service.find_asset(
+            current_user["name"],
+            workspace,
+            asset_id,
+            is_admin=is_admin,
+            pool_edit=pool_edit,
+            viewer_role=viewer_role,
+        )
+        if found is None:
+            failed.append({"id": asset_id, "error": "Asset not found"})
+            continue
+        if not found["can_delete"]:
+            failed.append({"id": asset_id, "error": "Only an admin can delete this asset"})
+            continue
+        resolved.append((asset_id, found))
+
+    def _depth(found: dict) -> int:
+        depth = 0
+        current = found["asset"]
+        seen = {current["id"]}
+        while current.get("parent_id") and current["parent_id"] not in seen:
+            parent_found = assets_service.find_asset(
+                current_user["name"],
+                workspace,
+                current["parent_id"],
+                is_admin=is_admin,
+                pool_edit=pool_edit,
+                viewer_role=viewer_role,
+            )
+            if parent_found is None:
+                break
+            current = parent_found["asset"]
+            seen.add(current["id"])
+            depth += 1
+        return depth
+
+    resolved.sort(key=lambda pair: _depth(pair[1]), reverse=True)
+
+    deleted: list[str] = []
+    for asset_id, found in resolved:
+        try:
+            if assets_service.delete_asset(
+                found["store"],
+                asset_id,
+                workspace=found["store_workspace"],
+                deleted_by=current_user["name"],
+            ):
+                deleted.append(asset_id)
+            else:
+                failed.append({"id": asset_id, "error": "Asset not found"})
+        except ValueError as exc:
+            failed.append({"id": asset_id, "error": str(exc)})
+    return {"deleted": deleted, "failed": failed}
 
 
 @router.post("/{asset_id}/convert")

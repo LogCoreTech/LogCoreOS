@@ -310,6 +310,18 @@ MODULE = ModuleManifest(
         "get_balance_projection",
     ],
     owned_block_types=["finance_activity", "finance_book_report"],
+    owned_trash_types=[
+        "book",
+        "account",
+        "transaction",
+        "receipt",
+        "rule",
+        "recurring",
+        "planned",
+        "client",
+        "invoice",
+        "payment",
+    ],
     owned_search_providers=[
         SearchProviderSpec(key="finance", label="Finance", resolve=_search_finance),
     ],

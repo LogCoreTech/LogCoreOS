@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import HelpButton from '../../../components/HelpButton'
+import TrashLink from '../../../components/TrashLink'
 import { useSearchParams } from 'react-router-dom'
 import { finance as financeApi } from './api'
 import { assets as assetsApi } from '../../assets/frontend/api'
@@ -153,6 +154,7 @@ export default function Finance() {
         <span className="flex items-center gap-2">
           <h1 className="text-2xl font-bold">Finance</h1>
           <HelpButton section="finance" />
+          <TrashLink module="finance" />
           <button onClick={() => setShowNewBook(true)} className="btn-primary text-sm whitespace-nowrap md:hidden">＋ New book</button>
         </span>
         <div className="flex gap-2 shrink-0">

@@ -13,7 +13,7 @@ import importlib
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
     from fastapi import APIRouter, FastAPI
@@ -106,6 +106,7 @@ class ModuleManifest:
     owned_block_types: list[str] = field(default_factory=list)
     owned_metric_providers: list[MetricProviderSpec] = field(default_factory=list)
     owned_search_providers: list[SearchProviderSpec] = field(default_factory=list)
+    owned_trash_types: list[str] = field(default_factory=list)
     migrations: list[tuple[str, MigrationFn]] = field(default_factory=list)
     uninstallable: bool = False
     on_install: Callable[[Path], None] | None = None
@@ -323,6 +324,32 @@ def search_providers() -> dict[str, SearchProviderSpec]:
         for spec in manifest.owned_search_providers:
             providers[f"{module_id}:{spec.key}"] = spec
     return providers
+
+
+def trash_dispatch() -> dict[str, tuple[str, Any]]:
+    """{record_type: (module_id, trash_handlers module)} for every ACTIVE
+    module that declares owned_trash_types — the registry services/
+    trash_service.py dispatches restore()/access_check() calls through so it
+    never has to import any module_packages/* itself, the same discovery
+    shape as metric_providers()/search_providers() above. A module whose
+    trash_handlers.py fails to import is logged and skipped, same asymmetric-
+    failure handling as register_routers() for an optional module — a
+    broken module's trash entries just become undispatchable (surfaced to
+    the user as TrashModuleUnavailable on restore, not a crash here)."""
+    dispatch: dict[str, tuple[str, Any]] = {}
+    for module_id, manifest in active_manifests().items():
+        if not manifest.owned_trash_types:
+            continue
+        try:
+            handlers = importlib.import_module(
+                f"module_packages.{module_id}.backend.trash_handlers"
+            )
+        except Exception:
+            logger.exception("module_packages/%s: trash_handlers failed to import", module_id)
+            continue
+        for record_type in manifest.owned_trash_types:
+            dispatch[record_type] = (module_id, handlers)
+    return dispatch
 
 
 def brain_paths_for_disabled(disabled_modules: set[str]) -> set[str]:

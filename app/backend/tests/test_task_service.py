@@ -90,9 +90,14 @@ def test_update_task_fields(user_brain):
 
 def test_delete_task(user_brain):
     task = task_service.add_task(USER, _make_task())
-    result = task_service.delete_task(USER, task["id"])
+    result = task_service.delete_task(USER, task["id"], deleted_by=USER)
     assert result is True
     assert task_service.get_task(USER, task["id"]) is None
+
+    from services import trash_service
+
+    entries = trash_service.list_trash_for_user({"name": USER, "disabled_modules": []}, "personal")
+    assert any(e["original_id"] == task["id"] and e["title"] == "Test Task" for e in entries)
 
 
 def test_delete_nonexistent_task(user_brain):

@@ -76,6 +76,16 @@ def job_recurring_processor():
         logger.exception("recurring processor failed")
 
 
+def job_trash_purge():
+    from services import trash_service
+
+    try:
+        results = trash_service.purge_expired()
+        logger.info("trash purge: %s", results)
+    except Exception:
+        logger.exception("trash purge failed")
+
+
 def job_morning_digest():
     from services.suggestions_service import get_config, run_suggestion_sync
 
@@ -445,6 +455,7 @@ def start():
         id="goal_due_urgency",
     )
     scheduler.add_job(job_cleanup_revoked_jtis, _cron(hour=3, minute=0), id="jti_cleanup")
+    scheduler.add_job(job_trash_purge, _cron(hour=2, minute=0), id="trash_purge")
     # Workflow sync: 90s after boot (wait for n8n), then every 6 hours
     scheduler.add_job(
         job_workflow_sync,

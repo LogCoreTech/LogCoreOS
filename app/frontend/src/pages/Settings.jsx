@@ -14,6 +14,7 @@ export default function Settings() {
         <MenuRow icon="🔔" label="Notifications" subtitle="ntfy, push notifications, proactive suggestions" to="/settings/notifications" />
         <MenuRow icon="⭐" label="Shortcuts" subtitle="Pin modules to the bottom bar & sidebar" to="/settings/shortcuts" />
         <MenuRow icon="🗂" label="Account" subtitle="Timezone, your Brain, export data" to="/settings/account" />
+        <MenuRow icon="🗑" label="Trash" subtitle="Restore or permanently remove deleted items" to="/trash" />
       </div>
 
       {user?.role === 'admin' && (

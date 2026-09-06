@@ -221,7 +221,7 @@ def execute(name: str, inputs: dict, user: dict, workspace: str = "personal"):
         return result
 
     if name == "delete_task":
-        ok = task_service.delete_task(user["name"], inputs["task_id"])
+        ok = task_service.delete_task(user["name"], inputs["task_id"], deleted_by=user["name"])
         return {"deleted": ok}
 
     if name == "get_top3_tasks":

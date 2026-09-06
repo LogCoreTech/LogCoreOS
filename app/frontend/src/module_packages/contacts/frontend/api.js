@@ -56,6 +56,7 @@ export const contacts = {
   create:       (data)              => post('/contacts', data),
   update:       (id, data)          => patch(`/contacts/${id}`, data),
   remove:       (id)                => del(`/contacts/${id}`),
+  bulkDelete:   (ids)               => post('/contacts/bulk-delete', { ids }),
   archive:      (id)                => post(`/contacts/${id}/archive`, {}),
   unarchive:    (id)                => post(`/contacts/${id}/unarchive`, {}),
   convert:      (id)                => post(`/contacts/${id}/convert`, {}),

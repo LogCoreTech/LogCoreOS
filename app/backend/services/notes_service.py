@@ -193,12 +193,32 @@ def update_note(
     }
 
 
-def delete_note(user_name: str, path: str, workspace: str = "personal") -> bool:
+def delete_note(
+    user_name: str, path: str, workspace: str = "personal", deleted_by: str = ""
+) -> bool:
     _validate_path(path)
     p = _note_path(user_name, path, workspace)
     if not p.exists():
         return False
-    p.unlink()
+
+    from module_packages.notes.backend import trash_handlers
+    from services import trash_service
+
+    tags = get_note_tags(user_name, workspace, path)
+    title, subtitle = trash_handlers.describe("note", {"path": path})
+    trash_service.soft_delete(
+        store_user=user_name,
+        workspace=workspace,
+        module="notes",
+        record_type="note",
+        original_id=path,
+        payload=None,
+        deleted_by=deleted_by,
+        title=title,
+        subtitle=subtitle,
+        original_location={"tags": {path: tags} if tags else {}},
+        move_path=p,
+    )
     _drop_archived_entry(user_name, workspace, path)
     _drop_note_tags_entry(user_name, workspace, path)
     return True
@@ -213,12 +233,33 @@ def create_folder(user_name: str, path: str, workspace: str = "personal") -> dic
     return {"type": "folder", "path": path, "name": Path(path).name}
 
 
-def delete_folder(user_name: str, path: str, workspace: str = "personal") -> bool:
+def delete_folder(
+    user_name: str, path: str, workspace: str = "personal", deleted_by: str = ""
+) -> bool:
     _validate_path(path)
     p = _folder_path(user_name, path, workspace)
     if not p.exists() or not p.is_dir():
         return False
-    shutil.rmtree(p)
+
+    from module_packages.notes.backend import trash_handlers
+    from services import trash_service
+
+    all_tags = load_note_tags(user_name, workspace)
+    nested_tags = {k: v for k, v in all_tags.items() if k == path or k.startswith(f"{path}/")}
+    title, subtitle = trash_handlers.describe("folder", {"path": path})
+    trash_service.soft_delete(
+        store_user=user_name,
+        workspace=workspace,
+        module="notes",
+        record_type="folder",
+        original_id=path,
+        payload=None,
+        deleted_by=deleted_by,
+        title=title,
+        subtitle=subtitle,
+        original_location={"tags": nested_tags},
+        move_path=p,
+    )
     _drop_archived_prefix(user_name, workspace, path)
     _drop_note_tags_prefix(user_name, workspace, path)
     return True

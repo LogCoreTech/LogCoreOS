@@ -208,7 +208,9 @@ def delete_recurring(
     store_user, _book, access = _find_or_404(current_user, workspace, book_id)
     _require_edit(access)
     _validate_uuid(item_id, "item ID")
-    if not planning.delete_recurring(store_user, workspace, book_id, item_id):
+    if not planning.delete_recurring(
+        store_user, workspace, book_id, item_id, deleted_by=current_user["name"]
+    ):
         raise HTTPException(status_code=404, detail="Recurring item not found")
     return {"ok": True}
 
@@ -282,7 +284,9 @@ def delete_planned(
     store_user, _book, access = _find_or_404(current_user, workspace, book_id)
     _require_edit(access)
     _validate_uuid(item_id, "item ID")
-    if not planning.delete_planned(store_user, workspace, book_id, item_id):
+    if not planning.delete_planned(
+        store_user, workspace, book_id, item_id, deleted_by=current_user["name"]
+    ):
         raise HTTPException(status_code=404, detail="Planned item not found")
     return {"ok": True}
 

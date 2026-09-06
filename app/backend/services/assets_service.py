@@ -1127,21 +1127,39 @@ def set_archived(
     return asset
 
 
-def delete_asset(store_user: str, asset_id: str, workspace: str = "personal") -> bool:
+def delete_asset(
+    store_user: str, asset_id: str, workspace: str = "personal", deleted_by: str = ""
+) -> bool:
     store = _load(store_user, workspace)
-    if not any(a["id"] == asset_id for a in store["assets"]):
+    asset = next((a for a in store["assets"] if a["id"] == asset_id), None)
+    if asset is None:
         return False
     children = [a for a in store["assets"] if a.get("parent_id") == asset_id]
     if children:
         raise ValueError(
             f"This asset has {len(children)} child asset(s) — delete or move them first"
         )
+
+    from module_packages.assets.backend import trash_handlers
+    from services import trash_service
+
+    title, subtitle = trash_handlers.describe("asset", asset)
+    trash_service.soft_delete(
+        store_user=store_user,
+        workspace=workspace,
+        module="assets",
+        record_type="asset",
+        original_id=asset_id,
+        payload=asset,
+        deleted_by=deleted_by,
+        title=title,
+        subtitle=subtitle,
+        move_path=assets_files_path(store_user, workspace) / asset_id,
+    )
+
     store["assets"] = [a for a in store["assets"] if a["id"] != asset_id]
     _save(store_user, workspace, store)
     assets_index.reindex_owner(store_user, workspace)
-    files_dir = assets_files_path(store_user, workspace) / asset_id
-    if files_dir.exists():
-        shutil.rmtree(files_dir)
     return True
 
 

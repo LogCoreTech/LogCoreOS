@@ -120,6 +120,7 @@ MODULE = ModuleManifest(
     ],
     read_only_agent_tools=["list_notes", "read_note"],
     owned_block_types=["note_embed"],
+    owned_trash_types=["note", "folder"],
     owned_search_providers=[
         SearchProviderSpec(key="notes", label="Notes", resolve=_search_notes),
     ],

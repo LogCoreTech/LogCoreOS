@@ -1,10 +1,15 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import HelpButton from '../../../components/HelpButton'
+import TrashLink from '../../../components/TrashLink'
 import { notes as notesApi } from './api'
 import { tags as tagsApi } from '../../../lib/api'
 import TagInput from '../../../components/TagInput'
 import ConfirmDialog from '../../../components/ConfirmDialog'
+import SelectCheckbox from '../../../components/SelectCheckbox'
+import BulkActionBar from '../../../components/BulkActionBar'
+import useBulkSelect from '../../../lib/useBulkSelect'
+import { useToast } from '../../../lib/toast'
 import { useWorkspace } from '../../../lib/workspace'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
@@ -37,13 +42,23 @@ function allFolderPaths(items) {
   return items.filter(i => i.type === 'folder').map(i => i.path)
 }
 
+// Mirrors ContextMenu's own inline canManage derivation exactly — a note or
+// folder is bulk-selectable only where the single-item "···" menu would
+// have offered Delete in the first place.
+function canManageNode(node) {
+  const own = !node._owner
+  const isPool = node._owner === 'household' || node._owner === 'team'
+  return own || (isPool && node._access === 'edit')
+}
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function TreeNode({ node, depth, selectedPath, openFolders, onSelectNote, onToggleFolder, onAction, onNotePointerDown, dragActive, overFolder }) {
+function TreeNode({ node, depth, selectedPath, openFolders, onSelectNote, onToggleFolder, onAction, onNotePointerDown, dragActive, overFolder, canManage, selectActive, isNodeSelected, onToggleSelect }) {
   const isOpen = openFolders.has(node.path)
   const isSelected = selectedPath === node.path
   const indent = depth * 16
   const isDropTarget = dragActive && overFolder === node.path
+  const selectable = canManage(node)
 
   if (node.type === 'folder') {
     return (
@@ -60,6 +75,14 @@ function TreeNode({ node, depth, selectedPath, openFolders, onSelectNote, onTogg
           style={{ paddingLeft: `${8 + indent}px` }}
           onClick={() => onToggleFolder(node.path)}
         >
+          {selectable && (
+            <SelectCheckbox
+              checked={isNodeSelected(node)}
+              onChange={() => onToggleSelect(node)}
+              label={`Select ${node.name}`}
+              className={selectActive ? 'inline-flex' : 'hidden md:inline-flex'}
+            />
+          )}
           <span className="text-charcoal-400 dark:text-charcoal-500 text-xs w-3 shrink-0">
             {isOpen ? '▼' : '▶'}
           </span>
@@ -88,6 +111,10 @@ function TreeNode({ node, depth, selectedPath, openFolders, onSelectNote, onTogg
             onNotePointerDown={onNotePointerDown}
             dragActive={dragActive}
             overFolder={overFolder}
+            canManage={canManage}
+            selectActive={selectActive}
+            isNodeSelected={isNodeSelected}
+            onToggleSelect={onToggleSelect}
           />
         ))}
       </div>
@@ -105,6 +132,14 @@ function TreeNode({ node, depth, selectedPath, openFolders, onSelectNote, onTogg
       }`}
       onClick={() => onSelectNote(node.path)}
     >
+      {selectable && (
+        <SelectCheckbox
+          checked={isNodeSelected(node)}
+          onChange={() => onToggleSelect(node)}
+          label={`Select ${node.name}`}
+          className={selectActive ? 'inline-flex' : 'hidden md:inline-flex'}
+        />
+      )}
       <span className="text-base leading-none shrink-0">📝</span>
       <span className={`flex-1 text-sm truncate ${node.archived ? 'line-through text-charcoal-400' : ''}`}>{node.name}</span>
       {node.archived && <span className="text-[10px] text-charcoal-400 shrink-0">archived</span>}
@@ -230,6 +265,9 @@ function NoteShareModal({ node, onClose, onSaved }) {
 
 export default function Notes() {
   const { workspace } = useWorkspace()
+  const toast = useToast()
+  const bulkSelect = useBulkSelect(item => item.path)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
   const [items, setItems]           = useState([])
   const [tree, setTree]             = useState([])
   const [loading, setLoading]       = useState(true)
@@ -599,6 +637,52 @@ export default function Notes() {
     }
   }
 
+  // Selecting a folder does not implicitly select its own descendants (no
+  // tri-state tree UI) — but if both are selected anyway, drop the nested
+  // one client-side before sending, same defense-in-depth dedup the backend
+  // repeats server-side (delete_folder() already cascades on its own).
+  async function handleBulkDelete() {
+    setConfirmState(null)
+    setBulkDeleting(true)
+    try {
+      const selectedItems = items.filter(i => bulkSelect.selected.has(i.path))
+      const folderPaths = selectedItems.filter(i => i.type === 'folder').map(i => i.path)
+      const survivors = selectedItems.filter(
+        i => !folderPaths.some(fp => i.path !== fp && i.path.startsWith(`${fp}/`))
+      )
+      const result = await notesApi.bulkDelete(survivors.map(i => ({ path: i.path, type: i.type })))
+      const deletedSet = new Set(result.deleted)
+      const deletedFolders = survivors
+        .filter(i => i.type === 'folder' && deletedSet.has(i.path))
+        .map(i => i.path)
+      if (note && (deletedSet.has(note.path) || deletedFolders.some(fp => note.path.startsWith(`${fp}/`)))) {
+        setNote(null)
+        setSelectedPath(null)
+      }
+      if (result.failed?.length) {
+        toast.error(`${result.deleted.length} deleted, ${result.failed.length} couldn't be deleted.`)
+      } else {
+        toast.success(`${result.deleted.length} item${result.deleted.length === 1 ? '' : 's'} deleted`)
+      }
+      bulkSelect.stop()
+      load()
+    } catch (err) {
+      toast.error(err.message || 'Bulk delete failed.')
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
+  function confirmBulkDelete() {
+    setConfirmState({
+      title: 'Delete selected items?',
+      message: `${bulkSelect.count} item${bulkSelect.count === 1 ? '' : 's'} will be moved to Trash.`,
+      danger: true,
+      confirmLabel: 'Delete',
+      onConfirm: handleBulkDelete,
+    })
+  }
+
   function openModal(type, item = null) {
     setModalInput(type === 'rename' ? item?.name || '' : '')
     setModalTarget('')
@@ -614,7 +698,13 @@ export default function Notes() {
     <div className="flex flex-col h-full">
       {/* Sidebar header */}
       <div className="flex items-center gap-2 px-3 py-3 border-b border-charcoal-200 dark:border-charcoal-700 shrink-0">
-        <span className="font-semibold text-sm flex-1 flex items-center gap-1.5">Notes<HelpButton section="notes" /></span>
+        <span className="font-semibold text-sm flex-1 flex items-center gap-1.5">Notes<HelpButton section="notes" /><TrashLink module="notes" /></span>
+        <button
+          onClick={() => (bulkSelect.active ? bulkSelect.stop() : bulkSelect.setActive(true))}
+          className="text-xs px-2 py-1 rounded-md border border-charcoal-300 dark:border-charcoal-600 hover:bg-charcoal-100 dark:hover:bg-charcoal-700 transition-colors md:hidden"
+        >
+          {bulkSelect.active ? 'Cancel' : 'Select'}
+        </button>
         <button
           onClick={() => { setModalInput(''); openModal('newNote') }}
           className="text-xs px-2 py-1 rounded-md bg-orange-500 hover:bg-orange-600 text-white font-medium transition-colors"
@@ -641,6 +731,14 @@ export default function Notes() {
           {showArchived ? 'Archived shown' : 'Show archived'}
         </button>
       </div>
+
+      <BulkActionBar
+        count={bulkSelect.count}
+        onCancel={bulkSelect.stop}
+        actions={[
+          { label: 'Delete', variant: 'danger', busy: bulkDeleting, onClick: confirmBulkDelete },
+        ]}
+      />
 
       {/* Tree — the container is the root ("no folder") drop target */}
       <div
@@ -682,6 +780,10 @@ export default function Notes() {
               onNotePointerDown={startNoteDrag}
               dragActive={dragActive}
               overFolder={overFolder}
+              canManage={canManageNode}
+              selectActive={bulkSelect.active}
+              isNodeSelected={bulkSelect.isSelected}
+              onToggleSelect={bulkSelect.toggle}
             />
           ))
         )}
