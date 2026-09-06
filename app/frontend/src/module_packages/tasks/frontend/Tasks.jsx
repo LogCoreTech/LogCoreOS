@@ -60,6 +60,7 @@ export default function Tasks() {
   const [tempOrder, setTempOrder] = useState([])
   const [dragIdx, setDragIdx] = useState(null)
   const [loading, setLoading] = useState(true)
+  const loadGeneration = useRef(0)
   const [assetList, setAssetList] = useState([])
   const assetsEnabled = !user?.disabledModules?.includes('assets')
   const [searchParams, setSearchParams] = useSearchParams()
@@ -107,6 +108,17 @@ export default function Tasks() {
   }, [searchParams, setSearchParams])
 
   async function load() {
+    // `load()` is called from a lot of independent places (mount, pull-to-
+    // refresh, every delete/save handler, bulk-delete) with no relationship
+    // to each other — two overlapping calls can have their responses arrive
+    // out of order over the network. Without this guard, an older call's
+    // slower response can land AFTER a newer call's faster one and silently
+    // overwrite the correct up-to-date list with stale data (a real report:
+    // an item deleted via a newer `load()` reappeared because an older,
+    // still-in-flight `load()` resolved later and won the last `setState`).
+    // `loadGeneration` makes only the most-recently-STARTED call's response
+    // ever actually apply.
+    const myGeneration = ++loadGeneration.current
     setLoading(true)
     const [all, prio, pool, assetsRes] = await Promise.allSettled([
       tasksApi.list(),
@@ -114,6 +126,7 @@ export default function Tasks() {
       tasksApi.assigned(),
       assetsEnabled ? assetsApi.list() : Promise.resolve([]),
     ])
+    if (loadGeneration.current !== myGeneration) return
     if (all.status === 'fulfilled') setTaskList(all.value)
     if (prio.status === 'fulfilled') {
       setPriorityOrder(prio.value.order || [])

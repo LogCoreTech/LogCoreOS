@@ -321,21 +321,33 @@ export default function Notes() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
   const [overFolder, setOverFolder] = useState(null)   // folder path ('' = root) under the pointer
+  const loadGeneration = useRef(0)
   const autoSaveTimer = useRef(null)
   const textareaRef = useRef(null)
   const dragRef = useRef(null)
   const overFolderRef = useRef(null)
 
   const load = useCallback(async () => {
+    // `load()` is called from a lot of independent places (mount, every
+    // delete/save/move/archive handler, bulk-delete) with no relationship to
+    // each other — two overlapping calls can have their responses arrive out
+    // of order over the network. Without this guard, an older call's slower
+    // response can land AFTER a newer call's faster one and silently
+    // overwrite the correct up-to-date tree with stale data (a real report:
+    // a deleted note reappeared because an older, still-in-flight `load()`
+    // resolved later and won the last `setState`). `loadGeneration` makes
+    // only the most-recently-STARTED call's response ever actually apply.
+    const myGeneration = ++loadGeneration.current
     setLoading(true)
     try {
       const data = await notesApi.list(showArchived)
+      if (loadGeneration.current !== myGeneration) return
       setItems(data)
       setTree(buildTree(data))
     } catch {
-      setError('Could not load notes.')
+      if (loadGeneration.current === myGeneration) setError('Could not load notes.')
     } finally {
-      setLoading(false)
+      if (loadGeneration.current === myGeneration) setLoading(false)
     }
     // `workspace` isn't referenced in this callback's own body (the active
     // workspace flows through api.js's request header instead) — it's kept

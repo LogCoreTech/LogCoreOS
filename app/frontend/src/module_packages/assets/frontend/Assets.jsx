@@ -191,6 +191,7 @@ export default function Assets() {
   const [templates, setTemplates] = useState([])
   const [items, setItems] = useState([])
   const [loaded, setLoaded] = useState(false)
+  const loadGeneration = useRef(0)
   const [error, setError] = useState('')
   const [expanded, setExpanded] = useState(new Set())
   const [query, setQuery] = useState('')
@@ -221,18 +222,29 @@ export default function Assets() {
   }, [searchParams, setSearchParams])
 
   async function load() {
+    // `load()` is called from a lot of independent places (mount, every
+    // delete/save/move/archive handler, bulk-delete) with no relationship to
+    // each other — two overlapping calls can have their responses arrive out
+    // of order over the network. Without this guard, an older call's slower
+    // response can land AFTER a newer call's faster one and silently
+    // overwrite the correct up-to-date tree with stale data (a real report:
+    // a deleted asset reappeared because an older, still-in-flight `load()`
+    // resolved later and won the last `setState`). `loadGeneration` makes
+    // only the most-recently-STARTED call's response ever actually apply.
+    const myGeneration = ++loadGeneration.current
     setError('')
     try {
       const [t, a] = await Promise.all([
         assetsApi.listTemplates(),
         assetsApi.list({ includeArchived: showArchived }),
       ])
+      if (loadGeneration.current !== myGeneration) return
       setTemplates(Array.isArray(t) ? t : [])
       setItems(Array.isArray(a) ? a : [])
     } catch (err) {
-      setError(err.message)
+      if (loadGeneration.current === myGeneration) setError(err.message)
     } finally {
-      setLoaded(true)
+      if (loadGeneration.current === myGeneration) setLoaded(true)
     }
   }
 

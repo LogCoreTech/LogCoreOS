@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import HelpButton from '../../../components/HelpButton'
 import TrashLink from '../../../components/TrashLink'
 import EmptyState from '../../../components/EmptyState'
@@ -34,6 +34,7 @@ export default function Contacts() {
   const [fields, setFields] = useState([])
   const [pipeline, setPipeline] = useState(['Lead', 'Contacted', 'Proposal', 'Negotiation', 'Won', 'Lost'])
   const [loading, setLoading] = useState(true)
+  const loadGeneration = useRef(0)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [showArchived, setShowArchived] = useState(false)
@@ -64,6 +65,17 @@ export default function Contacts() {
   }
 
   const load = useCallback(async () => {
+    // `load()` is called from a lot of independent places (mount, the 60s
+    // presence poll, every delete/save handler, bulk-delete) with no
+    // relationship to each other — two overlapping calls can have their
+    // responses arrive out of order over the network. Without this guard, an
+    // older call's slower response can land AFTER a newer call's faster one
+    // and silently overwrite the correct up-to-date list with stale data (a
+    // real report: a deleted contact reappeared because an older,
+    // still-in-flight `load()` resolved later and won the last `setState`).
+    // `loadGeneration` makes only the most-recently-STARTED call's response
+    // ever actually apply.
+    const myGeneration = ++loadGeneration.current
     setLoading(true)
     try {
       const [list, f, p] = await Promise.all([
@@ -71,17 +83,29 @@ export default function Contacts() {
         contactsApi.fields().catch(() => []),
         contactsApi.pipeline().catch(() => ({ stages: [] })),
       ])
+      if (loadGeneration.current !== myGeneration) return
       const cleanList = Array.isArray(list) ? list : []
       setItems(cleanList)
       setFields(Array.isArray(f) ? f : [])
       if (p?.stages?.length) setPipeline(p.stages)
-      // Re-sync the open detail panel (if any) from the same fresh list —
-      // load() previously only ever touched `items`, so a contact left open
-      // in the detail view (presence dot included) went stale forever until
-      // manually reopened. Falls back to the previous value if the contact's
-      // no longer visible (e.g. it was just archived out from under it).
-      setDetail(prev => (prev ? cleanList.find(c => c.id === prev.id) || prev : prev))
-    } finally { setLoading(false) }
+      // Re-sync the open detail panel (if any) — load() previously only ever
+      // touched `items`, so a contact left open in the detail view (presence
+      // dot included) went stale forever until manually reopened. NOT a
+      // lookup against `cleanList` (which is already filtered by
+      // showArchived) — that couldn't tell "archived out of this filtered
+      // view" apart from "genuinely deleted", and fell back to redisplaying
+      // the stale object indefinitely in the deleted case (real bug, found
+      // 2026-09-06). Re-fetches the one open contact directly by id instead:
+      // still-existing-but-archived succeeds with fresh data, genuinely
+      // deleted 404s and closes the panel instead of showing stale data.
+      setDetail(prev => {
+        if (!prev) return prev
+        contactsApi.get(prev.id).then(setDetail).catch(() => setDetail(null))
+        return prev
+      })
+    } finally {
+      if (loadGeneration.current === myGeneration) setLoading(false)
+    }
     // `workspace` isn't referenced in this callback's own body (the active
     // workspace flows through api.js's request header instead) — it's kept
     // as a dependency deliberately, purely so `load` gets a new reference
