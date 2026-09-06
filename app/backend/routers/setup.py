@@ -82,9 +82,12 @@ def setup_user(req: SetupRequest, current_user: dict = Depends(get_current_user)
     except (ZoneInfoNotFoundError, Exception):
         raise HTTPException(status_code=400, detail=f"Invalid timezone: '{req.timezone}'")
 
-    # Sanitize free-text fields before writing to markdown
+    # Sanitize free-text fields before writing to markdown. Timezone is exempt —
+    # ZoneInfo() above already proved it's a real IANA identifier, whose charset
+    # (letters, digits, /, _, -, +) legitimately includes underscores (e.g.
+    # "America/New_York"), which the markdown-safe regex would otherwise reject.
     safe_role = _sanitize(req.role, "role") if req.role else ""
-    safe_timezone = _sanitize(req.timezone, "timezone")
+    safe_timezone = req.timezone.strip()
     # Validate all categories (custom_categories is a subset of priority_order, so validating
     # priority_order is sufficient — do NOT concatenate them or custom cats get written twice)
     for c in req.priority_order:
