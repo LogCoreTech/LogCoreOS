@@ -221,10 +221,15 @@ wait_healthy() {
 # ── Docker Compose helper ─────────────────────────────────────────────────────
 
 compose_up() {
+    # --remove-orphans: stop/remove any running container whose service no
+    # longer exists in docker-compose.yml (e.g. logcore-ntfy on an instance
+    # updating past the 2026-09-06 ntfy removal) instead of leaving it running
+    # unmanaged forever. See launch.sh's own compose_up-equivalent for why the
+    # data volume is deliberately left alone.
     docker compose \
         -f "$DOCKER_DIR/docker-compose.yml" \
         --project-directory "$DOCKER_DIR" \
-        up --build -d >> "$LOG_FILE" 2>&1
+        up --build -d --remove-orphans >> "$LOG_FILE" 2>&1
 }
 
 # ── Rollback ──────────────────────────────────────────────────────────────────

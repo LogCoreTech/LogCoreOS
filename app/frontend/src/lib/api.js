@@ -112,7 +112,6 @@ export const auth = {
   today:            ()                => get('/auth/today'),
   status:           ()                => get('/auth/status'),
   updateMe:         (data)            => patch('/auth/me', data),
-  rotateChannel:    ()                => post('/auth/me/rotate-channel', {}),
   uploadBackground: (file)            => requestFile('POST', '/auth/me/background', file),
   deleteBackground: ()                => del('/auth/me/background'),
 }

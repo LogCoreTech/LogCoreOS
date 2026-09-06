@@ -107,11 +107,7 @@ You can export your Brain at any time from **Admin → Export** as a zip file. T
 
 ## Notifications
 
-Push notifications are handled via [ntfy](https://ntfy.sh) (self-hosted, included in the Docker stack).
-
-1. Install the ntfy app on your phone (Android or iOS)
-2. Add your server: `http://YOUR_SERVER_IP:5680`
-3. Subscribe to your personal channel — find it in **Settings → Notifications** after logging in
+Push notifications use the standard Web Push API (VAPID) — no separate notification server, nothing extra to run. Enable it from **Settings → Notifications** after logging in; each device you approve gets its own subscription, manageable independently from the same settings page.
 
 ---
 

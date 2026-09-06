@@ -59,21 +59,16 @@
       "id": "notifications",
       "icon": "🔔",
       "title": "Notifications",
-      "blurb": "LogCore reaches you through an in-app inbox (the bell), self-hosted push via ntfy, and web push on your devices.",
+      "blurb": "LogCore reaches you through an in-app inbox (the bell) and web push on your devices.",
       "howto": [
         "Click the bell to see your notification inbox; actionable items (like share requests) have Accept/Decline right there.",
-        "Enable browser/web push in Settings → Notifications to get alerts on your devices — this works from anywhere, including away from home. Enable it separately on each phone, tablet, or computer you want alerts on; Settings → Notifications lists every device that's enabled it, with its own Remove button, so you can drop one you no longer have without affecting the rest.",
-        "For phone notifications at home, install the ntfy app and subscribe to your channel (shown in Settings → Notifications).",
-        "Rotate your ntfy channel anytime from Settings → Notifications if you think it's been shared or exposed; you'll need to re-subscribe in the ntfy app with the new channel afterward. LogCore also reminds you here once a channel is over 30 days old.",
+        "Enable push in Settings → Notifications to get alerts on your devices — this works from anywhere, including away from home. Enable it separately on each phone, tablet, or computer you want alerts on; Settings → Notifications lists every device that's enabled it, with its own Remove button, so you can drop one you no longer have without affecting the rest.",
         "Proactive digests (morning summary, overdue alerts, weekly review, This Week at a Glance) are configurable in Settings — This Week at a Glance is off by default and lets you pick daily or weekly.",
-        "Been away a while? A welcome-back message greets you next time you open LogCore, with an AI summary of what changed if you've turned that on and have an AI key configured. Set how many days counts as \"away\" in Settings → Notifications.",
-        "Want ntfy notifications away from home too, not just Web Push? An admin can give ntfy a public address if you're using a Cloudflare Tunnel: in Cloudflare Zero Trust → Networks → Tunnels → your tunnel → Public Hostname → Add, pick a subdomain (e.g. ntfy.yourdomain.com), and point it at http://localhost:5680. Then use that https:// address as the server in the ntfy app instead of your LAN address. This is optional — everything else works fine without it."
+        "Been away a while? A welcome-back message greets you next time you open LogCore, with an AI summary of what changed if you've turned that on and have an AI key configured. Set how many days counts as \"away\" in Settings → Notifications."
       ],
       "tips": [
-        "ntfy is fully self-hosted — no third-party notification service is involved.",
-        "By default ntfy is only reachable on your server's local network; use Web Push for remote devices unless an admin has given ntfy a public hostname (see the howto above).",
-        "A channel ID is the only thing that gates who can read (or fake) your ntfy notifications, since ntfy topics have no login — rotating it immediately retires the old ID.",
-        "The moment ntfy gets a public hostname, launch.sh automatically locks down publishing to the app itself (an admin publisher token) while subscribing stays login-free — nothing extra to configure, and it fails safe (never silently breaks notifications) if that provisioning can't complete."
+        "Push is fully self-hosted (VAPID) — no third-party notification service is involved.",
+        "On iOS, push needs Safari 16.4+ and the app added to your home screen first; on an unsupported browser you'll still get in-app/chat notifications, just not a push alert."
       ],
       "modules": []
     },
@@ -181,7 +176,7 @@
     },
     {
       "q": "How do I get notifications on my phone?",
-      "a": "Enable web push in Settings → Notifications for alerts anywhere, including away from home. For phone notifications at home, install the ntfy app and subscribe to your channel shown in Settings — ntfy is self-hosted and by default only reachable on your local network, so no third-party service is involved. If you want ntfy away from home too, an admin can give it a public address through your Cloudflare Tunnel (see the howto in this section) — LogCore automatically locks down who can publish once that's done, so subscribing stays just as simple. If you ever think your ntfy channel ID has leaked, rotate it from the same Settings card."
+      "a": "Enable push in Settings → Notifications for alerts anywhere, including away from home — it's self-hosted (Web Push/VAPID), so no third-party notification service is involved. On iOS, add the app to your home screen first (Safari 16.4+); on other platforms, just tap Enable."
     },
     {
       "q": "Do I need n8n or Home Assistant to use LogCore?",

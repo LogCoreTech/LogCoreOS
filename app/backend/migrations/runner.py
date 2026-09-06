@@ -675,6 +675,25 @@ def m014_core_values_to_list(brain: Path) -> None:
         logger.info("m014: converted core_values to a list in %d contact store(s)", converted)
 
 
+def m015_remove_ntfy_fields(brain: Path) -> None:
+    """Strip the ntfy-era fields off every user record (ntfy removed entirely,
+    2026-09-06 — see docs/MEMORY.md). `notification_channel`/`channel_rotated_at`/
+    `channel_reminder_at` were the ntfy channel ID and its rotation-reminder
+    bookkeeping; nothing reads them anymore, so an upgrading instance's
+    auth.json shouldn't keep carrying them forward as dead weight."""
+    auth_file = brain / "_system" / "auth.json"
+    if not auth_file.exists():
+        return
+    data = read_json(auth_file, default={"users": []})
+    changed = False
+    for user in data.get("users", []):
+        for field in ("notification_channel", "channel_rotated_at", "channel_reminder_at"):
+            if user.pop(field, None) is not None:
+                changed = True
+    if changed:
+        write_json(auth_file, data)
+
+
 MIGRATIONS: list[tuple[str, MigrationFn]] = [
     ("m001_task_type_field", m001_task_type_field),
     ("m002_task_notes_field", m002_task_notes_field),
@@ -690,6 +709,7 @@ MIGRATIONS: list[tuple[str, MigrationFn]] = [
     ("m012_rescale_dashboard_mobile_grid_units", m012_rescale_dashboard_mobile_grid_units),
     ("m013_move_self_contacts_to_household_pool", m013_move_self_contacts_to_household_pool),
     ("m014_core_values_to_list", m014_core_values_to_list),
+    ("m015_remove_ntfy_fields", m015_remove_ntfy_fields),
 ]
 
 # ── Runner ─────────────────────────────────────────────────────────────────────

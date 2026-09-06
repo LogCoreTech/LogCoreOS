@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { auth as authApi, push as pushApi, suggestions as sugApi } from '../../lib/api'
+import { push as pushApi, suggestions as sugApi } from '../../lib/api'
 import HelpButton from '../../components/HelpButton'
 import SettingsPageHeader from '../../components/settings/SettingsPageHeader'
 
@@ -34,12 +33,6 @@ function _deviceLabel() {
 }
 
 export default function Notifications() {
-  const [ntfyChannel, setNtfyChannel] = useState('')
-  const [channelRotatedAt, setChannelRotatedAt] = useState(null)
-  const [rotating, setRotating] = useState(false)
-  const [rotateError, setRotateError] = useState('')
-  const [rotateSaved, setRotateSaved] = useState(false)
-
   const [pushStatus, setPushStatus] = useState('unknown')
   const [pushLoading, setPushLoading] = useState(false)
   const [pushMsg, setPushMsg] = useState('')
@@ -59,10 +52,6 @@ export default function Notifications() {
   }
 
   useEffect(() => {
-    authApi.me().then(me => {
-      setNtfyChannel(me.notification_channel || '')
-      setChannelRotatedAt(me.channel_rotated_at || null)
-    })
     sugApi.list().then(setSugConfig).catch(() => {})
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       setPushStatus('unsupported')
@@ -76,26 +65,6 @@ export default function Notifications() {
       loadDevices()
     }
   }, [])
-
-  function flash(setter) {
-    setter(true)
-    setTimeout(() => setter(false), 2000)
-  }
-
-  async function rotateChannel() {
-    setRotating(true)
-    setRotateError('')
-    try {
-      const res = await authApi.rotateChannel()
-      setNtfyChannel(res.notification_channel)
-      setChannelRotatedAt(res.channel_rotated_at)
-      flash(setRotateSaved)
-    } catch (err) {
-      setRotateError(err.message || 'Rotation failed')
-    } finally {
-      setRotating(false)
-    }
-  }
 
   async function subscribePush() {
     setPushLoading(true)
@@ -218,55 +187,12 @@ export default function Notifications() {
     <div className="max-w-lg mx-auto space-y-6">
       <SettingsPageHeader title="Notifications" backTo="/settings" backLabel="Settings" />
 
-      {/* ntfy */}
-      <div className="card p-5">
-        <h2 className="font-semibold mb-1">
-          Notifications (ntfy)
-          <HelpButton section="notifications" className="ml-1 align-middle" />
-        </h2>
-        <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-3">
-          Install the <strong>ntfy</strong> app on your phone and subscribe to your personal channel to receive morning digests and alerts. By default ntfy runs self-hosted on your server&apos;s local network only — for notifications away from home, use Web Push below, or ask an admin to give ntfy a public address (see the <Link to="/help#notifications" className="text-orange-500 hover:underline">Notifications guide</Link> for setup steps). Your channel ID is the only thing protecting it, so treat it like a password: don&apos;t share it, and rotate it if you ever suspect it&apos;s leaked.
-        </p>
-        {ntfyChannel ? (
-          <div>
-            <label className="block text-sm font-medium mb-1">Your ntfy channel</label>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 bg-charcoal-100 dark:bg-charcoal-700 text-sm px-3 py-2 rounded-lg font-mono break-all">
-                {ntfyChannel}
-              </code>
-              <button
-                onClick={() => navigator.clipboard?.writeText(ntfyChannel)}
-                className="text-xs text-charcoal-500 hover:text-orange-500 whitespace-nowrap"
-              >
-                Copy
-              </button>
-            </div>
-            <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mt-2">
-              {channelRotatedAt
-                ? `Last rotated ${new Date(channelRotatedAt).toLocaleDateString()}`
-                : 'Never rotated since account creation'}
-              {' — '}we&apos;ll remind you here once it&apos;s over 30 days old.
-            </p>
-            <div className="flex items-center gap-2 mt-2">
-              <button
-                onClick={rotateChannel}
-                disabled={rotating}
-                className="btn-ghost text-xs disabled:opacity-50"
-              >
-                {rotating ? 'Rotating…' : 'Rotate channel'}
-              </button>
-              {rotateSaved && <span className="text-green-500 text-xs">Rotated ✓ — update the topic in your ntfy app</span>}
-              {rotateError && <span className="text-red-500 text-xs">{rotateError}</span>}
-            </div>
-          </div>
-        ) : (
-          <p className="text-sm text-charcoal-500">Channel loading…</p>
-        )}
-      </div>
-
       {/* Push Notifications */}
       <div className="card p-5">
-        <h2 className="font-semibold mb-1">Push Notifications</h2>
+        <h2 className="font-semibold mb-1">
+          Push Notifications
+          <HelpButton section="notifications" className="ml-1 align-middle" />
+        </h2>
         <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-3">
           Receive morning digests and task reminders directly in your browser or on your device.
         </p>
@@ -377,7 +303,7 @@ export default function Notifications() {
         <div className="card p-5 space-y-4">
           <h2 className="font-semibold">Proactive Suggestions</h2>
           <p className="text-xs text-charcoal-500 dark:text-charcoal-400 -mt-2">
-            Recurring AI-powered reminders and check-ins. Delivery: <strong>Push</strong> = ntfy + web push, <strong>In-app</strong> = bell icon, <strong>Chat</strong> = appears in AI chat on next open.
+            Recurring AI-powered reminders and check-ins. Delivery: <strong>Push</strong> = web push, <strong>In-app</strong> = bell icon, <strong>Chat</strong> = appears in AI chat on next open.
           </p>
 
           {[

@@ -18,8 +18,6 @@ services:
       AI_PROVIDER: ${AI_PROVIDER:-anthropic}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       AI_MODEL: ${AI_MODEL:-claude-sonnet-4-6}
-      NTFY_URL: http://ntfy:80
-      NTFY_PUBLISH_TOKEN: ${NTFY_PUBLISH_TOKEN:-}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
       # Talk to Docker through the filtered proxy, not the raw socket.
       DOCKER_HOST: tcp://socket-proxy:2375
@@ -37,7 +35,6 @@ services:
       INFISICAL_ENV: ${INFISICAL_ENV:-prod}
       INFISICAL_PROJECT_ID: ${INFISICAL_PROJECT_ID:-}
     depends_on:
-      - ntfy
       - socket-proxy
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8000/api/v1/health"]
@@ -81,32 +78,6 @@ services:
     depends_on:
       - app
 
-  ntfy:
-    image: binwiederhier/ntfy:v2.26.0
-    container_name: logcore-ntfy
-    restart: unless-stopped
-    ports:
-      # Bound to loopback by default. Reached internally by the app
-      # (http://ntfy:80), via an SSH tunnel, or — since cloudflared runs with
-      # network_mode: host below and therefore shares this same loopback — via a
-      # Cloudflare Public Hostname mapped to http://localhost:5680, if you choose
-      # to give ntfy a public address for remote push. The loopback bind alone
-      # does NOT block that path.
-      - "127.0.0.1:5680:80"
-    volumes:
-      - ntfy_data:/var/lib/ntfy
-    environment:
-      # Auth is off (read-write for everyone, incl. anonymous) until launch.sh's
-      # provision_ntfy_auth provisions an admin publisher account and flips this
-      # to read-only — anonymous subscribe (family members reading their channel)
-      # still works, but publish then requires NTFY_PUBLISH_TOKEN above. This
-      # matters most once ntfy has a public hostname (see the ports note); on a
-      # LAN-only instance the default open mode is fine. Defaults to read-write
-      # so a fresh install is never silently broken if provisioning hasn't run.
-      NTFY_AUTH_DEFAULT_ACCESS: ${NTFY_AUTH_DEFAULT_ACCESS:-read-write}
-      NTFY_AUTH_FILE: /var/lib/ntfy/auth.db
-    command: serve
-
   n8n:
     image: docker.n8n.io/n8nio/n8n:2.31.3
     container_name: logcore-n8n
@@ -134,5 +105,4 @@ services:
       - app
 
 volumes:
-  ntfy_data:
   n8n_data:

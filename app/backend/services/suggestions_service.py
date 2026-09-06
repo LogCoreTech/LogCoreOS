@@ -6,13 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from config import settings
-from services.auth_service import (
-    get_user_by_id,
-    get_user_by_name,
-    list_users,
-    today_for_user,
-    update_user,
-)
+from services.auth_service import get_user_by_name, today_for_user
 from services.file_service import history_path, read_json, tasks_path, user_path, write_json
 
 logger = logging.getLogger("logcore.suggestions")
@@ -63,13 +57,6 @@ def _suggestions_path(user_name: str):
 
 def _notifications_path(user_name: str):
     return user_path(user_name) / "notifications.json"
-
-
-def _ntfy_channel(user_name: str) -> str:
-    user = get_user_by_name(user_name)
-    if user and user.get("notification_channel"):
-        return user["notification_channel"]
-    return f"logcore-{user_name.lower().replace(' ', '-')}"
 
 
 # ---------------------------------------------------------------------------
@@ -225,13 +212,10 @@ def _deliver(
     user_name: str, title: str, body: str, source: str, delivery: list, url: str = "/"
 ) -> None:
     """Send via all configured delivery channels."""
-    from services.notification_service import send
     from services.push_service import get_subscriptions, send_push
 
-    if "push" in delivery:
-        send(channel=_ntfy_channel(user_name), title=title, message=body, priority="default")
-        if get_subscriptions(user_name):
-            send_push(user_name, title, body, url=url)
+    if "push" in delivery and get_subscriptions(user_name):
+        send_push(user_name, title, body, url=url)
     if "in_app" in delivery:
         add_notification(user_name, title, body, source, "in_app")
     if "chat" in delivery:
@@ -251,63 +235,12 @@ def notify_user(
     the web push carries a deep-link `url`."""
     add_notification(user_name, title, body, source, "in_app", action=action)
     try:
-        from services.notification_service import send
         from services.push_service import get_subscriptions, send_push
 
-        send(channel=_ntfy_channel(user_name), title=title, message=body, priority="default")
         if get_subscriptions(user_name):
             send_push(user_name, title, body, url=url)
     except Exception:  # push delivery must never break the write path
         pass
-
-
-# ---------------------------------------------------------------------------
-# Channel rotation reminders
-# ---------------------------------------------------------------------------
-
-ROTATION_REMINDER_DAYS = 30
-
-
-def _parse_utc(raw: str) -> datetime | None:
-    try:
-        dt = datetime.fromisoformat(raw)
-    except (ValueError, TypeError):
-        return None
-    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-
-
-def run_channel_rotation_reminders(now: datetime | None = None) -> int:
-    """Nudge each user to rotate their ntfy channel ID once it is 30+ days old.
-
-    The channel ID is the only lock on a user's notification stream, so rotation
-    is the revocation mechanism. Fires monthly (channel_reminder_at dedup) until
-    the user rotates; rotating stamps channel_rotated_at, which resets the clock.
-    Users who never rotated are measured from created_at.
-    """
-    now = now or datetime.now(timezone.utc)
-    window = timedelta(days=ROTATION_REMINDER_DAYS)
-    sent = 0
-    for entry in list_users():
-        user = get_user_by_id(entry["id"])
-        if not user:
-            continue
-        baseline = _parse_utc(user.get("channel_rotated_at") or user.get("created_at") or "")
-        if baseline is None or now - baseline < window:
-            continue
-        reminded = _parse_utc(user.get("channel_reminder_at") or "")
-        if reminded is not None and now - reminded < window:
-            continue
-        notify_user(
-            user["name"],
-            "Rotate your notification channel",
-            "Your ntfy channel ID is over a month old. Rotate it in Settings → "
-            "Notifications, then update the subscription in your ntfy app.",
-            action={"type": "open_settings"},
-            url="/settings",
-        )
-        update_user(user["id"], {"channel_reminder_at": now.isoformat()})
-        sent += 1
-    return sent
 
 
 # ---------------------------------------------------------------------------

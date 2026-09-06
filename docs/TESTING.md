@@ -179,7 +179,6 @@ The following services have no test file:
 - `hosting_service.py` — reads `brain/hosting.json` at request time
 - `n8n_service.py` — n8n REST API client (requires mocked httpx)
 - `ha_service.py` — Home Assistant client (requires mocked httpx)
-- `notification_service.py` — ntfy delivery
 - `push_service.py` — VAPID subscription management
 - `infisical_loader.py` — secret pull on startup
 - `web_search_service.py` — Tavily search

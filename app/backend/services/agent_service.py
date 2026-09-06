@@ -244,7 +244,7 @@ _USER_TOOLS: list[dict] = [
     },
     {
         "name": "send_notification",
-        "description": "Send a push notification to the user via their configured ntfy channel.",
+        "description": "Send a web push notification to the user's enabled devices.",
         "input_schema": {
             "type": "object",
             "properties": {

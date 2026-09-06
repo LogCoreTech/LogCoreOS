@@ -134,7 +134,7 @@ The App currently provides:
 - Task management (create, complete, skip, recurring, streaks, history)
 - Life priority scoring and top-3 dashboard
 - AI chat interface (full Brain context injected into every message)
-- Push notifications via ntfy (self-hosted)
+- Push notifications via Web Push (VAPID, self-hosted)
 - Setup wizard (creates user Brain folder from template on first login)
 - Background scheduler (nightly recurring processor, morning digest, overdue alerts, weekly review)
 - React PWA (installable on phone and desktop)
@@ -352,13 +352,12 @@ Each user receives:
 
 **User contact & notification preferences (future):**
 
-Currently each user record stores an email (login identifier) and an ntfy channel UUID (push notifications). Email is used for login only — not for sending messages. ntfy handles all current notification delivery without requiring a phone number or email address.
+Currently each user record stores an email (login identifier); push delivery is Web Push (VAPID), keyed off per-device subscriptions stored separately, not a flat field on the user record. Email is used for login only — not for sending messages.
 
 When notification automation expands (email digests, SMS alerts, etc.), user records should be extended with a structured `notifications` block rather than adding flat fields:
 
 ```json
 "notifications": {
-  "ntfy": "lc-abc123",
   "email": "user@example.com",
   "phone": "+15551234567"
 }
@@ -415,14 +414,13 @@ Planned connectors:
 
 - Backend: Python FastAPI
 - Frontend: React + Vite + Tailwind CSS (served as PWA)
-- Notifications: ntfy (self-hosted)
+- Notifications: Web Push (VAPID, self-hosted, no separate notification server)
 - Containers: Docker Compose
 
 **Docker services:**
 
 ```
 logcore-app    → FastAPI backend + React frontend (port 8000)
-logcore-ntfy   → ntfy push notification server (port 5680)
 logcore-n8n    → n8n workflow automation engine (internal; exposed via app proxy)
 ```
 
@@ -462,7 +460,7 @@ Keeps the 30 most recent backups automatically. For automated backups, add to cr
 0 3 * * * /path/to/logcoreos/docker/backup.sh >> /var/log/logcore-backup.log 2>&1
 ```
 
-**PWA on mobile:** The app installs as a PWA on Android and desktop. iOS (Safari) supports PWA installation but has historically limited background push notification support — ntfy's native app handles notifications on iOS reliably regardless of PWA limits.
+**PWA on mobile:** The app installs as a PWA on Android and desktop. iOS (Safari 16.4+) supports Web Push once the app is added to the home screen; Web Push is now the app's only push channel (ntfy removed 2026-09-06 — see `docs/MEMORY.md`'s 2026-09-06 entry) — a device that hasn't installed the PWA, or an older/unsupported browser, gets no push delivery at all, only in-app/chat notifications.
 
 **Deployment models:**
 
@@ -501,7 +499,7 @@ Done:
 - Life priority scoring (top 3 dashboard)
 - AI chat interface with full Brain context injection
 - AI provider abstraction layer (swap providers by changing one env var)
-- Push notifications (ntfy)
+- Push notifications (Web Push/VAPID)
 - Background scheduler (recurring processor, morning digest, overdue alerts, weekly review)
 - Configurable CORS, timezone, and registration settings
 - Backup script (`docker/backup.sh`)

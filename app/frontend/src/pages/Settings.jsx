@@ -11,7 +11,7 @@ export default function Settings() {
       <div className="card divide-y divide-charcoal-100 dark:divide-charcoal-800">
         <MenuRow icon="👤" label="Profile" subtitle="Your details, priorities, and values" to="/profile" />
         <MenuRow icon="🎨" label="Appearance" subtitle="Dark mode, accent color, background, density" to="/settings/appearance" />
-        <MenuRow icon="🔔" label="Notifications" subtitle="ntfy, push notifications, proactive suggestions" to="/settings/notifications" />
+        <MenuRow icon="🔔" label="Notifications" subtitle="Push notifications, proactive suggestions" to="/settings/notifications" />
         <MenuRow icon="⭐" label="Shortcuts" subtitle="Pin modules to the bottom bar & sidebar" to="/settings/shortcuts" />
         <MenuRow icon="🗂" label="Account" subtitle="Timezone, your Brain, export data" to="/settings/account" />
         <MenuRow icon="🗑" label="Trash" subtitle="Restore or permanently remove deleted items" to="/trash" />
