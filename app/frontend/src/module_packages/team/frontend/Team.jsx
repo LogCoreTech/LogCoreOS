@@ -5,6 +5,9 @@ import { useAuth } from '../../../lib/auth'
 import TaskModal from '../../../components/TaskModal'
 import EventModal from '../../../components/EventModal'
 import CalendarGrid from '../../../components/CalendarGrid'
+import EmptyState from '../../../components/EmptyState'
+import PullToRefreshIndicator from '../../../components/PullToRefreshIndicator'
+import usePullToRefresh from '../../../lib/usePullToRefresh'
 import { catColor } from '../../../lib/constants'
 import { handleTabListKeyDown } from '../../../lib/tabListKeyboard'
 
@@ -108,8 +111,11 @@ export default function Team() {
     remove: id         => teamApi.removeSharedEvent(id),
   }
 
+  const pull = usePullToRefresh(load)
+
   return (
     <div className="w-full max-w-4xl mx-auto space-y-4">
+      <PullToRefreshIndicator {...pull} />
 
       {/* Header */}
       <div>
@@ -247,10 +253,13 @@ export default function Team() {
 
           {/* Task list */}
           {filteredTasks.length === 0 ? (
-            <div className="card p-8 text-center text-charcoal-500 dark:text-charcoal-400">
-              <p className="text-4xl mb-2">✓</p>
-              <p>No tasks here.</p>
-            </div>
+            <EmptyState
+              icon="✓"
+              title="No team tasks yet"
+              description="Add a task for the team to get started."
+              ctaLabel={canEdit ? '+ Task' : undefined}
+              onCta={canEdit ? () => { setEditTask(null); setShowTaskModal(true) } : undefined}
+            />
           ) : (
             <div className="space-y-2">
               {filteredTasks.map(task => (

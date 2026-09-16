@@ -88,6 +88,14 @@ class Settings(BaseSettings):
     # Leave false when the app is exposed directly — otherwise clients can spoof IPs.
     trust_proxy_headers: bool = False
 
+    # Off by default: FastAPI's auto-generated /docs (Swagger UI), /redoc, and
+    # /openapi.json let anyone unauthenticated enumerate the entire API surface
+    # (every route, param, and schema) — real reconnaissance value for an
+    # attacker, zero value to a normal user. Set to true only for local
+    # development or a controlled debugging session, never on a networked
+    # instance.
+    enable_api_docs: bool = False
+
     model_config = SettingsConfigDict(env_file=".env")
 
 

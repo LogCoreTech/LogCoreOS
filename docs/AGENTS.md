@@ -108,7 +108,7 @@ LogCoreOS is a self-hosted, open-source, AI-native life operating system. It giv
 All user data lives in `brain/USERS/{UserName}/` as Markdown and JSON files. There is no database. This makes data portable, human-readable, and AI-friendly.
 
 Key files per user:
-- Profile — no longer a file; it's the user's self-contact, a Contact record in `Contacts/contacts.json` marked `self_of: <user_name>` (see "Contacts (CRM) Module" below). `Profile.md`/`profile.json` are legacy, inert leftovers on existing installs post-migration.
+- Profile — for a real user, no longer a file; it's their self-contact, a Contact record in `Contacts/contacts.json` marked `self_of: <user_name>` (see "Contacts (CRM) Module" below). `Profile.md` is genuinely dead (fixed 2026-09-08: the only code that ever read it, `file_service.parse_priority_order()`, had zero callers and was removed, along with the misleading `_template/Profile.md` file every new signup used to receive). **`profile.json` is still live, but only for the `_household`/`_team` pool pseudo-users**, which have no Contact record of their own — see `services/profile_service.py`.
 - `Long_Term_Memory.md` / `Short_Term_Memory.md` — AI context
 - `Tasks/tasks.json` — active tasks
 - `Tasks/tasks_history.json` — completed tasks
@@ -164,7 +164,7 @@ Push notifications use the Web Push API with VAPID keypair stored in `brain/_sys
 Brain zip download is at `GET /api/v1/user/export` (note: router is mounted at `/api/v1/user`, not `/api/v1/export`). Returns a zip of the user's entire Brain folder.
 
 ### Suggestions
-`suggestions_service.py` manages proactive AI suggestions: `daily_digest`, `overdue_alert`, `weekly_review`, `goal_drift`, `goal_due_urgency` (2026-08-28, new — a separate signal from `goal_drift`, watching an approaching due date regardless of whether progress has stalled), and any user-defined custom suggestions. Each suggestion type generates an AI-crafted notification. Custom suggestions have configurable schedules (daily/weekly/interval) and are registered as live APScheduler jobs.
+`suggestions_service.py` manages proactive AI suggestions: `daily_digest`, `overdue_alert`, `weekly_review`, `this_week_digest` (2026-09-04, new — an opt-in "this week at a glance" summary, daily or weekly per-user cadence, off by default), `goal_drift`, `goal_due_urgency` (2026-08-28, new — a separate signal from `goal_drift`, watching an approaching due date regardless of whether progress has stalled), and any user-defined custom suggestions. Each suggestion type generates an AI-crafted notification. Custom suggestions have configurable schedules (daily/weekly/interval) and are registered as live APScheduler jobs.
 
 ### API Versioning
 All routes are under `/api/v1/`. The frontend base is `const BASE = '/api/v1'` in `lib/api.js`. Always use the v1 prefix.
@@ -333,27 +333,32 @@ See `docs/TESTING.md` for the full guide: the `brain` fixture pattern, how to wr
 
 ## Scheduler
 
-APScheduler runs 12 fixed jobs plus dynamic per-user custom jobs (all times in `settings.scheduler_timezone`):
+APScheduler runs 18 fixed jobs plus dynamic per-user custom jobs (all times in `settings.scheduler_timezone`; re-audited and corrected 2026-09-07 — this table previously undercounted at 12):
 
 | Job | Schedule | What it does |
 |-----|----------|--------------|
-| Recurring processor | Nightly 00:01 | Archives yesterday's done non-recurring tasks → `tasks_history.json`; advances recurring task due dates; resets broken streaks |
+| Recurring processor | Nightly 00:01 (+ a boot+15s self-heal run) | Archives yesterday's done non-recurring tasks → `tasks_history.json`; advances recurring task due dates; resets broken streaks. Idempotent, so the boot run can't double-process anything even landing next to the nightly one |
+| Trash purge | Nightly 02:00 | (2026-09-05) Permanently purges any soft-deleted Trash entry past its 30-day retention window, across every module that owns a trash type |
+| JTI cleanup | Nightly 03:00 | Removes expired revoked JWT token IDs from `auth.json` |
 | Morning digest | Configurable (default 06:00) | Runs `daily_digest` suggestion for each user |
+| This-week digest | Configurable (same hour as morning digest) | (2026-09-04) Runs `this_week_digest` — fires every day the job runs for a user on `daily` cadence, only on Sunday for `weekly` cadence (checked in the user's own timezone); a single daily registration is what makes cadence a genuine per-user config choice rather than an instance-wide one |
+| Finance nightly | Daily 07:30 | Missed-bill flags, budget alerts, balance-deviation checks across all stores + pools |
+| Contacts follow-ups | Daily 08:00 | (2026-08-xx) Notifies contact owners of due CRM follow-ups (interactions + deals) |
 | Overdue check | Configurable (default 19:00) | Runs `overdue_alert` suggestion for each user |
-| Weekly review | Sunday 19:00 | Runs `weekly_review` suggestion for each user |
 | Goal progress snapshot | Daily, `overdue_check_hour`:15 | (2026-08-28, Goals becoming a real module) Records each goal's computed % into a capped rolling log (`Goals/goal_progress_history.json`) and fires a completion-celebration notification the moment a goal crosses from <100% to ≥100% — runs before Goal drift so that job always compares against a fresh snapshot |
 | Goal drift | Daily, `overdue_check_hour`:30 | Runs `goal_drift` suggestion for each user — reworked 2026-08-28 to compare a goal's CURRENT computed % against its snapshot from N days ago (default 14) instead of only checking staleness-by-creation-date |
 | Goal due urgency | Daily, `overdue_check_hour`:35 | (2026-08-28, new) Runs `goal_due_urgency` — a separate signal from Goal drift, watching an approaching due date regardless of whether progress has stalled |
-| JTI cleanup | Nightly 03:00 | Removes expired revoked JWT token IDs from `auth.json` |
+| Weekly review | Sunday 19:00 | Runs `weekly_review` suggestion for each user |
 | Update check | Daily 12:00 | Refreshes GitHub release cache → Admin → Updates card reads result; also re-runs the What's-New announce |
 | What's-New recheck | Boot+180s one-shot | Re-runs `announce_if_updated()` after update.sh has stamped `installed_version.json` (the stamp lands after the app restarts, so the lifespan announce alone misses in-place updates) |
+| n8n reconcile | Boot+100s one-shot | Keeps the bundled n8n container running only when actually needed (`n8n_service.reconcile()`) |
+| Workflow sync | Boot+90s, then every 6h | Syncs business workflows from `automations_stubs/` (`sync_business_workflows()`) |
 | SimpleFIN sync | Boot+2min, then every 12h | Pulls bank transactions for every user with a connection (`sync_all_users()`) |
-| Finance nightly | Daily 07:30 | Missed-bill flags, budget alerts, balance-deviation checks across all stores + pools |
 | Custom jobs | User-configured (daily/weekly/interval) | Per-user custom suggestion schedules registered dynamically via `add_custom_job()` |
 
 Custom jobs are registered at startup via `_load_custom_jobs()` (reads all enabled custom suggestions across all users) and dynamically via `add_custom_job(user_name, suggestion)` / `remove_custom_job(user_name, suggestion_id)` when the user adds or deletes a custom suggestion.
 
-**Workspace-aware notification jobs:** The notification jobs (morning digest, overdue check, weekly review, goal progress snapshot, goal drift, goal due urgency) iterate `_all_user_workspace_pairs()` instead of a flat user list. `_all_user_workspace_pairs()` reads each user's `workspaces` field from auth and expands to `(user_name, workspace)` tuples — personal workspace only if the task file exists; business workspace if the user has it. Each pair calls `run_suggestion_sync(user, suggestion_id, workspace)` so business-workspace tasks generate their own separate notification. Business notifications include a `[business]` label suffix in the title.
+**Workspace-aware notification jobs:** The notification jobs (morning digest, this-week digest, overdue check, weekly review, goal progress snapshot, goal drift, goal due urgency) iterate `_all_user_workspace_pairs()` instead of a flat user list. `_all_user_workspace_pairs()` reads each user's `workspaces` field from auth and expands to `(user_name, workspace)` tuples — personal workspace only if the task file exists; business workspace if the user has it. Each pair calls `run_suggestion_sync(user, suggestion_id, workspace)` so business-workspace tasks generate their own separate notification. Business notifications include a `[business]` label suffix in the title.
 
 `_load_custom_jobs()` still iterates a flat user list — custom suggestions are personal-only for now.
 
@@ -367,13 +372,7 @@ Recurring tasks are **never** archived — they stay in `tasks.json` and have th
 
 ## Adding a New Module
 
-1. Add entry to `ALL_MODULES` in `app/frontend/src/lib/constants.js`
-2. Create `app/frontend/src/pages/NewModule.jsx`
-3. Add route in `app/frontend/src/App.jsx`
-4. Create `app/backend/routers/new_module.py` with `_require_new = require_module("new_module_id")`
-5. Register router in `app/backend/main.py` under `/api/v1/new_module`
-6. Add API methods to `app/frontend/src/lib/api.js`
-7. Update `docs/MAP.md` with the new file
+See **[docs/MODULE_AUTHORING.md](MODULE_AUTHORING.md)** for the full, current, step-by-step guide (written 2026-09-08, replacing a checklist here that had gone 100% stale — it described the pre-Mod-Store-conversion architecture: a flat `routers/`/hardcoded-`ALL_MODULES` layout that no longer exists). Every module today is a self-contained `module_packages/<id>/` package with its own `manifest.py`/`manifest.js`, discovered dynamically — nothing needs a manual edit to `constants.js`, `App.jsx`, `main.py`, or `lib/api.js`.
 
 ## Household Module
 

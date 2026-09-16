@@ -386,12 +386,14 @@ export default function Tasks() {
                       type="button"
                       onClick={() => moveItem(i, i - 1)}
                       disabled={i === 0}
+                      aria-label={`Move ${cat} up`}
                       className="text-charcoal-400 hover:text-orange-500 disabled:opacity-20 leading-none px-1 py-0.5 text-xs"
                     >▲</button>
                     <button
                       type="button"
                       onClick={() => moveItem(i, i + 1)}
                       disabled={i === tempOrder.length - 1}
+                      aria-label={`Move ${cat} down`}
                       className="text-charcoal-400 hover:text-orange-500 disabled:opacity-20 leading-none px-1 py-0.5 text-xs"
                     >▼</button>
                   </div>
@@ -442,6 +444,7 @@ function TaskCard({ task, catColor, today, onDone, onOpen, onTagClick, selectabl
       )}
       <button
         onClick={e => { e.stopPropagation(); onDone() }}
+        aria-label={task.status === 'done' ? 'Mark as not done' : 'Mark as done'}
         className={`mt-0.5 shrink-0 w-5 h-5 rounded transition-colors flex items-center justify-center text-white text-xs ${
           task.status === 'done'
             ? 'bg-orange-500 hover:bg-orange-400'

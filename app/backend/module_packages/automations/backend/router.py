@@ -85,6 +85,7 @@ class ItemStatusUpdate(BaseModel):
 @router.get("/n8n/status")
 def n8n_status(
     current_user: dict = Depends(require_admin),
+    _module: dict = Depends(_require_automations),
     _rl: None = Depends(_read_limit),
 ):
     return n8n_service.test_connection()
@@ -94,6 +95,7 @@ def n8n_status(
 def save_n8n_config(
     req: N8nConfigRequest,
     current_user: dict = Depends(require_admin),
+    _module: dict = Depends(_require_automations),
     _rl: None = Depends(_write_limit),
 ):
     n8n_service.save_config(
@@ -108,6 +110,7 @@ def save_n8n_config(
 @router.post("/n8n/sync-workflows")
 def trigger_workflow_sync(
     current_user: dict = Depends(require_admin),
+    _module: dict = Depends(_require_automations),
     _rl: None = Depends(_write_limit),
 ):
     """Manually trigger business workflow sync against the remote stub source."""
@@ -118,6 +121,7 @@ def trigger_workflow_sync(
 @router.post("/n8n/sync-secrets")
 def sync_secrets_to_n8n(
     current_user: dict = Depends(require_admin),
+    _module: dict = Depends(_require_automations),
     _rl: None = Depends(_write_limit),
 ):
     """Write cached Infisical secrets to docker/n8n.env and restart n8n."""

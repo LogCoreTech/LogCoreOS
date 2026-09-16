@@ -41,7 +41,7 @@ from routers import (
     welcome_back,
 )
 from scheduler import start as start_scheduler
-from services.hosting_service import effective_domain_url
+from services.hosting_service import effective_domain_url, effective_trust_proxy_headers
 from services.update_service import get_installed_version
 
 logger = logging.getLogger("logcore")
@@ -231,7 +231,18 @@ def _startup_checks() -> None:
         )
 
 
-app = FastAPI(title="LogCore OS", version=get_installed_version(), lifespan=lifespan)
+app = FastAPI(
+    title="LogCore OS",
+    version=get_installed_version(),
+    lifespan=lifespan,
+    # /docs, /redoc, and /openapi.json are unauthenticated by default in FastAPI —
+    # anyone who can reach the instance can enumerate the entire API surface (every
+    # route, param, and schema) with no login required. Off by default; opt in with
+    # ENABLE_API_DOCS=true for local development or a controlled debugging session.
+    docs_url="/docs" if settings.enable_api_docs else None,
+    redoc_url="/redoc" if settings.enable_api_docs else None,
+    openapi_url="/openapi.json" if settings.enable_api_docs else None,
+)
 
 
 @app.exception_handler(Exception)
@@ -266,11 +277,18 @@ def _is_https_request(request: Request) -> bool:
     domain (Admin → Hosting) as HTTPS. We deliberately do NOT send HSTS on a
     plain-HTTP LAN instance — that would lock the browser into HTTPS-only and
     break a dev/LAN deployment that has no TLS.
+
+    X-Forwarded-Proto is only trusted when TRUST_PROXY_HEADERS is on — same
+    gate services/rate_limiter.py's _client_ip() applies to X-Forwarded-For.
+    An instance exposed directly (no reverse proxy) must never honor a
+    client-supplied header here, since a client can otherwise spoof "https"
+    on a plain-HTTP request to have the browser told the connection is secure.
     """
     if request.url.scheme == "https":
         return True
-    if request.headers.get("x-forwarded-proto", "").split(",")[0].strip() == "https":
-        return True
+    if effective_trust_proxy_headers():
+        if request.headers.get("x-forwarded-proto", "").split(",")[0].strip() == "https":
+            return True
     return bool(effective_domain_url())
 
 

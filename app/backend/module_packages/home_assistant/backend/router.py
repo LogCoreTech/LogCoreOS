@@ -15,6 +15,22 @@ _require_home = require_module("home_assistant")
 _read_limit = rate_limit(60, 60)
 _write_limit = rate_limit(20, 60)
 
+# Domains this UI is meant to expose through the generic entity service-call
+# passthrough. Anything else (e.g. homeassistant.restart, automation.turn_off,
+# shell_command.*) is a system-level HA service and must not be reachable by
+# crafting an entity_id.
+_ALLOWED_SERVICE_DOMAINS = {
+    "light",
+    "switch",
+    "climate",
+    "lock",
+    "cover",
+    "fan",
+    "media_player",
+    "vacuum",
+    "scene",
+}
+
 router = APIRouter()
 
 
@@ -38,6 +54,7 @@ class FavouritesRequest(BaseModel):
 @router.get("/status")
 def ha_status(
     current_user: dict = Depends(require_admin),
+    _module: dict = Depends(_require_home),
     _rl: None = Depends(_read_limit),
 ):
     return ha_service.test_connection()
@@ -47,6 +64,7 @@ def ha_status(
 def save_ha_config(
     req: HaConfigRequest,
     current_user: dict = Depends(require_admin),
+    _module: dict = Depends(_require_home),
     _rl: None = Depends(_write_limit),
 ):
     ha_service.save_config({"url": req.url.strip(), "token": req.token.strip()})
@@ -93,8 +111,13 @@ def call_entity_service(
 ):
     if not ha_service.is_configured():
         raise HTTPException(status_code=503, detail="Home Assistant not configured")
+    domain = entity_id.split(".")[0]
+    if domain not in _ALLOWED_SERVICE_DOMAINS:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Service calls to '{domain}' are not permitted through this endpoint",
+        )
     try:
-        domain = entity_id.split(".")[0]
         data = {**req.data, "entity_id": entity_id}
         return ha_service.call_service(domain, req.service, data)
     except Exception as exc:

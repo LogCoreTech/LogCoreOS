@@ -15,6 +15,9 @@ All documentation for AI agents and developers lives in `docs/`:
 | `docs/PROJECT.md` | Architecture, tech stack, and roadmap |
 | `docs/TASKS.md` | Active work queue |
 | `docs/MEMORY.md` | Design decisions, security rules, and known gotchas |
+| `docs/COMPONENTS.md` | Shared frontend hook & component inventory — read before wiring a new modal/popup |
+| `docs/DESIGN.md` | Visual/interaction design tokens and conventions — buttons, forms, tabs, confirm/toast/empty-state patterns |
+| `docs/MODULE_AUTHORING.md` | Step-by-step guide for adding a new `module_packages/` module |
 | `docs/MAP.md` | Full file navigation index |
 | `docs/API.md` | REST API endpoint reference |
 | `docs/TESTING.md` | Testing guide: brain fixture, patterns, coverage targets |

@@ -234,21 +234,19 @@ def _resolve_targets(target: str) -> list[str]:
 
 
 def _respond_shares(shares: list[dict], viewer: str, accept: bool) -> tuple[list[dict], bool]:
-    out: list[dict] = []
-    changed = False
-    for share in shares:
-        if not accept and share.get("target") == viewer:
-            changed = True
-            continue
-        accepted = share.get("accepted") or []
-        if accept and viewer not in accepted:
-            accepted = accepted + [viewer]
-            changed = True
-        elif not accept and viewer in accepted:
-            accepted = [n for n in accepted if n != viewer]
-            changed = True
-        out.append({**share, "accepted": accepted})
-    return out, changed
+    """See services.sharing.apply_share_response(). Routed through the shared
+    helper 2026-09-08: this had the identical missing-target-check bug
+    assets_service.py's own _respond_shares() had — every entry was eligible
+    for the viewer's accept regardless of who it actually named. Mirrors
+    assets_service.py's own docstring for the full writeup."""
+    from services.sharing import apply_share_response
+
+    # Every real entry here already carries "accepted" (set unconditionally
+    # in update_access below) — normalize any that don't (very old/edge-case
+    # data) so the shared helper's own "no accepted key -> leave alone" guard
+    # doesn't accidentally skip a legitimate share with no responses yet.
+    normalized = [{**share, "accepted": share.get("accepted") or []} for share in shares]
+    return apply_share_response(normalized, viewer, accept, _resolve_targets)
 
 
 def _notify_share_targets(recipients: list[str], sharer: str, tid: str, label: str) -> None:

@@ -93,9 +93,9 @@ export default function HistoryCalendar({ entriesByDate = {}, legend }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
-        <button type="button" onClick={() => step(-1)} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200 px-1">‹</button>
+        <button type="button" onClick={() => step(-1)} aria-label={view === 'month' ? 'Previous month' : 'Previous year'} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200 px-1">‹</button>
         <span className="text-xs font-medium">{periodLabel}</span>
-        <button type="button" onClick={() => step(1)} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200 px-1">›</button>
+        <button type="button" onClick={() => step(1)} aria-label={view === 'month' ? 'Next month' : 'Next year'} className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200 px-1">›</button>
       </div>
 
       <div className="flex justify-center mb-2">

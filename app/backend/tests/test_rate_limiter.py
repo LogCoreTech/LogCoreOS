@@ -127,10 +127,15 @@ def test_client_ip_uses_forwarded_when_proxy_trusted(monkeypatch):
     assert rl._client_ip(req) == "99.99.99.99"
 
 
-def test_client_ip_uses_leftmost_forwarded_ip(monkeypatch):
+def test_client_ip_uses_rightmost_forwarded_ip(monkeypatch):
+    """A standard reverse proxy APPENDS the real client IP rather than replacing it, so
+    the one trustworthy entry is the LAST one — everything before it is client-supplied
+    and spoofable. Fixed 2026-09-07: this test previously asserted the leftmost entry,
+    which is exactly the bug that let a client bypass every IP-keyed rate limit at will
+    once trust_proxy_headers was on."""
     monkeypatch.setattr(rl.settings, "trust_proxy_headers", True)
     req = _req(ip="10.0.0.1", forwarded="1.1.1.1, 2.2.2.2, 3.3.3.3")
-    assert rl._client_ip(req) == "1.1.1.1"
+    assert rl._client_ip(req) == "3.3.3.3"
 
 
 # ---------------------------------------------------------------------------

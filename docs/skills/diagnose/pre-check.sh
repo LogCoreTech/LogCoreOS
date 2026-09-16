@@ -19,17 +19,25 @@ echo "======================================"
 echo ""
 
 # ── 1. Module registry sync ────────────────────────────────────────────────────
+# Every module is discovered dynamically now (no more hardcoded ALL_MODULES/VALID_MODULE_IDS
+# lists to compare) — the real invariant is that every module_packages/<id>/ directory exists
+# on BOTH sides, frontend and backend, with matching ids.
 echo "── Module registry sync"
 
-fe_ids=$(grep -oP "id: '\K[^']+" "$FRONTEND/lib/constants.js" | sort)
-be_ids=$(grep -oP "\"[a-z]+\"" "$BACKEND/routers/auth.py" | grep -A50 "VALID_MODULE_IDS" | head -20 | grep -oP '"[a-z]+"' | tr -d '"' | sort)
+# Only real module directories — backend's module_packages/ also contains __init__.py and
+# a __pycache__ dir, neither a module (mirrors module_registry.discover_manifests()'s own
+# "skip _-prefixed entries" rule).
+fe_ids=$(find "$FRONTEND/module_packages" -mindepth 1 -maxdepth 1 -type d ! -name '_*' -printf '%f\n' 2>/dev/null | sort)
+be_ids=$(find "$BACKEND/module_packages" -mindepth 1 -maxdepth 1 -type d ! -name '_*' -printf '%f\n' 2>/dev/null | sort)
 
-if [ "$fe_ids" = "$be_ids" ]; then
-  pass "ALL_MODULES (frontend) matches VALID_MODULE_IDS (backend)"
+if [ -z "$fe_ids" ] || [ -z "$be_ids" ]; then
+  fail "Could not list module_packages/ on one or both sides"
+elif [ "$fe_ids" = "$be_ids" ]; then
+  pass "module_packages/ ids match on frontend and backend ($(echo "$fe_ids" | wc -l) modules)"
 else
-  fail "Module ID mismatch"
-  echo "  Frontend: $fe_ids"
-  echo "  Backend:  $be_ids"
+  fail "Module directory mismatch between frontend and backend module_packages/"
+  echo "  Frontend-only: $(comm -23 <(echo "$fe_ids") <(echo "$be_ids") | tr '\n' ' ')"
+  echo "  Backend-only:  $(comm -13 <(echo "$fe_ids") <(echo "$be_ids") | tr '\n' ' ')"
 fi
 echo ""
 

@@ -420,13 +420,14 @@ export default function ContactDetail({ contact, fields, pipeline, user, onClose
                         onClick={() => { setExpandedDeal(expandedDeal === d.id ? null : d.id); setLinkSelect('') }}
                         className={`btn-ghost text-xs ${expandedDeal === d.id ? 'text-orange-500' : ''}`}
                         title="Linked assets"
+                        aria-label="Linked assets"
                       >
                         🔗{(d.linked_asset_ids || []).length > 0 ? (d.linked_asset_ids || []).length : ''}
                       </button>
                       {canEdit && d.stage?.toLowerCase() === 'won' && (
                         <button
                           onClick={() => navigate(`/finance?view=invoices&client_contact=${contact.id}&amount=${d.value_cents || 0}&title=${encodeURIComponent(d.title)}&deal_id=${d.id}`)}
-                          className="btn-ghost text-xs" title="Create invoice in Finance"
+                          className="btn-ghost text-xs" title="Create invoice in Finance" aria-label="Create invoice in Finance"
                         >🧾</button>
                       )}
                       {canEdit && <button onClick={() => contactsApi.removeDeal(contact.id, d.id).then(load)} aria-label="Remove deal" className="btn-ghost text-xs text-red-500">×</button>}

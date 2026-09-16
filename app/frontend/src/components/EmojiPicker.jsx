@@ -32,6 +32,7 @@ export default function EmojiPicker({ value, onChange }) {
           onClick={() => setOpen(o => !o)}
           className="input !w-12 text-center text-lg"
           title="Pick an icon"
+          aria-label="Pick an icon"
         >
           {value || '🙂'}
         </button>
@@ -59,6 +60,7 @@ export default function EmojiPicker({ value, onChange }) {
               type="button"
               onClick={() => { onChange(e); setOpen(false) }}
               className="text-lg rounded hover:bg-charcoal-100 dark:hover:bg-charcoal-800 p-0.5"
+              aria-label={`Emoji ${e}`}
             >
               {e}
             </button>

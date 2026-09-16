@@ -52,6 +52,7 @@ function AssetRow({ asset, depth, childrenMap, expanded, onToggle, onOpen, onAdd
         )}
         <button
           onClick={() => children.length && onToggle(asset.id)}
+          aria-label={isOpen ? 'Collapse' : 'Expand'}
           className={`w-6 text-xl leading-none text-charcoal-400 shrink-0 ${children.length ? 'hover:text-orange-500' : 'opacity-0'}`}
         >
           {isOpen ? '▼' : '▶'}
@@ -84,6 +85,7 @@ function AssetRow({ asset, depth, childrenMap, expanded, onToggle, onOpen, onAdd
                 onClick={() => onMove(asset)}
                 className="btn-ghost text-xs px-1.5 py-0.5"
                 title="Move"
+                aria-label="Move"
               >
                 ⇄
               </button>
@@ -93,6 +95,7 @@ function AssetRow({ asset, depth, childrenMap, expanded, onToggle, onOpen, onAdd
                 onClick={() => onAddChild(asset)}
                 className="btn-ghost text-xs px-1.5 py-0.5"
                 title="Add inside"
+                aria-label="Add inside"
               >
                 ＋
               </button>
@@ -163,9 +166,9 @@ function MovePicker({ asset, allAssets, onClose, onMoved }) {
   return (
     <div className="modal-overlay z-[55]" onClick={onClose}>
       <div ref={cardRef} className="modal-card p-4 max-w-sm" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-sm">Move “{asset.name}” to…</h2>
-          <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <h2 className="font-semibold text-sm min-w-0 flex-1 truncate">Move “{asset.name}” to…</h2>
+          <button onClick={onClose} aria-label="Close" className="shrink-0 text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
         </div>
         {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
         <AssetTreePicker
@@ -444,7 +447,7 @@ export default function Assets() {
       {confirmBulkDelete && (
         <ConfirmDialog
           title="Delete selected assets?"
-          message={`${bulkSelect.count} asset${bulkSelect.count === 1 ? '' : 's'} will be moved to Trash.`}
+          message={`${bulkSelect.count} asset${bulkSelect.count === 1 ? '' : 's'} will be moved to Trash and can be restored within 30 days.`}
           danger
           confirmLabel="Delete"
           onConfirm={handleBulkDelete}

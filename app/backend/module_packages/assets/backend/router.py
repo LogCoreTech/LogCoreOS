@@ -843,6 +843,7 @@ def convert_asset(
     current_user: dict = Depends(require_admin),
     workspace: str = Depends(get_workspace),
     _rl: None = Depends(_write_limit),
+    _assets: dict = Depends(_require_assets),
 ):
     _validate_asset_id(asset_id)
     found = _find_or_404(current_user, workspace, asset_id)

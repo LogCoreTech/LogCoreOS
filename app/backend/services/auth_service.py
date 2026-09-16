@@ -249,6 +249,14 @@ def create_user(
             "spaces, apostrophes, hyphens, and underscores."
         )
 
+    # Safety net: RegisterRequest/CreateUserRequest already enforce min_length=8
+    # at the API layer, but this service function is also called directly (e.g.
+    # by tests and other services) — reject an empty password here too, rather
+    # than letting a caller that bypasses request validation silently create an
+    # account with no real password.
+    if not password:
+        raise ValueError("Password is required")
+
     normalized_email = email.lower()
     with _auth_lock:
         data = _load_auth()
@@ -278,22 +286,31 @@ def list_users() -> list[dict]:
 
 
 def update_user_role(user_id: str, role: str) -> dict:
-    data = _load_auth()
-    for user in data["users"]:
-        if user["id"] == user_id:
-            user["role"] = role
-            _save_auth(data)
-            return {k: v for k, v in user.items() if k in _SAFE_FIELDS}
+    # Locked (fixed 2026-09-07) — this and delete_user() below were the only two
+    # writers of auth.json with no lock, unlike every sibling function in this file
+    # (create_user/update_user/update_system_settings/revoke_token). A concurrent
+    # locked write (e.g. the target user's own ordinary PATCH /auth/me) could read
+    # its stale pre-revoke copy after this function's unlocked read and silently
+    # overwrite this role change on save.
+    with _auth_lock:
+        data = _load_auth()
+        for user in data["users"]:
+            if user["id"] == user_id:
+                user["role"] = role
+                _save_auth(data)
+                return {k: v for k, v in user.items() if k in _SAFE_FIELDS}
     raise ValueError("User not found")
 
 
 def delete_user(user_id: str) -> None:
-    data = _load_auth()
-    original = len(data["users"])
-    data["users"] = [u for u in data["users"] if u["id"] != user_id]
-    if len(data["users"]) == original:
-        raise ValueError("User not found")
-    _save_auth(data)
+    # Locked (fixed 2026-09-07) — see update_user_role()'s own comment above; same gap.
+    with _auth_lock:
+        data = _load_auth()
+        original = len(data["users"])
+        data["users"] = [u for u in data["users"] if u["id"] != user_id]
+        if len(data["users"]) == original:
+            raise ValueError("User not found")
+        _save_auth(data)
 
 
 def authenticate(email: str, password: str) -> dict | None:

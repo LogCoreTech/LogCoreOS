@@ -8,6 +8,7 @@ live in the _household (personal) / _team (business) pseudo-user Notes stores.
 
 import re
 import shutil
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -124,7 +125,7 @@ def list_notes(
     if create_default and not any(i["type"] == "note" for i in items):
         p = _note_path(user_name, _GETTING_STARTED_PATH, workspace)
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(_GETTING_STARTED_CONTENT, encoding="utf-8")
+        write_markdown(p, _GETTING_STARTED_CONTENT)
         items.append(
             {
                 "type": "note",
@@ -393,6 +394,26 @@ def _drop_note_tags_prefix(store_user: str, workspace: str, path: str) -> None:
         write_json(_tags_file(store_user, workspace), {"tags": remaining})
 
 
+# Per-(store_user, workspace) lock, held across a full load-mutate-save cycle by
+# update_access() and respond_share() (fixed 2026-09-07) — the same unlocked
+# load+mutate+save race as auth.json's role-update bug: an admin revoking access
+# on one shared target could have that change silently reverted by a DIFFERENT
+# recipient's own concurrent accept/decline on the same _shares.json file.
+# transfer_ownership() and the archive-cleanup path below still do the same
+# unlocked two-step — not covered here, since transfer_ownership spans TWO
+# stores' shares files at once and needs its own careful lock-ordering design.
+_shares_locks: dict[tuple[str, str], threading.Lock] = {}
+_shares_locks_guard = threading.Lock()
+
+
+def _shares_lock(store_user: str, workspace: str) -> threading.Lock:
+    key = (store_user, workspace)
+    with _shares_locks_guard:
+        if key not in _shares_locks:
+            _shares_locks[key] = threading.Lock()
+        return _shares_locks[key]
+
+
 def _shares_file(store_user: str, workspace: str) -> Path:
     return _notes_root(store_user, workspace) / "_shares.json"
 
@@ -606,26 +627,27 @@ def update_access(
     if not pool and contributors is not None:
         raise ValueError("Contributors are for pool notes — use shared_with")
 
-    shares = load_shares(store_user, workspace)
-    entry = shares.get(path, {})
-    to_notify: list[str] = []
-    if shared_with is not None:
-        cleaned = _clean_entries(shared_with, entry.get("shared_with"), pool=False)
-        entry["shared_with"] = cleaned
-        for e in cleaned:
-            accepted = set(e.get("accepted") or [])
-            for name in resolve_target_users(e["target"]):
-                if name != store_user and name not in accepted:
-                    to_notify.append(name)
-    if contributors is not None:
-        entry["contributors"] = _clean_entries(contributors, entry.get("contributors"), pool=True)
-    if hidden_from is not None:
-        entry["hidden_from"] = _clean_hidden(hidden_from)
-    if entry:
-        shares[path] = entry
-    else:
-        shares.pop(path, None)
-    _save_shares(store_user, workspace, shares)
+    with _shares_lock(store_user, workspace):
+        shares = load_shares(store_user, workspace)
+        entry = shares.get(path, {})
+        to_notify: list[str] = []
+        if shared_with is not None:
+            cleaned = _clean_entries(shared_with, entry.get("shared_with"), pool=False)
+            entry["shared_with"] = cleaned
+            for e in cleaned:
+                accepted = set(e.get("accepted") or [])
+                for name in resolve_target_users(e["target"]):
+                    if name != store_user and name not in accepted:
+                        to_notify.append(name)
+        if contributors is not None:
+            entry["contributors"] = _clean_entries(contributors, entry.get("contributors"), pool=True)
+        if hidden_from is not None:
+            entry["hidden_from"] = _clean_hidden(hidden_from)
+        if entry:
+            shares[path] = entry
+        else:
+            shares.pop(path, None)
+        _save_shares(store_user, workspace, shares)
     if not pool:
         from services.notes_index import reindex_owner
 
@@ -771,36 +793,37 @@ def strip_user_references(user_name: str) -> None:
 
 
 def respond_share(viewer: str, owner: str, workspace: str, path: str, accept: bool) -> bool:
-    shares = load_shares(owner, workspace)
-    entry = shares.get(path)
-    if not entry:
-        return False
-    kept = []
-    changed = False
-    for e in entry.get("shared_with", []):
-        try:
-            targets_viewer = viewer in resolve_target_users(e.get("target", ""))
-        except ValueError:
-            targets_viewer = False
-        if not targets_viewer:
-            kept.append(e)
-            continue
-        if accept:
-            acc = e.setdefault("accepted", [])
-            if viewer not in acc:
-                acc.append(viewer)
-                changed = True
-            kept.append(e)
-        else:
-            if e.get("target") == viewer:
-                changed = True
+    with _shares_lock(owner, workspace):
+        shares = load_shares(owner, workspace)
+        entry = shares.get(path)
+        if not entry:
+            return False
+        kept = []
+        changed = False
+        for e in entry.get("shared_with", []):
+            try:
+                targets_viewer = viewer in resolve_target_users(e.get("target", ""))
+            except ValueError:
+                targets_viewer = False
+            if not targets_viewer:
+                kept.append(e)
                 continue
-            acc = e.get("accepted")
-            if isinstance(acc, list) and viewer in acc:
-                e["accepted"] = [n for n in acc if n != viewer]
-                changed = True
-            kept.append(e)
-    entry["shared_with"] = kept
-    shares[path] = entry
-    _save_shares(owner, workspace, shares)
-    return changed
+            if accept:
+                acc = e.setdefault("accepted", [])
+                if viewer not in acc:
+                    acc.append(viewer)
+                    changed = True
+                kept.append(e)
+            else:
+                if e.get("target") == viewer:
+                    changed = True
+                    continue
+                acc = e.get("accepted")
+                if isinstance(acc, list) and viewer in acc:
+                    e["accepted"] = [n for n in acc if n != viewer]
+                    changed = True
+                kept.append(e)
+        entry["shared_with"] = kept
+        shares[path] = entry
+        _save_shares(owner, workspace, shares)
+        return changed

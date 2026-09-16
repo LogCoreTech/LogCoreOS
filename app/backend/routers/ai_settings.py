@@ -12,12 +12,15 @@ instance's already-saved settings keep dispatching exactly as before, unchanged,
 forever, even if this router is never reopened again.
 """
 
+import urllib.parse
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, model_validator
 
 from config import settings
 from routers.auth import ai_settings_path, require_admin
 from services import ai_provider_catalog as catalog
+from services import net_safety
 from services.file_service import read_json, write_json
 from services.rate_limiter import rate_limit
 
@@ -135,6 +138,43 @@ class LoadModelsResponse(BaseModel):
     warning: str | None = None
 
 
+def _reject_ssrf_base_url(provider_id: str, spec: catalog.ProviderSpec, base_url: str) -> None:
+    """SSRF guard (S7) for the live "Load Models" fetch: for "custom" and any
+    not-yet-docs_verified provider, resolve_base_url() above just returned
+    the admin-typed ai_base_url verbatim (their default_base_url is None) —
+    without this, that value goes straight into the openai client with zero
+    validation of what host it actually points to, so an admin account (or
+    anyone who can reach this endpoint) could make the server itself POST to
+    an internal-only address (a Docker socket-proxy, n8n, cloud instance
+    metadata at 169.254.169.254, ...) under cover of a "model list" request,
+    same class of bug push_service._validate_push_endpoint exists to close
+    for push endpoints. Reuses that same resolved-IP check via
+    services/net_safety.py (a scheme check isn't reused here — unlike push
+    endpoints, a base_url is legitimately http:// for every local runner).
+
+    Exempted: the documented local-runner providers (Ollama, LM Studio,
+    vLLM, llama.cpp, text-generation-webui, KoboldCpp, Jan.ai) — pointing at
+    localhost is the entire point of running one of those, so a resolved
+    private/loopback address is expected and fine there. "custom" gets no
+    such exemption: an admin who genuinely needs an internal endpoint there
+    is exactly the case this guard has to say no to. Never triggered for a
+    known/verified provider's own hardcoded base_url (never admin input —
+    see resolve_base_url) or for "anthropic" (base_url isn't even used on
+    that branch of load_models).
+    """
+    if not base_url or spec.kind == "anthropic" or spec.default_base_url is not None:
+        return
+    if provider_id in catalog.LOCAL_RUNNER_PROVIDER_IDS:
+        return
+    hostname = urllib.parse.urlparse(base_url).hostname
+    if not hostname:
+        raise HTTPException(400, "Base URL must include a hostname.")
+    try:
+        net_safety.assert_resolves_publicly(hostname)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
 def _resolve_fetch_key(req: LoadModelsRequest, stored: dict) -> str:
     """The just-typed key wins when present. When blank, the persisted key is
     reused ONLY when the request's provider (and, for custom, base_url) matches
@@ -175,6 +215,7 @@ def load_models(
     spec = catalog.get_provider(req.ai_provider)
     key = _resolve_fetch_key(req, stored)
     base_url = catalog.resolve_base_url(req.ai_provider, req.ai_base_url)
+    _reject_ssrf_base_url(req.ai_provider, spec, base_url)
 
     if not key and spec.list_requires_key:
         # Without this, an admin switching the picker to a different provider

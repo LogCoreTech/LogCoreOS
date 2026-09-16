@@ -8,7 +8,7 @@ Keep this up to date. When a task is completed, **remove it** rather than checki
 
 ## Now — active build work
 
-- [ ] **Land lead search & qualify workflow** — n8n pulling land listings (multiple sources with a fallback from day one) and AI-qualifying against configurable criteria; stub file in `automations_stubs/`; posts to the Automation Inbox (`POST /automations/inbox/items`, `GET /inbox/seen` to skip known listings)
+- [ ] **Land lead search & qualify workflow** — n8n pulling land listings (multiple sources with a fallback from day one) and AI-qualifying against configurable criteria; posts to the Automation Inbox (`POST /automations/inbox/items`, `GET /inbox/seen` to skip known listings — this generic plumbing is fully built and tested); the actual n8n workflow itself doesn't exist yet (`automations_stubs/` is still empty, `.gitkeep` only, as of 2026-09-07)
 All 14 `module_packages/` modules (the 13-module Mod Store rollout plus Goals) and the app-wide search bar + universal tags feature are confirmed working end-to-end on the owner's real instance — live-instance verification closed 2026-09-06. Full build history and design decisions: `docs/PROJECT.md`'s "Complete — Mod Store" section and `docs/MEMORY.md`'s 2026-08-24 through 2026-08-30 entries.
 
 ---
@@ -88,7 +88,7 @@ From the 2026-07-19 audit (full detail in `docs/Security-Audit-2026-07-19.md`) p
   2. **Expense category sub-groups** — categories are a flat list today (`{name, kind}`); add a `parent` field + parent-aware aggregation in `finance_reports.py` and Budgets.
   3. **Finance page redesign** — book list → dedicated per-book page. Main page becomes just the book rows + "＋ New book"; clicking a book opens its own page with its own "＋ New transaction"/"＋ Add invoice"/"Ask AI" buttons; the Bank/SimpleFIN panel moves into that book's own Settings page.
   4. **Remove the "＋ Account" button** from the household/team pool balance card — pool bank accounts are admin-managed via Admin → Bank Connections, so a member-facing add button doesn't belong there.
-  5. **Book Settings as its own page**, not a modal — fits naturally with #3's per-book page, more breathing room than the current 536-line modal.
+  5. **Book Settings as its own page**, not a modal — fits naturally with #3's per-book page, more breathing room than the current 572-line modal.
 - [ ] **Finance: recurring % auto-transfers (owner, 2026-07-20)** — the cross-book/cross-workspace Transfer primitive itself shipped 2026-08-14 (`POST /finance/transfers` + linked-pair edit/delete, excluded from income/expense reports); what's left is recurring percentage-based splits (e.g. auto-move 10% of every paycheck into savings) on top of it
 - [ ] **Contacts overhaul — big feature bundle (owner batch, 2026-07-20)**:
   1. **Sharing to household/team + peer users** — mirror the Assets/Finance/Notes sharing pattern.
@@ -259,18 +259,17 @@ Fully triaged 2026-09-04 — see the **UX Polish Batch** section near the top of
 - Structured error monitoring (Sentry or self-hosted GlitchTip) for backend + frontend. No centralized error visibility exists anywhere today — bugs are found by owner testing or user reports only. A self-hostable option fits the project's anti-vendor-lock-in ethos.
 - Audit whether CI actually gates the frontend build, or only backend pytest.
 - Baseline transactional email infrastructure (a provider-abstracted `email_service.py`) — unblocks password reset, Help feedback delivery, and email digests in one shot; the app currently has zero outbound email capability at all.
-- Consolidate the four near-duplicate share/access-resolution implementations (Assets/Finance/Contacts/Notes) — the same bug class has independently been found and fixed at least twice for Assets alone.
-- Break up `services/agent_service.py` (2,368 lines, the whole AI tool registry) into per-module tool files.
-- Close the API-doc coverage gap — only ~39% of the actual 298-endpoint surface is documented in the hand-maintained `docs/API.md`.
+- Extract `agent_service.py`'s `_USER_TOOLS`/`_ADMIN_TOOLS` schema lists (lines 75-482, ~406 lines of pure tool-name/description/input-schema data, zero logic) into a separate `agent_tool_schemas.py` — the original "break up into per-module tool files" framing for this item is stale (re-scoped 2026-09-07): every module-owned tool already moved out during the Mod Store conversion, so what's left in this file (the core tools in `_USER_TOOLS`/`_ADMIN_TOOLS`, plus `_execute_tool()`'s ~620-line dispatch logic and the session/run/pending-turn/presence management) is genuinely core orchestration infrastructure that shouldn't be split further, matching `module_registry.py`'s own "never converts" carve-out for this file. Only the schema-data extraction is still a real, low-risk win.
+- Close the remaining API-doc coverage gap — re-measured 2026-09-07: `docs/API.md` documents ~93% of the real 390-endpoint surface (the old "~39% of 298" figure here was wrong on both the numerator and denominator). ~28 endpoints are still genuinely undocumented, concentrated in Dashboard Templates (9, the single biggest gap) and the bulk-delete route every module with one now has (4).
 - Hosted developer/API documentation site, generated from the OpenAPI schema — early groundwork for the Phase 7 plugin-ecosystem roadmap item.
-- Migrate the remaining per-user JSON stores (Assets, Finance, Dashboards, …) to `file_service.update_json()` — the shared read-modify-write helper shipped 2026-08-12 (see `docs/MEMORY.md`) closes this race for Tasks specifically, and for Contacts' `create_contact()`/self-contact onboarding specifically as of 2026-08-17 (a real, no-longer-theoretical race once every user's self-contact converges on the same shared household-pool file); every other service, and every other Contacts mutator, still does an unlocked `read_json()`+`write_json()` pair and has the same theoretical lost-update exposure, just not yet demonstrated or fixed there.
+- Migrate the remaining per-user JSON stores to `file_service.update_json()` (or an equivalent lock) — the shared read-modify-write helper shipped 2026-08-12 closes this race for Tasks, Goals, and Trash already; Contacts' `create_contact()`/self-contact onboarding as of 2026-08-17; and, as of 2026-09-07/08 (see `docs/MEMORY.md`'s Security Rules 20-21), `auth.json`'s role-update/delete, and the `update_access()` (sharing) function specifically in Notes/Assets/Contacts/Finance (Finance's also covers its concrete co-writer, `set_account_sync_state()`). **Still open**: every OTHER mutator in these same files (~15-18 call sites each in Assets/Finance alone) plus Dashboards' own `_load`/`_save` chokepoint (a cheap single-function fix, not yet done) and the nightly `recurring_service.process_user()` job's own unlocked write to `tasks.json` (a gap in a file whose interactive endpoints are already migrated) — a full prioritized Tier 1/2/3 list exists from the 2026-09-07 audit, not reproduced here.
 - CONTRIBUTING.md scope note documenting the AI tool-registry pattern in `agent_service.py` — the least self-explanatory, most-touched file for new contributors.
 - Feature-flag-driven canary rollout to managed instances before self-hosted `master`.
 - Staged/canary rollout across managed tenants for releases, distinct from what gets installed.
 - Structured application logging (JSON + level config) instead of ad-hoc `logger.*` calls.
 - Dependency vulnerability scanning in CI (Dependabot/Renovate + `pip-audit`/`npm audit` gate).
 - Load/perf smoke test before the public demo opens registration.
-- Split `routers/auth.py` (1,009 lines, five unrelated concerns) by concern.
+- Split `routers/auth.py` (1,230 lines as of 2026-09-07, up from a stale 1,009 — it grew since this was filed) by concern.
 - Deep health-check endpoint — `GET /health` is a hardcoded `{"status":"ok"}` with zero real checks.
 - Module scaffolding script implementing the documented 7-step "Adding a New Module" checklist.
 - Scheduler job isolation audit (a verification pass, not a known bug).
@@ -304,7 +303,6 @@ Fully triaged 2026-09-04 — see the **UX Polish Batch** section near the top of
 - Budget rollover option (envelope-style, instead of a hard monthly reset).
 - Auto-post planned one-off transactions on their due date instead of requiring manual re-entry.
 - Period-over-period comparison + a trend chart in Reports — currently raw totals only, no direction.
-- Manual "Sync now" button for bank connections.
 - Category rename — today the only option is a destructive delete-and-recreate that strips all existing categorization.
 - Recurring/subscription invoice generation for retainer clients.
 - Accountant-friendly export formats (QIF/OFX) beyond CSV.

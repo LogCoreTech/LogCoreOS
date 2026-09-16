@@ -165,3 +165,67 @@ def test_successful_login_clears_failure_counter(brain):
 
 def test_lock_remaining_zero_when_no_failures(brain):
     assert auth_service.account_lock_remaining("nobody@example.com") == 0
+
+
+# ---------------------------------------------------------------------------
+# update_user_role / delete_user — race-safety (fixed 2026-09-07)
+# ---------------------------------------------------------------------------
+
+
+def test_update_user_role_holds_the_lock_no_lost_updates(brain, monkeypatch):
+    """The actual bug: update_user_role()/delete_user() were the only two writers
+    of auth.json with no lock, unlike every sibling function in this file. Mirrors
+    test_file_service.py's own test_update_json_serializes_concurrent_writers_no_lost_update
+    for the identical bug class — a widened read-to-write window via a slowed
+    _save_auth, N concurrent writers each touching a DIFFERENT user's role in the
+    same shared file, and an assertion that none of the N changes got silently
+    reverted by another writer's stale full-file overwrite."""
+    import threading
+    import time
+
+    real_save = auth_service._save_auth
+
+    def slow_save(data):
+        time.sleep(0.01)
+        real_save(data)
+
+    monkeypatch.setattr(auth_service, "_save_auth", slow_save)
+
+    users = [auth_service.create_user(f"user{i}@example.com", "password1", f"User{i}") for i in range(20)]
+
+    threads = [
+        threading.Thread(target=auth_service.update_user_role, args=(u["id"], "admin")) for u in users
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    reloaded = {u["id"]: u["role"] for u in auth_service._load_auth()["users"]}
+    assert all(reloaded[u["id"]] == "admin" for u in users)
+
+
+def test_delete_user_holds_the_lock_no_lost_deletes(brain, monkeypatch):
+    """Same bug class as above, for delete_user(): N concurrent deletes of N
+    different users must all land, not silently un-delete each other via a
+    stale full-file overwrite."""
+    import threading
+    import time
+
+    real_save = auth_service._save_auth
+
+    def slow_save(data):
+        time.sleep(0.01)
+        real_save(data)
+
+    monkeypatch.setattr(auth_service, "_save_auth", slow_save)
+
+    users = [auth_service.create_user(f"user{i}@example.com", "password1", f"User{i}") for i in range(20)]
+
+    threads = [threading.Thread(target=auth_service.delete_user, args=(u["id"],)) for u in users]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert auth_service._load_auth()["users"] == []

@@ -360,6 +360,7 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
                       onClick={() => set('due_time', '')}
                       className="text-charcoal-400 hover:text-red-500 transition-colors ml-0.5 text-sm"
                       title="Clear time"
+                      aria-label="Clear time"
                     >
                       ✕
                     </button>

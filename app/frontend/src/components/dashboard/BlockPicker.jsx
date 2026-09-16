@@ -189,6 +189,7 @@ function ColorSwatchPicker({ value, onChange }) {
         className={`w-7 h-7 rounded-md border text-xs flex items-center justify-center ${current.swatch} ${
           current.id === 'default' ? 'border-2 border-charcoal-300 dark:border-charcoal-600' : 'border-transparent'}`}
         title={`Button color: ${current.label} (click to change)`}
+        aria-label={`Button color: ${current.label} (click to change)`}
       >
         🎨
       </button>

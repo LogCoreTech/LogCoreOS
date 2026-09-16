@@ -12,12 +12,14 @@ from fastapi import HTTPException
 from routers.ai_settings import (
     AiSettingsRequest,
     LoadModelsRequest,
+    _reject_ssrf_base_url,
     get_ai_provider_catalog,
     get_ai_settings,
     load_models,
     update_ai_settings,
 )
-from services import auth_service
+from services import ai_provider_catalog as catalog
+from services import auth_service, net_safety
 from services.file_service import read_json, write_json
 
 
@@ -217,6 +219,121 @@ def test_backward_compat_old_openai_plus_groq_url_shape_still_works(brain):
     result = get_ai_settings(admin)
     assert result["ai_provider"] == "openai"
     assert result["ai_base_url"] == "https://api.groq.com/openai/v1"
+
+
+# ---------------------------------------------------------------------------
+# S7 fix (2026-09-08): SSRF guard on the Load Models live fetch. For "custom"
+# and any not-yet-docs_verified provider, resolve_base_url() honors the
+# admin-supplied ai_base_url verbatim — _reject_ssrf_base_url must then
+# reject anything that resolves to a private/internal address, the same way
+# push_service._validate_push_endpoint already does for push endpoints,
+# except for the documented local-runner providers.
+# ---------------------------------------------------------------------------
+
+
+def _boom(*_a, **_k):
+    raise AssertionError("socket.getaddrinfo should not have been called")
+
+
+def test_reject_ssrf_base_url_blocks_custom_provider_resolving_privately(monkeypatch):
+    monkeypatch.setattr(
+        net_safety.socket,
+        "getaddrinfo",
+        lambda *a, **k: [(None, None, None, None, ("10.0.0.5", 0))],
+    )
+    spec = catalog.get_provider("custom")
+    with pytest.raises(HTTPException) as exc:
+        _reject_ssrf_base_url("custom", spec, "http://internal.example.com:8080/v1")
+    assert exc.value.status_code == 400
+    assert "non-public" in exc.value.detail
+
+
+def test_reject_ssrf_base_url_blocks_unverified_provider_resolving_to_cloud_metadata(monkeypatch):
+    monkeypatch.setattr(
+        net_safety.socket,
+        "getaddrinfo",
+        lambda *a, **k: [(None, None, None, None, ("169.254.169.254", 0))],
+    )
+    spec = catalog.get_provider("deepinfra")
+    with pytest.raises(HTTPException) as exc:
+        _reject_ssrf_base_url("deepinfra", spec, "http://metadata.example.com/v1")
+    assert exc.value.status_code == 400
+
+
+def test_reject_ssrf_base_url_blocks_unresolvable_hostname(monkeypatch):
+    def fake_getaddrinfo(*a, **k):
+        raise net_safety.socket.gaierror("simulated DNS failure")
+
+    monkeypatch.setattr(net_safety.socket, "getaddrinfo", fake_getaddrinfo)
+    spec = catalog.get_provider("custom")
+    with pytest.raises(HTTPException) as exc:
+        _reject_ssrf_base_url("custom", spec, "https://nowhere.example.invalid/v1")
+    assert exc.value.status_code == 400
+    assert "resolved" in exc.value.detail
+
+
+def test_reject_ssrf_base_url_rejects_url_with_no_hostname():
+    spec = catalog.get_provider("custom")
+    with pytest.raises(HTTPException) as exc:
+        _reject_ssrf_base_url("custom", spec, "not-a-real-url")
+    assert exc.value.status_code == 400
+    assert "hostname" in exc.value.detail
+
+
+def test_reject_ssrf_base_url_allows_known_local_runner_resolving_privately(monkeypatch):
+    """llama.cpp/text-generation-webui/KoboldCpp/Jan.ai are docs_verified=False
+    (no single standard port, so no hardcoded default_base_url), but they're
+    still meant to run on localhost — a resolved private/loopback address for
+    one of these specific ids must NOT be treated as SSRF."""
+    monkeypatch.setattr(
+        net_safety.socket,
+        "getaddrinfo",
+        lambda *a, **k: [(None, None, None, None, ("127.0.0.1", 0))],
+    )
+    spec = catalog.get_provider("llamacpp")
+    _reject_ssrf_base_url("llamacpp", spec, "http://localhost:8080/v1")  # must not raise
+
+
+def test_reject_ssrf_base_url_skips_known_verified_provider_entirely(monkeypatch):
+    """A known/verified provider's base_url is the server's own hardcoded
+    default (resolve_base_url ignores client input for it entirely) — the
+    guard must not even attempt to resolve a hostname for it."""
+    monkeypatch.setattr(net_safety.socket, "getaddrinfo", _boom)
+    spec = catalog.get_provider("groq")
+    _reject_ssrf_base_url("groq", spec, "https://api.groq.com/openai/v1")  # must not raise
+
+
+def test_reject_ssrf_base_url_skips_anthropic_even_with_private_looking_base_url(monkeypatch):
+    """base_url isn't even used on load_models' anthropic branch — must not
+    block (or need to resolve) it regardless of its value."""
+    monkeypatch.setattr(net_safety.socket, "getaddrinfo", _boom)
+    spec = catalog.get_provider("anthropic")
+    _reject_ssrf_base_url("anthropic", spec, "http://169.254.169.254/")  # must not raise
+
+
+def test_reject_ssrf_base_url_skips_empty_base_url(monkeypatch):
+    monkeypatch.setattr(net_safety.socket, "getaddrinfo", _boom)
+    spec = catalog.get_provider("custom")
+    _reject_ssrf_base_url("custom", spec, "")  # must not raise
+
+
+def test_load_models_end_to_end_rejects_custom_provider_pointed_at_internal_host(
+    brain, monkeypatch
+):
+    admin = _admin(brain)
+    update_ai_settings(AiSettingsRequest(ai_provider="custom", ai_allow_model_fetch=True), admin)
+    monkeypatch.setattr(
+        net_safety.socket,
+        "getaddrinfo",
+        lambda *a, **k: [(None, None, None, None, ("10.0.0.5", 0))],
+    )
+    with pytest.raises(HTTPException) as exc:
+        load_models(
+            LoadModelsRequest(ai_provider="custom", ai_base_url="http://internal.example.com/v1"),
+            admin,
+        )
+    assert exc.value.status_code == 400
+    assert "non-public" in exc.value.detail
 
 
 def test_catalog_exposes_default_base_url_for_frontend_reconciliation(brain):

@@ -3,7 +3,7 @@
 set -euo pipefail
 
 GOAL="${1:?Usage: $0 \"goal\" [BASE_URL] [TOKEN]}"
-BASE="${2:-http://localhost:8000/api}"
+BASE="${2:-http://localhost:8000/api/v1}"
 TOKEN="${3:-${LOGCORE_TOKEN:-}}"
 
 if [[ -z "$TOKEN" ]]; then
@@ -13,7 +13,11 @@ if [[ -z "$TOKEN" ]]; then
   exit 1
 fi
 
-PAYLOAD=$(jq -n --arg msg "$GOAL" '{"message": $msg, "history": []}')
+# chat_id is required on every POST /chat since 2026-08-15 (ChatRequest.chat_id) — a fresh
+# one per invocation is fine here since this script never preserves history across calls anyway.
+CHAT_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || python3 -c 'import uuid; print(uuid.uuid4())')
+
+PAYLOAD=$(jq -n --arg msg "$GOAL" --arg chat_id "$CHAT_ID" '{"message": $msg, "history": [], "chat_id": $chat_id}')
 
 RESPONSE=$(curl -sf \
   -X POST "$BASE/chat" \

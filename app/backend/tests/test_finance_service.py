@@ -523,3 +523,51 @@ def test_last_book_id_can_be_cleared(brain, book):
     svc.set_last_book_id("Alice", "personal", book["id"])
     svc.set_last_book_id("Alice", "personal", None)
     assert svc.get_last_book_id("Alice", "personal") is None
+
+
+# ---------------------------------------------------------------------------
+# update_access / set_account_sync_state — race-safety (fixed 2026-09-07)
+# ---------------------------------------------------------------------------
+
+
+def test_update_access_survives_concurrent_simplefin_sync(brain, monkeypatch):
+    """The actual demonstrated bug: job_simplefin_sync runs automatically every
+    12h and writes synced_balance_cents via set_account_sync_state() — landing in
+    the same books.json an admin's update_access() call revokes a share on. Both
+    functions did an unlocked load-mutate-save; a widened race window (via a
+    slowed _save) reproduces a lost update without the fix and must not with it."""
+    import threading
+    import time
+
+    from services import auth_service
+
+    auth_service.create_user("bob@example.com", "password1", "Bob")
+    book = svc.create_book("Alice", "personal", name="Family budget", created_by="Alice")
+    account = svc.add_account("Alice", "personal", book["id"], {"name": "Checking"})
+
+    real_save = svc._save
+
+    def slow_save(store_user, workspace, data):
+        time.sleep(0.01)
+        real_save(store_user, workspace, data)
+
+    monkeypatch.setattr(svc, "_save", slow_save)
+
+    def revoke():
+        svc.update_access("Alice", "personal", book["id"], hidden_from=["Bob"])
+
+    def sync():
+        svc.set_account_sync_state("Alice", "personal", book["id"], account["id"], 12345)
+
+    threads = [threading.Thread(target=revoke), threading.Thread(target=sync)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    data = svc._load("Alice", "personal")
+    reloaded_book = next(b for b in data["books"] if b["id"] == book["id"])
+    reloaded_account = next(a for a in reloaded_book["accounts"] if a["id"] == account["id"])
+    # Both concurrent writes must have landed — neither silently reverted the other.
+    assert reloaded_book["hidden_from"] == ["Bob"]
+    assert reloaded_account["synced_balance_cents"] == 12345

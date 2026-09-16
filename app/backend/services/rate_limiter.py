@@ -23,11 +23,19 @@ def _client_ip(request: Request) -> str:
 
     X-Forwarded-For is only trusted when TRUST_PROXY_HEADERS=true, preventing
     attackers from spoofing IPs to bypass rate limits when the app is exposed directly.
+
+    A standard reverse proxy (nginx's $proxy_add_x_forwarded_for, Caddy, etc.) APPENDS
+    the real client IP to any existing header value rather than replacing it, so the
+    one trustworthy entry is the LAST one — everything before it is whatever the
+    original connecting client supplied and is fully attacker-controlled. Trusting the
+    first entry instead (a real bug found and fixed 2026-09-07) let any remote client
+    set an arbitrary X-Forwarded-For value and get a fresh rate-limit bucket on every
+    request, defeating every IP-keyed limiter in the app the moment this setting is on.
     """
     if effective_trust_proxy_headers():
         forwarded = request.headers.get("X-Forwarded-For")
         if forwarded:
-            candidate = forwarded.split(",")[0].strip()
+            candidate = forwarded.split(",")[-1].strip()
             if candidate:
                 return candidate
     return request.client.host if request.client else "unknown"

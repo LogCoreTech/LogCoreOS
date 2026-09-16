@@ -117,8 +117,8 @@ export default function ContactFields() {
                   <select value={f.type} onChange={e => setField(i, { type: e.target.value })} className="input !py-1 !w-24">
                     {FIELD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
-                  <button type="button" onClick={() => moveField(i, -1)} className="text-charcoal-400 hover:text-orange-500 px-0.5" title="Move up">↑</button>
-                  <button type="button" onClick={() => moveField(i, 1)} className="text-charcoal-400 hover:text-orange-500 px-0.5" title="Move down">↓</button>
+                  <button type="button" onClick={() => moveField(i, -1)} className="text-charcoal-400 hover:text-orange-500 px-0.5" title="Move up" aria-label="Move up">↑</button>
+                  <button type="button" onClick={() => moveField(i, 1)} className="text-charcoal-400 hover:text-orange-500 px-0.5" title="Move down" aria-label="Move down">↓</button>
                   <button type="button" onClick={() => removeField(i)} aria-label="Remove field" className="text-red-400 hover:text-red-500 px-0.5">✕</button>
                 </div>
                 {f.type === 'select' && (

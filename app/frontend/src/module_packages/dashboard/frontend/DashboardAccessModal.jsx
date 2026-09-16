@@ -74,9 +74,9 @@ export default function DashboardAccessModal({ dashboard, isPool, isOwner, onClo
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div ref={cardRef} className="modal-card max-w-md" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold">Share &quot;{dashboard.name}&quot;</h2>
-          <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-600">✕</button>
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <h2 className="font-semibold min-w-0 flex-1 truncate">Share &quot;{dashboard.name}&quot;</h2>
+          <button onClick={onClose} aria-label="Close" className="shrink-0 text-charcoal-400 hover:text-charcoal-600">✕</button>
         </div>
 
         {error && <p className="text-sm text-red-500 mb-3">{error}</p>}

@@ -1,4 +1,5 @@
-fastapi==0.111.0
+fastapi==0.115.14
+starlette>=0.40.0,<0.47.0
 uvicorn[standard]==0.30.0
 python-jose[cryptography]==3.4.0
 passlib[bcrypt]==1.7.4
@@ -11,6 +12,7 @@ anthropic>=0.50.0,<1.0.0
 openai>=1.0.0,<2.0.0
 pydantic==2.7.4
 pydantic-settings==2.3.1
+email-validator==2.2.0
 tzdata==2024.1
 docker>=7.0.0,<8.0.0
 Pillow==12.3.0

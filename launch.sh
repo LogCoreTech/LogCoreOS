@@ -332,8 +332,34 @@ env_get() {
 
 # ── Environment setup ─────────────────────────────────────────────────────────
 
+# True if a previous launch already created the n8n container and/or its
+# `n8n_data` volume — the signal that this is NOT a fresh install and n8n may
+# already hold real, encrypted workflow credentials. Volume name follows
+# Compose's default <project>_<volume> naming; project name defaults to the
+# --project-directory basename ("docker"), matching launch_containers()'s own
+# --project-directory "$DOCKER_DIR" call below.
+n8n_data_exists() {
+  local project
+  project="$(basename "$DOCKER_DIR")"
+  if docker volume inspect "${project}_n8n_data" &>/dev/null; then
+    return 0
+  fi
+  if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "logcore-n8n"; then
+    return 0
+  fi
+  return 1
+}
+
 generate_env() {
   log_step "Creating docker/.env"
+
+  # Grab the CURRENT N8N_ENCRYPTION_KEY (if any) before it's overwritten below —
+  # needed so an existing instance's key can be preserved rather than replaced
+  # with a fresh one that can't decrypt anything already encrypted with it.
+  local existing_n8n_key=""
+  if [[ -f "$ENV_FILE" ]]; then
+    existing_n8n_key="$(env_get N8N_ENCRYPTION_KEY 2>/dev/null || true)"
+  fi
 
   cp "$ENV_EXAMPLE" "$ENV_FILE"
 
@@ -350,9 +376,32 @@ generate_env() {
   env_set DOCKER_GID          "$(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo '999')"
 
   # Strong per-install n8n keys (fresh install → no existing n8n data, so it is
-  # safe to set the encryption key now). Never regenerated for an existing .env.
+  # safe to set the encryption key now). Never regenerated for an existing .env
+  # under normal operation — this function only runs on a truly fresh install
+  # or under --reconfigure, and the block below guards the --reconfigure case.
   env_set N8N_API_KEY         "$(generate_secret_key)"
-  env_set N8N_ENCRYPTION_KEY  "$(generate_secret_key)"
+
+  if n8n_data_exists; then
+    if [[ -n "$existing_n8n_key" ]]; then
+      # Preserve it instead of regenerating — a new key would make every
+      # credential already stored in n8n's existing workflows permanently
+      # undecryptable, even though the workflows themselves would still load.
+      env_set N8N_ENCRYPTION_KEY "$existing_n8n_key"
+      log_warn "Existing n8n data detected — kept the current N8N_ENCRYPTION_KEY instead of"
+      log_warn "  generating a new one (a new key would make n8n workflow credentials"
+      log_warn "  permanently undecryptable)."
+    else
+      log_warn "Existing n8n data detected (container/volume already present) but no prior"
+      log_warn "  N8N_ENCRYPTION_KEY was found to preserve."
+      log_warn "  Generating a NEW key now WILL make every credential already stored in n8n's"
+      log_warn "  existing workflows PERMANENTLY UNDECRYPTABLE."
+      log_warn "Press Ctrl+C now to abort and recover the old key first, or wait 10 seconds to proceed."
+      sleep 10
+      env_set N8N_ENCRYPTION_KEY "$(generate_secret_key)"
+    fi
+  else
+    env_set N8N_ENCRYPTION_KEY "$(generate_secret_key)"
+  fi
 
   # Same reasoning: fresh install → no encrypted Infisical cache/token file yet,
   # so it's safe to set this now. Never regenerated for an existing .env — see

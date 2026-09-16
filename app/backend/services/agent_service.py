@@ -580,6 +580,21 @@ def _get_tools(user: dict) -> list[dict]:
     return tools
 
 
+def _module_owning_tool(tool_name: str) -> str | None:
+    """The display_name of the module whose manifest declares `tool_name` in
+    owned_agent_tools, or None if it isn't a module-owned tool (a core tool,
+    which can't be disabled this way). Used only to build a human-readable
+    message when a resumed pending tool call has gone stale — see run_agent's
+    resume path below (S12 fix)."""
+    from module_registry import discover_manifests
+
+    manifests, _errors = discover_manifests()
+    for manifest in manifests.values():
+        if tool_name in manifest.owned_agent_tools:
+            return manifest.display_name
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Tool executor
 # ---------------------------------------------------------------------------
@@ -964,14 +979,44 @@ async def run_agent(
     last_text = ""
     step_limit = max_steps if max_steps is not None else MAX_STEPS
 
+    # Computed once, up front, and reused both to gate the resume replay
+    # below and to build active_tools further down — this is a FRESH read of
+    # the user's CURRENT disabled_modules (the `user` dict passed in comes
+    # from this HTTP request's own get_current_user(), not anything cached
+    # from whenever the pending write was originally proposed).
+    all_tools = _get_tools(user)
+
     if resume:
         messages = list(resume["messages"])
         replay_results = []
+        current_tool_names = {t["name"] for t in all_tools}
         for tc in resume["pending_tool_calls"]:
             if resume.get("kind") == "question":
                 result: Any = {"answer": resume.get("answer")}
             elif resume.get("decision") == "decline":
                 result = {"declined": True}
+            elif tc["name"] not in current_tool_names:
+                # S12 fix: this exact tool was offered when the write was
+                # proposed, but is no longer in this user's CURRENT tool list
+                # by the time it's actually being approved/replayed — most
+                # likely an admin disabled the owning module in between.
+                # Replaying it anyway would execute a write the user can no
+                # longer even see the tool for in the live (non-resume) path;
+                # skip execution and surface why instead of silently running
+                # it or letting a KeyError/AttributeError deeper in
+                # _execute_tool crash the whole resume.
+                module_label = _module_owning_tool(tc["name"])
+                reason = (
+                    f"the {module_label} module was disabled"
+                    if module_label
+                    else "it's no longer available"
+                )
+                result = {
+                    "error": (
+                        f"This action can no longer be completed — {reason} "
+                        "after this was proposed."
+                    )
+                }
             else:
                 result = _execute_tool(
                     tc["name"],
@@ -997,8 +1042,6 @@ async def run_agent(
         tools_used = True
     else:
         messages = list(history) + [{"role": "user", "content": goal}]
-
-    all_tools = _get_tools(user)
     if mode in ("auto", "approve"):
         active_tools = [t for t in all_tools if t["name"] != "propose_plan"]
     elif mode == "research":

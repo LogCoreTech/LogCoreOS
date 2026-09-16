@@ -266,9 +266,9 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
     <Portal>
       <div className="modal-overlay" onClick={attemptClose}>
         <div ref={cardRef} className="modal-card max-w-lg max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold">{goalId ? (editing ? 'Edit Goal' : goal?.title) : 'New Goal'}</h2>
-            <button onClick={attemptClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-600">✕</button>
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <h2 className="font-semibold min-w-0 flex-1 truncate">{goalId ? (editing ? 'Edit Goal' : goal?.title) : 'New Goal'}</h2>
+            <button onClick={attemptClose} aria-label="Close" className="shrink-0 text-charcoal-400 hover:text-charcoal-600">✕</button>
           </div>
 
           {loading ? (

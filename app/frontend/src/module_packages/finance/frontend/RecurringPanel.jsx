@@ -164,7 +164,7 @@ export default function RecurringPanel({ book, canEdit }) {
                   </span>
                   {canEdit && (
                     <div className="flex shrink-0">
-                      <button onClick={() => toggleActive(item)} className="btn-ghost text-xs px-1.5" title={item.active ? 'Pause' : 'Resume'}>
+                      <button onClick={() => toggleActive(item)} className="btn-ghost text-xs px-1.5" title={item.active ? 'Pause' : 'Resume'} aria-label={item.active ? 'Pause' : 'Resume'}>
                         {item.active ? '⏸' : '▶'}
                       </button>
                       <button onClick={() => openForm(item)} aria-label="Edit" className="btn-ghost text-xs px-1.5">✎</button>
@@ -202,6 +202,7 @@ export default function RecurringPanel({ book, canEdit }) {
                 {canEdit && (
                   <button
                     onClick={() => togglePlannedDone(item)}
+                    aria-label={item.done ? 'Mark as not done' : 'Mark as done'}
                     className={`shrink-0 w-4 h-4 rounded border-2 text-white text-[10px] flex items-center justify-center ${
                       item.done ? 'bg-orange-500 border-orange-500' : 'border-charcoal-300 dark:border-charcoal-600'
                     }`}

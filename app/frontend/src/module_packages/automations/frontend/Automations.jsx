@@ -11,6 +11,7 @@ import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
 import useScrollLock from '../../../lib/useScrollLock'
 import { useToast } from '../../../lib/toast'
+import { handleTabListKeyDown } from '../../../lib/tabListKeyboard'
 
 function fmt(iso) {
   if (!iso) return 'Never'
@@ -276,9 +277,9 @@ function LogsModal({ workflow, onClose }) {
         className="bg-white dark:bg-charcoal-900 rounded-xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-4 border-b border-charcoal-100 dark:border-charcoal-800">
-          <h3 className="font-semibold">{workflow.name} — Logs</h3>
-          <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-600">✕</button>
+        <div className="flex items-center justify-between gap-2 p-4 border-b border-charcoal-100 dark:border-charcoal-800">
+          <h3 className="font-semibold min-w-0 flex-1 truncate">{workflow.name} — Logs</h3>
+          <button onClick={onClose} aria-label="Close" className="shrink-0 text-charcoal-400 hover:text-charcoal-600">✕</button>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {loading && <p className="text-sm text-charcoal-400">Loading…</p>}
@@ -493,6 +494,7 @@ function WorkflowCard({ workflow, isAdmin, onDelete, onRun, onToggleActive }) {
             <button
               onClick={handleDelete}
               disabled={deleting}
+              aria-label="Delete workflow"
               className="text-charcoal-300 hover:text-red-500 transition-colors shrink-0 text-xs disabled:opacity-30"
             >
               {deleting ? '…' : '✕'}
@@ -575,6 +577,7 @@ export default function Automations() {
   const [statusFilter, setStatusFilter] = useState('new') // new | reviewed | all
   const [inboxModal, setInboxModal] = useState(null) // {inbox} | {creating: true}
   const [searchParams, setSearchParams] = useSearchParams()
+  const tabRefs = useRef([])
 
   async function load() {
     setLoading(true)
@@ -653,6 +656,16 @@ export default function Automations() {
     setWorkflows(wfs => [...wfs, record])
   }
 
+  // Gates the skeleton/spinner to the FIRST load only. Real bug (2026-09-08):
+  // clicking "Run" called load(), which unconditionally set loading=true —
+  // and the list below was gated on plain `!loading`, so it tore down and
+  // replaced the already-visible workflow grid with a bare "Loading…" on
+  // every run, even though the data hadn't gone anywhere. Same non-blanking
+  // pattern Tasks.jsx (`loading && sorted.length === 0`) and Contacts.jsx
+  // (`loading && items.length === 0`) already use for their own list
+  // refreshes — once there's data on screen, a background reload no longer
+  // blanks it.
+  const initialLoading = loading && workflows.length === 0
   const visible = workflows.filter(w => w.scope === scope)
   const newCount = items.filter(i => i.status === 'new').length
   const canManageInboxes = scope !== 'business' || isAdmin
@@ -689,30 +702,40 @@ export default function Automations() {
         ) : null}
       </div>
 
-      {/* View pills */}
-      <div className="flex gap-1">
+      {/* View tabs */}
+      <div role="tablist" aria-label="Automations view" className="flex gap-1">
         {[
           { id: 'workflows', label: 'Workflows' },
           { id: 'inbox', label: `Inbox${newCount ? ` (${newCount})` : ''}` },
-        ].map(v => (
+        ].map(({ id, label }, i, arr) => (
           <button
-            key={v.id}
-            onClick={() => setView(v.id)}
+            key={id}
+            ref={el => { tabRefs.current[i] = el }}
+            role="tab"
+            aria-selected={view === id}
+            tabIndex={view === id ? 0 : -1}
+            onClick={() => setView(id)}
+            onKeyDown={e => handleTabListKeyDown(e, {
+              tabs: arr.map(t => t.id),
+              activeIndex: i,
+              onActivate: setView,
+              refs: tabRefs,
+            })}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              view === v.id
+              view === id
                 ? 'bg-orange-500 text-white'
                 : 'bg-charcoal-100 dark:bg-charcoal-800 text-charcoal-600 dark:text-charcoal-300'
             }`}
           >
-            {v.label}
+            {label}
           </button>
         ))}
       </div>
 
-      {loading && <p className="text-sm text-charcoal-400">Loading…</p>}
+      {initialLoading && <p className="text-sm text-charcoal-400">Loading…</p>}
       {error && <p className="text-sm text-red-500">{error}</p>}
 
-      {view === 'workflows' && !loading && !error && visible.length === 0 && (
+      {view === 'workflows' && !initialLoading && !error && visible.length === 0 && (
         <div className="text-center py-12 text-charcoal-400">
           <p className="text-4xl mb-3">⚡</p>
           <p className="text-sm font-medium">No {scope} workflows yet</p>
@@ -726,7 +749,7 @@ export default function Automations() {
         </div>
       )}
 
-      {view === 'workflows' && !loading && visible.length > 0 && (
+      {view === 'workflows' && !initialLoading && visible.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {visible.map(wf => (
             <WorkflowCard

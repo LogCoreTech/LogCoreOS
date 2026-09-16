@@ -184,9 +184,9 @@ export default function DashboardTemplateManager({ templates, user, onClose, onC
   return (
     <div className="modal-overlay">
       <div ref={cardRef} className="modal-card p-5 max-w-lg">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold">{title}</h2>
-          <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <h2 className="font-semibold min-w-0 flex-1 truncate">{title}</h2>
+          <button onClick={onClose} aria-label="Close" className="shrink-0 text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
         </div>
 
         {view.mode === 'list' && (
@@ -330,8 +330,8 @@ export default function DashboardTemplateManager({ templates, user, onClose, onC
                         <p className="text-sm truncate">{meta?.label || b.type}</p>
                         {blockUsesSubject(b) && <p className="text-[10px] text-orange-500">🔗 uses this dashboard&apos;s subject</p>}
                       </div>
-                      <button type="button" onClick={() => moveBlock(i, -1)} className="text-charcoal-400 hover:text-orange-500 px-0.5 shrink-0" title="Move up">↑</button>
-                      <button type="button" onClick={() => moveBlock(i, 1)} className="text-charcoal-400 hover:text-orange-500 px-0.5 shrink-0" title="Move down">↓</button>
+                      <button type="button" onClick={() => moveBlock(i, -1)} className="text-charcoal-400 hover:text-orange-500 px-0.5 shrink-0" title="Move up" aria-label="Move up">↑</button>
+                      <button type="button" onClick={() => moveBlock(i, 1)} className="text-charcoal-400 hover:text-orange-500 px-0.5 shrink-0" title="Move down" aria-label="Move down">↓</button>
                       <button type="button" onClick={() => setBlockEditor({ index: i })} className="text-charcoal-400 hover:text-orange-500 px-1 shrink-0 text-xs">Edit</button>
                       <button type="button" onClick={() => removeBlock(i)} aria-label="Remove block" className="text-red-400 hover:text-red-500 px-0.5 shrink-0">✕</button>
                     </div>

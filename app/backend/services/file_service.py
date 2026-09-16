@@ -110,10 +110,6 @@ def automation_inbox_path(user_name: str) -> Path:
     return user_path(user_name) / "Automations" / "inbox.json"
 
 
-def profile_path(user_name: str) -> Path:
-    return user_path(user_name) / "Profile.md"
-
-
 def contacts_path(user_name: str, workspace: str = "personal") -> Path:
     return ws_path(user_name, workspace) / "Contacts" / "contacts.json"
 
@@ -282,19 +278,3 @@ def resolve_user_md_path(user_name: str, rel_path: str) -> Path:
     return target
 
 
-def parse_priority_order(user_name: str) -> list[str]:
-    """Extract ordered priority categories from Profile.md."""
-    profile = read_markdown(profile_path(user_name))
-    in_section = False
-    order = []
-    for line in profile.splitlines():
-        if line.strip() == "## Life Priorities":
-            in_section = True
-            continue
-        if in_section:
-            if line.startswith("## "):
-                break
-            match = re.match(r"^\d+\.\s+(.+)$", line.strip())
-            if match:
-                order.append(match.group(1).strip())
-    return order

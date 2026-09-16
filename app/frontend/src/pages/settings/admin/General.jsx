@@ -139,6 +139,7 @@ function WorkspaceVisibilitySection() {
               <button
                 onClick={() => toggle(ws.id)}
                 disabled={saving}
+                aria-label={ws.label}
                 className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
                   on ? 'bg-orange-500' : 'bg-charcoal-300 dark:bg-charcoal-700'
                 } disabled:opacity-50`}
@@ -437,6 +438,7 @@ function UpdateSection() {
               disabled={refreshing}
               className="text-sm text-charcoal-500 hover:text-orange-500 transition-colors disabled:opacity-50 px-2"
               title="Check for updates now (bypasses the cache)"
+              aria-label="Check for updates now"
             >
               {refreshing ? '…' : '↺'}
             </button>

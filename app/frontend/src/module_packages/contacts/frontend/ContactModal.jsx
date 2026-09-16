@@ -6,29 +6,16 @@ import { useContactPhotoUrl } from './ContactAvatar'
 import TagInput from '../../../components/TagInput'
 import SectionHeader from './SectionHeader'
 import ConfirmDialog from '../../../components/ConfirmDialog'
+import Field from './Field'
+import CareerRoleFields from './CareerRoleFields'
 import { tags as tagsApi } from '../../../lib/api'
 import useEscapeToClose from '../../../lib/useEscapeToClose'
 import useFocusTrap from '../../../lib/useFocusTrap'
 import useScrollLock from '../../../lib/useScrollLock'
 
 const DEFAULT_PRIORITY_ORDER = ['Religion', 'Family', 'Job', 'Personal Growth', 'Hobbies']
-const EDUCATION_LEVELS = [
-  'Junior High', 'High School', 'Some College', 'Trade/Vocational School',
-  "Associate's Degree", "Bachelor's Degree", "Master's Degree", 'Doctorate', 'Other',
-]
-const EXPERIENCE_LEVELS = [
-  'Less than 1 year', '1-2 years', '3-5 years', '6-10 years', '11-15 years', '16-20 years', '20+ years',
-]
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'Unknown']
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
-
-function Field({ label, children }) {
-  return (
-    <label className="block text-xs text-charcoal-500 dark:text-charcoal-400">{label}
-      {children}
-    </label>
-  )
-}
 
 function formatPhoneNumber(digits) {
   const d = (digits || '').slice(0, 10)
@@ -231,28 +218,7 @@ function CareerHistoryEditor({ career, onChange }) {
   return (
     <div className="space-y-3">
       <p className="text-[11px] text-charcoal-400">{current ? 'Current role' : 'Add a role'}</p>
-      <input className="input" placeholder="Job title" value={cur.title || ''} onChange={e => updateCurrent({ title: e.target.value })} />
-      <ContactPicker
-        label="Employer"
-        value={{ name: companyNames[cur.company_id] || '', contactId: cur.company_id || null }}
-        onChange={(_n, id) => updateCurrent({ company_id: id })}
-        placeholder="Search or add a company…"
-      />
-      <div className="grid grid-cols-2 gap-3">
-        <input className="input" placeholder="Industry" value={cur.industry || ''} onChange={e => updateCurrent({ industry: e.target.value })} />
-        <select className="input" value={cur.education || ''} onChange={e => updateCurrent({ education: e.target.value })}>
-          <option value="">Education —</option>
-          {EDUCATION_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-        </select>
-        <select className="input" value={cur.years_experience || ''} onChange={e => updateCurrent({ years_experience: e.target.value })}>
-          <option value="">Experience —</option>
-          {EXPERIENCE_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-        </select>
-        <Field label="Started">
-          <input type="month" className="input" value={cur.start_date || ''} onChange={e => updateCurrent({ start_date: e.target.value })} />
-        </Field>
-      </div>
-      <input className="input" placeholder="Skills (comma-separated)" value={cur.skills || ''} onChange={e => updateCurrent({ skills: e.target.value })} />
+      <CareerRoleFields entry={cur} onChange={updateCurrent} companyNames={companyNames} />
       <div className="flex gap-2 flex-wrap">
         {current && (
           <button type="button" onClick={archiveCurrent} className="btn-ghost text-xs">
@@ -269,31 +235,7 @@ function CareerHistoryEditor({ career, onChange }) {
       {editingPast && (
         <div className="space-y-2 p-2.5 rounded-lg border border-charcoal-200 dark:border-charcoal-700">
           <p className="text-[11px] text-charcoal-400">{editingPast.id ? 'Edit past role' : 'New past role'}</p>
-          <input className="input" placeholder="Job title" value={editingPast.title || ''} onChange={e => pastField({ title: e.target.value })} />
-          <ContactPicker
-            label="Employer"
-            value={{ name: companyNames[editingPast.company_id] || '', contactId: editingPast.company_id || null }}
-            onChange={(_n, id) => pastField({ company_id: id })}
-            placeholder="Search or add a company…"
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <input className="input" placeholder="Industry" value={editingPast.industry || ''} onChange={e => pastField({ industry: e.target.value })} />
-            <select className="input" value={editingPast.education || ''} onChange={e => pastField({ education: e.target.value })}>
-              <option value="">Education —</option>
-              {EDUCATION_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-            </select>
-            <select className="input" value={editingPast.years_experience || ''} onChange={e => pastField({ years_experience: e.target.value })}>
-              <option value="">Experience —</option>
-              {EXPERIENCE_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-            </select>
-            <Field label="Started">
-              <input type="month" className="input" value={editingPast.start_date || ''} onChange={e => pastField({ start_date: e.target.value })} />
-            </Field>
-            <Field label="Ended">
-              <input type="month" className="input" value={editingPast.end_date || ''} onChange={e => pastField({ end_date: e.target.value })} />
-            </Field>
-          </div>
-          <input className="input" placeholder="Skills (comma-separated)" value={editingPast.skills || ''} onChange={e => pastField({ skills: e.target.value })} />
+          <CareerRoleFields entry={editingPast} onChange={pastField} companyNames={companyNames} showEndDate />
           <div className="flex gap-2">
             <button type="button" onClick={savePast} className="btn-primary text-xs">Save role</button>
             <button type="button" onClick={() => setEditingPast(null)} className="btn-ghost text-xs">Cancel</button>
@@ -426,8 +368,8 @@ function PrioritiesEditor({ order, workspace, onChange }) {
           >
             <span className="text-charcoal-400 text-xs w-4 shrink-0">{i + 1}</span>
             <span className="flex-1 min-w-0 truncate">{cat}</span>
-            <button type="button" onClick={() => move(i, i - 1)} disabled={i === 0} className="text-charcoal-400 hover:text-orange-500 disabled:opacity-20 text-xs px-1">▲</button>
-            <button type="button" onClick={() => move(i, i + 1)} disabled={i === order.length - 1} className="text-charcoal-400 hover:text-orange-500 disabled:opacity-20 text-xs px-1">▼</button>
+            <button type="button" onClick={() => move(i, i - 1)} disabled={i === 0} aria-label={`Move ${cat} up`} className="text-charcoal-400 hover:text-orange-500 disabled:opacity-20 text-xs px-1">▲</button>
+            <button type="button" onClick={() => move(i, i + 1)} disabled={i === order.length - 1} aria-label={`Move ${cat} down`} className="text-charcoal-400 hover:text-orange-500 disabled:opacity-20 text-xs px-1">▼</button>
             <button type="button" onClick={() => removeCat(cat)} disabled={order.length <= 1} aria-label="Remove" className="text-charcoal-400 hover:text-red-500 disabled:opacity-20 text-xs">✕</button>
           </li>
         ))}
@@ -697,7 +639,11 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
   function handleDelete() {
     setConfirmState({
       title: 'Delete contact',
-      message: `Permanently delete "${contact.name}"? This cannot be undone.`,
+      // Contacts' trash_handlers.py snapshots interactions/deals into the
+      // trash payload for display only — they're never actually restorable,
+      // unlike the contact itself. Callers need to know that up front, not
+      // discover it after restoring from Trash and finding them gone.
+      message: `Move "${contact.name}" to Trash? The contact can be restored within 30 days, but interactions and deals logged on it will be permanently deleted and can't be recovered — even if you restore the contact.`,
       confirmLabel: 'Delete',
       danger: true,
       onConfirm: async () => {

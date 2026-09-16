@@ -1,12 +1,15 @@
 # LogCoreOS — Testing Guide
 
-Tests live in `app/backend/tests/`. Run from `app/backend/`:
+Tests live in `app/backend/tests/` (core) and `app/backend/module_packages/<id>/tests/` (per-module, since the 2026-08-24 Mod Store conversion). Host Python is 3.14 but this app targets 3.12 — use the uv-managed venv at `app/backend/.venv` (see `docs/AGENTS.md`'s Development Setup section for the one-time `uv venv --python 3.12 .venv` + `uv pip install` steps) rather than system Python, or dependency versions won't match. Run from `app/backend/`:
 
 ```bash
-pytest tests/ -v                        # full suite
+pytest -v                               # full suite — tests/ AND every module_packages/*/tests/
+pytest tests/ -v                        # core-only (narrower — excludes module_packages/*/tests/)
 pytest tests/test_task_service.py -v    # single file
 pytest tests/ -v -k "test_score"        # match by name pattern
 ```
+
+**Bare `pytest -v` is the real full-suite command.** `pyproject.toml`'s `testpaths = ["tests", "module_packages"]` only applies when no path is given on the command line — `pytest tests/ -v` silently narrows to core-only and misses every converted module's own tests (hundreds of them).
 
 ---
 
@@ -91,7 +94,7 @@ Exception: external HTTP calls (AI provider, n8n, HA, Tavily) should be mocked w
 
 ---
 
-## Current Coverage (1112 tests, 62 core files + module_packages/{journal,automations,household,team,chat,notes,dashboard,assets,contacts,finance,goals}/tests/ — all 13 modules in the Mod Store rollout have now converted, see docs/PROJECT.md/docs/MEMORY.md's 2026-08-28 entry; goals/ joined the same day as an 11th module_packages/ test dir but is NOT part of that 13-module count — see its own note below the table. 2026-08-29 (Goals Round 2, same still-uncommitted changeset): 2 new core files — `test_tags_service.py`/`test_tags_router.py`, backing new core `services/tags_service.py`/`routers/tags.py` — plus a new `module_packages/contacts/tests/test_contacts_metric_providers.py` and growth in 3 existing files (`test_goals_service.py` 24→30, `test_module_registry.py` 8→15, `test_task_service.py` 13→20); see each row below)
+## Current Coverage (1441 tests as of 2026-09-07, confirmed via `pytest --collect-only`; the table below is accurate through 2026-08-29 and NOT fully itemized past that date — most of the gap is the 2026-09-05 Trash/soft-delete + Bulk-actions test files, one `test_<module>_trash_handlers.py` per delete-owning module, and the 2026-09-06 ntfy-removal migration tests (`test_migrations_runner.py`). See `docs/Daily Notes/2026-09-05.md`/`2026-09-06.md` and `CHANGELOG.md` for what shipped since. 62 core files + module_packages/{journal,automations,household,team,chat,notes,dashboard,assets,contacts,finance,goals}/tests/ — all 13 modules in the Mod Store rollout have now converted, see docs/PROJECT.md/docs/MEMORY.md's 2026-08-28 entry; goals/ joined the same day as an 11th module_packages/ test dir but is NOT part of that 13-module count — see its own note below the table. 2026-08-29 (Goals Round 2, same still-uncommitted changeset): 2 new core files — `test_tags_service.py`/`test_tags_router.py`, backing new core `services/tags_service.py`/`routers/tags.py` — plus a new `module_packages/contacts/tests/test_contacts_metric_providers.py` and growth in 3 existing files (`test_goals_service.py` 24→30, `test_module_registry.py` 8→15, `test_task_service.py` 13→20); see each row below)
 
 Core-service coverage below (the module suites — finance, contacts, assets, help, etc. — make up the remainder of the files). Since 2026-08-24, `testpaths` (pyproject.toml) covers both `tests/` and `module_packages/` — run bare `pytest`/`pytest -v` for the full suite, or `pytest tests/ -v` to narrow to core-only (an explicit path on the command line overrides `testpaths`).
 

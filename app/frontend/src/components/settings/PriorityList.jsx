@@ -37,8 +37,10 @@ export default function PriorityList({ label, pool, setter, newVal, setNewVal, d
             <span className="flex-1">{cat}</span>
             <div className="flex flex-col shrink-0 mr-2">
               <button type="button" onClick={() => poolMove(pool, setter, i, i - 1)} disabled={i === 0}
+                aria-label={`Move ${cat} up`}
                 className="text-charcoal-400 hover:text-orange-500 disabled:opacity-20 leading-none px-1 text-xs">▲</button>
               <button type="button" onClick={() => poolMove(pool, setter, i, i + 1)} disabled={i === pool.length - 1}
+                aria-label={`Move ${cat} down`}
                 className="text-charcoal-400 hover:text-orange-500 disabled:opacity-20 leading-none px-1 text-xs">▼</button>
             </div>
             <button type="button" onClick={() => poolRemove(pool, setter, cat)} disabled={pool.length <= 1}

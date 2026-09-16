@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import HelpButton from '../../../components/HelpButton'
 import TrashLink from '../../../components/TrashLink'
+import SimpleFormModal from '../../../components/SimpleFormModal'
 import { notes as notesApi } from './api'
 import { tags as tagsApi } from '../../../lib/api'
 import TagInput from '../../../components/TagInput'
@@ -94,6 +95,7 @@ function TreeNode({ node, depth, selectedPath, openFolders, onSelectNote, onTogg
             onClick={e => { e.stopPropagation(); onAction('folderMenu', node) }}
             className="opacity-0 group-hover:opacity-100 text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200 px-1 text-xs shrink-0 transition-opacity"
             title="Folder options"
+            aria-label={`Folder options for ${node.name}`}
           >
             ···
           </button>
@@ -148,6 +150,7 @@ function TreeNode({ node, depth, selectedPath, openFolders, onSelectNote, onTogg
         onClick={e => { e.stopPropagation(); onAction('noteMenu', node) }}
         className="opacity-0 group-hover:opacity-100 text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200 px-1 text-xs shrink-0 transition-opacity"
         title="Note options"
+        aria-label={`Note options for ${node.name}`}
       >
         ···
       </button>
@@ -232,9 +235,9 @@ function NoteShareModal({ node, onClose, onSaved }) {
   return (
     <div className="modal-overlay">
       <div ref={cardRef} className="modal-card p-5 max-w-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold">Share &ldquo;{node.name}&rdquo;</h2>
-          <button onClick={onClose} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <h2 className="font-semibold min-w-0 flex-1 truncate">Share &ldquo;{node.name}&rdquo;</h2>
+          <button onClick={onClose} aria-label="Close" className="shrink-0 text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
         </div>
         <div className="space-y-3">
           <p className="text-xs text-charcoal-500 dark:text-charcoal-400">
@@ -702,6 +705,13 @@ export default function Notes() {
     setModal({ type, item })
   }
 
+  // Shared by all six SimpleFormModal instances below: the ✕ button never
+  // clears the in-progress error (matches every modal's prior inline
+  // `onClick={() => setModal(null)}`), while Cancel does (matches every
+  // modal's prior inline `onClick={() => { setModal(null); setError('') }}`).
+  function closeModal() { setModal(null) }
+  function cancelModal() { setModal(null); setError('') }
+
   const folders = allFolderPaths(items)
 
   // ── Sidebar ──────────────────────────────────────────────────────────────────
@@ -919,164 +929,154 @@ export default function Notes() {
         />
       )}
       {modal?.type === 'newNote' && (
-        <div className="modal-overlay">
-          <div ref={modalCardRef} className="modal-card p-5 max-w-sm">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold">New Note</h2>
-              <button onClick={() => setModal(null)} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
-            </div>
-            <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-2">
-              {selectedPath && items.find(i => i.path === selectedPath && i.type === 'folder')
-                ? `Will be created inside: ${selectedPath}`
-                : 'Will be created at the top level.'}
-            </p>
-            <input
-              autoFocus
-              className="input w-full mb-3"
-              placeholder="Note name"
-              value={modalInput}
-              onChange={e => setModalInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleCreateNote()}
-            />
-            {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
-            <div className="flex gap-2">
-              <button onClick={() => { setModal(null); setError('') }} className="btn-ghost flex-1">Cancel</button>
-              <button onClick={handleCreateNote} disabled={modalBusy || !modalInput.trim()} className="btn-primary flex-1">
-                {modalBusy ? 'Creating…' : 'Create'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <SimpleFormModal
+          cardRef={modalCardRef}
+          title="New Note"
+          onClose={closeModal}
+          onCancel={cancelModal}
+          onSubmit={handleCreateNote}
+          submitLabel="Create"
+          submitBusyLabel="Creating…"
+          busy={modalBusy}
+          submitDisabled={modalBusy || !modalInput.trim()}
+          error={error}
+        >
+          <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-2">
+            {selectedPath && items.find(i => i.path === selectedPath && i.type === 'folder')
+              ? `Will be created inside: ${selectedPath}`
+              : 'Will be created at the top level.'}
+          </p>
+          <input
+            autoFocus
+            className="input w-full mb-3"
+            placeholder="Note name"
+            value={modalInput}
+            onChange={e => setModalInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleCreateNote()}
+          />
+        </SimpleFormModal>
       )}
 
       {modal?.type === 'newFolder' && (
-        <div className="modal-overlay">
-          <div ref={modalCardRef} className="modal-card p-5 max-w-sm">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold">New Folder</h2>
-              <button onClick={() => setModal(null)} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
-            </div>
-            <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-2">
-              {selectedPath && items.find(i => i.path === selectedPath && i.type === 'folder')
-                ? `Will be created inside: ${selectedPath}`
-                : 'Will be created at the top level.'}
-            </p>
-            <input
-              autoFocus
-              className="input w-full mb-3"
-              placeholder="Folder name"
-              value={modalInput}
-              onChange={e => setModalInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleCreateFolder()}
-            />
-            {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
-            <div className="flex gap-2">
-              <button onClick={() => { setModal(null); setError('') }} className="btn-ghost flex-1">Cancel</button>
-              <button onClick={handleCreateFolder} disabled={modalBusy || !modalInput.trim()} className="btn-primary flex-1">
-                {modalBusy ? 'Creating…' : 'Create'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <SimpleFormModal
+          cardRef={modalCardRef}
+          title="New Folder"
+          onClose={closeModal}
+          onCancel={cancelModal}
+          onSubmit={handleCreateFolder}
+          submitLabel="Create"
+          submitBusyLabel="Creating…"
+          busy={modalBusy}
+          submitDisabled={modalBusy || !modalInput.trim()}
+          error={error}
+        >
+          <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-2">
+            {selectedPath && items.find(i => i.path === selectedPath && i.type === 'folder')
+              ? `Will be created inside: ${selectedPath}`
+              : 'Will be created at the top level.'}
+          </p>
+          <input
+            autoFocus
+            className="input w-full mb-3"
+            placeholder="Folder name"
+            value={modalInput}
+            onChange={e => setModalInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleCreateFolder()}
+          />
+        </SimpleFormModal>
       )}
 
       {modal?.type === 'rename' && (
-        <div className="modal-overlay">
-          <div ref={modalCardRef} className="modal-card p-5 max-w-sm">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold">Rename {modal.item?.type === 'folder' ? 'Folder' : 'Note'}</h2>
-              <button onClick={() => setModal(null)} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
-            </div>
-            <input
-              autoFocus
-              className="input w-full mb-3"
-              value={modalInput}
-              onChange={e => setModalInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleRename()}
-            />
-            {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
-            <div className="flex gap-2">
-              <button onClick={() => { setModal(null); setError('') }} className="btn-ghost flex-1">Cancel</button>
-              <button onClick={handleRename} disabled={modalBusy || !modalInput.trim()} className="btn-primary flex-1">
-                {modalBusy ? 'Renaming…' : 'Rename'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <SimpleFormModal
+          cardRef={modalCardRef}
+          title={`Rename ${modal.item?.type === 'folder' ? 'Folder' : 'Note'}`}
+          onClose={closeModal}
+          onCancel={cancelModal}
+          onSubmit={handleRename}
+          submitLabel="Rename"
+          submitBusyLabel="Renaming…"
+          busy={modalBusy}
+          submitDisabled={modalBusy || !modalInput.trim()}
+          error={error}
+        >
+          <input
+            autoFocus
+            className="input w-full mb-3"
+            value={modalInput}
+            onChange={e => setModalInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleRename()}
+          />
+        </SimpleFormModal>
       )}
 
       {modal?.type === 'move' && (
-        <div className="modal-overlay">
-          <div ref={modalCardRef} className="modal-card p-5 max-w-sm">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold">Move Note</h2>
-              <button onClick={() => setModal(null)} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
-            </div>
-            <p className="text-sm text-charcoal-600 dark:text-charcoal-300 mb-2">
-              Move <strong>{modal.item?.name}</strong> to:
-            </p>
-            <select
-              className="input w-full mb-3"
-              value={modalTarget}
-              onChange={e => setModalTarget(e.target.value)}
-            >
-              <option value="">(Root — no folder)</option>
-              {folders
-                .filter(f => f !== parentOf(modal.item?.path || ''))
-                .map(f => <option key={f} value={f}>{f}</option>)
-              }
-            </select>
-            {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
-            <div className="flex gap-2">
-              <button onClick={() => { setModal(null); setError('') }} className="btn-ghost flex-1">Cancel</button>
-              <button onClick={handleMove} disabled={modalBusy} className="btn-primary flex-1">
-                {modalBusy ? 'Moving…' : 'Move'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <SimpleFormModal
+          cardRef={modalCardRef}
+          title="Move Note"
+          onClose={closeModal}
+          onCancel={cancelModal}
+          onSubmit={handleMove}
+          submitLabel="Move"
+          submitBusyLabel="Moving…"
+          busy={modalBusy}
+          submitDisabled={modalBusy}
+          error={error}
+        >
+          <p className="text-sm text-charcoal-600 dark:text-charcoal-300 mb-2">
+            Move <strong>{modal.item?.name}</strong> to:
+          </p>
+          <select
+            className="input w-full mb-3"
+            value={modalTarget}
+            onChange={e => setModalTarget(e.target.value)}
+          >
+            <option value="">(Root — no folder)</option>
+            {folders
+              .filter(f => f !== parentOf(modal.item?.path || ''))
+              .map(f => <option key={f} value={f}>{f}</option>)
+            }
+          </select>
+        </SimpleFormModal>
       )}
 
       {modal?.type === 'deleteNote' && (
-        <div className="modal-overlay">
-          <div ref={modalCardRef} className="modal-card p-5 max-w-sm">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold">Delete Note?</h2>
-              <button onClick={() => setModal(null)} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
-            </div>
-            <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mb-4">
-              <strong>{modal.item?.path}</strong> will be permanently deleted.
-            </p>
-            {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
-            <div className="flex gap-2">
-              <button onClick={() => { setModal(null); setError('') }} className="btn-ghost flex-1">Cancel</button>
-              <button onClick={handleDelete} disabled={modalBusy} className="flex-1 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors">
-                {modalBusy ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <SimpleFormModal
+          cardRef={modalCardRef}
+          title="Delete Note?"
+          onClose={closeModal}
+          onCancel={cancelModal}
+          onSubmit={handleDelete}
+          submitLabel="Delete"
+          submitBusyLabel="Deleting…"
+          busy={modalBusy}
+          submitDisabled={modalBusy}
+          danger
+          error={error}
+        >
+          <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mb-4">
+            <strong>{modal.item?.path}</strong> will be permanently deleted.
+          </p>
+        </SimpleFormModal>
       )}
 
       {modal?.type === 'deleteFolder' && (
-        <div className="modal-overlay">
-          <div ref={modalCardRef} className="modal-card p-5 max-w-sm">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold">Delete Folder?</h2>
-              <button onClick={() => setModal(null)} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
-            </div>
-            <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mb-4">
-              <strong>{modal.item?.path}</strong> and all its contents will be permanently deleted.
-            </p>
-            {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
-            <div className="flex gap-2">
-              <button onClick={() => { setModal(null); setError('') }} className="btn-ghost flex-1">Cancel</button>
-              <button onClick={handleDelete} disabled={modalBusy} className="flex-1 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors">
-                {modalBusy ? 'Deleting…' : 'Delete Folder'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <SimpleFormModal
+          cardRef={modalCardRef}
+          title="Delete Folder?"
+          onClose={closeModal}
+          onCancel={cancelModal}
+          onSubmit={handleDelete}
+          submitLabel="Delete Folder"
+          submitBusyLabel="Deleting…"
+          busy={modalBusy}
+          submitDisabled={modalBusy}
+          danger
+          error={error}
+        >
+          <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mb-4">
+            <strong>{modal.item?.path}</strong> and all its contents will be permanently deleted.
+          </p>
+        </SimpleFormModal>
       )}
 
       {confirmState && (

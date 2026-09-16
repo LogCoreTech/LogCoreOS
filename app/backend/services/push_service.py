@@ -8,7 +8,6 @@ No pywebpush dependency required.
 
 import base64
 import hmac
-import ipaddress
 import json
 import logging
 import os
@@ -40,6 +39,7 @@ from cryptography.hazmat.primitives.serialization import (
 )
 
 from config import settings
+from services import net_safety
 from services.file_service import brain_path, read_json, write_json
 from services.hosting_service import effective_domain_url
 
@@ -135,36 +135,24 @@ def _validate_push_endpoint(endpoint: str) -> None:
     internal-only address (the Docker socket-proxy, n8n, cloud instance
     metadata at 169.254.169.254, ...) and the server will POST to it — with
     a signed VAPID header and an encrypted body — every time a notification
-    fires, not just on an explicit test send. Validated by resolved IP, not
-    a hostname allowlist: push-provider hostnames change/multiply over time
-    and a stale allowlist would just break real browsers, while "every
-    resolved address must be public" generalizes without maintenance.
-    Deliberately does NOT defend against DNS rebinding (a TOCTOU gap between
-    this check and the real send later) — legitimate push-provider domains
-    are stable, high-reputation domains with no realistic path to resolving
-    privately, so full IP-pinning on every send isn't worth the complexity
-    it would add here.
+    fires, not just on an explicit test send. The hostname-resolves-to-a-
+    public-IP check itself lives in services/net_safety.py (shared with the
+    admin AI-provider base_url SSRF guard in routers/ai_settings.py) —
+    validated by resolved IP, not a hostname allowlist: push-provider
+    hostnames change/multiply over time and a stale allowlist would just
+    break real browsers, while "every resolved address must be public"
+    generalizes without maintenance. Deliberately does NOT defend against DNS
+    rebinding (a TOCTOU gap between this check and the real send later) —
+    legitimate push-provider domains are stable, high-reputation domains with
+    no realistic path to resolving privately, so full IP-pinning on every
+    send isn't worth the complexity it would add here.
     """
     parsed = urllib.parse.urlparse(endpoint)
     if parsed.scheme != "https":
         raise ValueError("Push endpoint must be an https:// URL.")
     if not parsed.hostname:
         raise ValueError("Push endpoint must include a hostname.")
-    try:
-        infos = socket.getaddrinfo(parsed.hostname, None)
-    except socket.gaierror:
-        raise ValueError("Push endpoint hostname could not be resolved.")
-    for info in infos:
-        ip = ipaddress.ip_address(info[4][0])
-        if (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_reserved
-            or ip.is_multicast
-            or ip.is_unspecified
-        ):
-            raise ValueError("Push endpoint resolves to a non-public address and was rejected.")
+    net_safety.assert_resolves_publicly(parsed.hostname)
 
 
 def save_subscription(user_name: str, subscription: dict, label: str | None = None) -> None:

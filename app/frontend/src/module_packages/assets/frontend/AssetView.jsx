@@ -238,6 +238,7 @@ export default function AssetView({
                 onClick={openMutePopup}
                 className="text-charcoal-400 hover:text-orange-500 transition-colors p-0.5"
                 title="Comment notifications for this asset"
+                aria-label="Comment notifications for this asset"
               >
                 🔔
               </button>
@@ -435,6 +436,7 @@ export default function AssetView({
                             onClick={() => removeComment(c)}
                             className="ml-auto text-red-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
                             title="Delete comment (admin)"
+                            aria-label="Delete comment"
                           >
                             ✕
                           </button>

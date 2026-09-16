@@ -13,6 +13,7 @@ function PickRow({ node, depth, childrenMap, expanded, onToggle, onPick, disable
         <button
           type="button"
           onClick={() => kids.length && onToggle(node.id)}
+          aria-label={isOpen ? 'Collapse' : 'Expand'}
           className={`w-4 text-xs text-charcoal-400 shrink-0 ${kids.length ? 'hover:text-orange-500' : 'opacity-0'}`}
         >
           {isOpen ? '▾' : '▸'}

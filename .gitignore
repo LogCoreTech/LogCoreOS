@@ -36,7 +36,6 @@ app/frontend/node_modules/
 app/frontend/dist/
 
 # ── Docker volume data ────────────────────────────────────────────────────────
-docker/ntfy_data/
 docker/postgres_data/
 
 # ── OS / editor ───────────────────────────────────────────────────────────────

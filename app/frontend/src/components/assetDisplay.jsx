@@ -207,6 +207,7 @@ function ImageLightbox({ url, filename, onClose }) {
         type="button"
         onClick={onClose}
         title="Close"
+        aria-label="Close"
         className="fixed right-4 w-9 h-9 rounded-full bg-black/60 text-white text-lg flex items-center justify-center"
         style={{ top: 'max(1rem, env(safe-area-inset-top))' }}
       >
@@ -267,6 +268,7 @@ export function AttachmentThumb({ assetId, file, canEdit, onDelete }) {
           onClick={() => onDelete(file)}
           className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity"
           title="Delete file"
+          aria-label="Delete file"
         >
           ✕
         </button>

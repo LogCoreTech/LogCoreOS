@@ -16,8 +16,10 @@ from fastapi import APIRouter, Depends, Query
 
 from routers.auth import get_current_user, get_workspace
 from services import search_service
+from services.rate_limiter import rate_limit
 
 router = APIRouter()
+_read_limit = rate_limit(30, 60)
 
 
 @router.get("")
@@ -28,6 +30,7 @@ def search(
     provider: str | None = Query(default=None),
     current_user: dict = Depends(get_current_user),
     workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_read_limit),
 ):
     return search_service.search(
         q,

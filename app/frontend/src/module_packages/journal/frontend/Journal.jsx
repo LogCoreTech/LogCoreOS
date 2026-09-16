@@ -129,7 +129,7 @@ export default function Journal() {
       <div className="card flex-1 min-h-0 flex flex-col overflow-hidden p-0">
         {/* Date navigator */}
         <div className="flex items-center gap-2 p-3 border-b border-charcoal-200 dark:border-charcoal-700 shrink-0">
-          <button onClick={() => goDate(-1)} className="btn-ghost px-3 py-1 text-sm shrink-0">‹</button>
+          <button onClick={() => goDate(-1)} aria-label="Previous day" className="btn-ghost px-3 py-1 text-sm shrink-0">‹</button>
           <div className="flex-1 text-center min-w-0">
             <p className="font-medium text-sm truncate">{displayDate}</p>
             {date !== today && (
@@ -144,6 +144,7 @@ export default function Journal() {
           <button
             onClick={() => goDate(1)}
             disabled={date >= today}
+            aria-label="Next day"
             className="btn-ghost px-3 py-1 text-sm shrink-0 disabled:opacity-30"
           >
             ›

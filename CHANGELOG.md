@@ -42,6 +42,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Keyboard users can now navigate between tabs (Goals, Finance, Household, Team, and the admin User Detail page) with the arrow keys, not just Tab-and-Enter one at a time.
 - **Deleted items now go to a Trash instead of vanishing immediately** — Tasks, Calendar, Goals, Journal, Notes, Assets, Contacts, Finance, and Dashboards all route through it, including deletions the AI makes in Chat. Restore or permanently delete from Settings → Trash, or jump straight there from the 🗑 icon next to any of those modules' own titles. Items are kept for 30 days before being purged automatically. Admins get a Household/Team tab alongside their own Personal one; everyone else only ever sees their own items.
 - **Tasks, Notes, Assets, and Contacts can now select multiple items at once and delete them together** — tap "Select" on mobile (checkboxes are always visible on desktop) to pick several, then delete from the bar that appears. Selecting a folder in Notes doesn't need every note inside it individually picked too. Bulk deletes go to Trash exactly like a single delete, and any item you don't actually have permission to delete is reported back rather than silently skipped or silently allowed.
+- **Household and Team now have the same helpful empty state and pull-to-refresh gesture every other list page already had.**
+- Keyboard users can now switch between Sign In/Create Account on the login page, and Workflows/Inbox in Automations, with the arrow keys, matching every other tab switcher in the app.
+- **Fixed a real bug**: clicking "Run" on a workflow in Automations blanked the whole list back to a loading spinner instead of just refreshing it in place.
+- Delete confirmations on Contacts, Assets, and Finance now accurately describe what actually happens (moved to Trash, recoverable for 30 days — and for Contacts, that logged interactions/deals on the contact are NOT recoverable even if you restore the contact itself), instead of a generic "cannot be undone" message that wasn't true anymore.
+- More icon-only buttons across the app (including the emoji picker) now have proper screen-reader labels, and several modal titles that could overflow on mobile with a long item name now truncate correctly instead of pushing the layout wider.
+- Three new reference docs for anyone extending the app: `docs/MODULE_AUTHORING.md` (how to add a new module today — the old checklist had gone stale), `docs/COMPONENTS.md` (shared hooks/components and the modal-focus pattern that's caused a few repeat bugs), and `docs/DESIGN.md` (button/label/tab conventions).
+
+### Fixed
+
+- **Fixed a real deployability bug**: the backend was missing a required dependency (`email-validator`, needed for email validation on register/login) from its own dependency list. Any fresh build — a new deploy, a clean reinstall, an instance that happened to lose its cached image — would crash-loop on startup and never come back up. Only surfaced because an older running image had it some other way; a from-scratch build never would have had it.
 
 ### Removed
 
@@ -50,6 +60,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Security
 
 - Pinned a transitive `browserslist` dependency (pulled in via Autoprefixer/ESLint tooling) to a patched version, closing a Dependabot-flagged crash/prototype-pollution bug. Build-tooling only — never runs inside the deployed app — but a free, zero-risk fix.
+- **Fixed a real bug**: accepting a share notification on an Asset or a Dashboard Template could, in a specific scenario (the same item shared with a group you're in AND separately shared with someone else at a higher access level), silently grant you that other person's higher access too — not just your own. Now only ever grants exactly what was actually shared with you.
+- Fixed a bug where, once behind a reverse proxy (an optional self-hosted setup), a remote visitor could spoof their own IP address to bypass every rate limit in the app (login attempts, registration, etc.).
+- Fixed a bug where an admin account that had just been demoted or deleted could, for a short window, still use its old browser session to create new accounts on an instance with registration closed.
+- Fixed two more places (in addition to the ones above) with the same kind of "two things changing at once could silently undo one of them" bug: an admin changing a user's role/deleting them, and revoking someone's access to a shared Note/Asset/Contact/Finance book.
+- The Home Assistant integration's device-control action is now restricted to actual device types (lights, switches, climate, locks, etc.) rather than accepting any Home Assistant service name.
+- The interactive API documentation (`/docs`, `/redoc`) is now off by default — turn it on with `ENABLE_API_DOCS=true` if you want it for your own integration development.
+- A handful of admin actions that were missing the app's standard rate limit now have it; admin-created accounts now require the same minimum password length self-registration does.
+- Bumped a dependency that had a known (if low-severity, self-hosted) denial-of-service advisory.
 
 ## [0.7.1] — 2026-09-01
 

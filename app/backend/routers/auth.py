@@ -218,8 +218,14 @@ def register(
             raise HTTPException(
                 status_code=403, detail="Registration is closed. An admin must add new users."
             )
+        # Never trust the token's own embedded `role` claim here — nothing revokes a
+        # token on role change or account deletion (only logout() does), so a demoted
+        # or deleted admin's still-unexpired token would otherwise keep this endpoint
+        # open indefinitely (found 2026-09-07). Re-fetch the user fresh from disk, the
+        # same way get_current_user()/require_admin do for every other admin-gated path.
         payload = auth_service.decode_token(admin_token)
-        if not payload or payload.get("role") != "admin":
+        admin_user = auth_service.get_user_by_id(payload["sub"]) if payload else None
+        if not admin_user or admin_user.get("role") != "admin":
             raise HTTPException(status_code=403, detail="Only admins can register new users.")
 
     role = "admin" if is_first_user else "member"
@@ -952,6 +958,7 @@ def get_hosting_settings(current_user: dict = Depends(require_admin)):
 def update_hosting_settings(
     req: HostingSettingsRequest,
     current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_admin_limit),
 ):
     stored = read_json(_HOSTING_SETTINGS_PATH, default={})
     stored["cookie_secure"] = req.cookie_secure
@@ -971,7 +978,10 @@ def update_hosting_settings(
 
 
 @router.post("/admin/hosting-settings/apply")
-def apply_hosting_settings(current_user: dict = Depends(require_admin)):
+def apply_hosting_settings(
+    current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_admin_limit),
+):
     stored = read_json(_HOSTING_SETTINGS_PATH, default={})
     if stored.get("proxy_type") != "cloudflare":
         raise HTTPException(
@@ -1013,7 +1023,7 @@ def apply_hosting_settings(current_user: dict = Depends(require_admin)):
 
 class CreateUserRequest(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(..., min_length=8)
     name: str
     role: Literal["admin", "member", "guest"] = "member"
     feature_role: str = "guest"
@@ -1031,7 +1041,11 @@ class UpdateRoleRequest(BaseModel):
 
 
 @router.post("/admin/users", status_code=201)
-def admin_create_user(req: CreateUserRequest, current_user: dict = Depends(require_admin)):
+def admin_create_user(
+    req: CreateUserRequest,
+    current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_admin_limit),
+):
     from services import contacts_service
 
     if req.contact_id:
@@ -1109,6 +1123,7 @@ def admin_update_user_role(
     user_id: str,
     req: UpdateRoleRequest,
     current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_admin_limit),
 ):
     if user_id == current_user["id"]:
         raise HTTPException(status_code=400, detail="Cannot change your own role")
@@ -1119,7 +1134,11 @@ def admin_update_user_role(
 
 
 @router.delete("/admin/users/{user_id}", status_code=204)
-def admin_delete_user(user_id: str, current_user: dict = Depends(require_admin)):
+def admin_delete_user(
+    user_id: str,
+    current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_admin_limit),
+):
     if user_id == current_user["id"]:
         raise HTTPException(status_code=400, detail="Cannot delete your own account")
     target = auth_service.get_user_by_id(user_id)
@@ -1165,6 +1184,7 @@ def admin_user_deletion_execute(
     user_id: str,
     req: DeletionExecuteRequest,
     current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_admin_limit),
 ):
     if user_id == current_user["id"]:
         raise HTTPException(status_code=400, detail="Cannot delete your own account")
@@ -1221,6 +1241,7 @@ def get_admin_settings(current_user: dict = Depends(require_admin)):
 def update_admin_settings(
     req: AdminSettingsRequest,
     current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_admin_limit),
 ):
     updated = auth_service.update_system_settings(req.model_dump(exclude_none=True))
     return {

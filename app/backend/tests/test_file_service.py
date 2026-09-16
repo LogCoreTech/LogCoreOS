@@ -12,8 +12,6 @@ import pytest
 
 from services.file_service import (
     history_path,
-    parse_priority_order,
-    profile_path,
     read_json,
     resolve_user_md_path,
     tasks_path,
@@ -40,10 +38,6 @@ def test_tasks_path(brain):
 
 def test_history_path(brain):
     assert history_path(USER) == brain / "USERS" / USER / "Tasks" / "tasks_history.json"
-
-
-def test_profile_path(brain):
-    assert profile_path(USER) == brain / "USERS" / USER / "Profile.md"
 
 
 # ---------------------------------------------------------------------------
@@ -160,38 +154,6 @@ def test_resolve_rejects_dot_segment(brain):
 def test_resolve_rejects_invalid_chars(brain):
     with pytest.raises(ValueError):
         resolve_user_md_path(USER, "notes/bad;name.md")
-
-
-# ---------------------------------------------------------------------------
-# parse_priority_order
-# ---------------------------------------------------------------------------
-
-
-def test_parse_priority_order_extracts_items(brain):
-    user_dir = brain / "USERS" / USER
-    user_dir.mkdir(parents=True)
-    (user_dir / "Profile.md").write_text(
-        "# Profile\n\n## Life Priorities\n1. God\n2. Family\n3. Job\n\n## Other\nstuff\n"
-    )
-    assert parse_priority_order(USER) == ["God", "Family", "Job"]
-
-
-def test_parse_priority_order_stops_at_next_heading(brain):
-    user_dir = brain / "USERS" / USER
-    user_dir.mkdir(parents=True)
-    (user_dir / "Profile.md").write_text(
-        "## Life Priorities\n1. Health\n2. Work\n\n## Something Else\n3. Noise\n"
-    )
-    order = parse_priority_order(USER)
-    assert "Noise" not in order
-    assert order == ["Health", "Work"]
-
-
-def test_parse_priority_order_missing_section_returns_empty(brain):
-    user_dir = brain / "USERS" / USER
-    user_dir.mkdir(parents=True)
-    (user_dir / "Profile.md").write_text("# Profile\n\nNo priorities here.\n")
-    assert parse_priority_order(USER) == []
 
 
 # ---------------------------------------------------------------------------

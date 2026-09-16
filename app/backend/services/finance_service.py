@@ -18,6 +18,7 @@ pool = read (admin edit). Shares/contributors/caps extend this function
 in the sharing phase — signatures already carry viewer_role for that.
 """
 
+import threading
 import uuid
 from datetime import date, datetime, timezone
 
@@ -129,6 +130,27 @@ def store_workspace(store_user: str, workspace: str) -> str:
 # ---------------------------------------------------------------------------
 # Registry load/save
 # ---------------------------------------------------------------------------
+
+
+# Per-(store_user, workspace) lock, held across a full load-mutate-save cycle by
+# update_access() and set_account_sync_state() (fixed 2026-09-07) — closes a real,
+# concretely-demonstrated race: job_simplefin_sync runs automatically every 12h and
+# writes synced_balance_cents onto an account via set_account_sync_state(), landing
+# in the same books.json an admin's update_access() call revokes a share on; without
+# this lock, the routine sync's stale-read-then-overwrite could silently undo the
+# revoke, no attacker timing required. Scoped to these two functions specifically —
+# this file's other ~15 _save() call sites (respond_share, create_book, etc.) still
+# have the same theoretical exposure, tracked separately as a broader migration.
+_books_locks: dict[tuple[str, str], threading.Lock] = {}
+_books_locks_guard = threading.Lock()
+
+
+def _books_lock(store_user: str, workspace: str) -> threading.Lock:
+    key = (store_user, store_workspace(store_user, workspace))
+    with _books_locks_guard:
+        if key not in _books_locks:
+            _books_locks[key] = threading.Lock()
+        return _books_locks[key]
 
 
 def _load(store_user: str, workspace: str) -> dict:
@@ -1319,21 +1341,22 @@ def set_account_sync_state(
 ) -> None:
     """Record the bank-reported balance on an account. This is SOURCE data from
     the bank (used by deviation checks) — not a derived value."""
-    data = _load(store_user, workspace)
-    for i, book in enumerate(data.get("books", [])):
-        if book["id"] != book_id:
-            continue
-        for j, account in enumerate(book.get("accounts", [])):
-            if account["id"] != account_id:
+    with _books_lock(store_user, workspace):
+        data = _load(store_user, workspace)
+        for i, book in enumerate(data.get("books", [])):
+            if book["id"] != book_id:
                 continue
-            account["synced_balance_cents"] = synced_balance_cents
-            account["synced_at"] = _now()
-            if simplefin_account_id is not None:
-                account["simplefin_account_id"] = simplefin_account_id
-            book["accounts"][j] = account
-            data["books"][i] = book
-            _save(store_user, workspace, data)
-            return
+            for j, account in enumerate(book.get("accounts", [])):
+                if account["id"] != account_id:
+                    continue
+                account["synced_balance_cents"] = synced_balance_cents
+                account["synced_at"] = _now()
+                if simplefin_account_id is not None:
+                    account["simplefin_account_id"] = simplefin_account_id
+                book["accounts"][j] = account
+                data["books"][i] = book
+                _save(store_user, workspace, data)
+                return
 
 
 # ---------------------------------------------------------------------------
@@ -1688,46 +1711,47 @@ def update_access(
     if not pool and contributors is not None:
         raise ValueError("Contributors are for pool books — use shared_with")
 
-    data = _load(store_user, workspace)
-    for i, book in enumerate(data.get("books", [])):
-        if book["id"] != book_id:
-            continue
-        target_record = book
-        if account_id:
-            target_record = next(
-                (a for a in book.get("accounts", []) if a["id"] == account_id), None
-            )
-            if target_record is None:
-                raise ValueError("Account not found")
+    with _books_lock(store_user, workspace):
+        data = _load(store_user, workspace)
+        for i, book in enumerate(data.get("books", [])):
+            if book["id"] != book_id:
+                continue
+            target_record = book
+            if account_id:
+                target_record = next(
+                    (a for a in book.get("accounts", []) if a["id"] == account_id), None
+                )
+                if target_record is None:
+                    raise ValueError("Account not found")
 
-        to_notify: list[str] = []
-        if shared_with is not None:
-            cleaned = _clean_share_entries(
-                shared_with, target_record.get("shared_with"), pool=False
-            )
-            target_record["shared_with"] = cleaned
-            for entry in cleaned:
-                accepted = set(entry.get("accepted") or [])
-                for name in resolve_target_users(entry["target"]):
-                    if name != store_user and name not in accepted:
-                        to_notify.append(name)
-        if contributors is not None:
-            target_record["contributors"] = _clean_share_entries(
-                contributors, target_record.get("contributors"), pool=True
-            )
-        if hidden_from is not None and not account_id:
-            book["hidden_from"] = _clean_hidden(hidden_from)
+            to_notify: list[str] = []
+            if shared_with is not None:
+                cleaned = _clean_share_entries(
+                    shared_with, target_record.get("shared_with"), pool=False
+                )
+                target_record["shared_with"] = cleaned
+                for entry in cleaned:
+                    accepted = set(entry.get("accepted") or [])
+                    for name in resolve_target_users(entry["target"]):
+                        if name != store_user and name not in accepted:
+                            to_notify.append(name)
+            if contributors is not None:
+                target_record["contributors"] = _clean_share_entries(
+                    contributors, target_record.get("contributors"), pool=True
+                )
+            if hidden_from is not None and not account_id:
+                book["hidden_from"] = _clean_hidden(hidden_from)
 
-        book["updated_at"] = _now()
-        data["books"][i] = book
-        _save(store_user, workspace, data)
+            book["updated_at"] = _now()
+            data["books"][i] = book
+            _save(store_user, workspace, data)
 
-        if not pool:
-            from services.finance_index import reindex_owner
+            if not pool:
+                from services.finance_index import reindex_owner
 
-            reindex_owner(store_user)
-        return (target_record, sorted(set(to_notify)))
-    raise ValueError("Book not found")
+                reindex_owner(store_user)
+            return (target_record, sorted(set(to_notify)))
+        raise ValueError("Book not found")
 
 
 def _walk_share_entries(book: dict):

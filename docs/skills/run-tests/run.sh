@@ -18,8 +18,10 @@ echo ""
 
 cd "$BACKEND"
 
-# Run pytest; capture output and exit code separately
-output=$(pytest tests/ -v --tb=short 2>&1) || true
+# Bare `pytest` (no path) picks up pyproject.toml's testpaths = ["tests", "module_packages"] —
+# `pytest tests/ -v` would silently narrow to core-only and miss every converted module's own
+# tests/ directory. See docs/TESTING.md.
+output=$(pytest -v --tb=short 2>&1) || true
 exit_code=$?
 
 echo "$output"

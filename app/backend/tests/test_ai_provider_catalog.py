@@ -1,7 +1,12 @@
 """Tests for services/ai_provider_catalog.py — pure data + pure functions, no
 brain/network fixtures needed."""
 
-from services.ai_provider_catalog import PROVIDERS, get_provider, resolve_base_url
+from services.ai_provider_catalog import (
+    LOCAL_RUNNER_PROVIDER_IDS,
+    PROVIDERS,
+    get_provider,
+    resolve_base_url,
+)
 
 
 def test_every_key_matches_its_own_id():
@@ -56,3 +61,25 @@ def test_resolve_base_url_unverified_provider_honors_client_value():
 
 def test_resolve_base_url_unknown_provider_falls_back_to_custom_behavior():
     assert resolve_base_url("nonexistent", "http://whatever") == "http://whatever"
+
+
+def test_local_runner_ids_match_the_local_labeled_providers():
+    """LOCAL_RUNNER_PROVIDER_IDS (used by routers/ai_settings.py's SSRF guard,
+    S7 fix, to exempt local runners from the resolved-private-IP rejection)
+    is derived from the label convention — every provider whose label ends
+    in "(local)" and no others."""
+    assert LOCAL_RUNNER_PROVIDER_IDS == {
+        "ollama",
+        "lmstudio",
+        "vllm",
+        "llamacpp",
+        "text_gen_webui",
+        "koboldcpp",
+        "janai",
+    }
+
+
+def test_local_runner_ids_excludes_custom():
+    """ "custom" is the general escape hatch, not a documented local runner —
+    it must never get the SSRF guard's local-runner exemption."""
+    assert "custom" not in LOCAL_RUNNER_PROVIDER_IDS

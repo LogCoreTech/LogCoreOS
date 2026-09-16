@@ -200,6 +200,17 @@ PROVIDERS: dict[str, ProviderSpec] = {
 }
 
 
+# Providers meant to be run on the admin's own machine/network — their whole
+# point is hitting localhost, so the SSRF guard in routers/ai_settings.py's
+# Load Models endpoint (S7 fix) exempts exactly these ids from its
+# resolved-private-IP rejection. Derived from the label convention every
+# local-runner entry above already follows ("... (local)") rather than a
+# second hand-maintained id list that could drift from PROVIDERS itself.
+LOCAL_RUNNER_PROVIDER_IDS: frozenset[str] = frozenset(
+    spec.id for spec in PROVIDERS.values() if spec.label.endswith("(local)")
+)
+
+
 def get_provider(provider_id: str) -> ProviderSpec:
     """Unknown ids resolve to "custom" — the same escape-hatch behavior a
     not-yet-docs_verified provider already gets, never a KeyError."""

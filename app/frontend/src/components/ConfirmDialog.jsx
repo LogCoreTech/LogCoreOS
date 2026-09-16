@@ -107,7 +107,7 @@ export default function ConfirmDialog({
             onClick={onConfirm}
             disabled={!typedMatches}
             className={`min-h-[44px] px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed ${
-              danger ? 'bg-red-600 hover:bg-red-500' : 'bg-orange-500 hover:bg-orange-400'
+              danger ? 'bg-red-500 hover:bg-red-600' : 'bg-orange-500 hover:bg-orange-600'
             }`}
           >
             {confirmLabel}

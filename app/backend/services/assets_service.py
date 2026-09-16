@@ -11,6 +11,7 @@ user-controlled.
 import copy
 import re
 import shutil
+import threading
 import uuid
 from datetime import date, datetime, timezone
 from typing import Any
@@ -498,6 +499,29 @@ def _validate_fields(template: dict, incoming: dict, custom_defs: list[dict] | N
 # ---------------------------------------------------------------------------
 # Asset store primitives
 # ---------------------------------------------------------------------------
+
+
+# Per-(store_user, workspace) lock, held across a full load-mutate-save cycle by
+# update_access() and _apply_share_response() (fixed 2026-09-07) — same unlocked
+# race as auth.json's role-update bug: an admin revoking one target's access could
+# have that change silently reverted by a DIFFERENT recipient's own concurrent
+# accept/decline on the same assets.json file. This ALSO closes the read side of
+# the separate privilege-escalation bug in _respond_shares() (a recipient
+# accepting their own share could get promoted to a different target's higher
+# grant) against concurrent interleaving, though the missing target-membership
+# check itself — the actual escalation bug — is a separate fix (see the sharing
+# audit's own consolidation item). This file's other ~18 _save() call sites still
+# have the same theoretical exposure, tracked separately as a broader migration.
+_assets_locks: dict[tuple[str, str], threading.Lock] = {}
+_assets_locks_guard = threading.Lock()
+
+
+def _assets_lock(store_user: str, workspace: str) -> threading.Lock:
+    key = (store_user, workspace)
+    with _assets_locks_guard:
+        if key not in _assets_locks:
+            _assets_locks[key] = threading.Lock()
+        return _assets_locks[key]
 
 
 def _load(store_user: str, workspace: str = "personal") -> dict:
@@ -1177,100 +1201,107 @@ def update_access(
     """Replace shared_with / hidden_from / contributors on the node (and, when
     cascade, on all descendants). asset_workspace is the workspace the asset
     logically belongs to (pool stores are physically 'personal')."""
-    store = _load(store_user, workspace)
-    asset = _by_id(store["assets"]).get(asset_id)
-    if asset is None:
-        return None
+    with _assets_lock(store_user, workspace):
+        store = _load(store_user, workspace)
+        asset = _by_id(store["assets"]).get(asset_id)
+        if asset is None:
+            return None
 
-    group = "team" if asset_workspace == "business" else "household"
-    valid_targets = {"team", "household"} | set((_load_features_roles()))
+        group = "team" if asset_workspace == "business" else "household"
+        valid_targets = {"team", "household"} | set((_load_features_roles()))
 
-    # Preserve the `accepted` list per target from the current entries, and detect
-    # which targets are NEW (only those trigger accept/decline request notifications).
-    prev_accepted: dict[str, list[str]] = {
-        s.get("target"): list(s.get("accepted") or [])
-        for s in (asset.get("shared_with") or [])
-        if "accepted" in s
-    }
-    prev_targets = {s.get("target") for s in (asset.get("shared_with") or [])}
+        # Preserve the `accepted` list per target from the current entries, and detect
+        # which targets are NEW (only those trigger accept/decline request notifications).
+        prev_accepted: dict[str, list[str]] = {
+            s.get("target"): list(s.get("accepted") or [])
+            for s in (asset.get("shared_with") or [])
+            if "accepted" in s
+        }
+        prev_targets = {s.get("target") for s in (asset.get("shared_with") or [])}
 
-    cleaned_shares: list[dict] | None = None
-    new_targets: list[str] = []
-    if shared_with is not None:
-        cleaned_shares = []
-        for share in shared_with:
-            target = (share.get("target") or "").strip()
-            access = share.get("access", "read")
-            if access not in ("read", "contribute", "edit"):
-                raise ValueError(f"Invalid access {access!r} — use 'read', 'contribute' or 'edit'")
-            if target not in valid_targets and get_user_by_name(target) is None:
-                raise ValueError(f"Unknown share target {target!r}")
-            entry = {"target": target, "access": access, "accepted": prev_accepted.get(target, [])}
-            if access == "contribute":
-                entry["caps"] = normalize_caps(share.get("caps"))
-            cleaned_shares.append(entry)
-            if target not in prev_targets:
-                new_targets.append(target)
+        cleaned_shares: list[dict] | None = None
+        new_targets: list[str] = []
+        if shared_with is not None:
+            cleaned_shares = []
+            for share in shared_with:
+                target = (share.get("target") or "").strip()
+                access = share.get("access", "read")
+                if access not in ("read", "contribute", "edit"):
+                    raise ValueError(
+                        f"Invalid access {access!r} — use 'read', 'contribute' or 'edit'"
+                    )
+                if target not in valid_targets and get_user_by_name(target) is None:
+                    raise ValueError(f"Unknown share target {target!r}")
+                entry = {
+                    "target": target,
+                    "access": access,
+                    "accepted": prev_accepted.get(target, []),
+                }
+                if access == "contribute":
+                    entry["caps"] = normalize_caps(share.get("caps"))
+                cleaned_shares.append(entry)
+                if target not in prev_targets:
+                    new_targets.append(target)
 
-    cleaned_hidden: list[str] | None = None
-    if hidden_from is not None:
-        role_names = set(_load_features_roles())
-        for name in hidden_from:
-            if name.startswith("role:"):
-                if name[5:] not in role_names:
-                    raise ValueError(f"Unknown role {name[5:]!r} in hidden_from")
-            elif get_user_by_name(name) is None:
-                raise ValueError(f"Unknown user {name!r} in hidden_from")
-        cleaned_hidden = list(dict.fromkeys(hidden_from))
+        cleaned_hidden: list[str] | None = None
+        if hidden_from is not None:
+            role_names = set(_load_features_roles())
+            for name in hidden_from:
+                if name.startswith("role:"):
+                    if name[5:] not in role_names:
+                        raise ValueError(f"Unknown role {name[5:]!r} in hidden_from")
+                elif get_user_by_name(name) is None:
+                    raise ValueError(f"Unknown user {name!r} in hidden_from")
+            cleaned_hidden = list(dict.fromkeys(hidden_from))
 
-    # Contributors — pool-asset capability grants (no handshake; pool is already
-    # workspace-visible). Targets: the workspace group or a named user.
-    cleaned_contributors: list[dict] | None = None
-    if contributors is not None:
-        cleaned_contributors = []
-        for entry in contributors:
-            target = (entry.get("target") or "").strip()
-            if target != group and get_user_by_name(target) is None:
-                raise ValueError(f"Unknown contributor target {target!r}")
-            cleaned_contributors.append(
-                {"target": target, "caps": normalize_caps(entry.get("caps"))}
+        # Contributors — pool-asset capability grants (no handshake; pool is already
+        # workspace-visible). Targets: the workspace group or a named user.
+        cleaned_contributors: list[dict] | None = None
+        if contributors is not None:
+            cleaned_contributors = []
+            for entry in contributors:
+                target = (entry.get("target") or "").strip()
+                if target != group and get_user_by_name(target) is None:
+                    raise ValueError(f"Unknown contributor target {target!r}")
+                cleaned_contributors.append(
+                    {"target": target, "caps": normalize_caps(entry.get("caps"))}
+                )
+
+        target_ids = collect_subtree_ids(store["assets"], asset_id) if cascade else {asset_id}
+        by_id = _by_id(store["assets"])
+        for aid in target_ids:
+            node = by_id.get(aid)
+            if node is None:
+                continue
+            if cleaned_shares is not None:
+                node["shared_with"] = copy.deepcopy(cleaned_shares)
+            if cleaned_hidden is not None:
+                node["hidden_from"] = list(cleaned_hidden)
+            if cleaned_contributors is not None:
+                node["contributors"] = copy.deepcopy(cleaned_contributors)
+            node["updated_at"] = _now_iso(by or store_user)
+            _push_history(node, by, "access_update")
+
+        _save(store_user, workspace, store)
+        assets_index.reindex_owner(store_user, workspace)
+
+        # Send accept/decline requests to members of newly-added targets (not the owner,
+        # not anyone who already accepted).
+        already = set(sum(prev_accepted.values(), []))
+        recipients: set[str] = set()
+        for target in new_targets:
+            for name in _resolve_targets(target):
+                if name != (by or store_user) and name not in already:
+                    recipients.add(name)
+        if recipients:
+            _notify_share_targets(
+                list(recipients),
+                by or store_user,
+                "asset_share",
+                asset.get("name", "an item"),
+                {"owner": store_user, "workspace": workspace, "asset_id": asset_id},
             )
-
-    target_ids = collect_subtree_ids(store["assets"], asset_id) if cascade else {asset_id}
-    by_id = _by_id(store["assets"])
-    for aid in target_ids:
-        node = by_id.get(aid)
-        if node is None:
-            continue
-        if cleaned_shares is not None:
-            node["shared_with"] = copy.deepcopy(cleaned_shares)
-        if cleaned_hidden is not None:
-            node["hidden_from"] = list(cleaned_hidden)
-        if cleaned_contributors is not None:
-            node["contributors"] = copy.deepcopy(cleaned_contributors)
-        node["updated_at"] = _now_iso(by or store_user)
-        _push_history(node, by, "access_update")
-
-    _save(store_user, workspace, store)
-    assets_index.reindex_owner(store_user, workspace)
-
-    # Send accept/decline requests to members of newly-added targets (not the owner,
-    # not anyone who already accepted).
-    already = set(sum(prev_accepted.values(), []))
-    recipients: set[str] = set()
-    for target in new_targets:
-        for name in _resolve_targets(target):
-            if name != (by or store_user) and name not in already:
-                recipients.add(name)
-    if recipients:
-        _notify_share_targets(
-            list(recipients),
-            by or store_user,
-            "asset_share",
-            asset.get("name", "an item"),
-            {"owner": store_user, "workspace": workspace, "asset_id": asset_id},
-        )
-    return asset
+        return asset
 
 
 def _load_features_roles() -> list[str]:
@@ -1284,45 +1315,36 @@ def _apply_share_response(
 ) -> bool:
     """Add/remove `viewer` in the `accepted` list of every node in the shared subtree
     that carries a request-based share. Returns True if anything changed."""
-    store = _load(store_user, workspace)
-    changed = False
-    for aid in collect_subtree_ids(store["assets"], asset_id):
-        node = _by_id(store["assets"]).get(aid)
-        if node is None:
-            continue
-        node["shared_with"], node_changed = _respond_shares(
-            node.get("shared_with") or [], viewer, accept
-        )
-        changed = changed or node_changed
-    if changed:
-        _save(store_user, workspace, store)
-        assets_index.reindex_owner(store_user, workspace)
-    return changed
+    with _assets_lock(store_user, workspace):
+        store = _load(store_user, workspace)
+        changed = False
+        for aid in collect_subtree_ids(store["assets"], asset_id):
+            node = _by_id(store["assets"]).get(aid)
+            if node is None:
+                continue
+            node["shared_with"], node_changed = _respond_shares(
+                node.get("shared_with") or [], viewer, accept
+            )
+            changed = changed or node_changed
+        if changed:
+            _save(store_user, workspace, store)
+            assets_index.reindex_owner(store_user, workspace)
+        return changed
 
 
 def _respond_shares(shares: list[dict], viewer: str, accept: bool) -> tuple[list[dict], bool]:
-    """Apply an accept/decline to a shared_with list. Accept adds the viewer to the
-    matching entry's `accepted`; decline removes them — and if the entry targets the
-    viewer directly (a per-user share), the whole entry is dropped so the owner no
-    longer lists them. Group/role entries just lose the viewer from `accepted`."""
-    out: list[dict] = []
-    changed = False
-    for share in shares:
-        if "accepted" not in share:
-            out.append(share)
-            continue
-        if not accept and share.get("target") == viewer:
-            changed = True  # per-user share declined/left → drop the entry entirely
-            continue
-        accepted = share["accepted"]
-        if accept and viewer not in accepted:
-            accepted.append(viewer)
-            changed = True
-        elif not accept and viewer in accepted:
-            accepted.remove(viewer)
-            changed = True
-        out.append(share)
-    return out, changed
+    """Apply an accept/decline to a shared_with list — see
+    services.sharing.apply_share_response() for the actual logic. Routed
+    through the shared helper 2026-09-08: this function previously added the
+    viewer to EVERY entry with an `accepted` key regardless of whether that
+    entry's own `target` actually named them — a real, live-PoC-confirmed
+    privilege-escalation bug (accepting your own household share notification
+    could silently promote you to a completely different person's `edit`
+    grant on the same asset). Finance's/Contacts'/Notes' own `respond_share()`
+    already had the missing target check; this now shares that same logic."""
+    from services.sharing import apply_share_response
+
+    return apply_share_response(shares, viewer, accept, _resolve_targets)
 
 
 def respond_to_asset_share(viewer: str, payload: dict, accept: bool) -> bool:

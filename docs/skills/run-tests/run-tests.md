@@ -8,10 +8,12 @@ Run the LogCoreOS backend test suite and report results. Use this after any code
 
 ```bash
 cd /path/to/LogCoreOS/app/backend
-pytest tests/ -v --tb=short 2>&1
+pytest -v --tb=short 2>&1
 ```
 
 Replace `/path/to/LogCoreOS` with the actual repo root (e.g. `/home/user/LogCoreOS`).
+
+**Bare `pytest` is required for the real full suite** — since 2026-08-24, a converted module's own tests live in `module_packages/<id>/tests/`, not just `tests/`. `pyproject.toml`'s `testpaths = ["tests", "module_packages"]` only applies when no path is given on the command line, so `pytest tests/ -v` silently narrows to core-only and misses every module's own tests (hundreds of them) — see `docs/TESTING.md`.
 
 ---
 
@@ -27,13 +29,13 @@ Replace `/path/to/LogCoreOS` with the actual repo root (e.g. `/home/user/LogCore
 
 ---
 
-## Coverage targets (per FOR_AI.md)
+## Coverage targets
 
-These modules must have test coverage. If any are missing, flag it:
+See `docs/TESTING.md` for the full, current coverage guide (the `brain` fixture pattern, how to write a test for a new service, and per-module coverage expectations) — a hardcoded list here would drift the same way this section already had (it previously pointed at a nonexistent `docs/FOR_AI.md`). At minimum, confirm these core files still have real coverage:
 
 | Module | Test file |
 |--------|-----------|
-| `services/recurring_service.py` — `_next_due()` | `tests/test_recurring_service.py` |
+| `services/recurrence_engine.py` — recurring-task date math | `tests/test_recurrence_engine.py` |
 | `services/priority_service.py` — `score_task()` | `tests/test_priority_service.py` |
 | `services/auth_service.py` — user CRUD, tokens, revocation | `tests/test_auth_service.py` |
 | `services/task_service.py` — CRUD, pagination | `tests/test_task_service.py` |

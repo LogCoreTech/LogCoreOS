@@ -320,7 +320,10 @@ export default function BookSettings({ book, onClose, onChanged, onDeletedBook }
   function removeAccount(acct) {
     setConfirmState({
       title: 'Delete account',
-      message: `Delete account "${acct.name}"?`,
+      // Matches the backend's own gate (router.py delete_account: 409
+      // "Account still has transactions — archive it instead.") up front,
+      // instead of only surfacing that reason after a failed attempt.
+      message: `Move account "${acct.name}" to Trash? Only works if it has no transactions — archive it instead if it does. If deleted, it can be restored from Trash within 30 days.`,
       confirmLabel: 'Delete',
       danger: true,
       onConfirm: async () => {
@@ -347,7 +350,11 @@ export default function BookSettings({ book, onClose, onChanged, onDeletedBook }
   function deleteBook() {
     setConfirmState({
       title: 'Delete book',
-      message: `Delete the book "${book.name}"? This cannot be undone.`,
+      // Matches the backend's own gate (router.py delete_book: 409 "Book
+      // still has transactions — archive it instead, or delete them
+      // first.") up front, instead of only surfacing that reason after a
+      // failed attempt.
+      message: `Move the book "${book.name}" to Trash? Only works if it has no transactions — archive it instead, or delete them first. If deleted, it can be restored from Trash within 30 days.`,
       confirmLabel: 'Delete',
       danger: true,
       onConfirm: async () => {
@@ -394,7 +401,7 @@ export default function BookSettings({ book, onClose, onChanged, onDeletedBook }
                 <span className="text-xs text-charcoal-500 dark:text-charcoal-400 shrink-0">
                   opens {fmtMoney(a.opening_balance_cents, currency)}
                 </span>
-                <button onClick={() => toggleAccountArchived(a)} className="btn-ghost text-xs px-2" title={a.archived ? 'Unarchive' : 'Archive'}>
+                <button onClick={() => toggleAccountArchived(a)} className="btn-ghost text-xs px-2" title={a.archived ? 'Unarchive' : 'Archive'} aria-label={a.archived ? 'Unarchive' : 'Archive'}>
                   {a.archived ? '↩' : '🗄'}
                 </button>
                 <button onClick={() => removeAccount(a)} className="btn-ghost text-xs px-2 text-red-500" title="Delete" aria-label="Delete">×</button>

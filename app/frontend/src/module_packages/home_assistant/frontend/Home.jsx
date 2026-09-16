@@ -93,6 +93,7 @@ function EntityTile({ entity, isFav, onToggleFav, onCall }) {
         onClick={() => onToggleFav(entity.entity_id)}
         className="absolute top-2 right-2 text-sm opacity-50 hover:opacity-100"
         title={isFav ? 'Remove from favourites' : 'Add to favourites'}
+        aria-label={isFav ? 'Remove from favourites' : 'Add to favourites'}
       >
         {isFav ? '★' : '☆'}
       </button>

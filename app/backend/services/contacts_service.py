@@ -1506,18 +1506,24 @@ def update_access(
     contributors=None,
 ) -> tuple[dict, list[str]]:
     """Replace a contact's audience. Personal contacts use shared_with (handshake);
-    pool contacts use contributors (no handshake). Returns (record, users_to_notify)."""
+    pool contacts use contributors (no handshake). Returns (record, users_to_notify).
+
+    Routed through _mutate_contact() (fixed 2026-09-07, was a plain unlocked
+    list_contacts()+_save_contacts() two-step) — the exact race that helper's own
+    docstring warns about: a concurrent write to the same shared pool file (e.g.
+    another contact edit, or a pool self-contact onboarding) could read its own
+    stale copy after this function's read and silently overwrite the access
+    change on save."""
     pool = is_pool(store_user)
     if pool and shared_with is not None:
         raise ValueError("Pool contacts are workspace-visible — use contributors, not shares")
     if not pool and contributors is not None:
         raise ValueError("Contributors are for pool contacts — use shared_with")
 
-    contacts = list_contacts(store_user, workspace)
-    for i, c in enumerate(contacts):
-        if c["id"] != contact_id:
-            continue
-        to_notify: list[str] = []
+    to_notify: list[str] = []
+
+    def _apply(c: dict) -> dict:
+        to_notify.clear()
         if shared_with is not None:
             cleaned = _clean_share_entries(shared_with, c.get("shared_with"), pool=False)
             if c.get("self_of") and any(e.get("access") == "edit" for e in cleaned):
@@ -1545,14 +1551,16 @@ def update_access(
                 raise ValueError("A self-contact can never be hidden from its own owner")
             c["hidden_from"] = cleaned_hidden
         c["updated_at"] = _now()
-        contacts[i] = c
-        _save_contacts(store_user, workspace, contacts)
-        if not pool:
-            from services.contacts_index import reindex_owner
+        return c
 
-            reindex_owner(store_user)
-        return (c, sorted(set(to_notify)))
-    raise ValueError("Contact not found")
+    updated = _mutate_contact(store_user, workspace, contact_id, _apply)
+    if updated is None:
+        raise ValueError("Contact not found")
+    if not pool:
+        from services.contacts_index import reindex_owner
+
+        reindex_owner(store_user)
+    return (updated, sorted(set(to_notify)))
 
 
 def respond_share(viewer: str, owner: str, workspace: str, contact_id: str, accept: bool) -> bool:

@@ -37,7 +37,7 @@ export default function BulkActionBar({ count, onCancel, actions }) {
       {createPortal(
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-charcoal-950 border-t border-charcoal-200 dark:border-charcoal-800 pb-[env(safe-area-inset-bottom)]">
           <div className="flex items-center justify-between gap-2 px-4 py-3">
-            <button type="button" onClick={onCancel} className="text-sm text-charcoal-500 dark:text-charcoal-400">
+            <button type="button" onClick={onCancel} className="px-4 py-3 text-sm text-charcoal-500 dark:text-charcoal-400">
               Cancel
             </button>
             <span className="text-sm font-medium">{count} selected</span>

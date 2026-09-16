@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { auth as authApi, setup as setupApi } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import DemoBanner from '../components/DemoBanner'
+import { handleTabListKeyDown } from '../lib/tabListKeyboard'
 
 export default function Login() {
   const [mode, setMode] = useState('login')
@@ -17,6 +18,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const { login, demoMode } = useAuth()
   const navigate = useNavigate()
+  const tabRefs = useRef([])
 
   useEffect(() => {
     authApi.status()
@@ -92,11 +94,21 @@ export default function Login() {
           {registrationOpen === null ? (
             <div className="h-9 bg-charcoal-100 dark:bg-charcoal-700 rounded-lg animate-pulse mb-6" />
           ) : registrationOpen ? (
-            <div className="flex bg-charcoal-100 dark:bg-charcoal-700 rounded-lg p-1 mb-6">
-              {['login', 'register'].map(m => (
+            <div role="tablist" aria-label="Sign in or create account" className="flex bg-charcoal-100 dark:bg-charcoal-700 rounded-lg p-1 mb-6">
+              {['login', 'register'].map((m, i, arr) => (
                 <button
                   key={m}
+                  ref={el => { tabRefs.current[i] = el }}
+                  role="tab"
+                  aria-selected={mode === m}
+                  tabIndex={mode === m ? 0 : -1}
                   onClick={() => setMode(m)}
+                  onKeyDown={e => handleTabListKeyDown(e, {
+                    tabs: arr,
+                    activeIndex: i,
+                    onActivate: setMode,
+                    refs: tabRefs,
+                  })}
                   className={`flex-1 py-1.5 rounded-md text-sm font-medium capitalize transition-colors ${
                     mode === m
                       ? 'bg-white dark:bg-charcoal-600 text-charcoal-900 dark:text-gray-100 shadow-sm'

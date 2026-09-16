@@ -1442,3 +1442,66 @@ def test_automation_list_rejects_arbitrary_user(users):
 
     # Pool reads still work.
     assert automation_list_assets(user="_team", _auth=None, _rl=None) == []
+
+
+# ---------------------------------------------------------------------------
+# _respond_shares — privilege-escalation fix (2026-09-08)
+# ---------------------------------------------------------------------------
+
+
+def test_accepting_a_group_share_does_not_grant_an_unrelated_persons_edit_access(
+    parcel, users
+):
+    """The actual bug, reproduced: Alice shares an asset with the whole
+    household at 'read', and separately grants Bob 'edit' personally — two
+    coexisting shared_with entries, an explicitly supported pattern. Carol,
+    an ordinary household member with no relationship to Bob's grant,
+    accepts her own legitimate household share notification. Before the fix,
+    every entry carrying an 'accepted' key was eligible for ANY accepting
+    viewer, silently promoting Carol to Bob's edit grant too."""
+    carol = auth_service.create_user("carol@example.com", "password123", "Carol")
+    sub, lot = _tree(users)
+
+    svc.update_access(
+        "Alice",
+        sub["id"],
+        shared_with=[
+            {"target": "household", "access": "read"},
+            {"target": "Bob", "access": "edit"},
+        ],
+        by="Alice",
+    )
+
+    _accept("Carol", "Alice", sub["id"])
+
+    found = svc.find_asset("Carol", "personal", sub["id"])
+    assert found["can_edit"] is False  # must resolve to household's "read", NOT Bob's "edit"
+
+    entries = {e["target"]: e for e in svc.get_asset("Alice", sub["id"])["shared_with"]}
+    assert "Carol" in entries["household"]["accepted"]
+    assert "Carol" not in entries["Bob"]["accepted"]  # the actual regression guard
+
+
+def test_declining_only_removes_the_viewers_own_targeting_entries(parcel, users):
+    """The decline side of the same fix: Carol declining a household share
+    must not touch Bob's unrelated per-user entry on the same node."""
+    carol = auth_service.create_user("carol@example.com", "password123", "Carol")
+    sub, lot = _tree(users)
+
+    svc.update_access(
+        "Alice",
+        sub["id"],
+        shared_with=[
+            {"target": "household", "access": "read"},
+            {"target": "Bob", "access": "edit"},
+        ],
+        by="Alice",
+    )
+    _accept("Carol", "Alice", sub["id"])
+    svc.respond_to_asset_share(
+        "Carol", {"owner": "Alice", "workspace": "personal", "asset_id": sub["id"]}, False
+    )
+
+    entries = {e["target"]: e for e in svc.get_asset("Alice", sub["id"])["shared_with"]}
+    assert "Carol" not in entries["household"]["accepted"]
+    assert entries["Bob"]["access"] == "edit"  # untouched throughout

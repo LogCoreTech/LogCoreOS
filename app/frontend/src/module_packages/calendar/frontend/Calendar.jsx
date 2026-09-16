@@ -172,6 +172,7 @@ export default function Calendar() {
             {poolModuleVisible && (
               <button
                 onClick={() => setShowPool(h => !h)}
+                aria-label={showPool ? `Hide ${poolLabel} events` : `Show ${poolLabel} events`}
                 className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${
                   showPool ? POOL_ON : POOL_OFF
                 }`}

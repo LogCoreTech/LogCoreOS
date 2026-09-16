@@ -36,6 +36,7 @@ function SearchButton({ onOpen }) {
       onClick={onOpen}
       className="p-1.5 rounded-lg text-charcoal-500 dark:text-charcoal-400 hover:text-orange-500 hover:bg-charcoal-100 dark:hover:bg-charcoal-800 transition-colors"
       title="Search (Ctrl+K)"
+      aria-label="Search"
     >
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="11" cy="11" r="8"/>
@@ -145,6 +146,7 @@ function NotifBell() {
         onClick={() => setOpen(o => !o)}
         className="relative p-1.5 rounded-lg text-charcoal-500 dark:text-charcoal-400 hover:text-orange-500 hover:bg-charcoal-100 dark:hover:bg-charcoal-800 transition-colors"
         title="Notifications"
+        aria-label="Notifications"
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>
@@ -394,6 +396,7 @@ export default function Layout() {
                 key={w}
                 onClick={() => switchWorkspace(w)}
                 title={w}
+                aria-label={w}
                 className={`py-1 rounded text-[10px] capitalize transition-colors ${
                   workspace === w
                     ? 'bg-orange-500 text-white font-semibold'
@@ -438,6 +441,7 @@ export default function Layout() {
               to={to}
               end={to === '/'}
               title={collapsed ? label : undefined}
+              aria-label={collapsed ? label : undefined}
               className={navLinkClass(collapsed)}
             >
               <span className="text-base shrink-0">{icon}</span>
@@ -450,6 +454,7 @@ export default function Layout() {
           <NavLink
             to="/settings"
             title={collapsed ? 'Settings' : undefined}
+            aria-label={collapsed ? 'Settings' : undefined}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2 text-sm font-medium transition-colors border-l-2 rounded-r-lg ${
                 isActive
@@ -464,6 +469,7 @@ export default function Layout() {
           <NavLink
             to="/help"
             title={collapsed ? 'Help' : undefined}
+            aria-label={collapsed ? 'Help' : undefined}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2 text-sm font-medium transition-colors border-l-2 rounded-r-lg ${
                 isActive
@@ -478,6 +484,7 @@ export default function Layout() {
           <button
             onClick={logout}
             title={collapsed ? 'Sign out' : undefined}
+            aria-label="Sign out"
             className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium transition-colors text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-r-lg border-l-2 border-transparent ${collapsed ? 'justify-center' : ''}`}
           >
             <span className="text-base shrink-0">→</span>
@@ -486,6 +493,7 @@ export default function Layout() {
           <button
             onClick={toggleSidebar}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             className="w-full flex items-center justify-center py-2 text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200 transition-colors text-xs"
           >
             {collapsed ? '›' : '‹'}

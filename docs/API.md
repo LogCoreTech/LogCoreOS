@@ -70,6 +70,20 @@ Revokes the current token. Auth required.
 
 **Response** `{ "ok": true }`
 
+### `POST /auth/demo-login`
+One-click account creation for a public demo instance — no email/password/setup wizard. `404`s on any non-demo instance (gated on `DEMO_MODE`, checked server-side only). Shares the same rate-limit bucket family as registration (5/hour/IP). The created account gets a randomly-generated name/email/password the visitor never sees — the auth cookie set by this call is its only credential.
+
+**Body** `{ "timezone": "America/Chicago" }` — optional, defaults to `"UTC"`; best-effort, not validated against the IANA zone list.
+
+**Response** — same shape as register/login.
+
+### `POST /auth/token`
+Returns a plain Bearer token instead of a cookie, for CLI/programmatic clients. Browser sessions should use `/login`. Shares `/login`'s rate-limit bucket.
+
+**Body** `{ "email": "user@example.com", "password": "mypassword" }`
+
+**Response** `{ "token": "..." }`
+
 ### `GET /auth/me`
 Returns current user's profile.
 
@@ -154,8 +168,10 @@ Returns today's date in the user's timezone.
 
 Requires admin role.
 
+**Two overlapping pairs of endpoints exist here** (`GET /users` vs. `GET /admin/users`, and `PATCH /users/{id}/role` vs. `PATCH /admin/users/{id}`) — found during a 2026-09-07 documentation audit and kept as-is pending an owner decision, not yet consolidated. They are not exact duplicates: the plain `/users`/`/users/{id}/role` pair is older ("legacy" in code comments, `role` limited to `admin`|`member`, list response is a bare array with 7 fields) while `/admin/users`/`/admin/users/{id}` is newer (`role` also allows `"guest"`, list response is `{"users": [...]}` with 10 fields including `feature_role`/`workspaces`/`pool_edit`) and is what the actual admin frontend calls today. The one difference that matters beyond field shape: the legacy `PATCH /users/{id}/role` routes through the locked, race-safe `auth_service.update_user()`; the current `PATCH /admin/users/{id}` routes through `auth_service.update_user_role()`, which — per this session's security audit — is missing the lock its sibling functions in the same file have. Documented here for accuracy; whether to consolidate/relock is tracked separately.
+
 ### `GET /auth/users`
-List all users (safe fields only).
+List all users (safe fields only). Legacy — see note above; still used nowhere in the current frontend as of this writing.
 
 **Response**
 ```json
@@ -172,17 +188,40 @@ List all users (safe fields only).
 ]
 ```
 
+### `GET /auth/admin/users`
+List all users with the fuller admin field set. This is the one the admin UI actually calls.
+
+**Response**
+```json
+{
+  "users": [
+    {
+      "id": "uuid", "name": "Alice", "email": "alice@example.com", "role": "member",
+      "created_at": "2024-01-01T00:00:00+00:00", "feature_role": "guest",
+      "disabled_modules": [], "workspaces": ["personal"], "pool_edit": [], "timezone": "UTC"
+    }
+  ]
+}
+```
+
 ### `PATCH /auth/users/{user_id}`
 Update a user's profile (timezone, etc.).
 
 **Body** `{ "timezone": "America/Chicago" }`
 
 ### `PATCH /auth/users/{user_id}/role`
-Promote or demote a user.
+Promote or demote a user. Legacy — see note above (`role` is `admin`|`member` only here; routes through the locked `update_user()`).
 
 **Body** `{ "role": "admin" }` or `{ "role": "member" }`
 
 **Response** `{ "ok": true, "role": "admin" }`
+
+### `PATCH /auth/admin/users/{user_id}`
+Promote or demote a user. The one the admin UI actually calls (`role` also allows `"guest"`; routes through `update_user_role()`, see the note above).
+
+**Body** `{ "role": "admin" }` | `{ "role": "member" }` | `{ "role": "guest" }`
+
+**Response** — the updated user record.
 
 ### `PATCH /auth/users/{user_id}/modules`
 Set which modules are disabled for a user.
@@ -246,6 +285,11 @@ Get current hosting configuration (reads from `brain/hosting.json` with env var 
 Update hosting configuration. Takes effect immediately without a restart.
 
 **Body** `{ "cookie_secure": true, "trust_proxy_headers": true, "domain_url": "https://logcore.example.com" }`
+
+### `POST /auth/admin/hosting-settings/apply`
+Cloudflare Tunnel mode only — recreates the `tunnel` Docker container with the currently-saved token (a plain restart would keep the old token baked in from the container's original creation). `400`s if hosting mode isn't `"cloudflare"` or no tunnel token has been saved yet.
+
+**Response** `{ "status": "ok" }`
 
 ### `GET /auth/admin/automation-token`
 Get the instance-wide n8n automation token (admin only). Relocated here from `GET /assets/automation/token` when assets/ converted 2026-08-27 — see `## Assets` → Automation API above for why. `automations_config.py` itself stays core, unowned by either Assets or Contacts, both of whose own automation APIs verify against this same token.
@@ -443,9 +487,16 @@ Update a task. Only send fields you want to change. Pass `null` to clear optiona
 ```
 
 ### `DELETE /tasks/{task_id}`
-Delete a task permanently.
+Soft-deletes a task (moved to Trash, see `## Trash` below — not an immediate permanent delete since 2026-09-05).
 
 **Response** `{ "ok": true }`
+
+### `POST /tasks/bulk-delete`
+Delete multiple tasks in one call. Personal tasks only (no pool support on this endpoint). Each id is soft-deleted individually via the same path `DELETE /tasks/{task_id}` uses — one invalid/missing id doesn't abort the rest of the batch.
+
+**Body** `{ "ids": ["uuid1", "uuid2"] }`
+
+**Response** `{ "deleted": ["uuid1"], "failed": [{ "id": "uuid2", "error": "Task not found" }] }`
 
 ---
 
@@ -688,6 +739,53 @@ Download the current user's entire brain folder as a `.zip` file.
 
 ---
 
+## Trash
+
+(2026-09-05) Soft-delete/restore/purge across every module that supports it (9 of 14 — Tasks, Calendar, Goals, Journal, Notes, Assets, Contacts, Finance, Dashboards). Core infrastructure, not itself an installable module — login-required, no module gate, mirroring `brain.py`'s own gating. Entries expire and are auto-purged nightly (02:00) after a 30-day window. Every restore/purge/bulk call validates a caller-supplied `store_user` against the caller's actually-allowed stores first — a non-admin only ever sees/touches their own store; household/team pool trash is admin-only (a stricter gate than the `pool_edit` grant other pool mutations use).
+
+### `GET /trash`
+List all trash entries visible to the caller in the active workspace — their own personal store, plus the workspace's household/team pool store if the caller is an admin and that pool module is installed.
+
+**Response** — array of entries, each annotated `scope: "personal" | "pool"` so the frontend can split into tabs without re-deriving it client-side. Grouped by owning module.
+
+### `POST /trash/restore`
+Restore one entry to its original location.
+
+**Body** `{ "store_user": "Alice", "entry_id": "..." }`
+
+**Response** — the restored record. `409` if the owning module is uninstalled, or if restoring hits a real conflict (e.g. a stale parent reference — some modules restore top-level with a `_warning` instead of hard-failing; see `docs/MEMORY.md`).
+
+### `POST /trash/purge`
+Permanently delete one trash entry (bypasses the 30-day window).
+
+**Body** `{ "store_user": "Alice", "entry_id": "..." }`
+
+**Response** `{ "ok": true }`
+
+### `POST /trash/bulk`
+Restore or purge multiple entries in one call. Each item is resolved and access-checked independently — one item failing (wrong store, module uninstalled, not found) doesn't abort the rest.
+
+**Body** `{ "items": [{ "store_user": "Alice", "entry_id": "..." }], "action": "restore" }` — `action` is `"restore"` or `"purge"`.
+
+**Response** `{ "results": [{ "entry_id": "...", "ok": true }, { "entry_id": "...", "ok": false, "error": "..." }] }`
+
+---
+
+## Search
+
+(2026-08-29) The app-wide search bar's one endpoint. Login-required, no module gate — fans out across whichever modules are active for the caller, via each module's own registered `SearchProviderSpec`.
+
+### `GET /search`
+**Query params**
+- `q` — search text, default empty
+- `tags` — repeatable, filters to items carrying any of these tags
+- `cross_workspace` — boolean, default `false`; only meaningful for dual-workspace users, searches both workspaces (results prefixed `personal/`/`business/`)
+- `provider` — optional; when set, returns only that one provider's results (the "show more" fast-follow) instead of every provider's top slice
+
+**Response** — `{ "results": [...], "provider_totals": {...} }`. Each result carries which provider/module produced it; `provider_totals` lets the frontend show an accurate "show more" count per provider even though `results` itself is capped.
+
+---
+
 ## Notes
 
 Router mounted at `/api/v1/notes` (module id `notes` — converted into `module_packages/notes/` 2026-08-26; same no-rename treatment as Calendar/Tasks). `notes_service.py`/`notes_index.py` both stay core — `services/user_deletion_service.py` imports both directly, alongside the equivalent assets/contacts/finance pairs, and `main.py`'s `_warm_share_index()` rebuilds `notes_index` at every boot the same way it does for those three. All endpoints require the `notes` module to be enabled.
@@ -748,6 +846,20 @@ Move or rename a file or folder.
 
 **Body** `{ "from": "old/path.md", "to": "new/path.md" }`
 
+### `PUT /notes/tags`
+Set a note's tags. Same access bar as content edits (`contribute`, not `edit`) — tagging is closer to editing content than to the structural edit-level actions above.
+
+**Body** `{ "path": "ideas/startup.md", "tags": ["Business", "Q3"] }`
+
+**Response** `{ "tags": ["Business", "Q3"] }`
+
+### `POST /notes/bulk-delete`
+Delete multiple notes/folders in one call. An item nested under another selected folder in the same request is dropped before processing (its parent's cascade already covers it) — this mirrors a dedup the frontend already does client-side.
+
+**Body** `{ "items": [{ "path": "ideas/old.md", "type": "note" }, { "path": "archive", "type": "folder" }] }`
+
+**Response** `{ "deleted": ["ideas/old.md"], "failed": [{ "path": "archive", "error": "..." }] }`
+
 **Agent tools**: `list_notes`/`read_note`/`search_brain` (read; `search_brain` also walks pool/shared notes, not just the caller's own) + `create_note`/`update_note`/`delete_note`/`move_note`/`create_note_folder` (approval-gated). All resolve through the same sharing-aware access check the HTTP API uses (`read` < `contribute` < `edit`) — the agent can see and use anything shared with the caller, not just their own notes, and returns a plain-language error rather than silently failing if the caller's access level is too low for the requested action. `read_note`/`update_note`/`delete_note`/`move_note` accept an optional `owner` hint (from a prior `list_notes`/`search_brain` result's `_owner` field) to disambiguate when the same relative path could exist in more than one store the caller can reach. All but `search_brain` moved to `module_packages/notes/backend/agent_tools.py` when notes/ converted (2026-08-26) — closing a real gap where they were previously unfiltered by `disabled_modules`; `search_brain` stays core since it isn't notes-owned (also walks journal/memory/profile files).
 
 ---
@@ -766,6 +878,13 @@ Read a journal entry. `date` format: `YYYY-MM-DD`.
 Write or replace a journal entry.
 
 **Body** `{ "content": "# Today\n\n..." }`
+
+### `PUT /journal/{date}/tags`
+Set a journal entry's tags.
+
+**Body** `{ "tags": ["mood:good", "travel"] }`
+
+**Response** `{ "tags": ["mood:good", "travel"] }`
 
 ### `DELETE /journal/{date}`
 Delete a journal entry.
@@ -976,6 +1095,7 @@ Router mounted at `/api/v1/assets` (module id `assets` — converted into `modul
 | `GET`/`PATCH` | `/assets/{id}` | per access | PATCH allowed for owner/edit-share/pool manager; records history. Re-parent (move) is same-owner only |
 | `POST` | `/assets/{id}/archive` · `/unarchive` | owner / pool manager | **per-node**; `?cascade=true` (un)archives the whole subtree. Archiving only a parent leaves its children active (they float to top level) |
 | `DELETE` | `/assets/{id}` | owner (personal) / **admin** (pool) | `409` if it has children; removes attachment files |
+| `POST` | `/assets/bulk-delete` | per-item, same as single delete | `{ids: [...]}` — deepest (leaf) items are deleted first so a same-request parent+child selection succeeds instead of hitting the has-children `409`; one item's failure doesn't abort the rest. Returns `{deleted: [...], failed: [{id, error}]}` |
 | `POST` | `/assets/{id}/convert` | **admin** | `{target:"pool"}` — move subtree + files to `_team`/`_household`; strips shares |
 | `POST` | `/assets/{id}/attach-template` | edit access | `{template_id}` (2026-08-18) — "Save as template" second half: retroactively attaches a real Template to a currently-blank asset (frontend creates the Template first via a plain `POST /assets/templates` call from the asset's own `custom_field_defs`, then calls this). `400` if the asset already has a template. Self-service, unlike `/convert` above — this never touches sharing/pool membership, just which template the caller's own asset points at. Clears `custom_field_defs` and re-validates existing field values against the template's real defs (should pass unchanged, checked anyway) |
 | `POST` | `/assets/{id}/files` | owner/edit-share | multipart `file`; jpeg/png/webp/avif/pdf; 10 MB; ≤20 per asset |
@@ -1175,6 +1295,7 @@ Router mounted at `/api/v1/contacts` (module id `contacts` — converted into `m
 | `POST` | `/contacts` | module users | `{type, name, emails?, phones?, address?, tags?, birthday?, status?, notes?, custom?, cross_workspace?, pool?}`; `pool` **defaults `true`** (2026-08-17) — a new contact is pool-shared unless explicitly set `false` ("make personal"). No longer admin-gated — any contacts-module user may create directly in the pool, and gets `edit` on their own creation |
 | `GET` | `/contacts/available-for-linking` | **admin** | household-pool contacts with no `self_of` set — candidates for the create-user "link to an existing contact" picker (2026-08-17). Deliberately workspace-independent (always reads the household pool, regardless of the admin's own active tab). **Deliberately NOT `require_module`-gated** (confirmed during contacts/'s 2026-08-28 conversion, left as-is) — account-creation infrastructure that must keep working regardless of whether Contacts is disabled for the acting admin or uninstalled instance-wide, the same reasoning as `/contacts/me` below |
 | `GET`/`PATCH`/`DELETE` | `/contacts/{id}` | per access | PATCH needs edit; DELETE cascades interactions+deals (pool DELETE admin-only) |
+| `POST` | `/contacts/bulk-delete` | per-item, same as single delete | `{ids: [...]}` — one item's failure doesn't abort the rest (a pool multi-select must not assume uniform access across every selected item). Returns `{deleted: [...], failed: [{id, error}]}` |
 | `POST` | `/contacts/{id}/archive` · `/unarchive` | edit | |
 | `POST` | `/contacts/{id}/convert` | edit | moves a personal contact into the active workspace's pool (2026-08-17) — self-service, mirrors `transfer_ownership()`; `400` if it's already a pool contact. Returns the full annotated contact (not `{"ok": true}` — the frontend's save flow expects a real record back) |
 | `POST` | `/contacts/convert-bulk` | module users | `{contact_ids?: string[]}` (2026-08-17) — bulk version of the above, scoped to the caller's own personal, non-self contacts; omitting `contact_ids` converts everything eligible. Skips (doesn't fail) any id that's already a pool contact or not owned by the caller. Returns `{converted, skipped}` |
@@ -1583,14 +1704,63 @@ the viewer IS the owner (directly, or via the `share_underlying_data` exception'
 
 **Not yet built** (deliberately deferred, not cut from scope — see `docs/TASKS.md`): the "Referenced
 by" UI hooks on non-Assets/Contacts view surfaces, Module Engagement and External Data block types, and
-Spending/Completion trend blocks (need new aggregation endpoints that don't exist yet). Dashboard
-Templates shipped 2026-08-09/10 (see `dashboard_templates_service.py`, `docs/MEMORY.md`) — stale here
-until 2026-08-12. A Net Worth aggregation endpoint (`GET /finance/networth`) also already exists, but
-has no Dashboard block wired to it yet — it currently has no frontend consumer at all (found while
-fixing its currency-blending bug, 2026-08-12).
+Spending/Completion trend blocks (need new aggregation endpoints that don't exist yet). A Net Worth
+aggregation endpoint (`GET /finance/networth`) also already exists, but has no Dashboard block wired to
+it yet — it currently has no frontend consumer at all (found while fixing its currency-blending bug,
+2026-08-12).
 
 `PATCH /auth/me` also accepts `default_dashboard_id: {personal, business}` (same workspace-keyed
 shape as `shortcuts`) — which dashboard opens when the Dashboard nav link is clicked.
+
+### Dashboard Templates
+
+Shipped 2026-08-09/10, previously undocumented here despite being fully built (`dashboard_templates_service.py`). A template is a reusable, versioned block-list an owner curates once and applies to a dashboard — `owner: "me"` (any user) or `owner: "global"` (admin-managed, instance-wide). Sharing mirrors the per-dashboard model above (`shared_with`, accept-handshake) but with only one access level (visible or not — no read/contribute/edit distinction, since applying a template doesn't mutate the template itself).
+
+| Method | Path | Access | Notes |
+|--------|------|--------|-------|
+| `GET` | `/dashboards/templates` | module users | Templates visible to the caller: their own `owner:"me"` templates, plus every `owner:"global"` template not restricted away from their feature role |
+| `POST` | `/dashboards/templates` | module users (`owner:"global"` — admin only) | `{label, icon?, subject_type?: "contact"\|"asset", blocks?, owner: "me"\|"global"}` |
+| `PATCH` | `/dashboards/templates/{tid}` | owner (or admin, for `owner:"global"`) | `{label?, icon?, subject_type?, blocks?, restrict_roles?}` — any subset |
+| `DELETE` | `/dashboards/templates/{tid}` | owner (or admin, for `owner:"global"`) | `204` |
+| `PUT` | `/dashboards/templates/{tid}/access` | owner (or admin, for `owner:"global"`) | `{shared_with?: [{target, ...}]}` for a personal template; `{restrict_roles?}` for a global one — the two owner kinds use disjoint halves of this same body |
+| `POST` | `/dashboards/templates/{tid}/leave` | share recipient | `204`. `400` on a global template — "Global templates can't be left" |
+| `POST` | `/dashboards/templates/shares/respond` | recipient | `{owner, template_id, accept}` |
+
+**Applying a template to a dashboard** rides the existing dashboard endpoints, not a template-specific one:
+
+| Method | Path | Access | Notes |
+|--------|------|--------|-------|
+| `PUT` | `/dashboards/{dashboard_id}/subject` | contribute+ (content edit, not a sharing change) | `{subject_id: string \| null}` — sets which contact/asset a templated dashboard is "about"; the dashboard's blocks read this to resolve their own data |
+| `POST` | `/dashboards/{dashboard_id}/detach-template` | edit | Breaks the link to the source template — the dashboard keeps its current blocks as its own, independent copy, no longer updated by future template edits |
+
+---
+
+## PWA
+
+(2026-09-04) Per-user accent-colored PWA manifest/icon.
+
+### `GET /pwa/manifest.webmanifest`
+Authenticated (cookie only — native `<link>`/`<img>` requests can't attach the `Authorization` header). Bakes the caller's own `accent_color` into the returned icon URLs.
+
+**Response** — `application/manifest+json`.
+
+### `GET /pwa/icon-{size}.png`
+Unauthenticated — just a public brand asset recolored by a plain hex string, nothing sensitive gated here. `size` is `192` or `512`.
+
+**Query params** — `accent` (hex color, falls back to the default orange if missing/invalid).
+
+**Response** — `image/png` bytes.
+
+---
+
+## Welcome Back
+
+(2026-09-04 UX Polish Batch) Login-required, no module gate.
+
+### `GET /welcome-back/check`
+Checked once per app load (`Layout.jsx`). Reads whether to show the "while you were away" popup *before* touching presence, so this request's own ping can't race the away-check it's answering; recording presence always runs last regardless of the answer.
+
+**Response** `{ "show": true, "summary": "..." }` — `summary` is an optional AI-generated recap (only computed when `show` is true and the caller has `welcome_back_ai_summary_enabled`), otherwise `null`.
 
 ---
 

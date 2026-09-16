@@ -344,7 +344,7 @@ export default function Contacts() {
       {confirmBulkDelete && (
         <ConfirmDialog
           title="Delete selected contacts?"
-          message={`${bulkSelect.count} contact${bulkSelect.count === 1 ? '' : 's'} will be moved to Trash.`}
+          message={`${bulkSelect.count} contact${bulkSelect.count === 1 ? '' : 's'} will be moved to Trash and can be restored within 30 days. Interactions and deals logged on ${bulkSelect.count === 1 ? 'it' : 'them'} will be permanently deleted and can't be recovered.`}
           danger
           confirmLabel="Delete"
           onConfirm={handleBulkDelete}

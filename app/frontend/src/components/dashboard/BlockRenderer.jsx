@@ -29,6 +29,7 @@ export default function BlockRenderer({ block, onRemove, onEdit, onAction, editi
                 onClick={() => onEdit(block)}
                 className="text-charcoal-400 hover:text-orange-500 text-[10px] leading-none"
                 title="Edit block config"
+                aria-label="Edit block config"
               >
                 ✎
               </button>
@@ -37,6 +38,7 @@ export default function BlockRenderer({ block, onRemove, onEdit, onAction, editi
               onClick={() => onRemove(block.id)}
               className="text-charcoal-400 hover:text-red-500 text-[10px] leading-none"
               title="Remove block"
+              aria-label="Remove block"
             >
               ✕
             </button>
@@ -84,6 +86,7 @@ export default function BlockRenderer({ block, onRemove, onEdit, onAction, editi
                   onClick={() => onEdit(block)}
                   className="text-charcoal-400 hover:text-orange-500 text-xs"
                   title="Edit block config"
+                  aria-label="Edit block config"
                 >
                   ✎
                 </button>
@@ -92,6 +95,7 @@ export default function BlockRenderer({ block, onRemove, onEdit, onAction, editi
                 onClick={() => onRemove(block.id)}
                 className="text-charcoal-400 hover:text-red-500 text-xs"
                 title="Remove block"
+                aria-label="Remove block"
               >
                 ✕
               </button>
