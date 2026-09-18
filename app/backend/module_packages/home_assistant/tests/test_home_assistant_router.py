@@ -50,8 +50,8 @@ from module_packages.home_assistant.backend.router import (
     list_entities,
     list_ha_automations,
     list_scenes,
-    save_ha_config,
     save_favourites,
+    save_ha_config,
     trigger_ha_automation,
 )
 from routers.auth import require_admin
@@ -177,7 +177,9 @@ def test_get_entity_wraps_ha_error_as_502(users):
 def test_call_entity_service_503_when_not_configured(users):
     with patch("services.ha_service.is_configured", return_value=False):
         with pytest.raises(HTTPException) as exc:
-            call_entity_service("light.kitchen", CallServiceRequest(service="turn_on"), users["bob"])
+            call_entity_service(
+                "light.kitchen", CallServiceRequest(service="turn_on"), users["bob"]
+            )
     assert exc.value.status_code == 503
 
 
@@ -268,9 +270,7 @@ def test_activate_scene_calls_scene_turn_on(users):
             "services.ha_service.call_service", return_value={"ok": True, "result": []}
         ) as mock_call:
             result = activate_scene("scene.movie_night", users["bob"])
-    mock_call.assert_called_once_with(
-        "scene", "turn_on", {"entity_id": "scene.movie_night"}
-    )
+    mock_call.assert_called_once_with("scene", "turn_on", {"entity_id": "scene.movie_night"})
     assert result == {"ok": True, "result": []}
 
 
@@ -318,6 +318,8 @@ def test_get_favourites_returns_service_result_for_current_user(users):
 
 def test_save_favourites_persists_for_current_user(users):
     with patch("services.ha_service.save_favourites") as mock_save:
-        result = save_favourites(FavouritesRequest(entity_ids=["light.kitchen", "lock.front"]), users["bob"])
+        result = save_favourites(
+            FavouritesRequest(entity_ids=["light.kitchen", "lock.front"]), users["bob"]
+        )
     mock_save.assert_called_once_with("Bob", ["light.kitchen", "lock.front"])
     assert result == {"ok": True}

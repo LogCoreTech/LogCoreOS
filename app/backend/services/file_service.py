@@ -276,5 +276,3 @@ def resolve_user_md_path(user_name: str, rel_path: str) -> Path:
     except ValueError:
         raise ValueError(f"Access denied: {rel_path!r}")
     return target
-
-

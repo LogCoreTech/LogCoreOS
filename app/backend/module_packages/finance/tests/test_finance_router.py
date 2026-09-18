@@ -227,9 +227,7 @@ def test_bulk_delete_transactions_reports_partial_failure_not_bypassed_or_droppe
 
     result = bulk_delete_transactions(
         book["id"],
-        BulkDeleteRequest(
-            ids=[tx["id"], "not-a-uuid", "11111111-1111-1111-1111-111111111111"]
-        ),
+        BulkDeleteRequest(ids=[tx["id"], "not-a-uuid", "11111111-1111-1111-1111-111111111111"]),
         users["alice"],
         "personal",
     )

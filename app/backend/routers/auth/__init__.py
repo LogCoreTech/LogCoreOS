@@ -42,81 +42,34 @@ new tag added, so OpenAPI grouping is unchanged.
 
 from fastapi import APIRouter
 
-# --- deps.py: core dependencies + shared helpers -----------------------
-from .deps import (
-    _admin_limit,
-    _clear_auth_cookie,
-    _COOKIE,
-    _set_auth_cookie,
-    _validate_timezone,
-    _VALID_WORKSPACES,
-    bearer_optional,
-    get_current_user,
-    get_workspace,
-    logger,
-    require_admin,
-    require_module,
-    require_pool_edit,
-)
-
-# --- session.py: login/logout/register/token/status/demo-login ---------
-from . import session as _session
-from .session import (
-    _DEMO_ADJECTIVES,
-    _DEMO_NOUNS,
-    _DEMO_PRIORITIES,
-    _demo_login_limit,
-    _login_limit,
-    _register_limit,
-    _status_limit,
-    DemoLoginRequest,
-    LoginRequest,
-    RegisterRequest,
-    demo_login,
-    get_token,
-    login,
-    logout,
-    register,
-    registration_status,
-)
-
-# --- profile.py: self-service /me endpoints -----------------------------
-from . import profile as _profile
-from .profile import (
-    _ACCENT_COLOR_RE,
-    _ALLOWED_BG_TYPES,
-    _BG_MAX_BYTES,
-    _find_user_background,
-    _get_me_limit,
-    _me_limit,
-    _validate_accent_color,
-    _validate_background,
-    _validate_corner_style,
-    _validate_dark_mode,
-    _validate_density,
-    _validate_tasks_filter,
-    _validate_tasks_sort_mode,
-    _VALID_CORNER_STYLES,
-    _VALID_DARK_MODES,
-    _VALID_DENSITIES,
-    _VALID_GRADIENT_IDS,
-    _VALID_SHORTCUT_WORKSPACES,
-    _VALID_TASKS_FILTERS,
-    _VALID_TASKS_SORT_MODES,
-    MeUpdateRequest,
-    delete_background,
-    get_background,
-    get_today,
-    me,
-    update_me,
-    upload_background,
-)
-
-# --- admin_users.py: admin user management ------------------------------
+# Each sibling module also imported directly (not just its names) so
+# `router.include_router(_session.router)` etc. below can reach its own
+# APIRouter() — isort groups these plain `from . import X as _X` imports
+# ahead of the named `from .X import (...)` blocks that follow.
+from . import admin_settings as _admin_settings
 from . import admin_users as _admin_users
+from . import profile as _profile
+from . import session as _session
+
+# --- admin_settings.py: instance-wide admin settings --------------------
+from .admin_settings import (
+    _HOSTING_SETTINGS_PATH,
+    AdminSettingsRequest,
+    HostingSettingsRequest,
+    SearchSettingsRequest,
+    _automation_token_limit,
+    ai_settings_path,
+    apply_hosting_settings,
+    get_admin_settings,
+    get_automation_token,
+    get_hosting_settings,
+    get_search_settings,
+    rotate_automation_token,
+    update_admin_settings,
+    update_search_settings,
+)
 from .admin_users import (
     _ADMIN_USER_FIELDS,
-    _all_module_ids,
     _VALID_POOLS,
     CreateUserRequest,
     DeletionDecision,
@@ -128,6 +81,7 @@ from .admin_users import (
     UserUpdateRequest,
     WorkspaceModulesRequest,
     WorkspacesRequest,
+    _all_module_ids,
     admin_create_user,
     admin_delete_user,
     admin_list_users,
@@ -143,23 +97,72 @@ from .admin_users import (
     update_workspace_modules,
 )
 
-# --- admin_settings.py: instance-wide admin settings --------------------
-from . import admin_settings as _admin_settings
-from .admin_settings import (
-    _automation_token_limit,
-    _HOSTING_SETTINGS_PATH,
-    AdminSettingsRequest,
-    HostingSettingsRequest,
-    SearchSettingsRequest,
-    ai_settings_path,
-    apply_hosting_settings,
-    get_admin_settings,
-    get_automation_token,
-    get_hosting_settings,
-    get_search_settings,
-    rotate_automation_token,
-    update_admin_settings,
-    update_search_settings,
+# --- deps.py: core dependencies + shared helpers -------------------------
+from .deps import (
+    _COOKIE,
+    _VALID_WORKSPACES,
+    _admin_limit,
+    _clear_auth_cookie,
+    _set_auth_cookie,
+    _validate_timezone,
+    bearer_optional,
+    get_current_user,
+    get_workspace,
+    logger,
+    require_admin,
+    require_module,
+    require_pool_edit,
+)
+
+# --- profile.py: self-service /me endpoints -------------------------------
+from .profile import (
+    _ACCENT_COLOR_RE,
+    _ALLOWED_BG_TYPES,
+    _BG_MAX_BYTES,
+    _VALID_CORNER_STYLES,
+    _VALID_DARK_MODES,
+    _VALID_DENSITIES,
+    _VALID_GRADIENT_IDS,
+    _VALID_SHORTCUT_WORKSPACES,
+    _VALID_TASKS_FILTERS,
+    _VALID_TASKS_SORT_MODES,
+    MeUpdateRequest,
+    _find_user_background,
+    _get_me_limit,
+    _me_limit,
+    _validate_accent_color,
+    _validate_background,
+    _validate_corner_style,
+    _validate_dark_mode,
+    _validate_density,
+    _validate_tasks_filter,
+    _validate_tasks_sort_mode,
+    delete_background,
+    get_background,
+    get_today,
+    me,
+    update_me,
+    upload_background,
+)
+
+# --- session.py: login/logout/register/token/status/demo-login -----------
+from .session import (
+    _DEMO_ADJECTIVES,
+    _DEMO_NOUNS,
+    _DEMO_PRIORITIES,
+    DemoLoginRequest,
+    LoginRequest,
+    RegisterRequest,
+    _demo_login_limit,
+    _login_limit,
+    _register_limit,
+    _status_limit,
+    demo_login,
+    get_token,
+    login,
+    logout,
+    register,
+    registration_status,
 )
 
 # --- assemble the single router main.py mounts --------------------------

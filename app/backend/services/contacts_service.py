@@ -21,13 +21,6 @@ import re
 import uuid
 from datetime import date, datetime, timezone
 
-from services.file_service import (
-    contact_fields_path,
-    contacts_path,
-    read_json,
-    write_json,
-)
-
 # Deals + interactions CRUD, the pipeline/stages logic, and deal<->asset
 # linking live in contacts_deals_service.py (split out 2026-09-16 — this file
 # had grown to ~2100 lines). Re-exported here so every existing call site
@@ -62,6 +55,7 @@ from services.contacts_deals_service import (  # noqa: F401
     update_deal,
     update_interaction,
 )
+from services.file_service import contact_fields_path, contacts_path, read_json, write_json
 
 POOL_HOUSEHOLD = "_household"
 POOL_TEAM = "_team"

@@ -16,7 +16,7 @@ from services import auth_service, automations_config
 from services.file_service import brain_path, read_json, write_json
 from services.rate_limiter import rate_limit
 
-from .deps import _admin_limit, _VALID_WORKSPACES, require_admin
+from .deps import _VALID_WORKSPACES, _admin_limit, require_admin
 
 router = APIRouter()
 

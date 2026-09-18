@@ -191,10 +191,13 @@ def test_update_user_role_holds_the_lock_no_lost_updates(brain, monkeypatch):
 
     monkeypatch.setattr(auth_service, "_save_auth", slow_save)
 
-    users = [auth_service.create_user(f"user{i}@example.com", "password1", f"User{i}") for i in range(20)]
+    users = [
+        auth_service.create_user(f"user{i}@example.com", "password1", f"User{i}") for i in range(20)
+    ]
 
     threads = [
-        threading.Thread(target=auth_service.update_user_role, args=(u["id"], "admin")) for u in users
+        threading.Thread(target=auth_service.update_user_role, args=(u["id"], "admin"))
+        for u in users
     ]
     for t in threads:
         t.start()
@@ -220,7 +223,9 @@ def test_delete_user_holds_the_lock_no_lost_deletes(brain, monkeypatch):
 
     monkeypatch.setattr(auth_service, "_save_auth", slow_save)
 
-    users = [auth_service.create_user(f"user{i}@example.com", "password1", f"User{i}") for i in range(20)]
+    users = [
+        auth_service.create_user(f"user{i}@example.com", "password1", f"User{i}") for i in range(20)
+    ]
 
     threads = [threading.Thread(target=auth_service.delete_user, args=(u["id"],)) for u in users]
     for t in threads:

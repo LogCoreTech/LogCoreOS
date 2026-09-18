@@ -14,7 +14,7 @@ from services import auth_service, user_deletion_service
 from services.features_service import all_module_ids as _all_module_ids
 from services.file_service import user_path
 
-from .deps import _admin_limit, _validate_timezone, _VALID_WORKSPACES, require_admin
+from .deps import _VALID_WORKSPACES, _admin_limit, _validate_timezone, require_admin
 
 router = APIRouter()
 

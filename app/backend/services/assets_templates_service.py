@@ -340,7 +340,11 @@ def share_template(owner: str, tid: str, shared_with: list[dict], by: str) -> di
     # Lazy import — these are asset-sharing internals shared with
     # assets_service's own update_access()/_apply_share_response(), not
     # template-specific; a module-level import would cycle back here.
-    from services.assets_service import _load_features_roles, _notify_share_targets, _resolve_targets
+    from services.assets_service import (
+        _load_features_roles,
+        _notify_share_targets,
+        _resolve_targets,
+    )
 
     store = _load_template_store(owner)
     tmpl = next((t for t in store["templates"] if t.get("id") == tid), None)

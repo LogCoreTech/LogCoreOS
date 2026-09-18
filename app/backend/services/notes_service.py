@@ -640,7 +640,9 @@ def update_access(
                     if name != store_user and name not in accepted:
                         to_notify.append(name)
         if contributors is not None:
-            entry["contributors"] = _clean_entries(contributors, entry.get("contributors"), pool=True)
+            entry["contributors"] = _clean_entries(
+                contributors, entry.get("contributors"), pool=True
+            )
         if hidden_from is not None:
             entry["hidden_from"] = _clean_hidden(hidden_from)
         if entry:

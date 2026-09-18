@@ -18,14 +18,6 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from services import assets_index
-from services.auth_service import get_user_by_name, get_user_timezone, list_users
-from services.file_service import (
-    assets_files_path,
-    assets_path,
-    read_json,
-    user_path,
-    write_json,
-)
 
 # Templates (CRUD, sharing, field-def/value validation) live in their own
 # module (services/assets_templates_service.py, split out 2026-09-16, R6) —
@@ -61,6 +53,8 @@ from services.assets_templates_service import (  # noqa: F401
     update_template,
     visible_templates,
 )
+from services.auth_service import get_user_by_name, get_user_timezone, list_users
+from services.file_service import assets_files_path, assets_path, read_json, user_path, write_json
 
 ATTACHMENT_TYPES = {
     "image/jpeg": "jpg",

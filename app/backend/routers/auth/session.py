@@ -14,7 +14,7 @@ from services import auth_service
 from services.features_service import get_effective_disabled
 from services.rate_limiter import rate_limit
 
-from .deps import _clear_auth_cookie, _COOKIE, _set_auth_cookie, bearer_optional, get_current_user
+from .deps import _COOKIE, _clear_auth_cookie, _set_auth_cookie, bearer_optional, get_current_user
 
 router = APIRouter()
 

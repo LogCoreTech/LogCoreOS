@@ -1452,9 +1452,7 @@ def test_automation_list_rejects_arbitrary_user(users):
 # ---------------------------------------------------------------------------
 
 
-def test_accepting_a_group_share_does_not_grant_an_unrelated_persons_edit_access(
-    parcel, users
-):
+def test_accepting_a_group_share_does_not_grant_an_unrelated_persons_edit_access(parcel, users):
     """The actual bug, reproduced: Alice shares an asset with the whole
     household at 'read', and separately grants Bob 'edit' personally — two
     coexisting shared_with entries, an explicitly supported pattern. Carol,

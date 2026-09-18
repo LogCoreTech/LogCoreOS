@@ -16,9 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 import pytest
 
-from module_packages.home_assistant.backend.dashboard_block import (
-    resolve_home_assistant_favourites,
-)
+from module_packages.home_assistant.backend.dashboard_block import resolve_home_assistant_favourites
 from services import auth_service, ha_service
 from services.dashboard_blocks.registry import BlockRenderCtx
 
