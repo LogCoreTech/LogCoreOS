@@ -201,6 +201,19 @@
   },
   "whats_new": [
     {
+      "version": "0.8.0",
+      "date": "2026-09-17",
+      "highlights": [
+        "Security hardening from a full-repo audit — closed a rate-limit bypass via spoofed IP headers, a window where a just-demoted/deleted admin's old session could still create accounts, a sharing bug that could grant more access than was actually shared, and a Home Assistant gap that let a device-control action reach any service instead of just real devices. The interactive API docs (/docs, /redoc) are now off by default.",
+        "Deleted items now go to a Trash instead of vanishing immediately, everywhere — Tasks, Calendar, Goals, Journal, Notes, Assets, Contacts, Finance, and Dashboards. Restore or permanently delete from Settings → Trash; items are kept 30 days. Tasks, Notes, Assets, Contacts, and now Finance can also select several items at once and delete them together.",
+        "A welcome-back message greets you after time away, with an optional AI summary of what changed across Tasks, Journal, Notes, and Calendar. A new \"This Week at a Glance\" digest joins the existing proactive suggestions in Settings → Notifications.",
+        "Admin → AI Settings is now a full picker instead of free-text fields — choose from ~25 named providers (including local runners like Ollama and LM Studio) with an opt-in \"Load Models\" button to pull each provider's real, current model list on demand.",
+        "ntfy has been removed entirely — Web Push is now the app's only push channel, since it already carried the real notification load. Devices that can't use Web Push (no PWA installed, older browsers) get in-app/chat notifications only going forward.",
+        "A broad accessibility and consistency pass: keyboard focus now stays inside open modals, every popup blocks background scrolling and closes on Escape, icon-only buttons across the app have real screen-reader labels, and confirmation dialogs use one consistent styled component everywhere instead of the browser's plain popup.",
+        "Smaller quality-of-life additions: a Duplicate button on Tasks/Calendar events/Finance transactions, closing a form with unsaved changes now asks first, a banner appears when your device loses connectivity, new accounts start with example items instead of a blank slate, and new instances now install Journal/Calendar/Notes/Goals by default."
+      ]
+    },
+    {
       "version": "0.7.1",
       "date": "2026-09-01",
       "highlights": [

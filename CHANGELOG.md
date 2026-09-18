@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-09-17
+
 ### Added
 
 - **New accounts now start with a real example item** in Tasks, Notes, Journal, Calendar, Goals, Assets, Contacts, and Finance (whichever of those modules are installed on your instance) — each clearly prefixed "Example" so it's obvious it's safe to delete, instead of every module starting completely blank.
