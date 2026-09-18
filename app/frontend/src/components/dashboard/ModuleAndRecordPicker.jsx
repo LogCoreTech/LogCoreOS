@@ -66,7 +66,7 @@ export default function ModuleAndRecordPicker({ value, onChange, label }) {
 
   return (
     <div className="space-y-2">
-      {label && <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>}
+      {label && <label className="block text-sm font-medium mb-1">{label}</label>}
       <select className="input w-full" value={module} onChange={e => setModule(e.target.value)}>
         <option value="">Choose a page…</option>
         {NAV_MODULE_OPTIONS.map(m => <option key={m.id} value={m.id}>{m.icon} {m.label}</option>)}

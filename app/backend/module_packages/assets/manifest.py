@@ -53,7 +53,48 @@ conditional owned_brain_paths gap. "Assets" added to the unconditional
 structural skip sets (routers/brain.py's _ALWAYS_SKIP, agent_service.py's
 _brain_skip()) for documentation honesty, matching Tasks'/Dashboards' own
 precedent — a no-op today since there's no markdown to protect, but honest
-about what this module owns."""
+about what this module owns.
+
+2026-09-16: router.py had grown past 1100 lines covering four genuinely
+different concerns, so it's split the same way Finance's own router.py was
+— into router.py (core asset tree CRUD: create/get/patch/delete/archive/
+convert/bulk-delete, contact cross-links, file attachments),
+router_templates.py (template CRUD), router_sharing.py (access control,
+share handshake, comments, mute state), and router_automation.py (the
+X-Automation-Token-gated n8n API).
+
+Unlike Finance's six routers (each already carrying its OWN distinct tag —
+finance/finance-banking/finance-planning/etc — before that conversion, so
+its own `_get_router()` passes a different `tags=[...]` to each
+`include_router()` call), Assets was a single, never-before-split router
+with no per-route tags of its own; router_tags=["assets"] below was always
+applied exactly once, uniformly, by module_registry.py's own
+app.include_router(router, tags=manifest.router_tags). Keeping that
+byte-identical only requires every split route to still carry that same
+single tag once composed — there's no "own original tag" per file to
+preserve here, since they never had one.
+
+`_get_router()` can't compose the four files with plain `include_router()`
+calls the way Finance does, though: router.py's own list/create endpoints
+are declared at the bare path `""` (`@router.get("")` / `@router.post("")`),
+and FastAPI's `include_router()` hard-refuses to merge a router containing
+a `""`-path route into another router with no prefix of its own ("Prefix
+and path cannot be both empty") — the real `/api/v1/assets` prefix only
+ever arrives later, at that same module_registry.py mount. So instead of
+`include_router()`, `_get_router()` builds a fresh `APIRouter()` every call
+and directly concatenates each file's already-fully-built `.routes` list
+onto it, in the order that keeps router_templates'/router_automation's/
+router_sharing's static paths (`/templates`, `/automation/...`, `/members`,
+`/roles`, `/shares/respond`) ahead of router.py's own catch-all
+`/{asset_id}` routes — FastAPI/Starlette match routes in registration
+order, and a single dynamic path segment matches any literal just as well,
+the same constraint the pre-split router.py's own docstring called out.
+Building `combined` fresh on every call (rather than mutating any of the
+four modules' own shared `router` singletons) matters because
+`register_routers()` runs inside main.py's `lifespan()`, which re-executes
+on every app startup — including once per test that spins up a TestClient
+— so `_get_router()` gets called many times per process; concatenating
+`.routes` onto a brand-new object each time is what keeps that idempotent."""
 
 from pathlib import Path
 
@@ -61,9 +102,19 @@ from module_registry import ModuleManifest, SearchProviderSpec, search_match
 
 
 def _get_router():
-    from module_packages.assets.backend.router import router
+    from fastapi import APIRouter
 
-    return router
+    from module_packages.assets.backend import router as _core
+    from module_packages.assets.backend import router_automation as _automation
+    from module_packages.assets.backend import router_sharing as _sharing
+    from module_packages.assets.backend import router_templates as _templates
+
+    combined = APIRouter()
+    combined.routes.extend(_templates.router.routes)
+    combined.routes.extend(_automation.router.routes)
+    combined.routes.extend(_sharing.router.routes)
+    combined.routes.extend(_core.router.routes)
+    return combined
 
 
 def _search_assets(query: str, tags: list[str], user: dict, workspace: str) -> list[dict]:

@@ -377,15 +377,15 @@ export default function BookSettings({ book, onClose, onChanged, onDeletedBook }
         {/* Book meta */}
         <div className="grid grid-cols-[1fr_4rem_5rem] gap-2">
           <div>
-            <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Name</label>
+            <label className="block text-sm font-medium mb-1">Name</label>
             <input className="input" value={name} onChange={e => setName(e.target.value)} maxLength={80} />
           </div>
           <div>
-            <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Icon</label>
+            <label className="block text-sm font-medium mb-1">Icon</label>
             <input className="input text-center" value={icon} onChange={e => setIcon(e.target.value)} maxLength={8} />
           </div>
           <div>
-            <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Currency</label>
+            <label className="block text-sm font-medium mb-1">Currency</label>
             <input className="input uppercase" value={currency} onChange={e => setCurrency(e.target.value)} maxLength={3} />
           </div>
         </div>

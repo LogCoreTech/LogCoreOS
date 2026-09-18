@@ -562,6 +562,47 @@ def delete_transaction(
     return {"ok": True}
 
 
+class BulkDeleteRequest(BaseModel):
+    ids: list[str]
+
+
+@router.post("/books/{book_id}/transactions/bulk-delete")
+def bulk_delete_transactions(
+    book_id: str,
+    req: BulkDeleteRequest,
+    current_user: dict = Depends(_require_finance),
+    workspace: str = Depends(get_workspace),
+    _rl: None = Depends(_write_limit),
+):
+    """UX Polish — same per-transaction access resolution as the single-item
+    delete above (contribute needs edit_own + ownership of that specific
+    transaction, everyone else needs edit access; either leg of a transfer is
+    still rejected), just never letting one item's failure abort the rest of
+    the batch. Reuses finance_service.delete_transaction() per item — that
+    function already routes through trash_service.soft_delete() — rather than
+    reimplementing deletion here."""
+    store_user, book, access = _find_or_404(current_user, workspace, book_id)
+    deleted: list[str] = []
+    failed: list[dict] = []
+    for tx_id in req.ids:
+        try:
+            _validate_id(tx_id, "transaction ID")
+            _reject_transfer_leg(store_user, workspace, book_id, tx_id)
+            if access == "contribute":
+                _require_contribute_own_tx(current_user, workspace, store_user, book, tx_id, None)
+            else:
+                _require_edit(access)
+            if not finance_service.delete_transaction(
+                store_user, workspace, book_id, tx_id, deleted_by=current_user["name"]
+            ):
+                failed.append({"id": tx_id, "error": "Transaction not found"})
+                continue
+            deleted.append(tx_id)
+        except HTTPException as exc:
+            failed.append({"id": tx_id, "error": exc.detail})
+    return {"deleted": deleted, "failed": failed}
+
+
 # ---------------------------------------------------------------------------
 # Receipts (photo/PDF attachments on transactions)
 # ---------------------------------------------------------------------------

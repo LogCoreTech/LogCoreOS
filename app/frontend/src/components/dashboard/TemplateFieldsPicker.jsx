@@ -23,7 +23,7 @@ export default function TemplateFieldsPicker({ templateId, value, onChange, labe
   if (!templateId) {
     return (
       <div>
-        {label && <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>}
+        {label && <label className="block text-sm font-medium mb-1">{label}</label>}
         <p className="text-xs text-charcoal-400">Pick a template above first.</p>
       </div>
     )
@@ -31,7 +31,7 @@ export default function TemplateFieldsPicker({ templateId, value, onChange, labe
   if (!available) {
     return (
       <div>
-        {label && <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>}
+        {label && <label className="block text-sm font-medium mb-1">{label}</label>}
         <p className="text-xs text-charcoal-400">Could not load this template&apos;s fields.</p>
       </div>
     )
@@ -46,7 +46,7 @@ export default function TemplateFieldsPicker({ templateId, value, onChange, labe
 
   return (
     <div>
-      {label && <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>}
+      {label && <label className="block text-sm font-medium mb-1">{label}</label>}
       {fields.length === 0 ? (
         <p className="text-xs text-charcoal-400">This template has no fields yet.</p>
       ) : (

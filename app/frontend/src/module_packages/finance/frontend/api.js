@@ -90,6 +90,7 @@ export const finance = {
   addTransaction:    (bookId, data)     => post(`/finance/books/${bookId}/transactions`, data),
   updateTransaction: (bookId, id, data) => patch(`/finance/books/${bookId}/transactions/${id}`, data),
   removeTransaction: (bookId, id)       => del(`/finance/books/${bookId}/transactions/${id}`),
+  bulkDeleteTransactions: (bookId, ids) => post(`/finance/books/${bookId}/transactions/bulk-delete`, { ids }),
   monthlyReport:     (bookId, month)    => get(`/finance/books/${bookId}/reports/monthly?month=${month}`),
   netWorth:          ()                 => get('/finance/networth'),
   assetTransactions: (assetId)          => get(`/finance/assets/${assetId}/transactions`),

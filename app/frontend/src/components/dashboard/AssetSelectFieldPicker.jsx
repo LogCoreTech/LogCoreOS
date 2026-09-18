@@ -33,7 +33,7 @@ export default function AssetSelectFieldPicker({ assetId, templateId, value, onC
   if (!assetId && !templateId) {
     return (
       <div>
-        {label && <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>}
+        {label && <label className="block text-sm font-medium mb-1">{label}</label>}
         <p className="text-xs text-charcoal-400">Pick an asset or template above first.</p>
       </div>
     )
@@ -41,7 +41,7 @@ export default function AssetSelectFieldPicker({ assetId, templateId, value, onC
   if (!available) {
     return (
       <div>
-        {label && <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>}
+        {label && <label className="block text-sm font-medium mb-1">{label}</label>}
         <p className="text-xs text-charcoal-400">Could not load select-type fields.</p>
       </div>
     )
@@ -53,7 +53,7 @@ export default function AssetSelectFieldPicker({ assetId, templateId, value, onC
 
   return (
     <div className="space-y-2">
-      {label && <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>}
+      {label && <label className="block text-sm font-medium mb-1">{label}</label>}
       <select
         className="input w-full"
         value={fieldKey}

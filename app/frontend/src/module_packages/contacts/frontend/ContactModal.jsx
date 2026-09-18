@@ -738,7 +738,7 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
           <input type="date" className="input" value={form.birthday || ''} onChange={e => set('birthday', e.target.value)} />
         </Field>
         {fields.filter(f => (f.applies_to || ['person', 'company']).includes(form.type)).map(f => (
-          <label key={f.key} className="block text-xs text-charcoal-500">{f.label}
+          <label key={f.key} className="block text-sm font-medium mb-1">{f.label}
             {f.type === 'select' ? (
               <select className="input" value={form.custom[f.key] || ''} onChange={e => setCustom(f.key, e.target.value)}>
                 <option value="">—</option>

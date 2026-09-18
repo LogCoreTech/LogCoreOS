@@ -69,7 +69,7 @@ export default function ContactPicker({ value, onChange, label, placeholder }) {
   if (!available) {
     return (
       <div>
-        {label && <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>}
+        {label && <label className="block text-sm font-medium mb-1">{label}</label>}
         <input className="input" placeholder={placeholder} value={text}
           onChange={e => { setText(e.target.value); onChange(e.target.value, null) }} maxLength={120} />
       </div>
@@ -78,7 +78,7 @@ export default function ContactPicker({ value, onChange, label, placeholder }) {
 
   return (
     <div ref={boxRef} className="relative">
-      {label && <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>}
+      {label && <label className="block text-sm font-medium mb-1">{label}</label>}
       <input
         className="input"
         placeholder={placeholder || 'Search or add a contact…'}

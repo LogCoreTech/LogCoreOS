@@ -23,7 +23,7 @@ export default function TemplatePicker({ value, onChange, label }) {
   if (!available) {
     return (
       <div>
-        {label && <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>}
+        {label && <label className="block text-sm font-medium mb-1">{label}</label>}
         <input className="input" disabled value="Templates unavailable" />
       </div>
     )
@@ -31,7 +31,7 @@ export default function TemplatePicker({ value, onChange, label }) {
 
   return (
     <div>
-      {label && <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>}
+      {label && <label className="block text-sm font-medium mb-1">{label}</label>}
       <select className="input w-full" value={value || ''} onChange={e => onChange(e.target.value || null)}>
         {!value && <option value="">Choose a template…</option>}
         {templates.map(t => (

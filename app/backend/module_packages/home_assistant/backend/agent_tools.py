@@ -106,9 +106,19 @@ def execute(name: str, inputs: dict, user: dict, workspace: str = "personal"):
         return [ha_service.get_state(eid) for eid in inputs["entity_ids"]]
 
     if name == "control_home_assistant_device":
+        # Same allowlist as router.py's own call_entity_service (2026-09-16) —
+        # domain here is a direct model-supplied string, an even more open
+        # passthrough than the router's entity_id-derived one, since nothing
+        # requires domain to actually match inputs["entity_id"]'s own prefix.
+        # Without this, the model could be asked (or, in Auto mode, could
+        # decide on its own) to call domain="shell_command"/"homeassistant"
+        # instead of a real device-control domain.
+        domain = inputs["domain"]
+        if domain not in ha_service.ALLOWED_SERVICE_DOMAINS:
+            raise ValueError(f"Service calls to '{domain}' are not permitted through this tool")
         data = dict(inputs.get("data") or {})
         data["entity_id"] = inputs["entity_id"]
-        return ha_service.call_service(inputs["domain"], inputs["service"], data)
+        return ha_service.call_service(domain, inputs["service"], data)
 
     if name == "activate_scene":
         return ha_service.call_service("scene", "turn_on", {"entity_id": inputs["entity_id"]})

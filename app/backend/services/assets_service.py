@@ -8,28 +8,60 @@ stored as Assets/files/{asset_id}/{attachment_id}.{ext} — disk names are never
 user-controlled.
 """
 
+import contextlib
 import copy
-import re
 import shutil
 import threading
 import uuid
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from services import assets_index
 from services.auth_service import get_user_by_name, get_user_timezone, list_users
 from services.file_service import (
-    asset_templates_path,
     assets_files_path,
     assets_path,
-    personal_templates_path,
     read_json,
     user_path,
     write_json,
 )
 
-FIELD_TYPES = {"text", "number", "date", "boolean", "select", "contact"}
+# Templates (CRUD, sharing, field-def/value validation) live in their own
+# module (services/assets_templates_service.py, split out 2026-09-16, R6) —
+# re-exported here so every existing `assets_service.create_template(...)`
+# / `assets_service.GLOBAL_OWNER` / etc. caller (routers, agent_tools,
+# dashboard blocks, tests — all going through the `assets_service` module
+# object rather than importing these names directly) keeps working
+# unchanged. The asset-record functions below (create_asset/update_asset/
+# attach_template/list_assets_for_contact) use the validation/lookup helpers
+# directly too.
+from services.assets_templates_service import (  # noqa: F401
+    FIELD_TYPES,
+    GLOBAL_OWNER,
+    _validate_field_defs,
+    _validate_fields,
+    _validate_value,
+    all_templates_by_id,
+    attach_templates,
+    create_template,
+    delete_template,
+    get_global_template,
+    get_template,
+    get_template_by_id,
+    insert_example_template,
+    leave_template_share,
+    list_global_templates,
+    list_personal_templates,
+    list_templates,
+    resolve_template,
+    respond_to_template_share,
+    share_template,
+    template_reference_count,
+    update_template,
+    visible_templates,
+)
+
 ATTACHMENT_TYPES = {
     "image/jpeg": "jpg",
     "image/png": "png",
@@ -42,8 +74,6 @@ MAX_ATTACHMENTS = 20
 MAX_COMMENTS = 100
 MAX_COMMENT_LEN = 2000
 _HISTORY_CAP = 50
-_KEY_RE = re.compile(r"^[a-z0-9_]{1,40}$")
-_TEXT_MAX = 2000
 
 # What a "contribute"-level user may ADD to an asset (per-share/contributor caps).
 CONTRIBUTE_ADDS = {"comments", "files", "children"}
@@ -62,456 +92,22 @@ def _now_iso(user_name: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Templates (instance-level, admin-curated)
-# ---------------------------------------------------------------------------
-
-
-GLOBAL_OWNER = "_global"
-
-
-def _template_store_path(owner: str):
-    return asset_templates_path() if owner == GLOBAL_OWNER else personal_templates_path(owner)
-
-
-def _load_template_store(owner: str) -> dict:
-    return read_json(_template_store_path(owner), default={"templates": []})
-
-
-def _save_template_store(owner: str, data: dict) -> None:
-    write_json(_template_store_path(owner), data)
-
-
-def list_global_templates() -> list[dict]:
-    return _load_template_store(GLOBAL_OWNER).get("templates", [])
-
-
-def list_personal_templates(owner: str) -> list[dict]:
-    return _load_template_store(owner).get("templates", [])
-
-
-def _all_personal_templates() -> list[tuple[str, dict]]:
-    out: list[tuple[str, dict]] = []
-    for u in list_users():
-        for t in list_personal_templates(u["name"]):
-            out.append((u["name"], t))
-    return out
-
-
-def get_global_template(key: str) -> dict | None:
-    return next((t for t in list_global_templates() if t.get("key") == key), None)
-
-
-def get_template_by_id(tid: str) -> dict | None:
-    for t in list_global_templates():
-        if t.get("id") == tid:
-            return t
-    for _owner, t in _all_personal_templates():
-        if t.get("id") == tid:
-            return t
-    return None
-
-
-def _find_template(tid: str) -> tuple[str, dict] | None:
-    """Return (owner, template) for a template id — owner is GLOBAL_OWNER or a user."""
-    for t in list_global_templates():
-        if t.get("id") == tid:
-            return GLOBAL_OWNER, t
-    for owner, t in _all_personal_templates():
-        if t.get("id") == tid:
-            return owner, t
-    return None
-
-
-def all_templates_by_id() -> dict:
-    """id → template for global + every personal store (one scan, for bulk attach)."""
-    m = {t["id"]: t for t in list_global_templates() if t.get("id")}
-    for _owner, t in _all_personal_templates():
-        if t.get("id"):
-            m[t["id"]] = t
-    return m
-
-
-def attach_templates(assets: list[dict]) -> list[dict]:
-    """Return copies of assets with their resolved template embedded as `_template`
-    so a viewer can render icon/label/fields even for a shared asset whose template
-    they don't own."""
-    by_id = all_templates_by_id()
-    by_key = {t.get("key"): t for t in list_global_templates()}
-    out = []
-    for a in assets:
-        tmpl = by_id.get(a.get("template_id")) or by_key.get(a.get("template"))
-        out.append({**a, "_template": tmpl})
-    return out
-
-
-def resolve_template(asset: dict) -> dict | None:
-    """Resolve an asset's template — by id (global or any owner's personal) with a
-    fallback to the legacy global-by-key reference for pre-Phase-2 assets.
-
-    Returns `{}` for a genuinely blank asset (no template_id and no template
-    key at all — 2026-08-17). `None` specifically means a STALE reference —
-    a template_id/key that used to exist and was deleted — which callers
-    correctly treat as an error. Before this distinction, a blank asset's
-    `update_asset()` call raised "Template None no longer exists" on every
-    single save (any edit sends `fields`, even an empty `{}`), since a blank
-    asset's `template` key is also `None` and `get_global_template(None or
-    "")` finds nothing — blank assets couldn't be saved at all post-create."""
-    tid = asset.get("template_id")
-    if tid:
-        return get_template_by_id(tid)
-    key = asset.get("template")
-    if not key:
-        return {}
-    return get_global_template(key)
-
-
-# Backward-compat: some callers still resolve global templates by key.
-def get_template(key: str) -> dict | None:
-    return get_global_template(key)
-
-
-def list_templates() -> list[dict]:
-    """Legacy: global templates only (used by reference counting)."""
-    return list_global_templates()
-
-
-def visible_templates(
-    viewer: str, is_admin: bool = False, feature_role: str = "member"
-) -> list[dict]:
-    """Templates a viewer can build from: role-permitted global + own personal +
-    personal templates shared to and accepted by the viewer."""
-    out: list[dict] = []
-    for t in list_global_templates():
-        rr = t.get("restrict_roles") or []
-        if not rr or is_admin or feature_role in rr:
-            out.append({**t, "_scope": "global"})
-    for t in list_personal_templates(viewer):
-        out.append({**t, "_scope": "own"})
-    for owner, t in _all_personal_templates():
-        if owner == viewer:
-            continue
-        for s in t.get("shared_with") or []:
-            if "accepted" in s and viewer in (s.get("accepted") or []):
-                out.append({**t, "_scope": "shared", "_owner": owner})
-                break
-    return out
-
-
-def _validate_field_defs(fields: list[dict]) -> list[dict]:
-    """Normalize and validate an ordered field-definition list."""
-    cleaned: list[dict] = []
-    seen: set[str] = set()
-    for f in fields:
-        key = (f.get("key") or "").strip()
-        if not _KEY_RE.match(key):
-            raise ValueError(f"Invalid field key {key!r} — use a-z, 0-9, _ (max 40 chars)")
-        if key in seen:
-            raise ValueError(f"Duplicate field key {key!r}")
-        seen.add(key)
-        ftype = f.get("type")
-        if ftype not in FIELD_TYPES:
-            raise ValueError(
-                f"Invalid field type {ftype!r} for {key!r}. Valid: {sorted(FIELD_TYPES)}"
-            )
-        entry: dict[str, Any] = {
-            "key": key,
-            "label": (f.get("label") or key).strip()[:80],
-            "type": ftype,
-        }
-        if ftype == "select":
-            options = [str(o).strip() for o in (f.get("options") or []) if str(o).strip()]
-            if not options:
-                raise ValueError(f"Select field {key!r} needs at least one option")
-            entry["options"] = options
-        default = f.get("default")
-        if default not in (None, ""):
-            entry["default"] = _validate_value(entry, default)
-        cleaned.append(entry)
-    return cleaned
-
-
-def create_template(data: dict, owner: str = GLOBAL_OWNER) -> dict:
-    key = (data.get("key") or "").strip()
-    if not _KEY_RE.match(key):
-        raise ValueError(f"Invalid template key {key!r} — use a-z, 0-9, _ (max 40 chars)")
-    store = _load_template_store(owner)
-    if any(t.get("key") == key for t in store["templates"]):
-        raise ValueError(f"Template {key!r} already exists")
-    template = {
-        "id": str(uuid.uuid4()),
-        "key": key,
-        "label": (data.get("label") or key).strip()[:80],
-        "icon": (data.get("icon") or "").strip()[:8],
-        "fields": _validate_field_defs(data.get("fields") or []),
-        "owner": owner,
-        "shared_with": [],
-        "restrict_roles": [],
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    store["templates"].append(template)
-    _save_template_store(owner, store)
-    return template
-
-
-def update_template(tid: str, updates: dict) -> dict | None:
-    """Replace label/icon/fields (+ restrict_roles for global). Key is immutable."""
-    found = _find_template(tid)
-    if found is None:
-        return None
-    owner, _ = found
-    store = _load_template_store(owner)
-    for i, t in enumerate(store["templates"]):
-        if t.get("id") != tid:
-            continue
-        if "label" in updates and updates["label"]:
-            t["label"] = str(updates["label"]).strip()[:80]
-        if "icon" in updates:
-            t["icon"] = str(updates["icon"] or "").strip()[:8]
-        if "fields" in updates:
-            t["fields"] = _validate_field_defs(updates["fields"] or [])
-        if "restrict_roles" in updates and owner == GLOBAL_OWNER:
-            t["restrict_roles"] = [str(r).strip() for r in (updates["restrict_roles"] or [])]
-        store["templates"][i] = t
-        _save_template_store(owner, store)
-        return t
-    return None
-
-
-def template_reference_count(tid: str) -> int:
-    found = _find_template(tid)
-    key = found[1].get("key") if found else None
-    count = 0
-    for store_user, workspace in _all_stores():
-        for a in list_assets(store_user, workspace):
-            if a.get("template_id") == tid or (
-                key and not a.get("template_id") and a.get("template") == key
-            ):
-                count += 1
-    return count
-
-
-def delete_template(tid: str) -> bool:
-    found = _find_template(tid)
-    if found is None:
-        return False
-    owner, tmpl = found
-    refs = template_reference_count(tid)
-    if refs:
-        raise ValueError(
-            f"{refs} asset(s) still use template {tmpl.get('label', tmpl.get('key'))!r} — "
-            "delete or archive them first"
-        )
-    store = _load_template_store(owner)
-    before = len(store["templates"])
-    store["templates"] = [t for t in store["templates"] if t.get("id") != tid]
-    if len(store["templates"]) == before:
-        return False
-    _save_template_store(owner, store)
-    return True
-
-
-def insert_example_template(owner: str = GLOBAL_OWNER) -> dict:
-    """Optional starter for the empty state — created only on explicit user click."""
-    existing = {t.get("key") for t in _load_template_store(owner).get("templates", [])}
-    key = "example"
-    n = 2
-    while key in existing:
-        key = f"example_{n}"
-        n += 1
-    return create_template(
-        {
-            "key": key,
-            "label": "Example",
-            "icon": "📦",
-            "fields": [
-                {
-                    "key": "status",
-                    "label": "Status",
-                    "type": "select",
-                    "options": ["active", "inactive"],
-                    "default": "active",
-                },
-                {"key": "value", "label": "Value", "type": "number"},
-                {"key": "location", "label": "Location", "type": "text"},
-                {"key": "acquired", "label": "Acquired", "type": "date"},
-                {"key": "in_use", "label": "In Use", "type": "boolean"},
-            ],
-        }
-    )
-
-
-# ---------------------------------------------------------------------------
-# Template sharing (request-based, same handshake as assets)
-# ---------------------------------------------------------------------------
-
-
-def share_template(owner: str, tid: str, shared_with: list[dict], by: str) -> dict | None:
-    """Replace a personal template's shared_with (request-based) and notify new
-    targets. Global templates are managed via restrict_roles, not shares."""
-    store = _load_template_store(owner)
-    tmpl = next((t for t in store["templates"] if t.get("id") == tid), None)
-    if tmpl is None:
-        return None
-
-    prev_accepted = {
-        s.get("target"): list(s.get("accepted") or [])
-        for s in (tmpl.get("shared_with") or [])
-        if "accepted" in s
-    }
-    prev_targets = {s.get("target") for s in (tmpl.get("shared_with") or [])}
-    valid_targets = {"team", "household"} | set(_load_features_roles())
-
-    cleaned = []
-    new_targets = []
-    for share in shared_with or []:
-        target = (share.get("target") or "").strip()
-        if target not in valid_targets and get_user_by_name(target) is None:
-            raise ValueError(f"Unknown share target {target!r}")
-        cleaned.append({"target": target, "accepted": prev_accepted.get(target, [])})
-        if target not in prev_targets:
-            new_targets.append(target)
-
-    tmpl["shared_with"] = cleaned
-    _save_template_store(owner, store)
-
-    already = set(sum(prev_accepted.values(), []))
-    recipients: set[str] = set()
-    for target in new_targets:
-        for name in _resolve_targets(target):
-            if name != by and name not in already:
-                recipients.add(name)
-    if recipients:
-        _notify_share_targets(
-            list(recipients),
-            by,
-            "template_share",
-            tmpl.get("label", tmpl.get("key", "a template")),
-            {"owner": owner, "template_id": tid},
-        )
-    return tmpl
-
-
-def respond_to_template_share(viewer: str, payload: dict, accept: bool) -> bool:
-    owner, tid = payload["owner"], payload["template_id"]
-    store = _load_template_store(owner)
-    tmpl = next((t for t in store["templates"] if t.get("id") == tid), None)
-    if tmpl is None:
-        return False
-    tmpl["shared_with"], changed = _respond_shares(tmpl.get("shared_with") or [], viewer, accept)
-    if changed:
-        _save_template_store(owner, store)
-    return changed
-
-
-def leave_template_share(viewer: str, owner: str, tid: str) -> bool:
-    return respond_to_template_share(viewer, {"owner": owner, "template_id": tid}, False)
-
-
-# ---------------------------------------------------------------------------
-# Field-value validation
-# ---------------------------------------------------------------------------
-
-
-def _validate_value(fdef: dict, value: Any) -> Any:
-    key, ftype = fdef["key"], fdef["type"]
-    if ftype == "text":
-        if not isinstance(value, str):
-            raise ValueError(f"Field {key!r} must be text")
-        if len(value) > _TEXT_MAX:
-            raise ValueError(f"Field {key!r} is too long (max {_TEXT_MAX} chars)")
-        return value
-    if ftype == "number":
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
-            raise ValueError(f"Field {key!r} must be a number")
-        return value
-    if ftype == "date":
-        try:
-            date.fromisoformat(str(value))
-        except ValueError:
-            raise ValueError(f"Field {key!r} must be a date in YYYY-MM-DD format")
-        return str(value)
-    if ftype == "boolean":
-        if not isinstance(value, bool):
-            raise ValueError(f"Field {key!r} must be true or false")
-        return value
-    if ftype == "select":
-        if value not in fdef.get("options", []):
-            raise ValueError(f"Field {key!r} must be one of: {', '.join(fdef.get('options', []))}")
-        return value
-    if ftype == "contact":
-        # Stores a CRM contact id. No cross-store existence check — the UI
-        # validates at pick time; stale ids render as "(contact)" (same
-        # tolerance as deals' linked_asset_ids).
-        if not isinstance(value, str) or not value.strip() or len(value) > 64:
-            raise ValueError(f"Field {key!r} must be a contact id")
-        return value.strip()
-    raise ValueError(f"Unknown field type {ftype!r}")
-
-
-def _validate_fields(template: dict, incoming: dict, custom_defs: list[dict] | None = None) -> dict:
-    """Validate incoming values against the template.
-
-    Returns {key: value} where None means "unset this key". Unknown keys may only be
-    unset (orphaned values from removed template fields stay readable/deletable but
-    can never be set) — UNLESS this is a genuinely blank asset (`template` has no
-    `key` at all, not just an empty `fields` list — a real template with zero
-    fields, like the seeded Folder template, keeps rejecting unknown keys as
-    before). A blank asset has no admin-defined field list to validate
-    against, so instead it accepts freeform label/value pairs typed directly
-    on the asset (owner report, 2026-08-17: a blank asset needs SOME way to
-    hold custom data, not just name+notes) — the typed label IS the key
-    (trimmed, capped, no slugification — same free-typed-string treatment
-    Contacts' own `tags` already get), capped to 40 fields per asset.
-
-    `custom_defs` (2026-08-18) is the blank asset's OWN field-definition list
-    — the same typed key/label/type/options shape _validate_field_defs()
-    already validates for a real Template, just scoped to one asset instead
-    of being reusable. A key with a matching def gets the same type-checked
-    treatment a templated field would (via _validate_value); anything else
-    still falls back to the freeform behavior above, so a value can be set
-    before its def exists. Ignored (has no effect) for a templated asset —
-    only ever consulted when `is_blank`.
-    """
-    defs = {f["key"]: f for f in template.get("fields", [])}
-    is_blank = not template.get("key")
-    if is_blank and custom_defs:
-        defs = {f["key"]: f for f in custom_defs}
-    cleaned: dict[str, Any] = {}
-    for key, value in (incoming or {}).items():
-        if value is None or (isinstance(value, str) and value.strip() == ""):
-            cleaned[str(key).strip()[:60] if is_blank else key] = None
-            continue
-        fdef = defs.get(key)
-        if fdef is None:
-            if is_blank:
-                clean_key = str(key).strip()[:60]
-                if clean_key and len(cleaned) < 40:
-                    cleaned[clean_key] = str(value).strip()[:2000]
-                continue
-            raise ValueError(
-                f"Unknown field {key!r} for template {template.get('key', '(blank asset)')!r}. "
-                f"Valid fields: {sorted(defs) or '(none)'}"
-            )
-        cleaned[key] = _validate_value(fdef, value)
-    return cleaned
-
-
-# ---------------------------------------------------------------------------
 # Asset store primitives
 # ---------------------------------------------------------------------------
 
 
-# Per-(store_user, workspace) lock, held across a full load-mutate-save cycle by
-# update_access() and _apply_share_response() (fixed 2026-09-07) — same unlocked
-# race as auth.json's role-update bug: an admin revoking one target's access could
-# have that change silently reverted by a DIFFERENT recipient's own concurrent
-# accept/decline on the same assets.json file. This ALSO closes the read side of
-# the separate privilege-escalation bug in _respond_shares() (a recipient
-# accepting their own share could get promoted to a different target's higher
-# grant) against concurrent interleaving, though the missing target-membership
-# check itself — the actual escalation bug — is a separate fix (see the sharing
-# audit's own consolidation item). This file's other ~18 _save() call sites still
-# have the same theoretical exposure, tracked separately as a broader migration.
+# Per-(store_user, workspace) lock, held across a full load-mutate-save cycle.
+# Originally added to update_access() and _apply_share_response() (fixed
+# 2026-09-07) — same unlocked race as auth.json's role-update bug: an admin
+# revoking one target's access could have that change silently reverted by a
+# DIFFERENT recipient's own concurrent accept/decline on the same assets.json
+# file. This ALSO closes the read side of the separate privilege-escalation bug
+# in _respond_shares() (a recipient accepting their own share could get
+# promoted to a different target's higher grant) against concurrent
+# interleaving, though the missing target-membership check itself — the actual
+# escalation bug — is a separate fix (see the sharing audit's own consolidation
+# item). This file's other ~18 _save() call sites had the same theoretical
+# exposure; all of them were migrated to the same lock (2026-09-16, R8).
 _assets_locks: dict[tuple[str, str], threading.Lock] = {}
 _assets_locks_guard = threading.Lock()
 
@@ -522,6 +118,22 @@ def _assets_lock(store_user: str, workspace: str) -> threading.Lock:
         if key not in _assets_locks:
             _assets_locks[key] = threading.Lock()
         return _assets_locks[key]
+
+
+@contextlib.contextmanager
+def _assets_locks_for(*keys: tuple[str, str]):
+    """Acquire the per-store locks for MULTIPLE (store_user, workspace) keys at
+    once — for the few mutators (convert_to_pool, transfer_ownership) that
+    read-modify-write two different stores' assets.json in one call. Keys are
+    deduped (a plain threading.Lock isn't reentrant — locking the same key
+    twice in one thread would self-deadlock if source and destination ever
+    resolved to the same store) and acquired in sorted order so that two
+    concurrent calls locking the same pair of stores in opposite directions
+    (e.g. a transfer A→B racing a transfer B→A) can never deadlock each other."""
+    with contextlib.ExitStack() as stack:
+        for key in sorted(set(keys)):
+            stack.enter_context(_assets_lock(*key))
+        yield
 
 
 def _load(store_user: str, workspace: str = "personal") -> dict:
@@ -752,88 +364,93 @@ def create_asset(
     workspace: str = "personal",
     created_by: str = "",
 ) -> dict:
-    # Resolve template by id (global or personal) or the legacy global key —
-    # optional (owner ask, 2026-08-17: standalone assets, mirroring how a
-    # Dashboard can start blank instead of from a template). No template_id/
-    # template given at all means a genuinely blank asset: no template-
-    # derived fields, template stays None on the record.
-    tid = data.get("template_id")
-    template: dict = {}
-    if tid or data.get("template"):
-        template = (
-            get_template_by_id(tid) if tid else get_global_template(data.get("template") or "")
+    with _assets_lock(store_user, workspace):
+        # Resolve template by id (global or personal) or the legacy global key —
+        # optional (owner ask, 2026-08-17: standalone assets, mirroring how a
+        # Dashboard can start blank instead of from a template). No template_id/
+        # template given at all means a genuinely blank asset: no template-
+        # derived fields, template stays None on the record.
+        tid = data.get("template_id")
+        template: dict = {}
+        if tid or data.get("template"):
+            template = (
+                get_template_by_id(tid) if tid else get_global_template(data.get("template") or "")
+            )
+            if template is None:
+                raise ValueError(f"Unknown template {(tid or data.get('template'))!r}")
+        template_key = template.get("key")
+        template_id = template.get("id")
+        name = (data.get("name") or "").strip()
+        if not name:
+            raise ValueError("Asset name is required")
+
+        # A blank asset's own ad-hoc, per-asset field definitions (2026-08-18) —
+        # same typed key/label/type/options shape a real Template uses (owner:
+        # "the same picker... so it can create an asset just the same just
+        # without a template"). Validated unconditionally (cheap — empty list
+        # for a templated asset, where it's never consulted by _validate_fields).
+        custom_field_defs = _validate_field_defs(data.get("custom_field_defs") or [])
+
+        store = _load(store_user, workspace)
+        parent_id = data.get("parent_id")
+        parent = (
+            next((a for a in store["assets"] if a["id"] == parent_id), None) if parent_id else None
         )
-        if template is None:
-            raise ValueError(f"Unknown template {(tid or data.get('template'))!r}")
-    template_key = template.get("key")
-    template_id = template.get("id")
-    name = (data.get("name") or "").strip()
-    if not name:
-        raise ValueError("Asset name is required")
+        if parent_id and parent is None:
+            raise ValueError(f"Parent asset {parent_id!r} not found")
 
-    # A blank asset's own ad-hoc, per-asset field definitions (2026-08-18) —
-    # same typed key/label/type/options shape a real Template uses (owner:
-    # "the same picker... so it can create an asset just the same just
-    # without a template"). Validated unconditionally (cheap — empty list
-    # for a templated asset, where it's never consulted by _validate_fields).
-    custom_field_defs = _validate_field_defs(data.get("custom_field_defs") or [])
+        # Inherit the parent's audience so a child added under a shared asset is
+        # automatically shared with (and hidden from) the same people — this is how a
+        # shared subtree grows into a "group". Deep-copy so the child's `accepted`
+        # list and contribute `caps` are independent of the parent's.
+        inherited_shares = copy.deepcopy(parent.get("shared_with") or []) if parent else []
+        inherited_hidden = list(parent.get("hidden_from") or []) if parent else []
+        inherited_contributors = copy.deepcopy(parent.get("contributors") or []) if parent else []
 
-    store = _load(store_user, workspace)
-    parent_id = data.get("parent_id")
-    parent = next((a for a in store["assets"] if a["id"] == parent_id), None) if parent_id else None
-    if parent_id and parent is None:
-        raise ValueError(f"Parent asset {parent_id!r} not found")
+        fields: dict[str, Any] = {
+            f["key"]: f["default"] for f in template.get("fields", []) if "default" in f
+        }
+        for key, value in _validate_fields(
+            template, data.get("fields") or {}, custom_field_defs
+        ).items():
+            if value is None:
+                fields.pop(key, None)
+            else:
+                fields[key] = value
 
-    # Inherit the parent's audience so a child added under a shared asset is
-    # automatically shared with (and hidden from) the same people — this is how a
-    # shared subtree grows into a "group". Deep-copy so the child's `accepted`
-    # list and contribute `caps` are independent of the parent's.
-    inherited_shares = copy.deepcopy(parent.get("shared_with") or []) if parent else []
-    inherited_hidden = list(parent.get("hidden_from") or []) if parent else []
-    inherited_contributors = copy.deepcopy(parent.get("contributors") or []) if parent else []
+        now = _now_iso(created_by or store_user)
+        asset: dict[str, Any] = {
+            "id": str(uuid.uuid4()),
+            "template": template_key,
+            "template_id": template_id,
+            "custom_field_defs": custom_field_defs,
+            "name": name[:200],
+            "parent_id": parent_id,
+            "fields": fields,
+            "notes": data.get("notes"),
+            "tags": [
+                t.strip() for t in (data.get("tags") or []) if isinstance(t, str) and t.strip()
+            ],
+            "archived": False,
+            "shared_with": inherited_shares,
+            "hidden_from": inherited_hidden,
+            "contributors": inherited_contributors,
+            "attachments": [],
+            "history": [],
+            "created_at": now,
+            "updated_at": now,
+            "created_by": created_by,
+        }
+        _push_history(asset, created_by, "create")
+        store["assets"].append(asset)
+        _save(store_user, workspace, store)
+        if inherited_shares:  # child carries an audience → refresh the share index
+            assets_index.reindex_owner(store_user, workspace)
+        if asset["tags"]:
+            from services.tags_service import register_tags
 
-    fields: dict[str, Any] = {
-        f["key"]: f["default"] for f in template.get("fields", []) if "default" in f
-    }
-    for key, value in _validate_fields(
-        template, data.get("fields") or {}, custom_field_defs
-    ).items():
-        if value is None:
-            fields.pop(key, None)
-        else:
-            fields[key] = value
-
-    now = _now_iso(created_by or store_user)
-    asset: dict[str, Any] = {
-        "id": str(uuid.uuid4()),
-        "template": template_key,
-        "template_id": template_id,
-        "custom_field_defs": custom_field_defs,
-        "name": name[:200],
-        "parent_id": parent_id,
-        "fields": fields,
-        "notes": data.get("notes"),
-        "tags": [t.strip() for t in (data.get("tags") or []) if isinstance(t, str) and t.strip()],
-        "archived": False,
-        "shared_with": inherited_shares,
-        "hidden_from": inherited_hidden,
-        "contributors": inherited_contributors,
-        "attachments": [],
-        "history": [],
-        "created_at": now,
-        "updated_at": now,
-        "created_by": created_by,
-    }
-    _push_history(asset, created_by, "create")
-    store["assets"].append(asset)
-    _save(store_user, workspace, store)
-    if inherited_shares:  # child carries an audience → refresh the share index
-        assets_index.reindex_owner(store_user, workspace)
-    if asset["tags"]:
-        from services.tags_service import register_tags
-
-        register_tags(store_user, workspace, asset["tags"])
-    return asset
+            register_tags(store_user, workspace, asset["tags"])
+        return asset
 
 
 def update_asset(
@@ -843,75 +460,78 @@ def update_asset(
     workspace: str = "personal",
     by: str = "",
 ) -> dict | None:
-    store = _load(store_user, workspace)
-    by_id = _by_id(store["assets"])
-    asset = by_id.get(asset_id)
-    if asset is None:
-        return None
+    with _assets_lock(store_user, workspace):
+        store = _load(store_user, workspace)
+        by_id = _by_id(store["assets"])
+        asset = by_id.get(asset_id)
+        if asset is None:
+            return None
 
-    changes: dict[str, list] = {}
+        changes: dict[str, list] = {}
 
-    if "name" in updates and updates["name"]:
-        new_name = str(updates["name"]).strip()[:200]
-        if new_name != asset["name"]:
-            changes["name"] = [asset["name"], new_name]
-            asset["name"] = new_name
+        if "name" in updates and updates["name"]:
+            new_name = str(updates["name"]).strip()[:200]
+            if new_name != asset["name"]:
+                changes["name"] = [asset["name"], new_name]
+                asset["name"] = new_name
 
-    if "notes" in updates and updates["notes"] != asset.get("notes"):
-        changes["notes"] = [asset.get("notes"), updates["notes"]]
-        asset["notes"] = updates["notes"]
+        if "notes" in updates and updates["notes"] != asset.get("notes"):
+            changes["notes"] = [asset.get("notes"), updates["notes"]]
+            asset["notes"] = updates["notes"]
 
-    if "tags" in updates:
-        new_tags = [t.strip() for t in (updates["tags"] or []) if isinstance(t, str) and t.strip()]
-        if new_tags != (asset.get("tags") or []):
-            changes["tags"] = [asset.get("tags"), new_tags]
-            asset["tags"] = new_tags
+        if "tags" in updates:
+            new_tags = [
+                t.strip() for t in (updates["tags"] or []) if isinstance(t, str) and t.strip()
+            ]
+            if new_tags != (asset.get("tags") or []):
+                changes["tags"] = [asset.get("tags"), new_tags]
+                asset["tags"] = new_tags
 
-    if "parent_id" in updates and updates["parent_id"] != asset.get("parent_id"):
-        new_parent = updates["parent_id"]
-        if new_parent is not None:
-            if new_parent not in by_id:
-                raise ValueError(f"Parent asset {new_parent!r} not found")
-            if new_parent in collect_subtree_ids(store["assets"], asset_id):
-                raise ValueError("Cannot move an asset under itself or its own descendant")
-        changes["parent_id"] = [asset.get("parent_id"), new_parent]
-        asset["parent_id"] = new_parent
+        if "parent_id" in updates and updates["parent_id"] != asset.get("parent_id"):
+            new_parent = updates["parent_id"]
+            if new_parent is not None:
+                if new_parent not in by_id:
+                    raise ValueError(f"Parent asset {new_parent!r} not found")
+                if new_parent in collect_subtree_ids(store["assets"], asset_id):
+                    raise ValueError("Cannot move an asset under itself or its own descendant")
+            changes["parent_id"] = [asset.get("parent_id"), new_parent]
+            asset["parent_id"] = new_parent
 
-    if "custom_field_defs" in updates:
-        # Validated and stored before "fields" below runs, deliberately —
-        # the frontend edits a blank asset's field defs and its values in
-        # the same PATCH, one row at a time, so a value validated against a
-        # def added in this very call must see that def, not a stale one.
-        new_defs = _validate_field_defs(updates["custom_field_defs"] or [])
-        if new_defs != asset.get("custom_field_defs"):
-            changes["custom_field_defs"] = [asset.get("custom_field_defs"), new_defs]
-            asset["custom_field_defs"] = new_defs
+        if "custom_field_defs" in updates:
+            # Validated and stored before "fields" below runs, deliberately —
+            # the frontend edits a blank asset's field defs and its values in
+            # the same PATCH, one row at a time, so a value validated against a
+            # def added in this very call must see that def, not a stale one.
+            new_defs = _validate_field_defs(updates["custom_field_defs"] or [])
+            if new_defs != asset.get("custom_field_defs"):
+                changes["custom_field_defs"] = [asset.get("custom_field_defs"), new_defs]
+                asset["custom_field_defs"] = new_defs
 
-    if "fields" in updates:
-        template = resolve_template(asset)
-        if template is None:
-            raise ValueError(f"Template {asset.get('template')!r} no longer exists")
-        for key, value in _validate_fields(
-            template, updates["fields"], asset.get("custom_field_defs")
-        ).items():
-            old = asset["fields"].get(key)
-            if value is None:
-                if key in asset["fields"]:
-                    changes[f"fields.{key}"] = [old, None]
-                    asset["fields"].pop(key)
-            elif old != value:
-                changes[f"fields.{key}"] = [old, value]
-                asset["fields"][key] = value
+        if "fields" in updates:
+            template = resolve_template(asset)
+            if template is None:
+                raise ValueError(f"Template {asset.get('template')!r} no longer exists")
+            for key, value in _validate_fields(
+                template, updates["fields"], asset.get("custom_field_defs")
+            ).items():
+                old = asset["fields"].get(key)
+                if value is None:
+                    if key in asset["fields"]:
+                        changes[f"fields.{key}"] = [old, None]
+                        asset["fields"].pop(key)
+                elif old != value:
+                    changes[f"fields.{key}"] = [old, value]
+                    asset["fields"][key] = value
 
-    if changes:
-        asset["updated_at"] = _now_iso(by or store_user)
-        _push_history(asset, by, "update", changes)
-        _save(store_user, workspace, store)
-        if updates.get("tags"):
-            from services.tags_service import register_tags
+        if changes:
+            asset["updated_at"] = _now_iso(by or store_user)
+            _push_history(asset, by, "update", changes)
+            _save(store_user, workspace, store)
+            if updates.get("tags"):
+                from services.tags_service import register_tags
 
-            register_tags(store_user, workspace, asset["tags"])
-    return asset
+                register_tags(store_user, workspace, asset["tags"])
+        return asset
 
 
 def attach_template(
@@ -931,26 +551,29 @@ def attach_template(
     checks rather than trusting they already match (the template WAS built
     from these same defs, but a mismatch should still surface as an error,
     not silently corrupt the asset)."""
-    store = _load(store_user, workspace)
-    by_id = _by_id(store["assets"])
-    asset = by_id.get(asset_id)
-    if asset is None:
-        return None
-    if asset.get("template_id"):
-        raise ValueError("This asset already uses a template")
-    template = get_template_by_id(template_id)
-    if template is None:
-        raise ValueError(f"Unknown template {template_id!r}")
-    validated = _validate_fields(template, asset.get("fields") or {})
-    old_template_id = asset.get("template_id")
-    asset["template_id"] = template["id"]
-    asset["template"] = template.get("key")
-    asset["custom_field_defs"] = []
-    asset["fields"] = {k: v for k, v in validated.items() if v is not None}
-    asset["updated_at"] = _now_iso(by or store_user)
-    _push_history(asset, by, "attach_template", {"template_id": [old_template_id, template["id"]]})
-    _save(store_user, workspace, store)
-    return asset
+    with _assets_lock(store_user, workspace):
+        store = _load(store_user, workspace)
+        by_id = _by_id(store["assets"])
+        asset = by_id.get(asset_id)
+        if asset is None:
+            return None
+        if asset.get("template_id"):
+            raise ValueError("This asset already uses a template")
+        template = get_template_by_id(template_id)
+        if template is None:
+            raise ValueError(f"Unknown template {template_id!r}")
+        validated = _validate_fields(template, asset.get("fields") or {})
+        old_template_id = asset.get("template_id")
+        asset["template_id"] = template["id"]
+        asset["template"] = template.get("key")
+        asset["custom_field_defs"] = []
+        asset["fields"] = {k: v for k, v in validated.items() if v is not None}
+        asset["updated_at"] = _now_iso(by or store_user)
+        _push_history(
+            asset, by, "attach_template", {"template_id": [old_template_id, template["id"]]}
+        )
+        _save(store_user, workspace, store)
+        return asset
 
 
 def _comment_audience(store_user: str, asset: dict, asset_workspace: str) -> set[str]:
@@ -986,41 +609,48 @@ def add_comment(
 ) -> dict | None:
     """Append an attributed comment to the asset's log (cap MAX_COMMENTS, oldest
     trimmed) and notify edit-level users with a jump-to-asset action."""
-    text = (text or "").strip()
-    if not text:
-        raise ValueError("Comment text is required")
-    if len(text) > MAX_COMMENT_LEN:
-        raise ValueError(f"Comment too long (max {MAX_COMMENT_LEN} characters)")
-    store = _load(store_user, workspace)
-    by_id = _by_id(store["assets"])
-    asset = by_id.get(asset_id)
-    if asset is None:
-        return None
-    if asset.get("comments_hidden"):
-        raise ValueError("Comments are turned off on this asset")
-    comment = {"id": str(uuid.uuid4()), "by": by, "at": _now_iso(by or store_user), "text": text}
-    comments = list(asset.get("comments") or [])
-    comments.append(comment)
-    asset["comments"] = comments[-MAX_COMMENTS:]
-    asset["updated_at"] = _now_iso(by or store_user)
-    _save(store_user, workspace, store)
-    _notify_comment(store_user, asset, comment, asset_workspace, by_id)
-    return comment
+    with _assets_lock(store_user, workspace):
+        text = (text or "").strip()
+        if not text:
+            raise ValueError("Comment text is required")
+        if len(text) > MAX_COMMENT_LEN:
+            raise ValueError(f"Comment too long (max {MAX_COMMENT_LEN} characters)")
+        store = _load(store_user, workspace)
+        by_id = _by_id(store["assets"])
+        asset = by_id.get(asset_id)
+        if asset is None:
+            return None
+        if asset.get("comments_hidden"):
+            raise ValueError("Comments are turned off on this asset")
+        comment = {
+            "id": str(uuid.uuid4()),
+            "by": by,
+            "at": _now_iso(by or store_user),
+            "text": text,
+        }
+        comments = list(asset.get("comments") or [])
+        comments.append(comment)
+        asset["comments"] = comments[-MAX_COMMENTS:]
+        asset["updated_at"] = _now_iso(by or store_user)
+        _save(store_user, workspace, store)
+        _notify_comment(store_user, asset, comment, asset_workspace, by_id)
+        return comment
 
 
 def set_comments_hidden(
     store_user: str, asset_id: str, hidden: bool, workspace: str = "personal", by: str = ""
 ) -> dict | None:
     """Owner/manager toggle: hide the comments section for ALL users (data kept)."""
-    store = _load(store_user, workspace)
-    asset = _by_id(store["assets"]).get(asset_id)
-    if asset is None:
-        return None
-    asset["comments_hidden"] = bool(hidden)
-    asset["updated_at"] = _now_iso(by or store_user)
-    _push_history(asset, by, "comments_off" if hidden else "comments_on")
-    _save(store_user, workspace, store)
-    return asset
+    with _assets_lock(store_user, workspace):
+        store = _load(store_user, workspace)
+        asset = _by_id(store["assets"]).get(asset_id)
+        if asset is None:
+            return None
+        asset["comments_hidden"] = bool(hidden)
+        asset["updated_at"] = _now_iso(by or store_user)
+        _push_history(asset, by, "comments_off" if hidden else "comments_on")
+        _save(store_user, workspace, store)
+        return asset
 
 
 def _notify_comment(
@@ -1104,17 +734,18 @@ def comment_mute_state(
 def delete_comment(
     store_user: str, asset_id: str, comment_id: str, workspace: str = "personal"
 ) -> bool:
-    store = _load(store_user, workspace)
-    asset = _by_id(store["assets"]).get(asset_id)
-    if asset is None:
-        return False
-    comments = asset.get("comments") or []
-    kept = [c for c in comments if c.get("id") != comment_id]
-    if len(kept) == len(comments):
-        return False
-    asset["comments"] = kept
-    _save(store_user, workspace, store)
-    return True
+    with _assets_lock(store_user, workspace):
+        store = _load(store_user, workspace)
+        asset = _by_id(store["assets"]).get(asset_id)
+        if asset is None:
+            return False
+        comments = asset.get("comments") or []
+        kept = [c for c in comments if c.get("id") != comment_id]
+        if len(kept) == len(comments):
+            return False
+        asset["comments"] = kept
+        _save(store_user, workspace, store)
+        return True
 
 
 def count_active_descendants(store_user: str, asset_id: str, workspace: str = "personal") -> int:
@@ -1132,59 +763,61 @@ def set_archived(
     by: str = "",
     cascade: bool = False,
 ) -> dict | None:
-    store = _load(store_user, workspace)
-    by_id = _by_id(store["assets"])
-    asset = by_id.get(asset_id)
-    if asset is None:
-        return None
-    targets = collect_subtree_ids(store["assets"], asset_id) if cascade else {asset_id}
-    changed = False
-    for aid in targets:
-        node = by_id.get(aid)
-        if node is not None and bool(node.get("archived")) != archived:
-            node["archived"] = archived
-            node["updated_at"] = _now_iso(by or store_user)
-            _push_history(node, by, "archive" if archived else "unarchive")
-            changed = True
-    if changed:
-        _save(store_user, workspace, store)
-    return asset
+    with _assets_lock(store_user, workspace):
+        store = _load(store_user, workspace)
+        by_id = _by_id(store["assets"])
+        asset = by_id.get(asset_id)
+        if asset is None:
+            return None
+        targets = collect_subtree_ids(store["assets"], asset_id) if cascade else {asset_id}
+        changed = False
+        for aid in targets:
+            node = by_id.get(aid)
+            if node is not None and bool(node.get("archived")) != archived:
+                node["archived"] = archived
+                node["updated_at"] = _now_iso(by or store_user)
+                _push_history(node, by, "archive" if archived else "unarchive")
+                changed = True
+        if changed:
+            _save(store_user, workspace, store)
+        return asset
 
 
 def delete_asset(
     store_user: str, asset_id: str, workspace: str = "personal", deleted_by: str = ""
 ) -> bool:
-    store = _load(store_user, workspace)
-    asset = next((a for a in store["assets"] if a["id"] == asset_id), None)
-    if asset is None:
-        return False
-    children = [a for a in store["assets"] if a.get("parent_id") == asset_id]
-    if children:
-        raise ValueError(
-            f"This asset has {len(children)} child asset(s) — delete or move them first"
+    with _assets_lock(store_user, workspace):
+        store = _load(store_user, workspace)
+        asset = next((a for a in store["assets"] if a["id"] == asset_id), None)
+        if asset is None:
+            return False
+        children = [a for a in store["assets"] if a.get("parent_id") == asset_id]
+        if children:
+            raise ValueError(
+                f"This asset has {len(children)} child asset(s) — delete or move them first"
+            )
+
+        from module_packages.assets.backend import trash_handlers
+        from services import trash_service
+
+        title, subtitle = trash_handlers.describe("asset", asset)
+        trash_service.soft_delete(
+            store_user=store_user,
+            workspace=workspace,
+            module="assets",
+            record_type="asset",
+            original_id=asset_id,
+            payload=asset,
+            deleted_by=deleted_by,
+            title=title,
+            subtitle=subtitle,
+            move_path=assets_files_path(store_user, workspace) / asset_id,
         )
 
-    from module_packages.assets.backend import trash_handlers
-    from services import trash_service
-
-    title, subtitle = trash_handlers.describe("asset", asset)
-    trash_service.soft_delete(
-        store_user=store_user,
-        workspace=workspace,
-        module="assets",
-        record_type="asset",
-        original_id=asset_id,
-        payload=asset,
-        deleted_by=deleted_by,
-        title=title,
-        subtitle=subtitle,
-        move_path=assets_files_path(store_user, workspace) / asset_id,
-    )
-
-    store["assets"] = [a for a in store["assets"] if a["id"] != asset_id]
-    _save(store_user, workspace, store)
-    assets_index.reindex_owner(store_user, workspace)
-    return True
+        store["assets"] = [a for a in store["assets"] if a["id"] != asset_id]
+        _save(store_user, workspace, store)
+        assets_index.reindex_owner(store_user, workspace)
+        return True
 
 
 def update_access(
@@ -1555,37 +1188,38 @@ def find_asset(
 
 def convert_to_pool(owner: str, asset_id: str, workspace: str = "personal", by: str = "") -> dict:
     """Move an asset subtree (records + attachment dirs) into the workspace pool store."""
-    store = _load(owner, workspace)
-    if not any(a["id"] == asset_id for a in store["assets"]):
-        raise ValueError("Asset not found")
-
-    ids = collect_subtree_ids(store["assets"], asset_id)
-    moving = [a for a in store["assets"] if a["id"] in ids]
-    store["assets"] = [a for a in store["assets"] if a["id"] not in ids]
-
     pool_user = POOL_USERS[workspace]
-    for asset in moving:
-        asset["shared_with"] = []
-        if asset["id"] == asset_id:
-            asset["parent_id"] = None
-            _push_history(asset, by, "convert_to_pool")
+    with _assets_locks_for((owner, workspace), (pool_user, "personal")):
+        store = _load(owner, workspace)
+        if not any(a["id"] == asset_id for a in store["assets"]):
+            raise ValueError("Asset not found")
 
-    pool_store = _load(pool_user)
-    pool_store["assets"].extend(moving)
-    _save(owner, workspace, store)
-    _save(pool_user, "personal", pool_store)
-    # subtree left the owner's store (shares stripped) → refresh their index entry
-    assets_index.reindex_owner(owner, workspace)
+        ids = collect_subtree_ids(store["assets"], asset_id)
+        moving = [a for a in store["assets"] if a["id"] in ids]
+        store["assets"] = [a for a in store["assets"] if a["id"] not in ids]
 
-    src_base = assets_files_path(owner, workspace)
-    dst_base = assets_files_path(pool_user)
-    for moved_id in ids:
-        src = src_base / moved_id
-        if src.exists():
-            dst_base.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(src), str(dst_base / moved_id))
+        for asset in moving:
+            asset["shared_with"] = []
+            if asset["id"] == asset_id:
+                asset["parent_id"] = None
+                _push_history(asset, by, "convert_to_pool")
 
-    return next(a for a in moving if a["id"] == asset_id)
+        pool_store = _load(pool_user)
+        pool_store["assets"].extend(moving)
+        _save(owner, workspace, store)
+        _save(pool_user, "personal", pool_store)
+        # subtree left the owner's store (shares stripped) → refresh their index entry
+        assets_index.reindex_owner(owner, workspace)
+
+        src_base = assets_files_path(owner, workspace)
+        dst_base = assets_files_path(pool_user)
+        for moved_id in ids:
+            src = src_base / moved_id
+            if src.exists():
+                dst_base.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(src), str(dst_base / moved_id))
+
+        return next(a for a in moving if a["id"] == asset_id)
 
 
 def transfer_ownership(
@@ -1601,47 +1235,48 @@ def transfer_ownership(
     the accept-handshake `accepted` key) since pool assets never read
     shared_with — this keeps the grant functioning instead of silently dying.
     """
-    store = _load(owner, workspace)
-    if not any(a["id"] == asset_id for a in store["assets"]):
-        raise ValueError("Asset not found")
+    with _assets_locks_for((owner, workspace), (new_owner, workspace)):
+        store = _load(owner, workspace)
+        if not any(a["id"] == asset_id for a in store["assets"]):
+            raise ValueError("Asset not found")
 
-    ids = collect_subtree_ids(store["assets"], asset_id)
-    moving = [a for a in store["assets"] if a["id"] in ids]
-    store["assets"] = [a for a in store["assets"] if a["id"] not in ids]
+        ids = collect_subtree_ids(store["assets"], asset_id)
+        moving = [a for a in store["assets"] if a["id"] in ids]
+        store["assets"] = [a for a in store["assets"] if a["id"] not in ids]
 
-    dest_is_pool = new_owner in POOL_USERS.values()
-    for asset in moving:
-        if dest_is_pool:
-            converted = list(asset.get("contributors") or [])
-            for share in asset.get("shared_with") or []:
-                entry = {"target": share["target"], "access": share.get("access", "read")}
-                if share.get("access") == "contribute" and "caps" in share:
-                    entry["caps"] = share["caps"]
-                converted.append(entry)
-            asset["contributors"] = converted
-            asset["shared_with"] = []
-        if asset["id"] == asset_id:
-            asset["parent_id"] = None
-            _push_history(asset, by, "transfer_ownership", {"new_owner": [owner, new_owner]})
+        dest_is_pool = new_owner in POOL_USERS.values()
+        for asset in moving:
+            if dest_is_pool:
+                converted = list(asset.get("contributors") or [])
+                for share in asset.get("shared_with") or []:
+                    entry = {"target": share["target"], "access": share.get("access", "read")}
+                    if share.get("access") == "contribute" and "caps" in share:
+                        entry["caps"] = share["caps"]
+                    converted.append(entry)
+                asset["contributors"] = converted
+                asset["shared_with"] = []
+            if asset["id"] == asset_id:
+                asset["parent_id"] = None
+                _push_history(asset, by, "transfer_ownership", {"new_owner": [owner, new_owner]})
 
-    dest_store = _load(new_owner, workspace)
-    dest_store["assets"].extend(moving)
-    _save(owner, workspace, store)
-    _save(new_owner, workspace, dest_store)
+        dest_store = _load(new_owner, workspace)
+        dest_store["assets"].extend(moving)
+        _save(owner, workspace, store)
+        _save(new_owner, workspace, dest_store)
 
-    assets_index.reindex_owner(owner, workspace)
-    if not dest_is_pool:
-        assets_index.reindex_owner(new_owner, workspace)
+        assets_index.reindex_owner(owner, workspace)
+        if not dest_is_pool:
+            assets_index.reindex_owner(new_owner, workspace)
 
-    src_base = assets_files_path(owner, workspace)
-    dst_base = assets_files_path(new_owner, workspace)
-    for moved_id in ids:
-        src = src_base / moved_id
-        if src.exists():
-            dst_base.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(src), str(dst_base / moved_id))
+        src_base = assets_files_path(owner, workspace)
+        dst_base = assets_files_path(new_owner, workspace)
+        for moved_id in ids:
+            src = src_base / moved_id
+            if src.exists():
+                dst_base.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(src), str(dst_base / moved_id))
 
-    return next(a for a in moving if a["id"] == asset_id)
+        return next(a for a in moving if a["id"] == asset_id)
 
 
 def strip_user_references(user_name: str) -> None:
@@ -1653,33 +1288,34 @@ def strip_user_references(user_name: str) -> None:
     for store_user, workspace in _all_stores():
         if store_user == user_name:
             continue
-        store = _load(store_user, workspace)
-        changed = False
-        for asset in store.get("assets", []):
-            kept = []
-            for s in asset.get("shared_with") or []:
-                if s.get("target") == user_name:
-                    changed = True
-                    continue
-                accepted = s.get("accepted")
-                if isinstance(accepted, list) and user_name in accepted:
-                    s = {**s, "accepted": [n for n in accepted if n != user_name]}
-                    changed = True
-                kept.append(s)
-            asset["shared_with"] = kept
+        with _assets_lock(store_user, workspace):
+            store = _load(store_user, workspace)
+            changed = False
+            for asset in store.get("assets", []):
+                kept = []
+                for s in asset.get("shared_with") or []:
+                    if s.get("target") == user_name:
+                        changed = True
+                        continue
+                    accepted = s.get("accepted")
+                    if isinstance(accepted, list) and user_name in accepted:
+                        s = {**s, "accepted": [n for n in accepted if n != user_name]}
+                        changed = True
+                    kept.append(s)
+                asset["shared_with"] = kept
 
-            contrib = asset.get("contributors") or []
-            new_contrib = [c for c in contrib if c.get("target") != user_name]
-            if len(new_contrib) != len(contrib):
-                asset["contributors"] = new_contrib
-                changed = True
+                contrib = asset.get("contributors") or []
+                new_contrib = [c for c in contrib if c.get("target") != user_name]
+                if len(new_contrib) != len(contrib):
+                    asset["contributors"] = new_contrib
+                    changed = True
 
-            hidden = asset.get("hidden_from") or []
-            if user_name in hidden:
-                asset["hidden_from"] = [h for h in hidden if h != user_name]
-                changed = True
-        if changed:
-            _save(store_user, workspace, store)
+                hidden = asset.get("hidden_from") or []
+                if user_name in hidden:
+                    asset["hidden_from"] = [h for h in hidden if h != user_name]
+                    changed = True
+            if changed:
+                _save(store_user, workspace, store)
 
 
 # ---------------------------------------------------------------------------
@@ -1704,36 +1340,37 @@ def add_attachment(
     workspace: str = "personal",
     by: str = "",
 ) -> dict:
-    ext = ATTACHMENT_TYPES.get(mime)
-    if ext is None:
-        raise ValueError(f"Unsupported file type {mime!r}")
-    if len(content) > MAX_ATTACHMENT_BYTES:
-        raise ValueError("File too large (max 10 MB)")
+    with _assets_lock(store_user, workspace):
+        ext = ATTACHMENT_TYPES.get(mime)
+        if ext is None:
+            raise ValueError(f"Unsupported file type {mime!r}")
+        if len(content) > MAX_ATTACHMENT_BYTES:
+            raise ValueError("File too large (max 10 MB)")
 
-    store = _load(store_user, workspace)
-    asset = _by_id(store["assets"]).get(asset_id)
-    if asset is None:
-        raise ValueError("Asset not found")
-    if len(asset.get("attachments") or []) >= MAX_ATTACHMENTS:
-        raise ValueError(f"Attachment limit reached (max {MAX_ATTACHMENTS} per asset)")
+        store = _load(store_user, workspace)
+        asset = _by_id(store["assets"]).get(asset_id)
+        if asset is None:
+            raise ValueError("Asset not found")
+        if len(asset.get("attachments") or []) >= MAX_ATTACHMENTS:
+            raise ValueError(f"Attachment limit reached (max {MAX_ATTACHMENTS} per asset)")
 
-    att_id = str(uuid.uuid4())
-    files_dir = assets_files_path(store_user, workspace) / asset_id
-    files_dir.mkdir(parents=True, exist_ok=True)
-    (files_dir / f"{att_id}.{ext}").write_bytes(content)
+        att_id = str(uuid.uuid4())
+        files_dir = assets_files_path(store_user, workspace) / asset_id
+        files_dir.mkdir(parents=True, exist_ok=True)
+        (files_dir / f"{att_id}.{ext}").write_bytes(content)
 
-    attachment = {
-        "id": att_id,
-        "filename": _sanitize_filename(filename, ext),
-        "mime": mime,
-        "size": len(content),
-        "uploaded_at": datetime.now(timezone.utc).isoformat(),
-    }
-    asset.setdefault("attachments", []).append(attachment)
-    asset["updated_at"] = _now_iso(by or store_user)
-    _push_history(asset, by, "attachment_add", {"filename": [None, attachment["filename"]]})
-    _save(store_user, workspace, store)
-    return attachment
+        attachment = {
+            "id": att_id,
+            "filename": _sanitize_filename(filename, ext),
+            "mime": mime,
+            "size": len(content),
+            "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        }
+        asset.setdefault("attachments", []).append(attachment)
+        asset["updated_at"] = _now_iso(by or store_user)
+        _push_history(asset, by, "attachment_add", {"filename": [None, attachment["filename"]]})
+        _save(store_user, workspace, store)
+        return attachment
 
 
 def get_attachment(
@@ -1755,19 +1392,20 @@ def get_attachment(
 def delete_attachment(
     store_user: str, asset_id: str, file_id: str, workspace: str = "personal", by: str = ""
 ) -> bool:
-    store = _load(store_user, workspace)
-    asset = _by_id(store["assets"]).get(asset_id)
-    if asset is None:
-        return False
-    attachments = asset.get("attachments") or []
-    meta = next((f for f in attachments if f["id"] == file_id), None)
-    if meta is None:
-        return False
-    asset["attachments"] = [f for f in attachments if f["id"] != file_id]
-    asset["updated_at"] = _now_iso(by or store_user)
-    _push_history(asset, by, "attachment_delete", {"filename": [meta["filename"], None]})
-    _save(store_user, workspace, store)
-    ext = ATTACHMENT_TYPES.get(meta["mime"], "bin")
-    path = assets_files_path(store_user, workspace) / asset_id / f"{file_id}.{ext}"
-    path.unlink(missing_ok=True)
-    return True
+    with _assets_lock(store_user, workspace):
+        store = _load(store_user, workspace)
+        asset = _by_id(store["assets"]).get(asset_id)
+        if asset is None:
+            return False
+        attachments = asset.get("attachments") or []
+        meta = next((f for f in attachments if f["id"] == file_id), None)
+        if meta is None:
+            return False
+        asset["attachments"] = [f for f in attachments if f["id"] != file_id]
+        asset["updated_at"] = _now_iso(by or store_user)
+        _push_history(asset, by, "attachment_delete", {"filename": [meta["filename"], None]})
+        _save(store_user, workspace, store)
+        ext = ATTACHMENT_TYPES.get(meta["mime"], "bin")
+        path = assets_files_path(store_user, workspace) / asset_id / f"{file_id}.{ext}"
+        path.unlink(missing_ok=True)
+        return True

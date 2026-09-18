@@ -924,8 +924,8 @@ def _router_patch(asset_id: str, payload: dict, user: dict, workspace: str = "pe
 
 
 def _router_access(asset_id: str, payload: dict, user: dict, workspace: str = "personal"):
-    from module_packages.assets.backend.router import AccessUpdate
-    from module_packages.assets.backend.router import update_access as route_access
+    from module_packages.assets.backend.router_sharing import AccessUpdate
+    from module_packages.assets.backend.router_sharing import update_access as route_access
 
     return route_access(
         asset_id, AccessUpdate(**payload), current_user=user, workspace=workspace, _rl=None
@@ -933,8 +933,8 @@ def _router_access(asset_id: str, payload: dict, user: dict, workspace: str = "p
 
 
 def _router_comment(asset_id: str, text: str, user: dict, workspace: str = "personal"):
-    from module_packages.assets.backend.router import CommentCreate
-    from module_packages.assets.backend.router import add_comment as route_comment
+    from module_packages.assets.backend.router_sharing import CommentCreate
+    from module_packages.assets.backend.router_sharing import add_comment as route_comment
 
     return route_comment(
         asset_id, CommentCreate(text=text), current_user=user, workspace=workspace, _rl=None
@@ -1100,7 +1100,7 @@ def test_comment_posting_rights(parcel, users):
 def test_comment_delete_permissions(parcel, users):
     from fastapi import HTTPException
 
-    from module_packages.assets.backend.router import delete_comment as route_delete_comment
+    from module_packages.assets.backend.router_sharing import delete_comment as route_delete_comment
 
     sub, _ = _tree(users)
     _share_contribute("Alice", sub["id"], "Bob", {"fields": [], "add": ["comments"]})
@@ -1151,7 +1151,7 @@ def test_comment_notifies_edit_audience_not_author(parcel, users):
 
 
 def test_automation_comment_posts_and_notifies(parcel, users):
-    from module_packages.assets.backend.router import (
+    from module_packages.assets.backend.router_automation import (
         AutomationCommentCreate,
         automation_add_comment,
     )
@@ -1297,7 +1297,10 @@ def test_pool_contributor_user_entry_beats_group_entry(parcel, users):
 def test_comments_hidden_blocks_posting_and_manager_gated(parcel, users):
     from fastapi import HTTPException
 
-    from module_packages.assets.backend.router import CommentsVisibility, set_comments_visibility
+    from module_packages.assets.backend.router_sharing import (
+        CommentsVisibility,
+        set_comments_visibility,
+    )
 
     sub, _ = _tree(users)
     _share_contribute("Alice", sub["id"], "Bob", {"fields": [], "add": ["comments"]})
@@ -1434,7 +1437,7 @@ def test_automation_list_rejects_arbitrary_user(users):
     import pytest as _pytest
     from fastapi import HTTPException
 
-    from module_packages.assets.backend.router import automation_list_assets
+    from module_packages.assets.backend.router_automation import automation_list_assets
 
     with _pytest.raises(HTTPException) as exc:
         automation_list_assets(user="Bob", workspace="personal", _auth=None, _rl=None)

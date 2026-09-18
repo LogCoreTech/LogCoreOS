@@ -28,7 +28,7 @@ export default function AssetPickerField({ value, onChange, label, placeholder }
   if (!available) {
     return (
       <div>
-        {label && <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>}
+        {label && <label className="block text-sm font-medium mb-1">{label}</label>}
         <input className="input" placeholder={placeholder} disabled value="Assets unavailable" />
       </div>
     )
@@ -36,7 +36,7 @@ export default function AssetPickerField({ value, onChange, label, placeholder }
 
   return (
     <div>
-      {label && <label className="block text-xs text-charcoal-500 dark:text-charcoal-400 mb-1">{label}</label>}
+      {label && <label className="block text-sm font-medium mb-1">{label}</label>}
       <button
         type="button"
         onClick={() => setOpen(o => !o)}

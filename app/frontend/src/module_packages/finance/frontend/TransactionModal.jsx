@@ -311,7 +311,7 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Amount</label>
+              <label className="block text-sm font-medium mb-1">Amount</label>
               <input
                 ref={amountRef}
                 className="input" inputMode="decimal" placeholder="0.00"
@@ -319,13 +319,13 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
               />
             </div>
             <div>
-              <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Date</label>
+              <label className="block text-sm font-medium mb-1">Date</label>
               <input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} required />
             </div>
           </div>
 
           <div>
-            <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{kind === 'transfer' ? 'From account' : 'Account'}</label>
+            <label className="block text-sm font-medium mb-1">{kind === 'transfer' ? 'From account' : 'Account'}</label>
             <select className="input" value={accountId} onChange={e => setAccountId(e.target.value)}>
               {accounts.length === 0 && <option value="">No accounts yet</option>}
               {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -339,7 +339,7 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
             <>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-charcoal-500 dark:text-charcoal-400">To book</label>
+                  <label className="block text-sm font-medium mb-1">To book</label>
                   <select className="input" value={toBookId} onChange={e => setToBookId(e.target.value)}>
                     {transferBookOptions.length === 0 && <option value="">No books available</option>}
                     {transferBookOptions.map(b => (
@@ -350,7 +350,7 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-charcoal-500 dark:text-charcoal-400">To account</label>
+                  <label className="block text-sm font-medium mb-1">To account</label>
                   <select className="input" value={toAccountId} onChange={e => setToAccountId(e.target.value)}>
                     {toAccounts.length === 0 && <option value="">No accounts yet</option>}
                     {toAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -367,7 +367,7 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
 
           {kind !== 'transfer' && (
             <div>
-              <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Category</label>
+              <label className="block text-sm font-medium mb-1">Category</label>
               <select className="input" value={categoryValid ? category : ''} onChange={e => setCategory(e.target.value)}>
                 <option value="">Uncategorized</option>
                 {categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
@@ -387,7 +387,7 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
           {/* Linked asset — only shown when an assets list is provided (assets module on) */}
           {kind !== 'transfer' && assets && assets.length > 0 && (
             <div>
-              <label className="text-xs text-charcoal-500 dark:text-charcoal-400">
+              <label className="block text-sm font-medium mb-1">
                 Linked asset <span className="text-charcoal-400">(optional)</span>
               </label>
               <select className="input" value={assetId} onChange={e => setAssetId(e.target.value)}>
@@ -401,12 +401,12 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
           )}
 
           <div>
-            <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Notes</label>
+            <label className="block text-sm font-medium mb-1">Notes</label>
             <input className="input" value={notes} onChange={e => setNotes(e.target.value)} maxLength={2000} />
           </div>
 
           <div>
-            <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Tags</label>
+            <label className="block text-sm font-medium mb-1">Tags</label>
             <TagInput value={tags} onChange={setTags} suggestions={tagSuggestions} placeholder="Add a tag…" />
           </div>
 
@@ -429,7 +429,7 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
           {/* Receipts (existing transactions only) */}
           {editing && (
             <div>
-              <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Receipts</label>
+              <label className="block text-sm font-medium mb-1">Receipts</label>
               <div className="space-y-1 mt-1">
                 {receipts.map(r => (
                   <div key={r.id} className="flex items-center gap-2 text-xs">

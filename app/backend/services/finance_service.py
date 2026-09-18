@@ -132,15 +132,25 @@ def store_workspace(store_user: str, workspace: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-# Per-(store_user, workspace) lock, held across a full load-mutate-save cycle by
-# update_access() and set_account_sync_state() (fixed 2026-09-07) — closes a real,
-# concretely-demonstrated race: job_simplefin_sync runs automatically every 12h and
-# writes synced_balance_cents onto an account via set_account_sync_state(), landing
-# in the same books.json an admin's update_access() call revokes a share on; without
-# this lock, the routine sync's stale-read-then-overwrite could silently undo the
-# revoke, no attacker timing required. Scoped to these two functions specifically —
-# this file's other ~15 _save() call sites (respond_share, create_book, etc.) still
-# have the same theoretical exposure, tracked separately as a broader migration.
+# Per-(store_user, workspace) lock, held across a full load-mutate-save cycle.
+# First applied to update_access() and set_account_sync_state() (fixed 2026-09-07)
+# — closes a real, concretely-demonstrated race: job_simplefin_sync runs
+# automatically every 12h and writes synced_balance_cents onto an account via
+# set_account_sync_state(), landing in the same books.json an admin's
+# update_access() call revokes a share on; without this lock, the routine sync's
+# stale-read-then-overwrite could silently undo the revoke, no attacker timing
+# required. Migration completed 2026-09-16: every other _load()-mutate-_save()
+# mutator in this file (create_book, update_book, transfer_ownership,
+# strip_user_references, delete_book, add_account, update_account,
+# delete_account, next_invoice_number, set_deviation_alert_state, respond_share)
+# now holds this same lock across its own cycle, closing the same theoretical
+# exposure file-wide. transfer_ownership spans two stores (source + destination)
+# and acquires each store's lock separately and sequentially rather than one
+# lock for the whole function, so a transfer in the opposite direction can't
+# deadlock against it. finance_invoice_service.py/finance_planning_service.py
+# were checked and do NOT import _load/_save/_books_lock — they mutate their own
+# separate per-book JSON files (clients/invoices/budgets/recurring/planned),
+# never books.json, so they're outside this lock's scope.
 _books_locks: dict[tuple[str, str], threading.Lock] = {}
 _books_locks_guard = threading.Lock()
 
@@ -555,59 +565,61 @@ def create_book(
         "updated_at": _now(),
         "archived": False,
     }
-    data = _load(store_user, workspace)
-    data.setdefault("books", []).append(book)
-    _save(store_user, workspace, data)
-    return book
+    with _books_lock(store_user, workspace):
+        data = _load(store_user, workspace)
+        data.setdefault("books", []).append(book)
+        _save(store_user, workspace, data)
+        return book
 
 
 def update_book(store_user: str, workspace: str, book_id: str, updates: dict) -> dict | None:
-    data = _load(store_user, workspace)
-    for i, book in enumerate(data.get("books", [])):
-        if book["id"] != book_id:
-            continue
-        allowed: dict = {}
-        if "name" in updates:
-            name = (updates["name"] or "").strip()
-            if not name or len(name) > 80:
-                raise ValueError("Book name must be 1-80 characters")
-            allowed["name"] = name
-        if "icon" in updates:
-            allowed["icon"] = (updates["icon"] or "💰")[:8]
-        if "currency" in updates:
-            currency = (updates["currency"] or "USD").strip().upper()
-            if len(currency) != 3 or not currency.isalpha():
-                raise ValueError("Currency must be a 3-letter code")
-            allowed["currency"] = currency
-        if "budget_warn_pct" in updates:
-            pct = updates["budget_warn_pct"]
-            if isinstance(pct, bool) or not isinstance(pct, int) or not 1 <= pct <= 100:
-                raise ValueError("budget_warn_pct must be 1-100")
-            allowed["budget_warn_pct"] = pct
-        if "archived" in updates:
-            allowed["archived"] = bool(updates["archived"])
-        if "invoice_prefix" in updates:
-            prefix = (updates["invoice_prefix"] or "INV").strip().upper()
-            if not prefix or len(prefix) > 10 or not prefix.isalnum():
-                raise ValueError("invoice_prefix must be 1-10 alphanumeric characters")
-            allowed["invoice_prefix"] = prefix
-        if "tax_categories" in updates:
-            tax = updates["tax_categories"]
-            if not isinstance(tax, list) or any(
-                not isinstance(t, str) or not t.strip() or len(t) > 60 for t in tax
-            ):
-                raise ValueError("tax_categories must be a list of short names")
-            allowed["tax_categories"] = [t.strip() for t in tax]
-        if "categories" in updates:
-            # handled through set_categories so removed names re-label transactions
-            allowed["categories"] = _apply_categories(
-                store_user, workspace, book, _validate_categories(updates["categories"])
-            )
-        allowed["updated_at"] = _now()
-        data["books"][i] = {**book, **allowed}
-        _save(store_user, workspace, data)
-        return data["books"][i]
-    return None
+    with _books_lock(store_user, workspace):
+        data = _load(store_user, workspace)
+        for i, book in enumerate(data.get("books", [])):
+            if book["id"] != book_id:
+                continue
+            allowed: dict = {}
+            if "name" in updates:
+                name = (updates["name"] or "").strip()
+                if not name or len(name) > 80:
+                    raise ValueError("Book name must be 1-80 characters")
+                allowed["name"] = name
+            if "icon" in updates:
+                allowed["icon"] = (updates["icon"] or "💰")[:8]
+            if "currency" in updates:
+                currency = (updates["currency"] or "USD").strip().upper()
+                if len(currency) != 3 or not currency.isalpha():
+                    raise ValueError("Currency must be a 3-letter code")
+                allowed["currency"] = currency
+            if "budget_warn_pct" in updates:
+                pct = updates["budget_warn_pct"]
+                if isinstance(pct, bool) or not isinstance(pct, int) or not 1 <= pct <= 100:
+                    raise ValueError("budget_warn_pct must be 1-100")
+                allowed["budget_warn_pct"] = pct
+            if "archived" in updates:
+                allowed["archived"] = bool(updates["archived"])
+            if "invoice_prefix" in updates:
+                prefix = (updates["invoice_prefix"] or "INV").strip().upper()
+                if not prefix or len(prefix) > 10 or not prefix.isalnum():
+                    raise ValueError("invoice_prefix must be 1-10 alphanumeric characters")
+                allowed["invoice_prefix"] = prefix
+            if "tax_categories" in updates:
+                tax = updates["tax_categories"]
+                if not isinstance(tax, list) or any(
+                    not isinstance(t, str) or not t.strip() or len(t) > 60 for t in tax
+                ):
+                    raise ValueError("tax_categories must be a list of short names")
+                allowed["tax_categories"] = [t.strip() for t in tax]
+            if "categories" in updates:
+                # handled through set_categories so removed names re-label transactions
+                allowed["categories"] = _apply_categories(
+                    store_user, workspace, book, _validate_categories(updates["categories"])
+                )
+            allowed["updated_at"] = _now()
+            data["books"][i] = {**book, **allowed}
+            _save(store_user, workspace, data)
+            return data["books"][i]
+        return None
 
 
 def _apply_categories(
@@ -648,13 +660,14 @@ def transfer_ownership(
     """
     import shutil
 
-    data = _load(store_user, workspace)
-    books = data.get("books", [])
-    book = next((b for b in books if b["id"] == book_id), None)
-    if book is None:
-        raise ValueError("Book not found")
-    data["books"] = [b for b in books if b["id"] != book_id]
-    _save(store_user, workspace, data)
+    with _books_lock(store_user, workspace):
+        data = _load(store_user, workspace)
+        books = data.get("books", [])
+        book = next((b for b in books if b["id"] == book_id), None)
+        if book is None:
+            raise ValueError("Book not found")
+        data["books"] = [b for b in books if b["id"] != book_id]
+        _save(store_user, workspace, data)
 
     dest_is_pool = is_pool(new_owner)
 
@@ -673,9 +686,10 @@ def transfer_ownership(
         for account in book.get("accounts", []):
             _convert(account)
 
-    dest_data = _load(new_owner, workspace)
-    dest_data.setdefault("books", []).append(book)
-    _save(new_owner, workspace, dest_data)
+    with _books_lock(new_owner, workspace):
+        dest_data = _load(new_owner, workspace)
+        dest_data.setdefault("books", []).append(book)
+        _save(new_owner, workspace, dest_data)
 
     src_ws = store_workspace(store_user, workspace)
     dst_ws = store_workspace(new_owner, workspace)
@@ -704,20 +718,21 @@ def strip_user_references(user_name: str) -> None:
     for store_user, workspace in stores:
         if store_user == user_name:
             continue
-        data = _load(store_user, workspace)
-        changed = False
-        for book in data.get("books", []):
-            if _strip_entries(book, user_name):
-                changed = True
-            hidden = book.get("hidden_from") or []
-            if user_name in hidden:
-                book["hidden_from"] = [h for h in hidden if h != user_name]
-                changed = True
-            for account in book.get("accounts", []):
-                if _strip_entries(account, user_name):
+        with _books_lock(store_user, workspace):
+            data = _load(store_user, workspace)
+            changed = False
+            for book in data.get("books", []):
+                if _strip_entries(book, user_name):
                     changed = True
-        if changed:
-            _save(store_user, workspace, data)
+                hidden = book.get("hidden_from") or []
+                if user_name in hidden:
+                    book["hidden_from"] = [h for h in hidden if h != user_name]
+                    changed = True
+                for account in book.get("accounts", []):
+                    if _strip_entries(account, user_name):
+                        changed = True
+            if changed:
+                _save(store_user, workspace, data)
 
 
 def _strip_entries(record: dict, user_name: str) -> bool:
@@ -745,36 +760,37 @@ def _strip_entries(record: dict, user_name: str) -> bool:
 
 
 def delete_book(store_user: str, workspace: str, book_id: str, deleted_by: str = "") -> bool:
-    data = _load(store_user, workspace)
-    books = data.get("books", [])
-    book = next((b for b in books if b["id"] == book_id), None)
-    if book is None:
-        return False
+    with _books_lock(store_user, workspace):
+        data = _load(store_user, workspace)
+        books = data.get("books", [])
+        book = next((b for b in books if b["id"] == book_id), None)
+        if book is None:
+            return False
 
-    from module_packages.finance.backend import trash_handlers
-    from services import trash_service
+        from module_packages.finance.backend import trash_handlers
+        from services import trash_service
 
-    # The book's whole data directory (shards, rules, receipts) moves as one
-    # unit into Trash — replaces the old shutil.rmtree with a rename.
-    ws = store_workspace(store_user, workspace)
-    book_dir = finance_book_dir(store_user, book_id, ws)
-    title, subtitle = trash_handlers.describe("book", book)
-    trash_service.soft_delete(
-        store_user=store_user,
-        workspace=workspace,
-        module="finance",
-        record_type="book",
-        original_id=book_id,
-        payload=book,
-        deleted_by=deleted_by,
-        title=title,
-        subtitle=subtitle,
-        move_path=book_dir,
-    )
+        # The book's whole data directory (shards, rules, receipts) moves as one
+        # unit into Trash — replaces the old shutil.rmtree with a rename.
+        ws = store_workspace(store_user, workspace)
+        book_dir = finance_book_dir(store_user, book_id, ws)
+        title, subtitle = trash_handlers.describe("book", book)
+        trash_service.soft_delete(
+            store_user=store_user,
+            workspace=workspace,
+            module="finance",
+            record_type="book",
+            original_id=book_id,
+            payload=book,
+            deleted_by=deleted_by,
+            title=title,
+            subtitle=subtitle,
+            move_path=book_dir,
+        )
 
-    data["books"] = [b for b in books if b["id"] != book_id]
-    _save(store_user, workspace, data)
-    return True
+        data["books"] = [b for b in books if b["id"] != book_id]
+        _save(store_user, workspace, data)
+        return True
 
 
 # ---------------------------------------------------------------------------
@@ -783,134 +799,141 @@ def delete_book(store_user: str, workspace: str, book_id: str, deleted_by: str =
 
 
 def add_account(store_user: str, workspace: str, book_id: str, account_data: dict) -> dict | None:
-    data = _load(store_user, workspace)
-    for i, book in enumerate(data.get("books", [])):
-        if book["id"] != book_id:
-            continue
-        name = (account_data.get("name") or "").strip()
-        if not name or len(name) > 60:
-            raise ValueError("Account name must be 1-60 characters")
-        acct_type = account_data.get("type", "checking")
-        if acct_type not in ACCOUNT_TYPES:
-            raise ValueError(f"Invalid account type: {acct_type!r}")
-        opening = account_data.get("opening_balance_cents", 0)
-        if isinstance(opening, bool) or not isinstance(opening, int):
-            raise ValueError("opening_balance_cents must be an integer (cents)")
-        opening_date = account_data.get("opening_date")
-        if opening_date:
-            _parse_date(opening_date)
-        account = {
-            "id": str(uuid.uuid4()),
-            "name": name,
-            "type": acct_type,
-            "opening_balance_cents": opening,
-            "opening_date": opening_date,
-            "deviation_threshold_cents": None,
-            "synced_balance_cents": None,
-            "synced_at": None,
-            "simplefin_account_id": None,
-            "last_deviation_alert": None,
-            "archived": False,
-            "shared_with": [],
-            "contributors": [],
-        }
-        book.setdefault("accounts", []).append(account)
-        book["updated_at"] = _now()
-        data["books"][i] = book
-        _save(store_user, workspace, data)
-        return account
-    return None
+    with _books_lock(store_user, workspace):
+        data = _load(store_user, workspace)
+        for i, book in enumerate(data.get("books", [])):
+            if book["id"] != book_id:
+                continue
+            name = (account_data.get("name") or "").strip()
+            if not name or len(name) > 60:
+                raise ValueError("Account name must be 1-60 characters")
+            acct_type = account_data.get("type", "checking")
+            if acct_type not in ACCOUNT_TYPES:
+                raise ValueError(f"Invalid account type: {acct_type!r}")
+            opening = account_data.get("opening_balance_cents", 0)
+            if isinstance(opening, bool) or not isinstance(opening, int):
+                raise ValueError("opening_balance_cents must be an integer (cents)")
+            opening_date = account_data.get("opening_date")
+            if opening_date:
+                _parse_date(opening_date)
+            account = {
+                "id": str(uuid.uuid4()),
+                "name": name,
+                "type": acct_type,
+                "opening_balance_cents": opening,
+                "opening_date": opening_date,
+                "deviation_threshold_cents": None,
+                "synced_balance_cents": None,
+                "synced_at": None,
+                "simplefin_account_id": None,
+                "last_deviation_alert": None,
+                "archived": False,
+                "shared_with": [],
+                "contributors": [],
+            }
+            book.setdefault("accounts", []).append(account)
+            book["updated_at"] = _now()
+            data["books"][i] = book
+            _save(store_user, workspace, data)
+            return account
+        return None
 
 
 def update_account(
     store_user: str, workspace: str, book_id: str, account_id: str, updates: dict
 ) -> dict | None:
-    data = _load(store_user, workspace)
-    for i, book in enumerate(data.get("books", [])):
-        if book["id"] != book_id:
-            continue
-        for j, account in enumerate(book.get("accounts", [])):
-            if account["id"] != account_id:
+    with _books_lock(store_user, workspace):
+        data = _load(store_user, workspace)
+        for i, book in enumerate(data.get("books", [])):
+            if book["id"] != book_id:
                 continue
-            allowed: dict = {}
-            if "name" in updates:
-                name = (updates["name"] or "").strip()
-                if not name or len(name) > 60:
-                    raise ValueError("Account name must be 1-60 characters")
-                allowed["name"] = name
-            if "type" in updates:
-                if updates["type"] not in ACCOUNT_TYPES:
-                    raise ValueError(f"Invalid account type: {updates['type']!r}")
-                allowed["type"] = updates["type"]
-            if "opening_balance_cents" in updates:
-                opening = updates["opening_balance_cents"]
-                if isinstance(opening, bool) or not isinstance(opening, int):
-                    raise ValueError("opening_balance_cents must be an integer (cents)")
-                allowed["opening_balance_cents"] = opening
-            if "opening_date" in updates:
-                if updates["opening_date"]:
-                    _parse_date(updates["opening_date"])
-                allowed["opening_date"] = updates["opening_date"]
-            if "deviation_threshold_cents" in updates:
-                threshold = updates["deviation_threshold_cents"]
-                if threshold is not None and (
-                    isinstance(threshold, bool) or not isinstance(threshold, int) or threshold <= 0
-                ):
-                    raise ValueError("deviation_threshold_cents must be a positive integer")
-                allowed["deviation_threshold_cents"] = threshold
-            if "archived" in updates:
-                allowed["archived"] = bool(updates["archived"])
-            if "synced_balance_cents" in updates:
-                synced = updates["synced_balance_cents"]
-                if synced is not None and (isinstance(synced, bool) or not isinstance(synced, int)):
-                    raise ValueError("synced_balance_cents must be an integer (cents)")
-                allowed["synced_balance_cents"] = synced
-                allowed["synced_at"] = _now()
-            book["accounts"][j] = {**account, **allowed}
-            book["updated_at"] = _now()
-            data["books"][i] = book
-            _save(store_user, workspace, data)
-            return book["accounts"][j]
+            for j, account in enumerate(book.get("accounts", [])):
+                if account["id"] != account_id:
+                    continue
+                allowed: dict = {}
+                if "name" in updates:
+                    name = (updates["name"] or "").strip()
+                    if not name or len(name) > 60:
+                        raise ValueError("Account name must be 1-60 characters")
+                    allowed["name"] = name
+                if "type" in updates:
+                    if updates["type"] not in ACCOUNT_TYPES:
+                        raise ValueError(f"Invalid account type: {updates['type']!r}")
+                    allowed["type"] = updates["type"]
+                if "opening_balance_cents" in updates:
+                    opening = updates["opening_balance_cents"]
+                    if isinstance(opening, bool) or not isinstance(opening, int):
+                        raise ValueError("opening_balance_cents must be an integer (cents)")
+                    allowed["opening_balance_cents"] = opening
+                if "opening_date" in updates:
+                    if updates["opening_date"]:
+                        _parse_date(updates["opening_date"])
+                    allowed["opening_date"] = updates["opening_date"]
+                if "deviation_threshold_cents" in updates:
+                    threshold = updates["deviation_threshold_cents"]
+                    if threshold is not None and (
+                        isinstance(threshold, bool)
+                        or not isinstance(threshold, int)
+                        or threshold <= 0
+                    ):
+                        raise ValueError("deviation_threshold_cents must be a positive integer")
+                    allowed["deviation_threshold_cents"] = threshold
+                if "archived" in updates:
+                    allowed["archived"] = bool(updates["archived"])
+                if "synced_balance_cents" in updates:
+                    synced = updates["synced_balance_cents"]
+                    if synced is not None and (
+                        isinstance(synced, bool) or not isinstance(synced, int)
+                    ):
+                        raise ValueError("synced_balance_cents must be an integer (cents)")
+                    allowed["synced_balance_cents"] = synced
+                    allowed["synced_at"] = _now()
+                book["accounts"][j] = {**account, **allowed}
+                book["updated_at"] = _now()
+                data["books"][i] = book
+                _save(store_user, workspace, data)
+                return book["accounts"][j]
+            return None
         return None
-    return None
 
 
 def delete_account(
     store_user: str, workspace: str, book_id: str, account_id: str, deleted_by: str = ""
 ) -> bool:
     """Remove an account. Callers must first check account_has_transactions()."""
-    data = _load(store_user, workspace)
-    for i, book in enumerate(data.get("books", [])):
-        if book["id"] != book_id:
-            continue
-        accounts = book.get("accounts", [])
-        account = next((a for a in accounts if a["id"] == account_id), None)
-        if account is None:
-            return False
+    with _books_lock(store_user, workspace):
+        data = _load(store_user, workspace)
+        for i, book in enumerate(data.get("books", [])):
+            if book["id"] != book_id:
+                continue
+            accounts = book.get("accounts", [])
+            account = next((a for a in accounts if a["id"] == account_id), None)
+            if account is None:
+                return False
 
-        from module_packages.finance.backend import trash_handlers
-        from services import trash_service
+            from module_packages.finance.backend import trash_handlers
+            from services import trash_service
 
-        title, subtitle = trash_handlers.describe("account", account)
-        trash_service.soft_delete(
-            store_user=store_user,
-            workspace=workspace,
-            module="finance",
-            record_type="account",
-            original_id=account_id,
-            payload=account,
-            deleted_by=deleted_by,
-            title=title,
-            subtitle=subtitle,
-            original_location={"book_id": book_id},
-        )
+            title, subtitle = trash_handlers.describe("account", account)
+            trash_service.soft_delete(
+                store_user=store_user,
+                workspace=workspace,
+                module="finance",
+                record_type="account",
+                original_id=account_id,
+                payload=account,
+                deleted_by=deleted_by,
+                title=title,
+                subtitle=subtitle,
+                original_location={"book_id": book_id},
+            )
 
-        book["accounts"] = [a for a in accounts if a["id"] != account_id]
-        book["updated_at"] = _now()
-        data["books"][i] = book
-        _save(store_user, workspace, data)
-        return True
-    return False
+            book["accounts"] = [a for a in accounts if a["id"] != account_id]
+            book["updated_at"] = _now()
+            data["books"][i] = book
+            _save(store_user, workspace, data)
+            return True
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -1493,36 +1516,38 @@ def delete_receipt(
 
 def next_invoice_number(store_user: str, workspace: str, book_id: str) -> str:
     """Increment the book's invoice sequence and return e.g. INV-2026-0007."""
-    data = _load(store_user, workspace)
-    for i, book in enumerate(data.get("books", [])):
-        if book["id"] != book_id:
-            continue
-        seq = int(book.get("invoice_seq", 0)) + 1
-        book["invoice_seq"] = seq
-        prefix = book.get("invoice_prefix", "INV")
-        data["books"][i] = book
-        _save(store_user, workspace, data)
-        year = datetime.now(timezone.utc).year
-        return f"{prefix}-{year}-{seq:04d}"
-    raise ValueError("Book not found")
+    with _books_lock(store_user, workspace):
+        data = _load(store_user, workspace)
+        for i, book in enumerate(data.get("books", [])):
+            if book["id"] != book_id:
+                continue
+            seq = int(book.get("invoice_seq", 0)) + 1
+            book["invoice_seq"] = seq
+            prefix = book.get("invoice_prefix", "INV")
+            data["books"][i] = book
+            _save(store_user, workspace, data)
+            year = datetime.now(timezone.utc).year
+            return f"{prefix}-{year}-{seq:04d}"
+        raise ValueError("Book not found")
 
 
 def set_deviation_alert_state(
     store_user: str, workspace: str, book_id: str, account_id: str, state: dict
 ) -> None:
     """Notification-dedup bookkeeping for deviation alerts (not derived data)."""
-    data = _load(store_user, workspace)
-    for i, book in enumerate(data.get("books", [])):
-        if book["id"] != book_id:
-            continue
-        for j, account in enumerate(book.get("accounts", [])):
-            if account["id"] != account_id:
+    with _books_lock(store_user, workspace):
+        data = _load(store_user, workspace)
+        for i, book in enumerate(data.get("books", [])):
+            if book["id"] != book_id:
                 continue
-            account["last_deviation_alert"] = state
-            book["accounts"][j] = account
-            data["books"][i] = book
-            _save(store_user, workspace, data)
-            return
+            for j, account in enumerate(book.get("accounts", [])):
+                if account["id"] != account_id:
+                    continue
+                account["last_deviation_alert"] = state
+                book["accounts"][j] = account
+                data["books"][i] = book
+                _save(store_user, workspace, data)
+                return
 
 
 # ---------------------------------------------------------------------------
@@ -1765,46 +1790,47 @@ def respond_share(viewer: str, owner: str, workspace: str, book_id: str, accept:
     """Accept adds the viewer to accepted[] on every entry targeting them
     (book + account levels). Decline/leave removes a by-name entry entirely
     and drops the viewer from group-entry acceptance (silent, like assets)."""
-    data = _load(owner, workspace)
-    changed = False
-    for i, book in enumerate(data.get("books", [])):
-        if book["id"] != book_id:
-            continue
-        for _record, entries in _walk_share_entries(book):
-            kept = []
-            for entry in entries:
-                targets_viewer = False
-                try:
-                    targets_viewer = viewer in resolve_target_users(entry.get("target", ""))
-                except ValueError:
-                    pass
-                if not targets_viewer:
-                    kept.append(entry)
-                    continue
-                if accept:
-                    accepted = entry.setdefault("accepted", [])
-                    if viewer not in accepted:
-                        accepted.append(viewer)
-                        changed = True
-                    kept.append(entry)
-                else:
-                    if entry.get("target") == viewer:
-                        changed = True  # drop the by-name entry entirely
+    with _books_lock(owner, workspace):
+        data = _load(owner, workspace)
+        changed = False
+        for i, book in enumerate(data.get("books", [])):
+            if book["id"] != book_id:
+                continue
+            for _record, entries in _walk_share_entries(book):
+                kept = []
+                for entry in entries:
+                    targets_viewer = False
+                    try:
+                        targets_viewer = viewer in resolve_target_users(entry.get("target", ""))
+                    except ValueError:
+                        pass
+                    if not targets_viewer:
+                        kept.append(entry)
                         continue
-                    accepted = entry.get("accepted")
-                    if isinstance(accepted, list) and viewer in accepted:
-                        entry["accepted"] = [n for n in accepted if n != viewer]
-                        changed = True
-                    kept.append(entry)
-            entries[:] = kept
-        book["updated_at"] = _now()
-        data["books"][i] = book
-        break
-    else:
-        return False
-    if changed:
-        _save(owner, workspace, data)
-        from services.finance_index import reindex_owner
+                    if accept:
+                        accepted = entry.setdefault("accepted", [])
+                        if viewer not in accepted:
+                            accepted.append(viewer)
+                            changed = True
+                        kept.append(entry)
+                    else:
+                        if entry.get("target") == viewer:
+                            changed = True  # drop the by-name entry entirely
+                            continue
+                        accepted = entry.get("accepted")
+                        if isinstance(accepted, list) and viewer in accepted:
+                            entry["accepted"] = [n for n in accepted if n != viewer]
+                            changed = True
+                        kept.append(entry)
+                entries[:] = kept
+            book["updated_at"] = _now()
+            data["books"][i] = book
+            break
+        else:
+            return False
+        if changed:
+            _save(owner, workspace, data)
+            from services.finance_index import reindex_owner
 
-        reindex_owner(owner)
-    return changed
+            reindex_owner(owner)
+        return changed

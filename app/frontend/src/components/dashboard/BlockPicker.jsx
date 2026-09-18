@@ -122,14 +122,14 @@ function renderField(f, config, setConfig, templateMode = false, subjectType = n
     case 'date':
       return (
         <div>
-          <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>
+          <label className="block text-sm font-medium mb-1">{label}</label>
           <input type="date" className="input w-full" value={val || ''} onChange={e => set(e.target.value)} />
         </div>
       )
     case 'select':
       return (
         <div>
-          <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>
+          <label className="block text-sm font-medium mb-1">{label}</label>
           <select className="input w-full" value={val || f.options[0].value} onChange={e => set(e.target.value)}>
             {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
@@ -138,7 +138,7 @@ function renderField(f, config, setConfig, templateMode = false, subjectType = n
     case 'textarea':
       return (
         <div>
-          <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>
+          <label className="block text-sm font-medium mb-1">{label}</label>
           <textarea className="input w-full" rows={4} value={val || ''} onChange={e => set(e.target.value)} />
         </div>
       )
@@ -155,7 +155,7 @@ function renderField(f, config, setConfig, templateMode = false, subjectType = n
     default:
       return (
         <div>
-          <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>
+          <label className="block text-sm font-medium mb-1">{label}</label>
           <input className="input w-full" value={val || ''} onChange={e => set(e.target.value)} />
         </div>
       )
@@ -238,7 +238,7 @@ function ActionsEditor({ config, setConfig, recordKind }) {
 
   return (
     <div>
-      <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Buttons on this block</label>
+      <label className="block text-sm font-medium mb-1">Buttons on this block</label>
       <div className="space-y-2 mt-1">
         {actions.map((a, i) => (
           <div key={i} className="flex items-center gap-1.5 border border-charcoal-200 dark:border-charcoal-700 rounded-lg p-2">

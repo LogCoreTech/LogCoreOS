@@ -91,3 +91,38 @@ def test_execute_tool_dispatches_get_home_assistant_state_through_to_ha_service(
 
     mock_get.assert_called_once_with("light.x")
     assert result == [{"entity_id": "light.x", "state": "on"}]
+
+
+def test_control_home_assistant_device_rejects_disallowed_domain(brain):
+    """The same allowlist router.py's own call_entity_service enforces
+    (2026-09-16) — this tool takes domain as a direct model-supplied string,
+    an even more open passthrough, since nothing ties it to entity_id's own
+    prefix. Must not be able to reach a system-level HA service like
+    homeassistant.restart or shell_command.*."""
+    mod_store_service.mark_installed("home_assistant", by="tester")
+    _configure_ha(brain)
+
+    with patch.object(ha_service, "call_service") as mock_call:
+        result = agent_service._execute_tool(
+            "control_home_assistant_device",
+            {"entity_id": "shell_command.x", "domain": "shell_command", "service": "x"},
+            _user(),
+        )
+
+    mock_call.assert_not_called()
+    assert "not permitted" in result["error"]
+
+
+def test_control_home_assistant_device_allows_real_device_domain(brain):
+    mod_store_service.mark_installed("home_assistant", by="tester")
+    _configure_ha(brain)
+
+    with patch.object(ha_service, "call_service", return_value={"ok": True}) as mock_call:
+        result = agent_service._execute_tool(
+            "control_home_assistant_device",
+            {"entity_id": "light.living_room", "domain": "light", "service": "turn_on"},
+            _user(),
+        )
+
+    mock_call.assert_called_once_with("light", "turn_on", {"entity_id": "light.living_room"})
+    assert result == {"ok": True}

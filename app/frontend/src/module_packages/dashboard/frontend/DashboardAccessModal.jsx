@@ -106,7 +106,7 @@ export default function DashboardAccessModal({ dashboard, isPool, isOwner, onClo
 
         {!isPool && (
           <div className="mb-4">
-            <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Hidden from</label>
+            <label className="block text-sm font-medium mb-1">Hidden from</label>
             <TagInput
               value={hidden}
               onChange={setHidden}

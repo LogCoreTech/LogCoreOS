@@ -94,20 +94,20 @@ export default function TransferEditModal({ book, workspace, tx, onClose, onSave
         <form onSubmit={submit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Amount</label>
+              <label className="block text-sm font-medium mb-1">Amount</label>
               <input
                 className="input" inputMode="decimal" placeholder="0.00" autoFocus
                 value={amount} onChange={e => setAmount(e.target.value)}
               />
             </div>
             <div>
-              <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Date</label>
+              <label className="block text-sm font-medium mb-1">Date</label>
               <input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} required />
             </div>
           </div>
 
           <div>
-            <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Notes</label>
+            <label className="block text-sm font-medium mb-1">Notes</label>
             <input className="input" value={notes} onChange={e => setNotes(e.target.value)} maxLength={2000} />
           </div>
 

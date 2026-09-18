@@ -30,12 +30,15 @@ from module_packages.finance.backend.router import (
     AccountCreate,
     BookCreate,
     BookUpdate,
+    BulkDeleteRequest,
     TransactionCreate,
     add_account,
     add_transaction,
+    bulk_delete_transactions,
     create_book,
     delete_account,
     delete_book,
+    delete_transaction,
     get_book,
     list_books,
     update_book,
@@ -174,3 +177,101 @@ def test_contribute_without_see_balances_strips_balances(users):
     result = get_book(book["id"], users["bob"], "personal")
 
     assert "balances" not in result
+
+
+def test_bulk_delete_transactions_success(users):
+    book = create_book(BookCreate(name="Bulk Book", pool=False), users["alice"], "personal")
+    account = add_account(
+        book["id"], AccountCreate(name="Checking", type="checking"), users["alice"], "personal"
+    )
+    tx1 = add_transaction(
+        book["id"],
+        TransactionCreate(date="2026-08-28", amount_cents=-1000, account_id=account["id"]),
+        users["alice"],
+        "personal",
+    )
+    tx2 = add_transaction(
+        book["id"],
+        TransactionCreate(date="2026-08-29", amount_cents=-2000, account_id=account["id"]),
+        users["alice"],
+        "personal",
+    )
+
+    result = bulk_delete_transactions(
+        book["id"], BulkDeleteRequest(ids=[tx1["id"], tx2["id"]]), users["alice"], "personal"
+    )
+
+    assert set(result["deleted"]) == {tx1["id"], tx2["id"]}
+    assert result["failed"] == []
+    # Actually gone (and routed through Trash the same way the single-item
+    # delete above does) — not just reported as deleted.
+    with pytest.raises(HTTPException) as exc:
+        delete_transaction(book["id"], tx1["id"], users["alice"], "personal")
+    assert exc.value.status_code == 404
+
+
+def test_bulk_delete_transactions_reports_partial_failure_not_bypassed_or_dropped(users):
+    """Mirrors bulk_delete_contacts'/bulk_delete_assets' own equivalent test —
+    one bad id in the batch must come back in `failed`, not abort the rest or
+    get silently dropped."""
+    book = create_book(BookCreate(name="Partial Book", pool=False), users["alice"], "personal")
+    account = add_account(
+        book["id"], AccountCreate(name="Checking", type="checking"), users["alice"], "personal"
+    )
+    tx = add_transaction(
+        book["id"],
+        TransactionCreate(date="2026-08-28", amount_cents=-500, account_id=account["id"]),
+        users["alice"],
+        "personal",
+    )
+
+    result = bulk_delete_transactions(
+        book["id"],
+        BulkDeleteRequest(
+            ids=[tx["id"], "not-a-uuid", "11111111-1111-1111-1111-111111111111"]
+        ),
+        users["alice"],
+        "personal",
+    )
+
+    assert result["deleted"] == [tx["id"]]
+    errors = {f["id"]: f["error"] for f in result["failed"]}
+    assert errors["not-a-uuid"] == "Invalid transaction ID format"
+    assert errors["11111111-1111-1111-1111-111111111111"] == "Transaction not found"
+
+
+def test_bulk_delete_transactions_denies_contribute_without_edit_own(users):
+    """A contribute-access viewer without the edit_own cap can add entries
+    but not delete them — same per-item access resolution as the single-item
+    delete endpoint's own _require_contribute_own_tx call, just never
+    letting this denial abort the rest of a same-request batch."""
+    book = create_book(BookCreate(name="Shared Book", pool=False), users["alice"], "personal")
+    account = add_account(
+        book["id"], AccountCreate(name="Checking", type="checking"), users["alice"], "personal"
+    )
+    tx = add_transaction(
+        book["id"],
+        TransactionCreate(date="2026-08-28", amount_cents=-500, account_id=account["id"]),
+        users["alice"],
+        "personal",
+    )
+    from services import finance_service
+
+    finance_service.update_access(
+        "Alice",
+        "personal",
+        book["id"],
+        shared_with=[{"target": "Bob", "access": "contribute", "caps": {"edit_own": False}}],
+    )
+    finance_service.respond_share("Bob", "Alice", "personal", book["id"], True)
+
+    result = bulk_delete_transactions(
+        book["id"], BulkDeleteRequest(ids=[tx["id"]]), users["bob"], "personal"
+    )
+
+    assert result["deleted"] == []
+    assert result["failed"][0]["error"] == "Your access doesn't allow editing entries."
+    # Confirmed not silently allowed either — still exists (alice, who does
+    # have edit access, can still delete it; a 404 here would mean bob's
+    # denied bulk-delete call somehow went through anyway).
+    delete_transaction(book["id"], tx["id"], users["alice"], "personal")

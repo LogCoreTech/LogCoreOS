@@ -150,8 +150,12 @@ async def test_generate_summary_never_reads_another_users_journal(brain, monkeyp
     stale = (datetime.now(timezone.utc) - timedelta(days=8)).isoformat()
     write_json(presence_service._presence_path("Alice"), {"seen_at": stale})
 
-    journal_service.upsert_entry("Bob", "2026-09-01", "Bob's private entry")
-    journal_service.upsert_entry("Alice", "2026-09-01", "Alice's own entry")
+    # Relative to `now`, not a hardcoded calendar date — a fixed date here
+    # would eventually fall before the `stale` cutoff above as real time
+    # passes it (found 2026-09-17, when "2026-09-01" aged past 8 days old).
+    recent_date = (datetime.now(timezone.utc) - timedelta(days=3)).date().isoformat()
+    journal_service.upsert_entry("Bob", recent_date, "Bob's private entry")
+    journal_service.upsert_entry("Alice", recent_date, "Alice's own entry")
 
     await svc.generate_summary(_user("Alice"))
 

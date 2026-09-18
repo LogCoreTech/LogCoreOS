@@ -118,11 +118,11 @@ export default function CreateDashboardModal({ pool = false, onCreated, onClose 
           <div className="space-y-4">
             <div className="flex gap-3 items-end">
               <div className="w-24 shrink-0">
-                <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Icon</label>
+                <label className="block text-sm font-medium mb-1">Icon</label>
                 <EmojiPicker value={icon} onChange={setIcon} />
               </div>
               <div className="flex-1 min-w-0">
-                <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Name</label>
+                <label className="block text-sm font-medium mb-1">Name</label>
                 <input className="input w-full" value={name} onChange={e => setName(e.target.value)} maxLength={80} autoFocus />
               </div>
             </div>

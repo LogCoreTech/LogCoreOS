@@ -25,12 +25,9 @@ import pytest
 from fastapi import HTTPException
 
 from module_packages.contacts.backend.router import (
-    AccessRequest,
     BulkDeleteRequest,
     ContactCreate,
     ContactUpdate,
-    InteractionCreate,
-    ShareEntry,
     archive_contact,
     bulk_delete_contacts,
     convert_contact_to_pool,
@@ -41,6 +38,11 @@ from module_packages.contacts.backend.router import (
     list_contacts_available_for_linking,
     unarchive_contact,
     update_contact,
+)
+from module_packages.contacts.backend.router_deals import InteractionCreate
+from module_packages.contacts.backend.router_sharing import (
+    AccessRequest,
+    ShareEntry,
     update_contact_access,
 )
 
@@ -187,7 +189,7 @@ def test_contribute_access_can_log_interactions_not_edit_core_fields(users):
     contacts_service.respond_share("Bob", "Alice", "personal", created["id"], True)
 
     # Allowed: contribute can log an interaction.
-    from module_packages.contacts.backend.router import add_interaction
+    from module_packages.contacts.backend.router_deals import add_interaction
 
     logged = add_interaction(
         created["id"], InteractionCreate(summary="left a voicemail"), users["bob"], "personal"

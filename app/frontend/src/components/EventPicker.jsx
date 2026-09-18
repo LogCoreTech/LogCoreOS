@@ -36,7 +36,7 @@ export default function EventPicker({ value, onChange, label, placeholder }) {
   if (!available) {
     return (
       <div>
-        {label && <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>}
+        {label && <label className="block text-sm font-medium mb-1">{label}</label>}
         <input className="input" placeholder={placeholder} disabled value="Calendar unavailable" />
       </div>
     )
@@ -58,7 +58,7 @@ export default function EventPicker({ value, onChange, label, placeholder }) {
 
   return (
     <div ref={boxRef} className="relative">
-      {label && <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>}
+      {label && <label className="block text-sm font-medium mb-1">{label}</label>}
       <div className="flex gap-1">
         <input
           className="input flex-1"

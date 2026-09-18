@@ -17,6 +17,7 @@ exception in dashboard_blocks/render.py, which needs to re-resolve block access
 "as the owner" even for pool dashboards that have no store-location owner.
 """
 
+import threading
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -49,6 +50,26 @@ def pool_for(workspace: str) -> str:
 # ---------------------------------------------------------------------------
 # Store primitives
 # ---------------------------------------------------------------------------
+
+
+# Per-(store_user, workspace) lock, held across each mutator's full
+# load-mutate-save cycle — same shape as finance_service._books_lock and
+# assets_service._assets_lock. Household/Team dashboards are pool-shared (two
+# pool members can edit dashboards concurrently), and every mutator in this
+# file funnels through _load()/_save(), so unlike Assets/Finance (many
+# scattered call sites, migrated incrementally) this file wraps ALL of them
+# at once — locking _save() alone wouldn't close the race, since the read in
+# _load() happens outside it.
+_dashboards_locks: dict[tuple[str, str], threading.Lock] = {}
+_dashboards_locks_guard = threading.Lock()
+
+
+def _dashboards_lock(store_user: str, workspace: str) -> threading.Lock:
+    key = (store_user, workspace)
+    with _dashboards_locks_guard:
+        if key not in _dashboards_locks:
+            _dashboards_locks[key] = threading.Lock()
+        return _dashboards_locks[key]
 
 
 def _load(store_user: str, workspace: str = "personal") -> dict:
@@ -418,9 +439,10 @@ def create_dashboard(
         dashboard["subject_type"] = template.get("subject_type")
         dashboard["subject_id"] = subject_id
         dashboard["blocks"] = _sync_blocks_from_template([], template.get("blocks") or [])
-    store = _load(store_user, workspace)
-    store["dashboards"].append(dashboard)
-    _save(store_user, workspace, store)
+    with _dashboards_lock(store_user, workspace):
+        store = _load(store_user, workspace)
+        store["dashboards"].append(dashboard)
+        _save(store_user, workspace, store)
     return dashboard
 
 
@@ -479,12 +501,13 @@ def _sync_blocks_from_template(
 
 
 def _persist_single(store_user: str, workspace: str, dashboard: dict) -> None:
-    store = _load(store_user, workspace)
-    for i, d in enumerate(store["dashboards"]):
-        if d["id"] == dashboard["id"]:
-            store["dashboards"][i] = dashboard
-            break
-    _save(store_user, workspace, store)
+    with _dashboards_lock(store_user, workspace):
+        store = _load(store_user, workspace)
+        for i, d in enumerate(store["dashboards"]):
+            if d["id"] == dashboard["id"]:
+                store["dashboards"][i] = dashboard
+                break
+        _save(store_user, workspace, store)
 
 
 def _sync_templated_dashboard(store_user: str, workspace: str, dashboard: dict) -> dict:
@@ -515,16 +538,17 @@ def _sync_templated_dashboard(store_user: str, workspace: str, dashboard: dict) 
 def set_subject(
     store_user: str, workspace: str, dashboard_id: str, subject_id: str | None, by: str = ""
 ) -> dict | None:
-    store = _load(store_user, workspace)
-    dashboard = _by_id(store["dashboards"]).get(dashboard_id)
-    if dashboard is None:
-        return None
-    if not dashboard.get("template_id"):
-        raise ValueError("Only a dashboard created from a template has a subject")
-    dashboard["subject_id"] = (subject_id or "").strip() or None
-    dashboard["updated_at"] = _now()
-    _save(store_user, workspace, store)
-    return dashboard
+    with _dashboards_lock(store_user, workspace):
+        store = _load(store_user, workspace)
+        dashboard = _by_id(store["dashboards"]).get(dashboard_id)
+        if dashboard is None:
+            return None
+        if not dashboard.get("template_id"):
+            raise ValueError("Only a dashboard created from a template has a subject")
+        dashboard["subject_id"] = (subject_id or "").strip() or None
+        dashboard["updated_at"] = _now()
+        _save(store_user, workspace, store)
+        return dashboard
 
 
 def detach_template(
@@ -533,43 +557,45 @@ def detach_template(
     """Escape hatch: freezes the dashboard's currently-synced blocks/layout in
     place as an ordinary freeform dashboard — no more template sync, and its
     blocks become independently addable/removable/editable again."""
-    store = _load(store_user, workspace)
-    dashboard = _by_id(store["dashboards"]).get(dashboard_id)
-    if dashboard is None:
-        return None
-    dashboard["template_id"] = None
-    dashboard["subject_type"] = None
-    dashboard["subject_id"] = None
-    dashboard["updated_at"] = _now()
-    _save(store_user, workspace, store)
-    return dashboard
+    with _dashboards_lock(store_user, workspace):
+        store = _load(store_user, workspace)
+        dashboard = _by_id(store["dashboards"]).get(dashboard_id)
+        if dashboard is None:
+            return None
+        dashboard["template_id"] = None
+        dashboard["subject_type"] = None
+        dashboard["subject_id"] = None
+        dashboard["updated_at"] = _now()
+        _save(store_user, workspace, store)
+        return dashboard
 
 
 def update_dashboard(
     store_user: str, workspace: str, dashboard_id: str, updates: dict, by: str = ""
 ) -> dict | None:
     """Update name/icon/blocks (bulk block-array replace)."""
-    store = _load(store_user, workspace)
-    dashboard = _by_id(store["dashboards"]).get(dashboard_id)
-    if dashboard is None:
-        return None
+    with _dashboards_lock(store_user, workspace):
+        store = _load(store_user, workspace)
+        dashboard = _by_id(store["dashboards"]).get(dashboard_id)
+        if dashboard is None:
+            return None
 
-    if "name" in updates and updates["name"]:
-        dashboard["name"] = str(updates["name"]).strip()[:_NAME_MAX]
-    if "icon" in updates:
-        dashboard["icon"] = str(updates["icon"] or "📊").strip()[:8]
-    if "cross_workspace" in updates:
-        dashboard["cross_workspace"] = bool(updates["cross_workspace"])
-    if "blocks" in updates:
-        if dashboard.get("template_id"):
-            dashboard["blocks"] = _apply_layout_only(dashboard["blocks"], updates["blocks"])
-        else:
-            dashboard["blocks"] = _validate_blocks(updates["blocks"])
+        if "name" in updates and updates["name"]:
+            dashboard["name"] = str(updates["name"]).strip()[:_NAME_MAX]
+        if "icon" in updates:
+            dashboard["icon"] = str(updates["icon"] or "📊").strip()[:8]
+        if "cross_workspace" in updates:
+            dashboard["cross_workspace"] = bool(updates["cross_workspace"])
+        if "blocks" in updates:
+            if dashboard.get("template_id"):
+                dashboard["blocks"] = _apply_layout_only(dashboard["blocks"], updates["blocks"])
+            else:
+                dashboard["blocks"] = _validate_blocks(updates["blocks"])
 
-    dashboard["updated_at"] = _now()
-    _save(store_user, workspace, store)
-    dashboard_index.reindex_dashboard(store_user, workspace, dashboard)
-    return dashboard
+        dashboard["updated_at"] = _now()
+        _save(store_user, workspace, store)
+        dashboard_index.reindex_dashboard(store_user, workspace, dashboard)
+        return dashboard
 
 
 def _apply_layout_only(current_blocks: list[dict], incoming: list[dict]) -> list[dict]:
@@ -620,16 +646,17 @@ def set_share_underlying_data(
 ) -> dict | None:
     """Owner-only setter — checked against the `owner` field, NOT edit access,
     since this is the one deliberate access-bypass lever in the whole system."""
-    store = _load(store_user, workspace)
-    dashboard = _by_id(store["dashboards"]).get(dashboard_id)
-    if dashboard is None:
-        return None
-    if dashboard.get("owner") != by:
-        raise PermissionError("Only the dashboard owner can change this setting")
-    dashboard["share_underlying_data"] = bool(value)
-    dashboard["updated_at"] = _now()
-    _save(store_user, workspace, store)
-    return dashboard
+    with _dashboards_lock(store_user, workspace):
+        store = _load(store_user, workspace)
+        dashboard = _by_id(store["dashboards"]).get(dashboard_id)
+        if dashboard is None:
+            return None
+        if dashboard.get("owner") != by:
+            raise PermissionError("Only the dashboard owner can change this setting")
+        dashboard["share_underlying_data"] = bool(value)
+        dashboard["updated_at"] = _now()
+        _save(store_user, workspace, store)
+        return dashboard
 
 
 def update_access(
@@ -641,69 +668,75 @@ def update_access(
     contributors: list[dict] | None = None,
     by: str = "",
 ) -> dict | None:
-    store = _load(store_user, workspace)
-    dashboard = _by_id(store["dashboards"]).get(dashboard_id)
-    if dashboard is None:
-        return None
+    with _dashboards_lock(store_user, workspace):
+        store = _load(store_user, workspace)
+        dashboard = _by_id(store["dashboards"]).get(dashboard_id)
+        if dashboard is None:
+            return None
 
-    if is_pool(store_user):
+        if is_pool(store_user):
+            if shared_with is not None:
+                raise ValueError("Pool dashboards use 'contributors', not 'shared_with'")
+        elif contributors is not None:
+            raise ValueError("'contributors' only applies to pool dashboards")
+
+        prev_accepted: dict[str, list[str]] = {
+            s.get("target"): list(s.get("accepted") or [])
+            for s in (dashboard.get("shared_with") or [])
+        }
+        prev_targets = {s.get("target") for s in (dashboard.get("shared_with") or [])}
+
+        new_targets: list[str] = []
         if shared_with is not None:
-            raise ValueError("Pool dashboards use 'contributors', not 'shared_with'")
-    elif contributors is not None:
-        raise ValueError("'contributors' only applies to pool dashboards")
+            cleaned = []
+            for share in shared_with:
+                target = (share.get("target") or "").strip()
+                access = share.get("access", "read")
+                if access not in ("read", "contribute", "edit"):
+                    raise ValueError(f"Invalid access {access!r}")
+                valid = target in ("team", "household") or get_user_by_name(target) is not None
+                if not valid:
+                    raise ValueError(f"Unknown share target {target!r}")
+                cleaned.append(
+                    {
+                        "target": target,
+                        "access": access,
+                        "accepted": prev_accepted.get(target, []),
+                    }
+                )
+                if target not in prev_targets:
+                    new_targets.append(target)
+            dashboard["shared_with"] = cleaned
 
-    prev_accepted: dict[str, list[str]] = {
-        s.get("target"): list(s.get("accepted") or []) for s in (dashboard.get("shared_with") or [])
-    }
-    prev_targets = {s.get("target") for s in (dashboard.get("shared_with") or [])}
+        if hidden_from is not None:
+            dashboard["hidden_from"] = list(dict.fromkeys(hidden_from))
 
-    new_targets: list[str] = []
-    if shared_with is not None:
-        cleaned = []
-        for share in shared_with:
-            target = (share.get("target") or "").strip()
-            access = share.get("access", "read")
-            if access not in ("read", "contribute", "edit"):
-                raise ValueError(f"Invalid access {access!r}")
-            valid = target in ("team", "household") or get_user_by_name(target) is not None
-            if not valid:
-                raise ValueError(f"Unknown share target {target!r}")
-            cleaned.append(
-                {"target": target, "access": access, "accepted": prev_accepted.get(target, [])}
-            )
-            if target not in prev_targets:
-                new_targets.append(target)
-        dashboard["shared_with"] = cleaned
+        if contributors is not None:
+            group = "team" if workspace == "business" else "household"
+            cleaned_c = []
+            for entry in contributors:
+                target = (entry.get("target") or "").strip()
+                if target != group and get_user_by_name(target) is None:
+                    raise ValueError(f"Unknown contributor target {target!r}")
+                access = entry.get("access", "read")
+                if access not in ("read", "contribute", "edit"):
+                    raise ValueError(f"Invalid access {access!r}")
+                cleaned_c.append({"target": target, "access": access})
+            dashboard["contributors"] = cleaned_c
 
-    if hidden_from is not None:
-        dashboard["hidden_from"] = list(dict.fromkeys(hidden_from))
+        dashboard["updated_at"] = _now()
+        _save(store_user, workspace, store)
+        dashboard_index.reindex_dashboard(store_user, workspace, dashboard)
 
-    if contributors is not None:
-        group = "team" if workspace == "business" else "household"
-        cleaned_c = []
-        for entry in contributors:
-            target = (entry.get("target") or "").strip()
-            if target != group and get_user_by_name(target) is None:
-                raise ValueError(f"Unknown contributor target {target!r}")
-            access = entry.get("access", "read")
-            if access not in ("read", "contribute", "edit"):
-                raise ValueError(f"Invalid access {access!r}")
-            cleaned_c.append({"target": target, "access": access})
-        dashboard["contributors"] = cleaned_c
-
-    dashboard["updated_at"] = _now()
-    _save(store_user, workspace, store)
-    dashboard_index.reindex_dashboard(store_user, workspace, dashboard)
-
-    already = set(sum(prev_accepted.values(), []))
-    recipients: set[str] = set()
-    for target in new_targets:
-        for name in _resolve_targets(target):
-            if name != (by or store_user) and name not in already:
-                recipients.add(name)
-    if recipients:
-        _notify_share_targets(list(recipients), by or store_user, dashboard)
-    return dashboard
+        already = set(sum(prev_accepted.values(), []))
+        recipients: set[str] = set()
+        for target in new_targets:
+            for name in _resolve_targets(target):
+                if name != (by or store_user) and name not in already:
+                    recipients.add(name)
+        if recipients:
+            _notify_share_targets(list(recipients), by or store_user, dashboard)
+        return dashboard
 
 
 def _notify_share_targets(recipients: list[str], sharer: str, dashboard: dict) -> None:
@@ -750,17 +783,18 @@ def _respond_shares(shares: list[dict], viewer: str, accept: bool) -> tuple[list
 def respond_to_share(
     viewer: str, owner: str, workspace: str, dashboard_id: str, accept: bool
 ) -> bool:
-    store = _load(owner, workspace)
-    dashboard = _by_id(store["dashboards"]).get(dashboard_id)
-    if dashboard is None:
-        return False
-    dashboard["shared_with"], changed = _respond_shares(
-        dashboard.get("shared_with") or [], viewer, accept
-    )
-    if changed:
-        _save(owner, workspace, store)
-        dashboard_index.reindex_dashboard(owner, workspace, dashboard)
-    return changed
+    with _dashboards_lock(owner, workspace):
+        store = _load(owner, workspace)
+        dashboard = _by_id(store["dashboards"]).get(dashboard_id)
+        if dashboard is None:
+            return False
+        dashboard["shared_with"], changed = _respond_shares(
+            dashboard.get("shared_with") or [], viewer, accept
+        )
+        if changed:
+            _save(owner, workspace, store)
+            dashboard_index.reindex_dashboard(owner, workspace, dashboard)
+        return changed
 
 
 def leave_share(viewer: str, owner: str, workspace: str, dashboard_id: str) -> bool:
@@ -780,32 +814,33 @@ def delete_dashboard(
     deleted_by: str = "",
 ) -> None:
     """Raises ValueError('not_found') or ValueError('floor_of_one')."""
-    store = _load(viewer, workspace)
-    dashboard = next((d for d in store["dashboards"] if d["id"] == dashboard_id), None)
-    if dashboard is None:
-        raise ValueError("not_found")
-    if len(store["dashboards"]) == 1:
-        raise ValueError("floor_of_one")
+    with _dashboards_lock(viewer, workspace):
+        store = _load(viewer, workspace)
+        dashboard = next((d for d in store["dashboards"] if d["id"] == dashboard_id), None)
+        if dashboard is None:
+            raise ValueError("not_found")
+        if len(store["dashboards"]) == 1:
+            raise ValueError("floor_of_one")
 
-    from module_packages.dashboard.backend import trash_handlers
-    from services import trash_service
+        from module_packages.dashboard.backend import trash_handlers
+        from services import trash_service
 
-    title, subtitle = trash_handlers.describe("dashboard", dashboard)
-    trash_service.soft_delete(
-        store_user=viewer,
-        workspace=workspace,
-        module="dashboard",
-        record_type="dashboard",
-        original_id=dashboard_id,
-        payload=dashboard,
-        deleted_by=deleted_by,
-        title=title,
-        subtitle=subtitle,
-    )
+        title, subtitle = trash_handlers.describe("dashboard", dashboard)
+        trash_service.soft_delete(
+            store_user=viewer,
+            workspace=workspace,
+            module="dashboard",
+            record_type="dashboard",
+            original_id=dashboard_id,
+            payload=dashboard,
+            deleted_by=deleted_by,
+            title=title,
+            subtitle=subtitle,
+        )
 
-    store["dashboards"] = [d for d in store["dashboards"] if d["id"] != dashboard_id]
-    _save(viewer, workspace, store)
-    dashboard_index.remove_dashboard(viewer, workspace, dashboard_id)
+        store["dashboards"] = [d for d in store["dashboards"] if d["id"] != dashboard_id]
+        _save(viewer, workspace, store)
+        dashboard_index.remove_dashboard(viewer, workspace, dashboard_id)
 
 
 def resolve_default_dashboard_id(

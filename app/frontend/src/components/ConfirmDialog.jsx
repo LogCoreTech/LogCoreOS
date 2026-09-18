@@ -80,7 +80,7 @@ export default function ConfirmDialog({
 
         {requireTypedText && (
           <div className="mb-4">
-            <label className="block text-xs text-charcoal-500 dark:text-charcoal-400 mb-1">
+            <label className="block text-sm font-medium mb-1">
               Type <span className="font-mono font-semibold">{requireTypedText}</span> to confirm
             </label>
             <input

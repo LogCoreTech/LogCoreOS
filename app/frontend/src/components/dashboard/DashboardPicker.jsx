@@ -27,7 +27,7 @@ export default function DashboardPicker({ value, onChange, label }) {
   if (!available) {
     return (
       <div>
-        {label && <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>}
+        {label && <label className="block text-sm font-medium mb-1">{label}</label>}
         <input className="input" disabled value="Dashboards unavailable" />
       </div>
     )
@@ -50,7 +50,7 @@ export default function DashboardPicker({ value, onChange, label }) {
 
   return (
     <div>
-      {label && <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>}
+      {label && <label className="block text-sm font-medium mb-1">{label}</label>}
       <select
         className="input"
         value={value || ''}

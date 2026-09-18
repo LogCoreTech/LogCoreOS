@@ -24,26 +24,27 @@ import pytest
 from fastapi import HTTPException
 
 from module_packages.assets.backend.router import (
-    AccessUpdate,
     AssetCreate,
     AssetUpdate,
     BulkDeleteRequest,
-    ContributorEntry,
     ConvertRequest,
-    ShareEntry,
-    TemplateCreate,
     archive_asset,
     bulk_delete_assets,
     convert_asset,
     create_asset,
-    create_template,
     delete_asset,
     get_asset,
     list_assets,
     unarchive_asset,
-    update_access,
     update_asset,
 )
+from module_packages.assets.backend.router_sharing import (
+    AccessUpdate,
+    ContributorEntry,
+    ShareEntry,
+    update_access,
+)
+from module_packages.assets.backend.router_templates import TemplateCreate, create_template
 
 
 @pytest.fixture()

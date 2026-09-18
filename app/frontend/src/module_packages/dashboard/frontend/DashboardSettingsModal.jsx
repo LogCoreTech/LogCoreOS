@@ -119,11 +119,11 @@ export default function DashboardSettingsModal({ dashboard, isOwner, user, works
             <>
               <div className="flex gap-3 items-end">
                 <div className="w-28 shrink-0">
-                  <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Icon</label>
+                  <label className="block text-sm font-medium mb-1">Icon</label>
                   <EmojiPicker value={icon} onChange={setIcon} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Name</label>
+                  <label className="block text-sm font-medium mb-1">Name</label>
                   <input
                     className="input w-full"
                     value={name}

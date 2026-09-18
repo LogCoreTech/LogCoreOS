@@ -4,7 +4,7 @@
 // pieces importing each other.
 export default function Field({ label, children }) {
   return (
-    <label className="block text-xs text-charcoal-500 dark:text-charcoal-400">{label}
+    <label className="block text-sm font-medium mb-1">{label}
       {children}
     </label>
   )

@@ -1,22 +1,39 @@
-"""Assets module — templates (admin), hierarchical assets, sharing, pools, attachments.
+"""Assets module core router: asset tree CRUD (create/get/patch/delete/
+archive/convert), bulk delete, contact cross-links, and file attachments.
 
-Route order matters: /templates* and /automation* are declared before /{asset_id} so
-FastAPI never swallows them as an asset id.
+Split out of one 1100+ line router.py into this file plus
+router_templates.py / router_sharing.py / router_automation.py — the exact
+precedent module_packages/finance/backend/ already established for this
+same problem. manifest.py's `_get_router()` composes all four back into a
+single router via `include_router()` calls, same as Finance's own six-way
+composition.
+
+Route order matters: this file's bare GET/PATCH/DELETE `/{asset_id}` routes
+must never swallow a more specific static path (`/templates`, `/members`,
+`/roles`, `/shares/respond`, `/automation/...`) declared in a sibling router
+file — FastAPI/Starlette match routes in registration order, and a single
+dynamic path segment matches any literal just as well. `_get_router()` in
+manifest.py registers router_templates/router_automation/router_sharing
+BEFORE this file's router for exactly that reason (this module's `/{asset_id}`
+catch-all is the one thing Finance's own core router.py never had to work
+around — every Finance route lives under a literal prefix like `/books/...`).
+
+Shared helpers (`_validate_asset_id`, `_find_or_404`, `_is_admin`) live here
+and are imported by the sibling router files, matching how Finance's own
+sibling routers import `_find_or_404`/`_validate_id` from its router.py.
 """
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
-from pydantic import BaseModel, Field, field_validator
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from pydantic import BaseModel, Field
 
 from routers.auth import get_workspace, require_admin, require_module
-from services import assets_service, automations_config
-from services.auth_service import get_user_by_name
+from services import assets_service
 from services.rate_limiter import rate_limit
 
 _require_assets = require_module("assets")
 _write_limit = rate_limit(30, 60)
-_automation_limit = rate_limit(30, 60)
 
 router = APIRouter()
 
@@ -43,6 +60,10 @@ def _find_or_404(current_user: dict, workspace: str, asset_id: str) -> dict:
     return found
 
 
+def _is_admin(user: dict) -> bool:
+    return user.get("role") == "admin"
+
+
 # ---------------------------------------------------------------------------
 # Request models
 # ---------------------------------------------------------------------------
@@ -54,35 +75,6 @@ class FieldDefModel(BaseModel):
     type: str
     options: list[str] | None = None
     default: object | None = None
-
-
-class TemplateCreate(BaseModel):
-    key: str = Field(..., max_length=40)
-    label: str = Field("", max_length=80)
-    icon: str = Field("", max_length=8)
-    fields: list[FieldDefModel] = Field(default=[], max_length=50)
-    owner: str = Field("me", pattern="^(me|global)$")  # global = admin only
-
-
-class TemplateUpdate(BaseModel):
-    label: str | None = Field(None, max_length=80)
-    icon: str | None = Field(None, max_length=8)
-    fields: list[FieldDefModel] | None = Field(None, max_length=50)
-    restrict_roles: list[str] | None = Field(None, max_length=30)
-
-
-class TemplateShareEntry(BaseModel):
-    target: str = Field(..., max_length=100)
-
-
-class TemplateAccessUpdate(BaseModel):
-    shared_with: list[TemplateShareEntry] | None = Field(None, max_length=50)
-    restrict_roles: list[str] | None = Field(None, max_length=30)
-
-
-class ShareRespond(BaseModel):
-    notif_id: str = Field(..., max_length=64)
-    accept: bool
 
 
 class AssetCreate(BaseModel):
@@ -113,320 +105,12 @@ class AttachTemplateRequest(BaseModel):
     template_id: str = Field(..., max_length=64)
 
 
-class ContributeCaps(BaseModel):
-    fields: list[str] = Field(default=[], max_length=50)
-    add: list[str] = Field(default=[], max_length=10)
-
-
-class ShareEntry(BaseModel):
-    target: str = Field(..., max_length=100)
-    access: str = Field("read", pattern="^(read|contribute|edit)$")
-    caps: ContributeCaps | None = None  # only meaningful for access == "contribute"
-
-
-class ContributorEntry(BaseModel):
-    target: str = Field(..., max_length=100)
-    caps: ContributeCaps | None = None
-
-
-class AccessUpdate(BaseModel):
-    shared_with: list[ShareEntry] | None = Field(None, max_length=50)
-    hidden_from: list[str] | None = Field(None, max_length=50)
-    contributors: list[ContributorEntry] | None = Field(None, max_length=50)  # pool assets only
-    cascade: bool = True  # apply to the whole subtree by default
-
-    @field_validator("hidden_from")
-    @classmethod
-    def _names_max_len(cls, v):
-        if v is not None and any(len(n) > 110 for n in v):
-            raise ValueError("User name too long")
-        return v
-
-
-class CommentCreate(BaseModel):
-    text: str = Field(..., min_length=1, max_length=2000)
-
-
-class CommentsVisibility(BaseModel):
-    hidden: bool
-
-
-class MuteUpdate(BaseModel):
-    muted: bool
-
-
 class ConvertRequest(BaseModel):
     target: str = Field(..., pattern="^pool$")
 
 
-class AutomationAssetCreate(BaseModel):
-    user: str = Field(..., max_length=100)
-    workspace: str = Field("personal", pattern="^(personal|business)$")
-    template: str = Field(..., max_length=40)
-    name: str = Field(..., min_length=1, max_length=200)
-    parent_id: str | None = None
-    fields: dict = Field(default={})
-    notes: str | None = Field(None, max_length=5000)
-
-
-class AutomationAssetUpdate(BaseModel):
-    user: str = Field(..., max_length=100)
-    workspace: str = Field("personal", pattern="^(personal|business)$")
-    name: str | None = Field(None, max_length=200)
-    fields: dict | None = None
-    notes: str | None = Field(None, max_length=5000)
-
-
-class AutomationCommentCreate(BaseModel):
-    user: str = Field(..., max_length=100)
-    workspace: str = Field("personal", pattern="^(personal|business)$")
-    text: str = Field(..., min_length=1, max_length=2000)
-
-
-# ---------------------------------------------------------------------------
-# Templates (global admin-curated + per-user, shareable)
-# ---------------------------------------------------------------------------
-
-
-def _is_admin(user: dict) -> bool:
-    return user.get("role") == "admin"
-
-
-def _template_or_404(tid: str):
-    found = assets_service._find_template(tid)
-    if found is None:
-        raise HTTPException(status_code=404, detail="Template not found")
-    return found  # (owner, template)
-
-
-def _require_template_manage(tid: str, user: dict):
-    owner, _ = _template_or_404(tid)
-    if owner == assets_service.GLOBAL_OWNER:
-        if not _is_admin(user):
-            raise HTTPException(status_code=403, detail="Global templates are admin-managed")
-    elif owner != user["name"] and not _is_admin(user):
-        raise HTTPException(status_code=403, detail="You can only manage your own templates")
-    return owner
-
-
-@router.get("/templates")
-def list_templates(current_user: dict = Depends(_require_assets)):
-    return assets_service.visible_templates(
-        current_user["name"],
-        is_admin=_is_admin(current_user),
-        feature_role=current_user.get("feature_role", "member"),
-    )
-
-
-@router.post("/templates", status_code=201)
-def create_template(
-    req: TemplateCreate,
-    current_user: dict = Depends(_require_assets),
-    _rl: None = Depends(_write_limit),
-):
-    is_global = req.owner == "global"
-    if is_global and not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Only admins can create global templates")
-    owner = assets_service.GLOBAL_OWNER if is_global else current_user["name"]
-    try:
-        return assets_service.create_template(req.model_dump(exclude={"owner"}), owner=owner)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-
-@router.post("/templates/example", status_code=201)
-def insert_example_template(
-    owner: str = "me",
-    current_user: dict = Depends(_require_assets),
-    _rl: None = Depends(_write_limit),
-):
-    if owner == "global" and not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Only admins can create global templates")
-    store_owner = assets_service.GLOBAL_OWNER if owner == "global" else current_user["name"]
-    return assets_service.insert_example_template(owner=store_owner)
-
-
-@router.patch("/templates/{tid}")
-def update_template(
-    tid: str,
-    req: TemplateUpdate,
-    current_user: dict = Depends(_require_assets),
-    _rl: None = Depends(_write_limit),
-):
-    _require_template_manage(tid, current_user)
-    try:
-        result = assets_service.update_template(tid, req.model_dump(exclude_unset=True))
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    if result is None:
-        raise HTTPException(status_code=404, detail="Template not found")
-    return result
-
-
-@router.delete("/templates/{tid}", status_code=204)
-def delete_template(
-    tid: str,
-    current_user: dict = Depends(_require_assets),
-    _rl: None = Depends(_write_limit),
-):
-    _require_template_manage(tid, current_user)
-    try:
-        if not assets_service.delete_template(tid):
-            raise HTTPException(status_code=404, detail="Template not found")
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
-
-
-@router.put("/templates/{tid}/access")
-def update_template_access(
-    tid: str,
-    req: TemplateAccessUpdate,
-    current_user: dict = Depends(_require_assets),
-    _rl: None = Depends(_write_limit),
-):
-    owner = _require_template_manage(tid, current_user)
-    if owner == assets_service.GLOBAL_OWNER:
-        # Global templates aren't shared per-user; admins restrict them by role.
-        result = assets_service.update_template(tid, {"restrict_roles": req.restrict_roles or []})
-        return result or {}
-    try:
-        result = assets_service.share_template(
-            owner, tid, [s.model_dump() for s in (req.shared_with or [])], by=current_user["name"]
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    if result is None:
-        raise HTTPException(status_code=404, detail="Template not found")
-    return result
-
-
-@router.post("/templates/{tid}/leave", status_code=204)
-def leave_template(
-    tid: str,
-    current_user: dict = Depends(_require_assets),
-    _rl: None = Depends(_write_limit),
-):
-    found = _template_or_404(tid)
-    owner = found[0]
-    if owner == assets_service.GLOBAL_OWNER:
-        raise HTTPException(status_code=400, detail="Global templates can't be left")
-    assets_service.leave_template_share(current_user["name"], owner, tid)
-
-
-# ---------------------------------------------------------------------------
-# Automation API (n8n) — X-Automation-Token auth, no JWT
-# ---------------------------------------------------------------------------
-
-
-def _require_automation_token(x_automation_token: str = Header("")) -> None:
-    if not automations_config.verify_api_token(x_automation_token):
-        raise HTTPException(status_code=401, detail="Invalid automation token")
-
-
-def _automation_store(user: str, workspace: str, read_only: bool = False) -> tuple[str, str]:
-    """Resolve the target store: a real user, or _team/_household pool names.
-
-    ``read_only=True`` (the list/export path) restricts the target to the shared
-    pool pseudo-users only. The automation API is authenticated by a single
-    instance-wide token, so allowing an arbitrary ``user`` on a bulk read would let
-    one leaked token dump every user's entire assets store. Writes may still target
-    a specific user (that's the intended n8n sync use, and mirrors the Contacts
-    automation API's write-only, no-bulk-export design).
-    """
-    if user in ("_team", "_household"):
-        return user, "personal"
-    if read_only:
-        raise HTTPException(
-            status_code=403,
-            detail="Automation reads are limited to the _team/_household pools.",
-        )
-    if get_user_by_name(user) is None:
-        raise HTTPException(status_code=404, detail=f"Unknown user {user!r}")
-    return user, workspace
-
-
-@router.get("/automation/assets")
-def automation_list_assets(
-    user: str,
-    workspace: str = "personal",
-    template: str | None = None,
-    _auth: None = Depends(_require_automation_token),
-    _rl: None = Depends(_automation_limit),
-):
-    store, store_ws = _automation_store(user, workspace, read_only=True)
-    items = assets_service.list_assets(store, store_ws)
-    if template:
-        items = [a for a in items if a.get("template") == template]
-    return items
-
-
-@router.post("/automation/assets", status_code=201)
-def automation_create_asset(
-    req: AutomationAssetCreate,
-    _auth: None = Depends(_require_automation_token),
-    _rl: None = Depends(_automation_limit),
-):
-    store, store_ws = _automation_store(req.user, req.workspace)
-    try:
-        return assets_service.create_asset(
-            store,
-            req.model_dump(exclude={"user", "workspace"}),
-            workspace=store_ws,
-            created_by="automation",
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-
-@router.patch("/automation/assets/{asset_id}")
-def automation_update_asset(
-    asset_id: str,
-    req: AutomationAssetUpdate,
-    _auth: None = Depends(_require_automation_token),
-    _rl: None = Depends(_automation_limit),
-):
-    _validate_asset_id(asset_id)
-    store, store_ws = _automation_store(req.user, req.workspace)
-    try:
-        result = assets_service.update_asset(
-            store,
-            asset_id,
-            req.model_dump(exclude_unset=True, exclude={"user", "workspace"}),
-            workspace=store_ws,
-            by="automation",
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    if result is None:
-        raise HTTPException(status_code=404, detail="Asset not found")
-    return result
-
-
-@router.post("/automation/assets/{asset_id}/comments", status_code=201)
-def automation_add_comment(
-    asset_id: str,
-    req: AutomationCommentCreate,
-    _auth: None = Depends(_require_automation_token),
-    _rl: None = Depends(_automation_limit),
-):
-    """Workflow-posted comment (attributed 'automation'); triggers the same
-    edit-level notifications as a user comment — e.g. n8n posting an alert."""
-    _validate_asset_id(asset_id)
-    store, store_ws = _automation_store(req.user, req.workspace)
-    try:
-        comment = assets_service.add_comment(
-            store,
-            asset_id,
-            req.text,
-            workspace=store_ws,
-            by="automation",
-            asset_workspace=req.workspace,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    if comment is None:
-        raise HTTPException(status_code=404, detail="Asset not found")
-    return comment
+class BulkDeleteRequest(BaseModel):
+    ids: list[str]
 
 
 # ---------------------------------------------------------------------------
@@ -511,26 +195,6 @@ def create_asset(
     return out
 
 
-@router.get("/members")
-def list_members(current_user: dict = Depends(_require_assets)):
-    """Member display names for the share/hide selectors. Names only.
-
-    Exposed to any Assets user so they can pick who to share with. May become
-    permissioned/opt-in later (see MEMORY.md).
-    """
-    from services.auth_service import list_users
-
-    return [{"name": u["name"]} for u in list_users()]
-
-
-@router.get("/roles")
-def list_roles(current_user: dict = Depends(_require_assets)):
-    """Feature-role names for the share-by-role picker."""
-    from services.features_service import load_features
-
-    return sorted((load_features().get("roles") or {}).keys())
-
-
 @router.get("/by-contact/{contact_id}")
 def assets_by_contact(
     contact_id: str,
@@ -547,27 +211,6 @@ def assets_by_contact(
         pool_edit=current_user.get("pool_edit") or [],
         viewer_role=current_user.get("feature_role") or "",
     )
-
-
-@router.post("/shares/respond")
-def respond_share(
-    req: ShareRespond,
-    current_user: dict = Depends(_require_assets),
-    _rl: None = Depends(_write_limit),
-):
-    """Accept/decline a share request delivered as an actionable notification."""
-    from services import suggestions_service
-
-    notif = suggestions_service.resolve_notification(current_user["name"], req.notif_id)
-    if notif is None:
-        raise HTTPException(status_code=404, detail="Notification not found")
-    action = notif.get("action") or {}
-    viewer = current_user["name"]
-    if action.get("type") == "asset_share":
-        assets_service.respond_to_asset_share(viewer, action, req.accept)
-    elif action.get("type") == "template_share":
-        assets_service.respond_to_template_share(viewer, action, req.accept)
-    return {"ok": True}
 
 
 @router.get("/{asset_id}")
@@ -712,23 +355,6 @@ def _set_archived(asset_id: str, archived: bool, current_user: dict, workspace: 
     )
 
 
-@router.post("/{asset_id}/leave", status_code=204)
-def leave_asset(
-    asset_id: str,
-    current_user: dict = Depends(_require_assets),
-    workspace: str = Depends(get_workspace),
-    _rl: None = Depends(_write_limit),
-):
-    """A share recipient removes themselves from an asset shared with them."""
-    _validate_asset_id(asset_id)
-    found = _find_or_404(current_user, workspace, asset_id)
-    if found["relation"] != "shared":
-        raise HTTPException(status_code=400, detail="You can only leave assets shared with you")
-    assets_service.leave_asset_share(
-        current_user["name"], found["store"], asset_id, found["store_workspace"]
-    )
-
-
 @router.delete("/{asset_id}", status_code=204)
 def delete_asset(
     asset_id: str,
@@ -751,10 +377,6 @@ def delete_asset(
             raise HTTPException(status_code=404, detail="Asset not found")
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
-
-
-class BulkDeleteRequest(BaseModel):
-    ids: list[str]
 
 
 @router.post("/bulk-delete")
@@ -855,176 +477,6 @@ def convert_asset(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-
-
-@router.put("/{asset_id}/access")
-def update_access(
-    asset_id: str,
-    req: AccessUpdate,
-    current_user: dict = Depends(_require_assets),
-    workspace: str = Depends(get_workspace),
-    _rl: None = Depends(_write_limit),
-):
-    _validate_asset_id(asset_id)
-    found = _find_or_404(current_user, workspace, asset_id)
-    if not found["can_manage"]:
-        raise HTTPException(
-            status_code=403, detail="Only the owner or a pool manager can change access"
-        )
-    shared = req.shared_with
-    if found["relation"] == "pool" and shared is not None:
-        raise HTTPException(
-            status_code=400,
-            detail="Pool assets are workspace-visible — use hidden_from instead of shares",
-        )
-    if found["relation"] != "pool" and req.contributors is not None:
-        raise HTTPException(
-            status_code=400,
-            detail="Contributors are for pool assets — use shared_with with 'contribute' access",
-        )
-    try:
-        result = assets_service.update_access(
-            found["store"],
-            asset_id,
-            workspace=found["store_workspace"],
-            shared_with=(
-                [s.model_dump(exclude_none=True) for s in shared] if shared is not None else None
-            ),
-            hidden_from=req.hidden_from,
-            contributors=(
-                [c.model_dump(exclude_none=True) for c in req.contributors]
-                if req.contributors is not None
-                else None
-            ),
-            by=current_user["name"],
-            asset_workspace=workspace,
-            cascade=req.cascade,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    if result is None:
-        raise HTTPException(status_code=404, detail="Asset not found")
-    return result
-
-
-# ---------------------------------------------------------------------------
-# Comments — append-only attributed log ("leave notes" without clobbering)
-# ---------------------------------------------------------------------------
-
-
-def _can_comment(found: dict) -> bool:
-    """Edit-level users always; contribute users need the 'comments' cap.
-    Plain read access is view-only."""
-    if found["can_edit"] or found["can_manage"]:
-        return True
-    caps = found.get("can_contribute") or {}
-    return "comments" in (caps.get("add") or [])
-
-
-@router.post("/{asset_id}/comments", status_code=201)
-def add_comment(
-    asset_id: str,
-    req: CommentCreate,
-    current_user: dict = Depends(_require_assets),
-    workspace: str = Depends(get_workspace),
-    _rl: None = Depends(_write_limit),
-):
-    _validate_asset_id(asset_id)
-    found = _find_or_404(current_user, workspace, asset_id)
-    if not _can_comment(found):
-        raise HTTPException(status_code=403, detail="You don't have comment access on this asset")
-    try:
-        comment = assets_service.add_comment(
-            found["store"],
-            asset_id,
-            req.text,
-            workspace=found["store_workspace"],
-            by=current_user["name"],
-            asset_workspace=workspace,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    if comment is None:
-        raise HTTPException(status_code=404, detail="Asset not found")
-    return comment
-
-
-@router.delete("/{asset_id}/comments/{comment_id}", status_code=204)
-def delete_comment(
-    asset_id: str,
-    comment_id: str,
-    current_user: dict = Depends(_require_assets),
-    workspace: str = Depends(get_workspace),
-    _rl: None = Depends(_write_limit),
-):
-    """Comments are an audit-style log — only an admin can remove one. Owners
-    who want them gone from view use the hide-comments toggle instead."""
-    _validate_asset_id(asset_id)
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Only an admin can delete comments")
-    found = _find_or_404(current_user, workspace, asset_id)
-    if not assets_service.delete_comment(
-        found["store"], asset_id, comment_id, workspace=found["store_workspace"]
-    ):
-        raise HTTPException(status_code=404, detail="Comment not found")
-
-
-@router.put("/{asset_id}/comments/visibility")
-def set_comments_visibility(
-    asset_id: str,
-    req: CommentsVisibility,
-    current_user: dict = Depends(_require_assets),
-    workspace: str = Depends(get_workspace),
-    _rl: None = Depends(_write_limit),
-):
-    """Edit-level toggle (set from the edit page): turn comments off (or back
-    on) for ALL users on this asset. Data is kept; posting is blocked while off."""
-    _validate_asset_id(asset_id)
-    found = _find_or_404(current_user, workspace, asset_id)
-    if not found["can_edit"]:
-        raise HTTPException(status_code=403, detail="Only an edit-level user can change this")
-    result = assets_service.set_comments_hidden(
-        found["store"],
-        asset_id,
-        req.hidden,
-        workspace=found["store_workspace"],
-        by=current_user["name"],
-    )
-    if result is None:
-        raise HTTPException(status_code=404, detail="Asset not found")
-    return {"ok": True, "comments_hidden": bool(req.hidden)}
-
-
-@router.get("/{asset_id}/mute")
-def get_comment_mute(
-    asset_id: str,
-    current_user: dict = Depends(_require_assets),
-    workspace: str = Depends(get_workspace),
-):
-    """Viewer's own comment-notification state for this asset (+subtree)."""
-    _validate_asset_id(asset_id)
-    found = _find_or_404(current_user, workspace, asset_id)
-    return assets_service.comment_mute_state(
-        current_user["name"], found["store"], asset_id, workspace=found["store_workspace"]
-    )
-
-
-@router.put("/{asset_id}/mute")
-def set_comment_mute(
-    asset_id: str,
-    req: MuteUpdate,
-    current_user: dict = Depends(_require_assets),
-    workspace: str = Depends(get_workspace),
-    _rl: None = Depends(_write_limit),
-):
-    """Per-user opt in/out of comment notifications for this asset and
-    everything inside it (mute is stored on this node; delivery walks ancestors)."""
-    _validate_asset_id(asset_id)
-    found = _find_or_404(current_user, workspace, asset_id)
-    assets_service.set_comment_mute(current_user["name"], asset_id, req.muted)
-    return assets_service.comment_mute_state(
-        current_user["name"], found["store"], asset_id, workspace=found["store_workspace"]
-    )
 
 
 # ---------------------------------------------------------------------------

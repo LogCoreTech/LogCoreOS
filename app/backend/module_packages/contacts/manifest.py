@@ -6,6 +6,34 @@ Second of the three largest, most structurally complex remaining modules
 the sidecar-share-index pattern (proven by Notes) and the locked-module
 pattern (proven by Tasks/Chat/Dashboards) were both already battle-tested.
 
+module_packages/contacts/backend/router.py (1476 lines) was later split by
+concern, mirroring module_packages/finance/backend/router.py's own
+router.py/router_banking.py/router_planning.py/router_invoicing.py/
+router_sharing.py/router_transfers.py split exactly: router.py keeps core
+contact CRUD, self-contact/profile, pipeline, custom fields, CSV
+import/export, photo, and the finance cross-module read; router_deals.py
+holds interactions + deals; router_sharing.py holds access/sharing
+(including the member/role pickers, matching where Finance's own split put
+those same two picker endpoints) and the leave/respond-share handshake;
+router_automation.py holds the X-Automation-Token-gated n8n API.
+`ModuleManifest.get_router()` only supports returning ONE router, so
+`_get_router()` below composes all four. Unlike Finance's own _get_router()
+(a fresh APIRouter with all six of its files include_router()'d into it),
+Contacts' core router.py itself has to BE the combined router — it keeps
+list_contacts/create_contact at bare "" paths (relying entirely on the
+mount prefix), and FastAPI's include_router() refuses to merge a "" route
+into a router mounted with no prefix of its own ("Prefix and path cannot be
+both empty"); only router_deals.py/router_sharing.py/router_automation.py
+(none of which has a "" route) get include_router()'d into it. Unlike
+Finance (which has genuinely distinct per-file OpenAPI tags going back to
+before its own conversion), every Contacts endpoint always shared one
+single "contacts" tag, applied instance-wide via this manifest's own
+`router_tags=["contacts"]` at the top-level `app.include_router()` call
+(module_registry.py's register_routers()) — so none of the `include_router()`
+calls here pass a tag of their own, keeping the OpenAPI grouping
+byte-identical to before this split rather than fragmenting it into four
+tags nothing before this ever had.
+
 services/contacts_service.py and services/contacts_index.py both
 deliberately stay core, never moving into this package — same "real
 external consumers keep a service in core" pattern as every prior
@@ -192,9 +220,36 @@ def _resolve_weight(config: dict, user: dict, workspace: str) -> dict:
 
 
 def _get_router():
-    from module_packages.contacts.backend.router import router
+    from fastapi import APIRouter
 
-    return router
+    from module_packages.contacts.backend import router as _core
+    from module_packages.contacts.backend import router_automation as _automation
+    from module_packages.contacts.backend import router_deals as _deals
+    from module_packages.contacts.backend import router_sharing as _sharing
+
+    # Unlike Finance's own six files, Contacts' core router.py keeps
+    # list_contacts ("") and create_contact ("") at the router's own root —
+    # routes that rely entirely on the mount prefix ("/api/v1/contacts") for
+    # their real path. FastAPI's include_router() refuses to merge a ""
+    # route into a target mounted with no prefix of its own ("Prefix and
+    # path cannot be both empty"), so _core.router can't be include_router()'d
+    # into a fresh wrapper the way Finance's six files are. Extending
+    # `.routes` directly bypasses that specific prefix/path check (it's only
+    # enforced inside include_router()) while still producing a genuinely
+    # NEW APIRouter object on every call — same idempotency guarantee as
+    # Finance's `combined = APIRouter()` pattern. Reassigning
+    # `combined = _core.router` instead (mutating that cached singleton
+    # in place) was tried and rejected: a second call in the same process
+    # (e.g. a test suite building the app more than once) would re-run the
+    # three include_router() calls below against the now-already-merged
+    # router, silently re-appending duplicate deals/sharing/automation
+    # routes each time.
+    combined = APIRouter()
+    combined.routes.extend(_core.router.routes)
+    combined.include_router(_deals.router)
+    combined.include_router(_sharing.router)
+    combined.include_router(_automation.router)
+    return combined
 
 
 def _search_contacts(query: str, tags: list[str], user: dict, workspace: str) -> list[dict]:

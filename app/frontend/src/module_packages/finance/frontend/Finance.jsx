@@ -1,6 +1,10 @@
 import { useEffect, useState, useRef } from 'react'
 import HelpButton from '../../../components/HelpButton'
 import TrashLink from '../../../components/TrashLink'
+import SelectCheckbox from '../../../components/SelectCheckbox'
+import BulkActionBar from '../../../components/BulkActionBar'
+import useBulkSelect from '../../../lib/useBulkSelect'
+import { useToast } from '../../../lib/toast'
 import { useSearchParams } from 'react-router-dom'
 import { finance as financeApi } from './api'
 import { assets as assetsApi } from '../../assets/frontend/api'
@@ -509,7 +513,37 @@ function TransactionsView({ book, canEdit, canAdd, contribute, onAdd, onEdit, on
   const [category, setCategory] = useState('__all')
   const [offset, setOffset] = useState(0)
   const [loading, setLoading] = useState(true)
+  const bulkSelect = useBulkSelect()
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const toast = useToast()
   const LIMIT = 100
+
+  async function handleBulkDelete() {
+    setConfirmBulkDelete(false)
+    setBulkDeleting(true)
+    try {
+      const result = await financeApi.bulkDeleteTransactions(book.id, [...bulkSelect.selected])
+      // Removed locally rather than re-fetching the whole page from the
+      // server — this view's own load effect is keyed on
+      // [book.id, q, account, category, offset], none of which change on a
+      // delete, so it wouldn't refire on its own.
+      if (result.deleted?.length) {
+        setItems(prev => prev.filter(tx => !result.deleted.includes(tx.id)))
+        setTotal(t => Math.max(0, t - result.deleted.length))
+      }
+      if (result.failed?.length) {
+        toast.error(`${result.deleted.length} deleted, ${result.failed.length} couldn't be deleted.`)
+      } else {
+        toast.success(`${result.deleted.length} transaction${result.deleted.length === 1 ? '' : 's'} deleted`)
+      }
+      bulkSelect.stop()
+    } catch (err) {
+      toast.error(err.message || 'Bulk delete failed.')
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
 
   useEffect(() => {
     let alive = true
@@ -550,8 +584,22 @@ function TransactionsView({ book, canEdit, canAdd, contribute, onAdd, onEdit, on
           <option value="">Uncategorized</option>
           {(book.categories || []).map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
         </select>
+        <button
+          onClick={() => (bulkSelect.active ? bulkSelect.stop() : bulkSelect.setActive(true))}
+          className="btn-ghost text-sm md:hidden"
+        >
+          {bulkSelect.active ? 'Cancel' : 'Select'}
+        </button>
         {canAdd && <button onClick={onAdd} className="btn-primary shrink-0">＋ Add</button>}
       </div>
+
+      <BulkActionBar
+        count={bulkSelect.count}
+        onCancel={bulkSelect.stop}
+        actions={[
+          { label: 'Delete', variant: 'danger', busy: bulkDeleting, onClick: () => setConfirmBulkDelete(true) },
+        ]}
+      />
 
       {contribute && !contribute.caps?.see_all_tx && (
         <p className="text-[11px] text-charcoal-400 dark:text-charcoal-500">
@@ -569,28 +617,47 @@ function TransactionsView({ book, canEdit, canAdd, contribute, onAdd, onEdit, on
         <div className="card divide-y divide-charcoal-100 dark:divide-charcoal-700/60">
           {items.map(tx => {
             const isTransfer = !!tx.transfer_pair_id
+            const editable = rowEditable(tx)
+            // Transfer legs are edited/deleted from the Transfer only (see
+            // _reject_transfer_leg server-side) — never individually
+            // selectable for bulk delete either.
+            const selectable = editable && !isTransfer
             return (
-              <button
+              <div
                 key={tx.id}
-                onClick={() => rowEditable(tx) && (isTransfer ? onEditTransfer(tx) : onEdit(tx))}
-                disabled={!rowEditable(tx)}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-left disabled:cursor-default hover:bg-charcoal-50 dark:hover:bg-charcoal-800/60 transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-charcoal-50 dark:hover:bg-charcoal-800/60 transition-colors"
               >
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm truncate">
-                    {isTransfer
-                      ? `⇄ ${tx.amount_cents < 0 ? `To ${tx.transfer_peer_book_name}` : `From ${tx.transfer_peer_book_name}`}`
-                      : (tx.payee || tx.notes || (tx.amount_cents > 0 ? 'Income' : 'Expense'))}
-                  </p>
-                  <p className="text-xs text-charcoal-500 dark:text-charcoal-400">
-                    {tx.date} · {accountName[tx.account_id] || 'Unknown account'}
-                    {isTransfer ? ` · ${tx.transfer_peer_account_name}` : (tx.category ? ` · ${tx.category}` : '')}
-                  </p>
-                </div>
-                <span className={`font-medium text-sm shrink-0 ${isTransfer ? 'text-charcoal-500 dark:text-charcoal-400' : tx.amount_cents > 0 ? 'text-green-600 dark:text-green-400' : ''}`}>
-                  {fmtMoney(tx.amount_cents, book.currency)}
-                </span>
-              </button>
+                {selectable && (
+                  <SelectCheckbox
+                    checked={bulkSelect.isSelected(tx)}
+                    onChange={() => bulkSelect.toggle(tx)}
+                    label={`Select ${tx.payee || tx.notes || tx.date} transaction`}
+                    className={bulkSelect.active ? 'inline-flex' : 'hidden md:inline-flex'}
+                  />
+                )}
+                {/* Nested inside the row's own div (not a <button> root) so the
+                    checkbox above stays valid, non-nested-interactive HTML. */}
+                <button
+                  onClick={() => editable && (isTransfer ? onEditTransfer(tx) : onEdit(tx))}
+                  disabled={!editable}
+                  className="flex-1 min-w-0 flex items-center gap-3 text-left disabled:cursor-default"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm truncate">
+                      {isTransfer
+                        ? `⇄ ${tx.amount_cents < 0 ? `To ${tx.transfer_peer_book_name}` : `From ${tx.transfer_peer_book_name}`}`
+                        : (tx.payee || tx.notes || (tx.amount_cents > 0 ? 'Income' : 'Expense'))}
+                    </p>
+                    <p className="text-xs text-charcoal-500 dark:text-charcoal-400">
+                      {tx.date} · {accountName[tx.account_id] || 'Unknown account'}
+                      {isTransfer ? ` · ${tx.transfer_peer_account_name}` : (tx.category ? ` · ${tx.category}` : '')}
+                    </p>
+                  </div>
+                  <span className={`font-medium text-sm shrink-0 ${isTransfer ? 'text-charcoal-500 dark:text-charcoal-400' : tx.amount_cents > 0 ? 'text-green-600 dark:text-green-400' : ''}`}>
+                    {fmtMoney(tx.amount_cents, book.currency)}
+                  </span>
+                </button>
+              </div>
             )
           })}
         </div>
@@ -600,6 +667,17 @@ function TransactionsView({ book, canEdit, canAdd, contribute, onAdd, onEdit, on
         <button onClick={() => setOffset(offset + LIMIT)} className="btn-ghost w-full text-sm">
           Load more ({total - items.length} left)
         </button>
+      )}
+
+      {confirmBulkDelete && (
+        <ConfirmDialog
+          title="Delete selected transactions?"
+          message={`${bulkSelect.count} transaction${bulkSelect.count === 1 ? '' : 's'} will be moved to Trash and can be restored within 30 days.`}
+          danger
+          confirmLabel="Delete"
+          onConfirm={handleBulkDelete}
+          onCancel={() => setConfirmBulkDelete(false)}
+        />
       )}
     </div>
   )
@@ -636,12 +714,12 @@ function NewBookModal({ workspace, isAdmin, onClose, onCreated }) {
         <form onSubmit={submit} className="space-y-3">
           <div className="grid grid-cols-[1fr_4rem] gap-2">
             <div>
-              <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Name</label>
+              <label className="block text-sm font-medium mb-1">Name</label>
               <input className="input" value={name} onChange={e => setName(e.target.value)} maxLength={80} autoFocus
                 placeholder={workspace === 'business' ? 'LLC books' : 'Family budget'} required />
             </div>
             <div>
-              <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Icon</label>
+              <label className="block text-sm font-medium mb-1">Icon</label>
               <input className="input text-center" value={icon} onChange={e => setIcon(e.target.value)} maxLength={8} />
             </div>
           </div>

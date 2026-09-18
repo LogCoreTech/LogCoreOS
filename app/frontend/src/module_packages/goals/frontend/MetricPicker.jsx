@@ -31,7 +31,7 @@ function renderConfigField(f, config, setConfig) {
     case 'number':
       return (
         <div>
-          <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>
+          <label className="block text-sm font-medium mb-1">{label}</label>
           <input
             type="number"
             className="input w-full"
@@ -43,7 +43,7 @@ function renderConfigField(f, config, setConfig) {
     case 'select':
       return (
         <div>
-          <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>
+          <label className="block text-sm font-medium mb-1">{label}</label>
           <select className="input w-full" value={val || f.options[0].value} onChange={e => set(e.target.value)}>
             {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
@@ -52,7 +52,7 @@ function renderConfigField(f, config, setConfig) {
     default:
       return (
         <div>
-          <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>
+          <label className="block text-sm font-medium mb-1">{label}</label>
           <input className="input w-full" value={val || ''} onChange={e => set(e.target.value)} />
         </div>
       )
@@ -84,7 +84,7 @@ export default function MetricPicker({ value, onChange }) {
 
   return (
     <div className="space-y-2">
-      <label className="text-xs text-charcoal-500 dark:text-charcoal-400">
+      <label className="block text-sm font-medium mb-1">
         Metric (optional — drives progress automatically instead of a manual checkbox)
       </label>
       <select className="input w-full" value={selectedKey} onChange={e => pickProvider(e.target.value)}>

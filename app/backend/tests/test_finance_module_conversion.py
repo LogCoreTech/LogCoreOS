@@ -148,7 +148,9 @@ def test_simplefin_admin_endpoints_now_module_gated(brain):
 
 def test_finance_router_assembles_all_six_sub_routers(brain):
     """The manifest's _get_router() composes 6 separate router files into
-    one — confirms the combined router has all 78 original endpoints and
+    one — confirms the combined router has all 79 original endpoints
+    (bumped from 78 by the bulk-delete-transactions endpoint added for
+    bulk-select/bulk-delete parity with Tasks/Notes/Assets/Contacts) and
     keeps each sub-router's own original tag (no new umbrella tag added,
     so the OpenAPI grouping stays byte-identical to before this
     conversion)."""
@@ -159,7 +161,7 @@ def test_finance_router_assembles_all_six_sub_routers(brain):
     for route in router.routes:
         tags.update(route.tags)
 
-    assert len(router.routes) == 78
+    assert len(router.routes) == 79
     assert tags == {
         "finance",
         "finance-banking",

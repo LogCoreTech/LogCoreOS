@@ -122,7 +122,7 @@ From a full walkthrough of the chat agent (`services/agent_service.py`, `service
 - [ ] **No streaming of agent steps to the UI** — `run_agent` runs its entire loop (up to 10 LLM round-trips + tool calls) server-side before `routers/chat.py` returns one JSON blob; SSE streaming of steps as they happen would be a meaningful perceived-responsiveness win for multi-step tasks
 - [ ] **`search_brain` is substring matching, not semantic** (`agent_service.py:1548`) — plain `query.lower()` scan; misses synonym/paraphrase queries. Feeds into the RAG over the Brain item above rather than being a separate project
 
-Cross-reference: the per-user JSON write race (`task_service.py` has no read-modify-write lock) is tracked above under Security and under Idea Backlog → Technical/Architecture/DevOps — not repeated here.
+Cross-reference: the per-user JSON write race is tracked under Idea Backlog → Technical/Architecture/DevOps below (`task_service.py` itself was fixed 2026-08-12 via `file_service.update_json()`; other services' remaining mutators are the still-open part) — not repeated here.
 
 ---
 
@@ -209,7 +209,6 @@ Generated across a systematic search→generate→compare→document pass over t
 - Block the last-admin demotion/deletion path — nothing stops permanently locking an instance out of its own admin functions.
 - Warn (or block) deleting a feature role still assigned to users — can silently widen access via the `member` fallback (see the matching Security CHECK item above — same root issue).
 - Fix the admin-create-user password handoff — no forced change, no invite-link option; the admin invents and relays a password by hand today.
-- Decide deliberately whether `/docs`/`/redoc` stay enabled on every deployment, especially the public demo.
 - Independent third-party penetration test before managed hosting accepts non-beta paying customers.
 - SOC 2 readiness gap-assessment (a document, not an audit).
 - Bug bounty / vulnerability reward program.
@@ -260,16 +259,13 @@ Fully triaged 2026-09-04 — see the **UX Polish Batch** section near the top of
 - Audit whether CI actually gates the frontend build, or only backend pytest.
 - Baseline transactional email infrastructure (a provider-abstracted `email_service.py`) — unblocks password reset, Help feedback delivery, and email digests in one shot; the app currently has zero outbound email capability at all.
 - Extract `agent_service.py`'s `_USER_TOOLS`/`_ADMIN_TOOLS` schema lists (lines 75-482, ~406 lines of pure tool-name/description/input-schema data, zero logic) into a separate `agent_tool_schemas.py` — the original "break up into per-module tool files" framing for this item is stale (re-scoped 2026-09-07): every module-owned tool already moved out during the Mod Store conversion, so what's left in this file (the core tools in `_USER_TOOLS`/`_ADMIN_TOOLS`, plus `_execute_tool()`'s ~620-line dispatch logic and the session/run/pending-turn/presence management) is genuinely core orchestration infrastructure that shouldn't be split further, matching `module_registry.py`'s own "never converts" carve-out for this file. Only the schema-data extraction is still a real, low-risk win.
-- Close the remaining API-doc coverage gap — re-measured 2026-09-07: `docs/API.md` documents ~93% of the real 390-endpoint surface (the old "~39% of 298" figure here was wrong on both the numerator and denominator). ~28 endpoints are still genuinely undocumented, concentrated in Dashboard Templates (9, the single biggest gap) and the bulk-delete route every module with one now has (4).
 - Hosted developer/API documentation site, generated from the OpenAPI schema — early groundwork for the Phase 7 plugin-ecosystem roadmap item.
-- Migrate the remaining per-user JSON stores to `file_service.update_json()` (or an equivalent lock) — the shared read-modify-write helper shipped 2026-08-12 closes this race for Tasks, Goals, and Trash already; Contacts' `create_contact()`/self-contact onboarding as of 2026-08-17; and, as of 2026-09-07/08 (see `docs/MEMORY.md`'s Security Rules 20-21), `auth.json`'s role-update/delete, and the `update_access()` (sharing) function specifically in Notes/Assets/Contacts/Finance (Finance's also covers its concrete co-writer, `set_account_sync_state()`). **Still open**: every OTHER mutator in these same files (~15-18 call sites each in Assets/Finance alone) plus Dashboards' own `_load`/`_save` chokepoint (a cheap single-function fix, not yet done) and the nightly `recurring_service.process_user()` job's own unlocked write to `tasks.json` (a gap in a file whose interactive endpoints are already migrated) — a full prioritized Tier 1/2/3 list exists from the 2026-09-07 audit, not reproduced here.
 - CONTRIBUTING.md scope note documenting the AI tool-registry pattern in `agent_service.py` — the least self-explanatory, most-touched file for new contributors.
 - Feature-flag-driven canary rollout to managed instances before self-hosted `master`.
 - Staged/canary rollout across managed tenants for releases, distinct from what gets installed.
 - Structured application logging (JSON + level config) instead of ad-hoc `logger.*` calls.
 - Dependency vulnerability scanning in CI (Dependabot/Renovate + `pip-audit`/`npm audit` gate).
 - Load/perf smoke test before the public demo opens registration.
-- Split `routers/auth.py` (1,230 lines as of 2026-09-07, up from a stale 1,009 — it grew since this was filed) by concern.
 - Deep health-check endpoint — `GET /health` is a hardcoded `{"status":"ok"}` with zero real checks.
 - Module scaffolding script implementing the documented 7-step "Adding a New Module" checklist.
 - Scheduler job isolation audit (a verification pass, not a known bug).

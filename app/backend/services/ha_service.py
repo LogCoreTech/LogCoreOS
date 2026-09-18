@@ -80,6 +80,31 @@ def get_state(entity_id: str) -> dict:
         return r.json()
 
 
+# Domains the app's own UI/AI-tool passthroughs are meant to expose when the
+# target domain comes from user/model input rather than a hardcoded call site
+# in this codebase. Anything else (e.g. homeassistant.restart, automation.
+# turn_off, shell_command.*) is a system-level HA service and must not be
+# reachable by crafting an entity_id or asking the AI to call it directly.
+# Deliberately NOT enforced inside call_service() itself — trigger_automation()
+# below and activate_scene's own hardcoded "scene" domain both call through
+# here with a domain baked into the CODE, not user input, and must keep
+# working regardless of this allowlist (2026-09-16, found while closing the
+# identical gap in module_packages/home_assistant/backend/agent_tools.py's
+# own control_home_assistant_device tool — see that file and router.py's own
+# call_entity_service for the two real enforcement points).
+ALLOWED_SERVICE_DOMAINS = {
+    "light",
+    "switch",
+    "climate",
+    "lock",
+    "cover",
+    "fan",
+    "media_player",
+    "vacuum",
+    "scene",
+}
+
+
 def call_service(domain: str, service: str, data: dict) -> dict:
     """Call a HA service (turn_on, turn_off, set_temperature, etc.)."""
     with _client() as c:

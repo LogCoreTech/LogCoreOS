@@ -21,7 +21,7 @@ export default function ContactNumberFieldPicker({ value, onChange, label }) {
 
   return (
     <div>
-      {label && <label className="text-xs text-charcoal-500 dark:text-charcoal-400">{label}</label>}
+      {label && <label className="block text-sm font-medium mb-1">{label}</label>}
       {fields === null ? (
         <p className="text-xs text-charcoal-400">Loading…</p>
       ) : numberFields.length === 0 ? (

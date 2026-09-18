@@ -422,21 +422,21 @@ function InvoiceModal({ book, invoice, clients, canEdit, prefill, onPrefillConsu
               onChange={chooseClient}
             />
             <div>
-              <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Tax %</label>
+              <label className="block text-sm font-medium mb-1">Tax %</label>
               <input className="input" inputMode="decimal" value={taxPct} onChange={e => setTaxPct(e.target.value)} />
             </div>
             <div>
-              <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Issued</label>
+              <label className="block text-sm font-medium mb-1">Issued</label>
               <input type="date" className="input" value={issueDate} onChange={e => setIssueDate(e.target.value)} required />
             </div>
             <div>
-              <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Due</label>
+              <label className="block text-sm font-medium mb-1">Due</label>
               <input type="date" className="input" value={dueDate} onChange={e => setDueDate(e.target.value)} required />
             </div>
           </div>
 
           <div>
-            <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Line items</label>
+            <label className="block text-sm font-medium mb-1">Line items</label>
             <div className="space-y-1.5">
               {items.map((item, idx) => (
                 <div key={idx} className="flex gap-1.5">

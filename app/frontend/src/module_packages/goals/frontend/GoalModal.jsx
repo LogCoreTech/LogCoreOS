@@ -276,26 +276,26 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
           ) : editing ? (
             <form onSubmit={save} className="space-y-3">
               <div>
-                <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Title</label>
+                <label className="block text-sm font-medium mb-1">Title</label>
                 <input className="input w-full" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} autoFocus />
               </div>
               <div>
-                <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Category</label>
+                <label className="block text-sm font-medium mb-1">Category</label>
                 <select className="input w-full" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
                   <option value="">—</option>
                   {categories.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
-                <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Due date (optional)</label>
+                <label className="block text-sm font-medium mb-1">Due date (optional)</label>
                 <input type="date" className="input w-full" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} />
               </div>
               <div>
-                <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Tags</label>
+                <label className="block text-sm font-medium mb-1">Tags</label>
                 <TagInput value={form.tags} onChange={t => setForm({ ...form, tags: t })} suggestions={tagSuggestions} placeholder="Add a tag…" />
               </div>
               <div>
-                <label className="text-xs text-charcoal-500 dark:text-charcoal-400">Notes</label>
+                <label className="block text-sm font-medium mb-1">Notes</label>
                 <textarea className="input w-full" rows={3} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
               </div>
               <MetricPicker value={form.metric} onChange={m => setForm({ ...form, metric: m })} />

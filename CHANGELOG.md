@@ -48,6 +48,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Delete confirmations on Contacts, Assets, and Finance now accurately describe what actually happens (moved to Trash, recoverable for 30 days — and for Contacts, that logged interactions/deals on the contact are NOT recoverable even if you restore the contact itself), instead of a generic "cannot be undone" message that wasn't true anymore.
 - More icon-only buttons across the app (including the emoji picker) now have proper screen-reader labels, and several modal titles that could overflow on mobile with a long item name now truncate correctly instead of pushing the layout wider.
 - Three new reference docs for anyone extending the app: `docs/MODULE_AUTHORING.md` (how to add a new module today — the old checklist had gone stale), `docs/COMPONENTS.md` (shared hooks/components and the modal-focus pattern that's caused a few repeat bugs), and `docs/DESIGN.md` (button/label/tab conventions).
+- **Finance transactions can now select multiple items at once and delete them together**, the same "Select"/bulk-delete pattern Tasks/Notes/Assets/Contacts already had — the last of the list-heavy modules to gain it.
 
 ### Fixed
 
@@ -63,8 +64,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Fixed a real bug**: accepting a share notification on an Asset or a Dashboard Template could, in a specific scenario (the same item shared with a group you're in AND separately shared with someone else at a higher access level), silently grant you that other person's higher access too — not just your own. Now only ever grants exactly what was actually shared with you.
 - Fixed a bug where, once behind a reverse proxy (an optional self-hosted setup), a remote visitor could spoof their own IP address to bypass every rate limit in the app (login attempts, registration, etc.).
 - Fixed a bug where an admin account that had just been demoted or deleted could, for a short window, still use its old browser session to create new accounts on an instance with registration closed.
-- Fixed two more places (in addition to the ones above) with the same kind of "two things changing at once could silently undo one of them" bug: an admin changing a user's role/deleting them, and revoking someone's access to a shared Note/Asset/Contact/Finance book.
-- The Home Assistant integration's device-control action is now restricted to actual device types (lights, switches, climate, locks, etc.) rather than accepting any Home Assistant service name.
+- Fixed two more places (in addition to the ones above) with the same kind of "two things changing at once could silently undo one of them" bug: an admin changing a user's role/deleting them, and revoking someone's access to a shared Note/Asset/Contact/Finance book. Closed out every remaining place in Assets, Finance, and Dashboards with the same class of bug, plus the nightly recurring-task job's own unprotected write.
+- The Home Assistant integration's device-control action is now restricted to actual device types (lights, switches, climate, locks, etc.) rather than accepting any Home Assistant service name — including the AI's own version of that same action, which had the identical gap.
 - The interactive API documentation (`/docs`, `/redoc`) is now off by default — turn it on with `ENABLE_API_DOCS=true` if you want it for your own integration development.
 - A handful of admin actions that were missing the app's standard rate limit now have it; admin-created accounts now require the same minimum password length self-registration does.
 - Bumped a dependency that had a known (if low-severity, self-hosted) denial-of-service advisory.
