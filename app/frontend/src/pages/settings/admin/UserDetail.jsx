@@ -55,6 +55,10 @@ export default function UserDetail() {
   const [bankBusy, setBankBusy] = useState(false)
   const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
 
+  // Password reset
+  const [tempPassword, setTempPassword] = useState(null)
+  const [resetting, setResetting] = useState(false)
+
   function flash(ok, text) {
     setMsg({ ok, text })
     setTimeout(() => setMsg(null), 4000)
@@ -178,6 +182,18 @@ export default function UserDetail() {
   function goToDelete() {
     if (!target) return
     navigate(`/settings/admin/users/${userId}/delete`)
+  }
+
+  async function resetPassword() {
+    setResetting(true)
+    try {
+      const r = await adminApi.resetPassword(userId)
+      setTempPassword(r.temp_password)
+    } catch (err) {
+      flash(false, err.message || 'Failed to reset password')
+    } finally {
+      setResetting(false)
+    }
   }
 
   // --- Bank connection actions ---
@@ -461,6 +477,35 @@ export default function UserDetail() {
             <p className="font-mono">{revealed}</p>
             <button onClick={() => setRevealed(null)} className="text-orange-500 mt-1">Hide</button>
           </div>
+        )}
+      </div>
+
+      {/* Password reset */}
+      <div className="card p-5">
+        <h2 className="font-semibold mb-1">Password</h2>
+        <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-3">
+          Generate a random temporary password for this user. They&apos;ll be required to set their
+          own the next time they use it.
+        </p>
+        {tempPassword ? (
+          <div className="text-sm bg-charcoal-50 dark:bg-charcoal-800 rounded-lg p-3">
+            <p className="text-charcoal-500 dark:text-charcoal-400 mb-1">
+              Temporary password (shown once — copy it now):
+            </p>
+            <p className="font-mono select-all break-all">{tempPassword}</p>
+            <button onClick={() => setTempPassword(null)} className="text-orange-500 mt-2 text-sm">
+              Done
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={resetPassword}
+            disabled={resetting || isSelf}
+            title={isSelf ? 'Use Settings → Account to change your own password' : ''}
+            className="btn-ghost text-sm disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            {resetting ? 'Resetting…' : 'Reset Password'}
+          </button>
         )}
       </div>
 

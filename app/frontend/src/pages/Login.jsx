@@ -16,7 +16,7 @@ export default function Login() {
   const [bgLoaded, setBgLoaded] = useState(false)
   const [demoLoading, setDemoLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const { login, demoMode } = useAuth()
+  const { login, refreshUser, demoMode } = useAuth()
   const navigate = useNavigate()
   const tabRefs = useRef([])
 
@@ -36,6 +36,11 @@ export default function Login() {
         const me = await authApi.login(email, password)
         const status = await setupApi.status()
         login(me.id, me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC', me.accent_color || null, me.dark_mode || 'system', me.background || null, me.density || 'comfortable', me.corner_style || 'rounded', me.workspaces || ['personal'])
+        // login()'s own response above is a narrower shape than /me (no
+        // must_change_password, among others) — refresh from /me itself so
+        // a password-reset admin flagged doesn't slip through to a normal
+        // session until the next 30s poll.
+        await refreshUser()
         navigate(status.setup_complete ? '/' : '/setup')
       } else {
         const me = await authApi.register(email, password, name)

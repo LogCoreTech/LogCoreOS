@@ -206,7 +206,40 @@ def me(current_user: dict = Depends(get_current_user), _rl: None = Depends(_get_
         "welcome_back_threshold_days": current_user.get("welcome_back_threshold_days", 7),
         "tasks_filter": current_user.get("tasks_filter", "pending"),
         "tasks_sort_mode": current_user.get("tasks_sort_mode", "priority"),
+        "must_change_password": current_user.get("must_change_password", False),
     }
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=8)
+
+
+_password_limit = rate_limit(
+    5, 60
+)  # tighter than _me_limit — verifies a password, brute-force risk
+
+
+@router.post("/me/password")
+def change_password(
+    req: ChangePasswordRequest,
+    current_user: dict = Depends(get_current_user),
+    _rl: None = Depends(_password_limit),
+):
+    """Self-service password change — also how a `must_change_password` reset
+    (see admin_users.py's reset_password) gets cleared: the temp password IS
+    `current_password` here, same endpoint either way, no separate forced-flow
+    path needed."""
+    if not auth_service.verify_password(req.current_password, current_user["hashed_password"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    auth_service.update_user(
+        current_user["id"],
+        {
+            "hashed_password": auth_service.hash_password(req.new_password),
+            "must_change_password": False,
+        },
+    )
+    return {"ok": True}
 
 
 @router.post("/me/background")

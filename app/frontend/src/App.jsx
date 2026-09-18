@@ -5,6 +5,7 @@ import { WorkspaceProvider } from './lib/workspace'
 import { ToastProvider } from './lib/toast'
 import { MODULE_PACKAGES, isPackageModule } from './lib/moduleRegistry'
 import ErrorBoundary from './components/ErrorBoundary'
+import ForcePasswordChange from './components/ForcePasswordChange'
 import Layout from './components/Layout'
 import Dashboard from './module_packages/dashboard/frontend/Dashboard'
 import Brain from './pages/Brain'
@@ -27,6 +28,7 @@ import AdminTeam from './pages/settings/admin/Team'
 import AdminHousehold from './pages/settings/admin/Household'
 import AdminHosting from './pages/settings/admin/Hosting'
 import AdminModStore from './pages/settings/admin/ModStore'
+import AdminAuditLog from './pages/settings/admin/AuditLog'
 import Login from './pages/Login'
 import Setup from './pages/Setup'
 import Profile from './pages/Profile'
@@ -35,6 +37,7 @@ import Help from './pages/Help'
 function Protected({ children }) {
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" replace />
+  if (user.mustChangePassword) return <ForcePasswordChange />
   return children
 }
 
@@ -125,6 +128,7 @@ export default function App() {
                   <Route path="/settings/admin/household" element={<AdminOnly><AdminHousehold /></AdminOnly>} />
                   <Route path="/settings/admin/hosting" element={<AdminOnly><AdminHosting /></AdminOnly>} />
                   <Route path="/settings/admin/mod-store" element={<AdminOnly><AdminModStore /></AdminOnly>} />
+                  <Route path="/settings/admin/audit-log" element={<AdminOnly><AdminAuditLog /></AdminOnly>} />
                   <Route path="/help"     element={<Help />} />
                 </Route>
               </Routes>

@@ -4,13 +4,14 @@ of the old routers/auth.py. See routers/auth/__init__.py's docstring for the
 full rationale of this package split."""
 
 import logging
+import secrets
 import shutil
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
-from services import auth_service, user_deletion_service
+from services import audit_log, auth_service, user_deletion_service
 from services.features_service import all_module_ids as _all_module_ids
 from services.file_service import user_path
 
@@ -43,9 +44,23 @@ def update_user_role_legacy(
     """Promote or demote a user's role (admin only)."""
     if user_id == current_user["id"]:
         raise HTTPException(status_code=400, detail="Cannot change your own role")
+    target = auth_service.get_user_by_id(user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target["role"] == "admin" and req.role != "admin" and auth_service.admin_count() <= 1:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot demote the last admin — promote another user to admin first.",
+        )
     user = auth_service.update_user(user_id, {"role": req.role})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    audit_log.record(
+        current_user,
+        "user.role_change",
+        target["name"],
+        {"from": target["role"], "to": req.role},
+    )
     return {"ok": True, "role": req.role}
 
 
@@ -75,9 +90,16 @@ def update_user_modules(
         raise HTTPException(
             status_code=400, detail="Admins cannot restrict their own module access"
         )
-    user = auth_service.update_user(user_id, {"disabled_modules": req.disabled_modules})
-    if not user:
+    target = auth_service.get_user_by_id(user_id)
+    if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    user = auth_service.update_user(user_id, {"disabled_modules": req.disabled_modules})
+    audit_log.record(
+        current_user,
+        "user.modules_change",
+        target["name"],
+        {"from": target.get("disabled_modules", []), "to": req.disabled_modules},
+    )
     return {"ok": True, "disabled_modules": req.disabled_modules}
 
 
@@ -311,6 +333,18 @@ def admin_list_users(current_user: dict = Depends(require_admin)):
     return {"users": users}
 
 
+@router.get("/admin/audit-log")
+def admin_get_audit_log(
+    limit: int = 100,
+    current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_admin_limit),
+):
+    """Recent admin actions (user deletion, role changes, module toggles —
+    both per-user disabled_modules edits and instance-wide Mod Store
+    install/uninstall), most-recent-first. See services/audit_log.py."""
+    return {"entries": audit_log.list_entries(limit)}
+
+
 @router.patch("/admin/users/{user_id}")
 def admin_update_user_role(
     user_id: str,
@@ -320,10 +354,53 @@ def admin_update_user_role(
 ):
     if user_id == current_user["id"]:
         raise HTTPException(status_code=400, detail="Cannot change your own role")
+    target = auth_service.get_user_by_id(user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target["role"] == "admin" and req.role != "admin" and auth_service.admin_count() <= 1:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot demote the last admin — promote another user to admin first.",
+        )
     try:
-        return auth_service.update_user_role(user_id, req.role)
+        result = auth_service.update_user_role(user_id, req.role)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    audit_log.record(
+        current_user,
+        "user.role_change",
+        target["name"],
+        {"from": target["role"], "to": req.role},
+    )
+    return result
+
+
+@router.post("/admin/users/{user_id}/reset-password")
+def admin_reset_password(
+    user_id: str,
+    current_user: dict = Depends(require_admin),
+    _rl: None = Depends(_admin_limit),
+):
+    """Generate a random temp password for a user who's locked themselves
+    out, and flag their account so they're required to set their own on
+    next use of it (enforced client-side by must_change_password in /me;
+    cleared by POST /me/password — the same endpoint self-service change
+    uses, since the temp password IS their "current password" there). No
+    UI reveal beyond returning it plainly once here, no in-app notification
+    to the user — they'll discover the reset when they next try to log in."""
+    target = auth_service.get_user_by_id(user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    temp_password = secrets.token_urlsafe(12)
+    auth_service.update_user(
+        user_id,
+        {
+            "hashed_password": auth_service.hash_password(temp_password),
+            "must_change_password": True,
+        },
+    )
+    audit_log.record(current_user, "user.password_reset", target["name"])
+    return {"temp_password": temp_password}
 
 
 @router.delete("/admin/users/{user_id}", status_code=204)
@@ -337,6 +414,11 @@ def admin_delete_user(
     target = auth_service.get_user_by_id(user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    if target["role"] == "admin" and auth_service.admin_count() <= 1:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete the last admin — promote another user to admin first.",
+        )
     preview = user_deletion_service.build_preview(target)
     if preview["eligible_items"]:
         raise HTTPException(
@@ -347,6 +429,7 @@ def admin_delete_user(
             ),
         )
     auth_service.delete_user(user_id)
+    audit_log.record(current_user, "user.delete", target["name"], {"role": target["role"]})
     brain_dir = user_path(target["name"])
     if brain_dir.exists():
         shutil.rmtree(brain_dir)
@@ -384,6 +467,11 @@ def admin_user_deletion_execute(
     target = auth_service.get_user_by_id(user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    if target["role"] == "admin" and auth_service.admin_count() <= 1:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete the last admin — promote another user to admin first.",
+        )
     try:
         user_deletion_service.execute(
             target,
@@ -392,4 +480,5 @@ def admin_user_deletion_execute(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    audit_log.record(current_user, "user.delete", target["name"], {"role": target["role"]})
     return {"ok": True}

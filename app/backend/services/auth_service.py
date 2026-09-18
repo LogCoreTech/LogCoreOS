@@ -155,6 +155,10 @@ def user_count() -> int:
     return len(_load_auth()["users"])
 
 
+def admin_count() -> int:
+    return sum(1 for u in _load_auth()["users"] if u["role"] == "admin")
+
+
 def get_user_by_email(email: str) -> dict | None:
     return next((u for u in _load_auth()["users"] if u["email"] == email.lower()), None)
 

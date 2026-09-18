@@ -112,6 +112,8 @@ export const auth = {
   today:            ()                => get('/auth/today'),
   status:           ()                => get('/auth/status'),
   updateMe:         (data)            => patch('/auth/me', data),
+  changePassword:   (currentPassword, newPassword) =>
+    post('/auth/me/password', { current_password: currentPassword, new_password: newPassword }),
   uploadBackground: (file)            => requestFile('POST', '/auth/me/background', file),
   deleteBackground: ()                => del('/auth/me/background'),
 }
@@ -156,6 +158,7 @@ export const admin = {
   createUser:        (u)                         => post('/auth/admin/users', u),
   updateUserRole:    (id, role)                  => patch(`/auth/admin/users/${id}`, { role }),
   deleteUser:        (id)                        => del(`/auth/admin/users/${id}`),
+  resetPassword:     (id)                        => post(`/auth/admin/users/${id}/reset-password`, {}),
   deletionPreview:   (id)                        => get(`/auth/admin/users/${id}/deletion-preview`),
   deletionExecute:   (id, decisions)              => post(`/auth/admin/users/${id}/deletion-execute`, { decisions }),
   updateModules:          (userId, disabledModules)          => patch(`/auth/users/${userId}/modules`, { disabled_modules: disabledModules }),
@@ -164,6 +167,7 @@ export const admin = {
   updatePoolEdit:         (userId, poolEdit)                 => patch(`/auth/admin/users/${userId}/pool-edit`, { pool_edit: poolEdit }),
   updateUser:        (userId, data)              => patch(`/auth/users/${userId}`, data),
   updateRole:        (userId, role)              => patch(`/auth/users/${userId}/role`, { role }),
+  getAuditLog:       (limit = 100)                => get(`/auth/admin/audit-log?limit=${limit}`),
   // Registration settings
   getSettings:       ()                          => get('/auth/admin/settings'),
   updateSettings:    (s)                         => patch('/auth/admin/settings', s),

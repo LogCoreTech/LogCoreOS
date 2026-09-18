@@ -63,6 +63,15 @@ export default function Dashboard() {
   const [current, setCurrent] = useState(null) // rendered dashboard from GET /render
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  // Dashboard's root route (/) is hardcoded and unwrapped by ModuleRoute
+  // (necessarily so — wrapping it would self-redirect-loop for a disabled
+  // user already at /), unlike every other module's clean redirect-away
+  // when an admin disables it for a role/user via the generic role editor.
+  // require_module()'s 403 detail is a stable, matchable string (see
+  // routers/auth/deps.py) — detected here so this case gets its own
+  // friendly message instead of a generic error + a misleading "create
+  // your first dashboard" button that would also just 403.
+  const [moduleDisabled, setModuleDisabled] = useState(false)
   const [editing, setEditing] = useState(false)
   const [pendingLayouts, setPendingLayouts] = useState(null)
   const [showPicker, setShowPicker] = useState(false)
@@ -152,7 +161,12 @@ export default function Dashboard() {
         setSearchParams({ id: targetId }, { replace: true })
         await loadCurrent(targetId)
       } catch (e) {
-        if (!cancelled) setError(e.message || 'Failed to load dashboard')
+        if (cancelled) return
+        if (/has been disabled for your account/.test(e.message || '')) {
+          setModuleDisabled(true)
+        } else {
+          setError(e.message || 'Failed to load dashboard')
+        }
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -341,6 +355,20 @@ export default function Dashboard() {
   const pull = usePullToRefresh(() => loadCurrent(current.id, { resetEditing: false }), {
     enabled: !editing && !!current,
   })
+
+  if (moduleDisabled) {
+    return (
+      <div className="w-full max-w-5xl mx-auto">
+        <div className="card p-8 text-center text-charcoal-500 dark:text-charcoal-400">
+          <p className="text-2xl mb-2" aria-hidden>🔒</p>
+          <p className="font-medium text-charcoal-700 dark:text-charcoal-200">Dashboard is unavailable</p>
+          <p className="text-sm mt-1 max-w-sm mx-auto">
+            An admin has turned off the Dashboard module for your account. Ask them if you think this is a mistake.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div key={workspace} className="w-full max-w-5xl mx-auto space-y-4">

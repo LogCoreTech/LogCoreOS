@@ -70,6 +70,7 @@ export function AuthProvider({ children }) {
         welcomeBackThresholdDays: me.welcome_back_threshold_days || 7,
         tasksFilter:     me.tasks_filter     || 'pending',
         tasksSortMode:   me.tasks_sort_mode  || 'priority',
+        mustChangePassword: me.must_change_password || false,
       }
       // Persist theme prefs too so the pre-React FOUC script in main.jsx can
       // apply the real background/accent before first paint (otherwise the

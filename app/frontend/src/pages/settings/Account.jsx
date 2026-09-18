@@ -17,6 +17,9 @@ export default function Account() {
   const [tzSaved, setTzSaved] = useState(false)
   const [autoSyncTz, setAutoSyncTz] = useState(() => localStorage.getItem('lc_auto_tz') === 'true')
   const [exporting, setExporting] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [changingPassword, setChangingPassword] = useState(false)
 
   useEffect(() => {
     authApi.me().then(me => setTimezone(me.timezone || ''))
@@ -30,6 +33,21 @@ export default function Account() {
       setTimeout(() => setTzSaved(false), 2000)
     } catch (e) {
       toast.error(e.message || 'Invalid timezone')
+    }
+  }
+
+  async function changePassword() {
+    setChangingPassword(true)
+    try {
+      await authApi.changePassword(currentPassword, newPassword)
+      updateUserField('mustChangePassword', false)
+      setCurrentPassword('')
+      setNewPassword('')
+      toast.success('Password changed.')
+    } catch (e) {
+      toast.error(e.message || 'Failed to change password')
+    } finally {
+      setChangingPassword(false)
     }
   }
 
@@ -91,6 +109,44 @@ export default function Account() {
             </p>
           </div>
         </label>
+      </div>
+
+      {/* Password */}
+      <div className="card p-5">
+        <h2 className="font-semibold mb-1">Password</h2>
+        <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-3">
+          Change your password. You&apos;ll need your current one.
+        </p>
+        <div className="space-y-2 mb-3">
+          <div>
+            <label className="block text-sm font-medium mb-1">Current password</label>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={e => setCurrentPassword(e.target.value)}
+              className="input w-full"
+              autoComplete="current-password"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">New password</label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+              className="input w-full"
+              autoComplete="new-password"
+              minLength={8}
+            />
+          </div>
+        </div>
+        <button
+          onClick={changePassword}
+          disabled={changingPassword || !currentPassword || newPassword.length < 8}
+          className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {changingPassword ? 'Saving…' : 'Change Password'}
+        </button>
       </div>
 
       {/* Your Brain */}

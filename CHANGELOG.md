@@ -8,6 +8,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Admin: reset a user's password.** Generates a random temporary password (shown once, copy it to relay to the user) and requires them to set their own the next time they use it. Also adds the self-service **"Change Password" section in Settings → Account** that both this reset flow and any user wanting to rotate a known password now use — no path existed for either before.
+- **A new Admin → Audit Log page** shows the most recent admin actions — user deletions, role changes, module access changes, and module installs/uninstalls — with who did it and when. Nothing was queryable before this.
+- **Fixed a real bug**: if an admin disabled the Dashboard module for your account, the dashboard page just looked broken instead of explaining why — it now shows a clear "Dashboard is unavailable" message.
+
+### Security
+
+- **The last remaining admin account can no longer be demoted or deleted** — by anyone, through any of the three paths that could previously do it — which would have permanently locked an instance out of its own admin functions with no way back in.
+
 ## [0.8.0] — 2026-09-17
 
 ### Added

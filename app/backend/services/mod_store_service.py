@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from services import audit_log
 from services.file_service import brain_path, read_json, write_json
 
 logger = logging.getLogger("logcore.mod_store")
@@ -104,6 +105,7 @@ def mark_installed(module_id: str, by: str) -> None:
         _append_history(module_id, "install", by)
 
     _with_lock(_do)
+    audit_log.record({"id": None, "name": by}, "module.install", module_id)
 
 
 def mark_uninstalled(module_id: str, by: str) -> None:
@@ -115,6 +117,7 @@ def mark_uninstalled(module_id: str, by: str) -> None:
         _append_history(module_id, "uninstall", by)
 
     _with_lock(_do)
+    audit_log.record({"id": None, "name": by}, "module.uninstall", module_id)
 
 
 def get_catalog() -> list[dict[str, Any]]:

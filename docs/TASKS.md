@@ -128,12 +128,10 @@ Cross-reference: the per-user JSON write race is tracked under Idea Backlog → 
 
 ## Product Backlog (pull in when demand appears)
 
-- [ ] **Dashboard page doesn't handle a "dashboard disabled for me" state gracefully** — found 2026-08-27 while checking dashboard/'s own conversion for cross-module issues (there aren't any; `dashboards_service.py` etc. all stay core, unconditional). Real, pre-existing, unrelated to the conversion itself: `App.jsx`'s root route (`/`) has always been hardcoded and unwrapped by `ModuleRoute` — necessarily so, since wrapping it would self-redirect-loop for a disabled user already at `/`. But an admin *can* still disable the "Dashboard" module for a role or user via the existing generic role editor (it's toggleable exactly like Tasks, another locked module), and `require_module("dashboard")` correctly 403s their API calls — the frontend just has no graceful handling for that case, unlike every other module's clean `ModuleRoute` redirect-away. `Dashboard.jsx` should detect the 403 and show a friendly message instead of a broken/empty page.
 - [ ] **In-app Module Store (owner direction, 2026-08-03)** — owner wants to build out the growing module wishlist (see Idea Backlog below) personally, in-house. The product answer is a browsable in-app catalog where a user self-service activates/deactivates modules, reusing the existing `disabled_modules` + feature-role gating (no new permission model). Prerequisites: route-level code-splitting (today all pages ship in one JS bundle — tolerable at ~14 modules, not once most users have most of 30-40 switched off); curated default-on sets per profile type so onboarding isn't a 40-tile wall; store-eligibility gated per feature role/instance on top of the existing module gate
 - [ ] **Profit First method for Finance** — allocation-based budgeting (Income → Profit / Owner's Comp / Tax / Opex accounts with target percentages, instant-assessment view, quarterly distributions); needs a design pass before build. Likely built on the cross-book Transfer primitive above
 - [ ] **Cross-module linking: any-to-any generalization (last piece)** — the concrete client → job → money links (Deal↔Asset, Transaction↔Asset/Deal, Invoice↔Deal, Asset→Contact) all shipped; what's left is only a *generic* any-record-to-any-record link primitive if the pointer-per-pair pattern ever gets unwieldy
 - [ ] **Waterfall/cascading account balance visualization** — chart showing balance flow across accounts; check whether the existing Overview/projection views already cover this before building a new component. Ties to the Transfer primitive above
-- [ ] **Admin: reset a user's password** — generates a random temp password; user must set their own on next login. No UI reveal, no in-app notification needed
 - [ ] **Journal: block future-dated entries + AI append-only writes** — disallow opening/creating a journal entry dated in the future; let the AI append-only to journal entries (never overwrite)
 - [ ] **Help feedback delivery** — the Help page only instructs users to email support today, no backend. Add a `SUPPORT_WEBHOOK_URL` → Formspree/email relay for demo/managed instances; self-hosters get in-app admin-inbox delivery by default
 - [ ] **Help follow-ups** — full interactive coach-mark product tour (v1 ships only the Getting Started checklist); short GIF/video walkthroughs per module; ⓘ buttons that open AI chat pre-asked "how do I use X?"; per-page inline empty-state/tooltip copy rewrite
@@ -203,10 +201,7 @@ Generated across a systematic search→generate→compare→document pass over t
 
 - Public status page (status.logcoretech.com) for demo + managed instances.
 - One-click restore drill / documented DR runbook — backups exist but have never been verified end-to-end.
-- Admin action audit log (who changed what, when) — user deletion, role changes, module toggles leave no queryable trail today.
-- Self-service "Change password" in Settings — no path exists today for a logged-in user to rotate their own known password.
 - "Sign out of all other devices/sessions" button — the JTI-revocation mechanism already exists, just isn't exposed for this.
-- Block the last-admin demotion/deletion path — nothing stops permanently locking an instance out of its own admin functions.
 - Warn (or block) deleting a feature role still assigned to users — can silently widen access via the `member` fallback (see the matching Security CHECK item above — same root issue).
 - Fix the admin-create-user password handoff — no forced change, no invite-link option; the admin invents and relays a password by hand today.
 - Independent third-party penetration test before managed hosting accepts non-beta paying customers.
@@ -258,7 +253,6 @@ Fully triaged 2026-09-04 — see the **UX Polish Batch** section near the top of
 - Structured error monitoring (Sentry or self-hosted GlitchTip) for backend + frontend. No centralized error visibility exists anywhere today — bugs are found by owner testing or user reports only. A self-hostable option fits the project's anti-vendor-lock-in ethos.
 - Audit whether CI actually gates the frontend build, or only backend pytest.
 - Baseline transactional email infrastructure (a provider-abstracted `email_service.py`) — unblocks password reset, Help feedback delivery, and email digests in one shot; the app currently has zero outbound email capability at all.
-- Extract `agent_service.py`'s `_USER_TOOLS`/`_ADMIN_TOOLS` schema lists (lines 75-482, ~406 lines of pure tool-name/description/input-schema data, zero logic) into a separate `agent_tool_schemas.py` — the original "break up into per-module tool files" framing for this item is stale (re-scoped 2026-09-07): every module-owned tool already moved out during the Mod Store conversion, so what's left in this file (the core tools in `_USER_TOOLS`/`_ADMIN_TOOLS`, plus `_execute_tool()`'s ~620-line dispatch logic and the session/run/pending-turn/presence management) is genuinely core orchestration infrastructure that shouldn't be split further, matching `module_registry.py`'s own "never converts" carve-out for this file. Only the schema-data extraction is still a real, low-risk win.
 - Hosted developer/API documentation site, generated from the OpenAPI schema — early groundwork for the Phase 7 plugin-ecosystem roadmap item.
 - CONTRIBUTING.md scope note documenting the AI tool-registry pattern in `agent_service.py` — the least self-explanatory, most-touched file for new contributors.
 - Feature-flag-driven canary rollout to managed instances before self-hosted `master`.
@@ -269,7 +263,6 @@ Fully triaged 2026-09-04 — see the **UX Polish Batch** section near the top of
 - Deep health-check endpoint — `GET /health` is a hardcoded `{"status":"ok"}` with zero real checks.
 - Module scaffolding script implementing the documented 7-step "Adding a New Module" checklist.
 - Scheduler job isolation audit (a verification pass, not a known bug).
-- Fix the FastAPI app's hardcoded `title`/`version` to read from `VERSION`.
 - Lightweight numbered ADRs for major decisions, cross-linkable from PRs.
 - Container resource limits (`mem_limit`/`cpus`) — no service anywhere has a ceiling today.
 - Import dry-run preview — show exactly what the Todoist/Notion/Obsidian importer will create (counts, sample mapped items) before committing anything.
