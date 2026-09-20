@@ -211,8 +211,9 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
   }
 
   async function logManual() {
-    if (manualValue === '') return
-    await goalsApi.logMetric(goalId, Number(manualValue), null, pool)
+    const n = Number(manualValue)
+    if (manualValue === '' || Number.isNaN(n)) return
+    await goalsApi.logMetric(goalId, n, null, pool)
     setManualValue('')
     await load()
     onChanged()
@@ -338,7 +339,8 @@ export default function GoalModal({ goalId, categories, workspace, onClose, onCh
                   <>
                     <div className="flex gap-2 mt-3">
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         className="input flex-1 !py-1 text-sm"
                         placeholder="Log a new value…"
                         value={manualValue}

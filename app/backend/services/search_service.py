@@ -20,7 +20,15 @@ that all default to the pre-existing behavior — `search()` still returns a
 plain `list[dict]` unless `with_totals=True` is passed, so every existing
 caller/test is unaffected. Real relevance ranking across providers is
 explicitly NOT part of this item — that's the roadmapped RAG project's own
-job."""
+job.
+
+2026-09-18 (Homes module): `per_provider_cap`/`total_cap` keyword-only
+overrides, both defaulting to `None` (→ identical pre-existing behavior for
+every caller that doesn't pass them). Homes' own tagged-items view needs a
+higher combined cap than the search dropdown's `_TOTAL_CAP=60` since a
+house can realistically accumulate more than 60 tagged items across every
+module over its lifetime — this is a tag-only *browse* for one page, not a
+typeahead dropdown, so a larger cap is the right tradeoff there specifically."""
 
 import logging
 
@@ -42,6 +50,8 @@ def search(
     cross_workspace: bool = False,
     provider: str | None = None,
     with_totals: bool = False,
+    per_provider_cap: int | None = None,
+    total_cap: int | None = None,
 ) -> list[dict] | dict:
     """Fan out to every active module's own search provider, skipping any
     module currently disabled for this user. `user["disabled_modules"]` is
@@ -70,6 +80,11 @@ def search(
     "show more" fetch for a single provider's own truncated result set, not
     a second global search.
 
+    `per_provider_cap`/`total_cap` override `_PER_PROVIDER_CAP`/`_TOTAL_CAP`
+    when a caller needs a bigger single-page browse than the search
+    dropdown's own caps allow (Homes' per-house tagged-items view) — both
+    `None` by default, identical behavior to every pre-existing caller.
+
     Returns no results immediately for an empty query AND empty tags —
     there's no "browse everything" mode here, only "search for X" and/or
     "filter by tag Y". A provider that raises degrades to zero results from
@@ -95,7 +110,7 @@ def search(
             except Exception:
                 logger.exception("search provider %s failed", namespaced_key)
                 continue
-            cap = _SHOW_MORE_CAP if provider else _PER_PROVIDER_CAP
+            cap = _SHOW_MORE_CAP if provider else (per_provider_cap or _PER_PROVIDER_CAP)
             provider_totals[namespaced_key] = provider_totals.get(namespaced_key, 0) + len(
                 provider_results
             )
@@ -104,7 +119,7 @@ def search(
                     {**r, "_module": owning_module, "_workspace": ws, "_provider": namespaced_key}
                 )
 
-    capped = results if provider else results[:_TOTAL_CAP]
+    capped = results if provider else results[: (total_cap or _TOTAL_CAP)]
     if with_totals:
         return {"results": capped, "provider_totals": provider_totals}
     return capped

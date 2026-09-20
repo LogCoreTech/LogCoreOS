@@ -12,7 +12,7 @@ import useScrollLock from '../lib/useScrollLock'
 const PRIORITIES = ['High', 'Medium', 'Low']
 const TYPES = ['todo', 'recurring', 'appointment']
 
-export default function TaskModal({ task, categories: propCategories, defaultType, saveApi, users, assets, defaultAssetId, defaultGoalId, onClose, onSave, onDelete }) {
+export default function TaskModal({ task, categories: propCategories, defaultType, saveApi, users, assets, defaultAssetId, defaultGoalId, defaultTitle, defaultTags, defaultRecurrence, onClose, onSave, onDelete }) {
   const editing = !!task
   // Assigned pool tasks (household/team) live in another store — open them view-only.
   // Tasks page tags them with `_source`; Calendar tags them with `_household`.
@@ -26,18 +26,18 @@ export default function TaskModal({ task, categories: propCategories, defaultTyp
   const [mode, setMode] = useState(editing ? 'view' : 'edit')
   const [categories, setCategories] = useState(propCategories || [])
   const [form, setForm] = useState({
-    title:       task?.title       || '',
+    title:       task?.title       || defaultTitle || '',
     category:    task?.category    || '',
     priority:    task?.priority    || 'Medium',
     type:        task?.type        || defaultType || 'todo',
-    recurrence:  task?.recurrence  || null,
+    recurrence:  task?.recurrence  || defaultRecurrence || null,
     due_date:    task?.due_date    || '',
     due_time:    task?.due_time    || '',
     notes:       task?.notes       || '',
     assigned_to: task?.assigned_to || '',
     asset_id:    task?.asset_id    || defaultAssetId || '',
     goal_id:     task?.goal_id     || defaultGoalId || '',
-    tags:        task?.tags        || [],
+    tags:        task?.tags        || defaultTags || [],
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')

@@ -353,12 +353,13 @@ export default function Notifications() {
                     <label className="flex items-center gap-1 text-xs ml-auto">
                       <span className="text-charcoal-400">Hour:</span>
                       <input
-                        type="number"
-                        min={0} max={23}
+                        type="text"
+                        inputMode="numeric"
                         value={cfg.hour ?? ''}
                         placeholder="default"
                         onChange={e => {
-                          const v = e.target.value === '' ? null : Number(e.target.value)
+                          const raw = e.target.value
+                          const v = raw === '' || Number.isNaN(Number(raw)) ? null : Number(raw)
                           updateSug(id, { hour: v })
                         }}
                         className="w-16 input text-xs py-1 px-2"
@@ -369,10 +370,13 @@ export default function Notifications() {
                     <label className="flex items-center gap-1 text-xs ml-auto">
                       <span className="text-charcoal-400">Days:</span>
                       <input
-                        type="number"
-                        min={1} max={365}
+                        type="text"
+                        inputMode="numeric"
                         value={cfg.days_threshold ?? 14}
-                        onChange={e => updateSug(id, { days_threshold: Number(e.target.value) })}
+                        onChange={e => {
+                          const n = Number(e.target.value)
+                          updateSug(id, { days_threshold: Number.isNaN(n) ? cfg.days_threshold ?? 14 : n })
+                        }}
                         className="w-16 input text-xs py-1 px-2"
                       />
                     </label>

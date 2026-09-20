@@ -4,6 +4,7 @@ import { BLOCK_REGISTRY, getConfigFields } from './blockRegistry'
 import { ACTION_PRESETS_BY_KIND, BUTTON_COLORS } from './actionKinds'
 import ContactPicker from '../contacts/ContactPicker'
 import AssetPickerField from '../AssetPickerField'
+import HomePickerField from '../HomePickerField'
 import TaskPicker from '../TaskPicker'
 import EventPicker from '../EventPicker'
 import NotePicker from '../NotePicker'
@@ -70,6 +71,8 @@ function renderField(f, config, setConfig, templateMode = false, subjectType = n
       )
     case 'asset':
       return <AssetPickerField label={label} value={val} onChange={set} />
+    case 'home':
+      return <HomePickerField label={label} value={val} onChange={set} />
     case 'task':
       return <TaskPicker label={label} value={val} onChange={set} />
     case 'event':

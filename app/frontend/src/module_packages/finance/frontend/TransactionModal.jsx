@@ -44,6 +44,23 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
   const amountRef = useRef(null)
   const [confirmState, setConfirmState] = useState(null) // { title, message, danger, confirmLabel, onConfirm }
 
+  // Transfer-only state — a second workspace's books are fetched lazily,
+  // only once "Transfer" is actually picked, since most transactions never
+  // need it. Own-workspace books are already loaded (allBooks). Declared
+  // here (not down near the other transfer logic) because `snapshot` below
+  // closes over `toBookId`/`toAccountId` — real bug found live 2026-09-20:
+  // they used to be declared ~50 lines further down in this same function,
+  // so `useState(snapshot)`'s lazy initializer called `snapshot()` on every
+  // mount before those two `const`s had executed, throwing "Cannot access
+  // 'toBookId' before initialization" (a textbook temporal-dead-zone crash)
+  // on every single "Add transaction"/"Edit transaction" open.
+  const otherWorkspace = userWorkspaces?.includes('personal') && userWorkspaces?.includes('business')
+    ? (workspace === 'business' ? 'personal' : 'business')
+    : null
+  const [otherWorkspaceBooks, setOtherWorkspaceBooks] = useState([])
+  const [toBookId, setToBookId] = useState('')
+  const [toAccountId, setToAccountId] = useState('')
+
   // Item #9, 2026-09-04 UX Polish Batch — warn before discarding unsaved
   // changes. Captured once at mount, combining every separate useState slot
   // that together makes up this transaction's editable fields (there's no
@@ -95,16 +112,6 @@ export default function TransactionModal({ book, tx, allowedKinds, assets, allBo
   useEffect(() => {
     tagsApi.list(!!book?._owner).then(r => setTagSuggestions(r.tags || [])).catch(() => setTagSuggestions([]))
   }, [book])
-
-  // Transfer-only state — a second workspace's books are fetched lazily,
-  // only once "Transfer" is actually picked, since most transactions never
-  // need it. Own-workspace books are already loaded (allBooks).
-  const otherWorkspace = userWorkspaces?.includes('personal') && userWorkspaces?.includes('business')
-    ? (workspace === 'business' ? 'personal' : 'business')
-    : null
-  const [otherWorkspaceBooks, setOtherWorkspaceBooks] = useState([])
-  const [toBookId, setToBookId] = useState('')
-  const [toAccountId, setToAccountId] = useState('')
 
   useEffect(() => {
     if (kind !== 'transfer' || !otherWorkspace || otherWorkspaceBooks.length > 0) return

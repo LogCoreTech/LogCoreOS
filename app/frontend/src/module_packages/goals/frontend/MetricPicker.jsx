@@ -33,10 +33,14 @@ function renderConfigField(f, config, setConfig) {
         <div>
           <label className="block text-sm font-medium mb-1">{label}</label>
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
             className="input w-full"
             value={val ?? ''}
-            onChange={e => set(e.target.value === '' ? null : Number(e.target.value))}
+            onChange={e => {
+              const v = e.target.value
+              set(v === '' || Number.isNaN(Number(v)) ? null : Number(v))
+            }}
           />
         </div>
       )

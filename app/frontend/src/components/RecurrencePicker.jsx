@@ -105,9 +105,8 @@ export default function RecurrencePicker({ value, onChange, dueDate }) {
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-charcoal-500 dark:text-charcoal-400 shrink-0">Every</span>
           <input
-            type="number"
-            min={1}
-            max={365}
+            type="text"
+            inputMode="numeric"
             value={rule.interval || 1}
             onChange={e => patch({ interval: Math.max(1, parseInt(e.target.value, 10) || 1) })}
             className="input !w-16 text-center"
@@ -181,9 +180,8 @@ export default function RecurrencePicker({ value, onChange, dueDate }) {
           {monthMode === 'day' ? (
             <div className="flex items-center gap-2">
               <input
-                type="number"
-                min={1}
-                max={31}
+                type="text"
+                inputMode="numeric"
                 disabled={rule.month_day === -1}
                 value={rule.month_day === -1 ? '' : (rule.month_day || 1)}
                 onChange={e =>

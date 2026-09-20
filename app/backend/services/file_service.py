@@ -64,6 +64,10 @@ def goals_path(user_name: str, workspace: str = "personal") -> Path:
     return ws_path(user_name, workspace) / "Goals" / "goals.json"
 
 
+def homes_path(user_name: str, workspace: str = "personal") -> Path:
+    return ws_path(user_name, workspace) / "Homes" / "homes.json"
+
+
 def tags_path(user_name: str, workspace: str = "personal") -> Path:
     """Shared tag vocabulary for Goals + Tasks — one list per store (personal
     or pool), since a tag means the same thing on a goal or a task."""

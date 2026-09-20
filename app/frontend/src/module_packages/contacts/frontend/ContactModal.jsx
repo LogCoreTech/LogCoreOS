@@ -874,7 +874,7 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
                 <Field label="Height">
                   <div className="flex gap-1 items-center">
                     {form.height_unit === 'cm' ? (
-                      <input type="number" min="0" max="300" className="input min-w-0" placeholder="cm"
+                      <input type="text" inputMode="decimal" className="input min-w-0" placeholder="cm"
                         value={form.height_cm} onChange={e => set('height_cm', e.target.value)} />
                     ) : (
                       <>
@@ -899,7 +899,7 @@ export default function ContactModal({ contact, fields, user, onClose, onSaved, 
                 </Field>
                 <Field label="Weight">
                   <div className="flex gap-1 items-center">
-                    <input type="number" min="0" max={form.weight_unit === 'kg' ? 500 : 1102} step="0.1" className="input min-w-0" placeholder={form.weight_unit}
+                    <input type="text" inputMode="decimal" className="input min-w-0" placeholder={form.weight_unit}
                       value={weightDisplay} onChange={e => commitWeight(e.target.value, form.weight_unit)} />
                     <select className="input !w-auto shrink-0 text-xs" value={form.weight_unit}
                       onChange={e => changeWeightUnit(e.target.value)}>

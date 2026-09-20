@@ -522,6 +522,26 @@ Router mounted at `/api/v1/goals` (module id `goals` — a real module_packages/
 
 ---
 
+## Homes
+
+Router mounted at `/api/v1/homes` (module id `homes`, added 2026-09-18 — genuinely new design work, not a conversion, the same category as Goals). Requires the `homes` module. NOT locked. Manages houses (rented or owned); on creation each home gets an auto-generated, immutable tag (`home:<slug>-<8-hex>`, frozen forever — renaming the home never changes it) registered immediately into that store's shared tag vocabulary (see `## Tags` below) so it's selectable right away in any other module's tag picker. Serves BOTH personal and household/team pool homes from this one router, the same "single owning module serves personal + pool" shape Goals/Finance/Contacts/Assets/Notes already use — every non-list endpoint takes an explicit `pool: bool` body/query flag (default `false`), mirroring Goals' own precedent exactly (`_pool_user`/`_pool_id`/`_require_pool_write`/`_store_for`). Pool writes additionally require `pool_edit` for that workspace's pool or admin; pool reads are open to any module user. `homes/backend/service.py` stays fully inside the package — nothing outside it needs Home data directly.
+
+| Method | Path | Access | Notes |
+|--------|------|--------|-------|
+| `GET` | `/homes` | module users | Caller's own homes + the workspace's pool homes if that pool module is installed. Pool entries carry `_owner: "household"\|"team"`; own-store homes carry no `_owner` key at all (absence means "mine" — matches Finance's own book-list convention, not Goals' "always annotate" one) |
+| `POST` | `/homes` | module users (pool: `pool_edit`/admin) | `{name, ownership_type: "rent"\|"own", icon?, address?, notes?, rent?, own?, pool?}` — `rent`/`own` are field-set objects (see below); only the one matching `ownership_type` is validated/stored, the other is always `null`. `tag` is not an accepted field — the server always generates it |
+| `GET` | `/homes/{id}?pool=` | module users | 404 (not 403) if `{id}` doesn't exist in the resolved store — never distinguishes "doesn't exist" from "exists but isn't yours/your pool's" |
+| `PATCH` | `/homes/{id}` | module users (pool: `pool_edit`/admin) | Body accepts any subset of the `POST` fields (still no `tag`). Changing `ownership_type` clears the now-inactive variant (`rent`/`own`) to `null` rather than leaving stale data behind |
+| `DELETE` | `/homes/{id}?pool=` | module users (pool: `pool_edit`/admin) | Soft-delete via Trash, 30-day retention like every other module. Tagged items elsewhere are never touched — deleting a home only removes the home record itself |
+| `POST` | `/homes/bulk-delete` | module users (pool: `pool_edit`/admin) | `{ids: [...], pool?}` — reports per-item `{id, error}` failures rather than silently skipping or silently allowing, matching Tasks/Notes/Assets/Contacts/Finance's own bulk-delete convention |
+| `GET` | `/homes/{id}/items?pool=` | module users | The per-house aggregation view: resolves the home (and therefore access to it) first, then calls `services/search_service.search("", [home.tag], caller, workspace, per_provider_cap=50, total_cap=200)` — a plain tag-only browse across every active module's own search provider, always run as the real calling user against the real requested workspace (never a fabricated pseudo-user), so pool visibility is handled by each provider exactly the way `GET /search` already relies on. Returns `{home, items}`; each item carries the same lightweight `{title, snippet, tags, record_id, _module, _workspace, _provider}` shape `GET /search` returns — not each record's full native fields |
+
+**`rent` field set**: `landlord_name`, `landlord_contact_id` (validated against a real Contacts record in the same resolved store — rejected with 400 if it doesn't resolve, closing an IDOR/dangling-reference gap, not just a UI nicety), `monthly_rent`, `lease_start`, `lease_end`, `security_deposit`. **`own` field set**: `lender_name`, `lender_contact_id` (same validation), `monthly_payment`, `purchase_date`, `purchase_price`, `property_tax_annual`. Money fields are non-negative numbers under a sane upper bound; date fields are validated as real ISO dates. Unknown keys in either object are silently dropped, never persisted.
+
+**Why this reuses `GET /search` instead of a new cross-module registry**: `search_service.search()` already fans out across every active module's `SearchProviderSpec` (declared per-module, discovered dynamically), already supports a tag-only browse (empty query), and already degrades gracefully if one provider errors — building a second, parallel aggregation mechanism for the same job would have been pure duplication. The tradeoff, accepted deliberately for v1: results carry only `title`/`snippet`, not each record's full native fields (a task's due date, a transaction's amount) — richer per-type rendering is a real, separate fast-follow if the lightweight view proves insufficient in practice, not something this pass tried to half-build.
+
+---
+
 ## Priorities
 
 ### `GET /priorities`
@@ -564,7 +584,7 @@ here that never matched the actual route.)
 
 ## Tags
 
-Router mounted at `/api/v1/tags` (2026-08-29, `routers/tags.py`) — the shared tag vocabulary behind Goals' and Tasks' own `tags` fields (see the `## Goals` and `## Tasks` sections above). Deliberately core, not owned by either module — both Goals' package and core `task_service.py` write into it — and login-required only, no `require_module` gate, the same shape as `## Priorities` immediately above (a tag means the same thing regardless of which module's record it's attached to, so it can't sensibly be tied to one module's own install state).
+Router mounted at `/api/v1/tags` (2026-08-29, `routers/tags.py`) — the shared tag vocabulary behind `tags` fields across the app (Tasks, Goals, Calendar Events, Assets, Finance transactions, Contacts, and — 2026-09-18 — Homes, which additionally auto-generates and registers one immediately on every house it creates; see each module's own section above). Deliberately core, not owned by any one module — every one of those writes into it — and login-required only, no `require_module` gate, the same shape as `## Priorities` immediately above (a tag means the same thing regardless of which module's record it's attached to, so it can't sensibly be tied to one module's own install state).
 
 ### `GET /tags`
 The caller's own tag vocabulary, or their workspace's pool vocabulary when `pool=true`.

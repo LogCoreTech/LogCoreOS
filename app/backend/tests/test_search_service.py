@@ -248,6 +248,35 @@ def test_journal_provider_finds_matching_entry_content(user_brain):
     )
 
 
+def test_per_provider_cap_override_limits_results(user_brain):
+    """2026-09-18, Homes module: per_provider_cap/total_cap keyword overrides
+    default to None (identical pre-existing behavior — every test above this
+    one never passes them and still passes unchanged). This confirms the
+    override itself actually takes effect when a caller does pass one."""
+    from services import search_service
+
+    for i in range(3):
+        task_service.add_task(USER, {"title": f"Home task {i}", "tags": ["home:test"]})
+
+    default_results = search_service.search("", ["home:test"], _user(), "personal")
+    assert len(default_results) == 3
+
+    capped_results = search_service.search(
+        "", ["home:test"], _user(), "personal", per_provider_cap=1
+    )
+    assert len(capped_results) == 1
+
+
+def test_total_cap_override_limits_combined_results(user_brain):
+    from services import search_service
+
+    for i in range(5):
+        task_service.add_task(USER, {"title": f"Home task {i}", "tags": ["home:test"]})
+
+    results = search_service.search("", ["home:test"], _user(), "personal", total_cap=2)
+    assert len(results) == 2
+
+
 def test_broken_provider_degrades_to_no_results_without_crashing(user_brain, monkeypatch):
     import module_registry
     from module_registry import SearchProviderSpec

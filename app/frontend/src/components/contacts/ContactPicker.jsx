@@ -6,9 +6,20 @@ import { contacts as contactsApi } from '../../module_packages/contacts/frontend
  * Falls back to a plain free-text input if the Contacts module is unavailable
  * (403) so Finance stays usable standalone.
  *
- * Props: value {name, contactId}, onChange(name, contactId), label, placeholder
+ * Props: value {name, contactId}, onChange(name, contactId), label, placeholder,
+ * pool (optional bool) — where a brand-new contact created from "+ Create
+ * contact" lands. Omitted by default, which leaves the backend's own
+ * default (`pool: true`, household/team pool) untouched for every existing
+ * caller. A caller that validates the picked contact against one specific
+ * store — Homes' landlord/lender fields do, since a personal home's variant
+ * fields resolve against the caller's own personal store, not the pool —
+ * must pass the matching value explicitly, or "+ Create contact" silently
+ * creates a contact the picker's own owner can't actually reference (real
+ * bug, 2026-09-18: creating a lender from a personal home landed the new
+ * contact in the household pool by default, then the home's own save
+ * rejected it as "not a contact you have access to").
  */
-export default function ContactPicker({ value, onChange, label, placeholder }) {
+export default function ContactPicker({ value, onChange, label, placeholder, pool }) {
   const [available, setAvailable] = useState(true)
   const [all, setAll] = useState([])
   const [text, setText] = useState(value?.name || '')
@@ -60,7 +71,9 @@ export default function ContactPicker({ value, onChange, label, placeholder }) {
     if (!name) return
     setCreating(true)
     try {
-      const c = await contactsApi.create({ name, type: 'person' })
+      const c = await contactsApi.create(
+        pool === undefined ? { name, type: 'person' } : { name, type: 'person', pool }
+      )
       setAll(a => [...a, c])
       pick(c)
     } catch { /* ignore */ } finally { setCreating(false) }

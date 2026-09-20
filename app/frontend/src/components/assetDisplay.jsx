@@ -84,10 +84,13 @@ export function FieldInput({ def, value, onChange }) {
         </select>
       ) : def.type === 'number' ? (
         <input
-          type="number"
-          step="any"
+          type="text"
+          inputMode="decimal"
           value={value ?? ''}
-          onChange={e => onChange(e.target.value === '' ? '' : Number(e.target.value))}
+          onChange={e => {
+            const raw = e.target.value.trim().replace(/,/g, '').replace(/\$/g, '')
+            onChange(raw === '' || Number.isNaN(Number(raw)) ? '' : Number(raw))
+          }}
           className="input"
         />
       ) : def.type === 'date' ? (

@@ -33,6 +33,8 @@ def _search_calendar(query: str, tags: list[str], user: dict, workspace: str) ->
                     "snippet": e.get("notes"),
                     "tags": own_tags,
                     "record_id": e["id"],
+                    "start_date": e.get("start_date"),
+                    "end_date": e.get("end_date"),
                 }
             )
     return results

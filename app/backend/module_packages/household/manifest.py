@@ -68,10 +68,18 @@ def _search_household_events(query: str, tags: list[str], user: dict, workspace:
 
     results = []
     for e in events_service.list_events("_household", "personal"):
+        own_tags = e.get("tags") or []
         haystack = " ".join(filter(None, [e.get("title"), e.get("notes")]))
-        if search_match(query, tags, haystack, []):
+        if search_match(query, tags, haystack, own_tags):
             results.append(
-                {"title": e["title"], "snippet": e.get("notes"), "tags": [], "record_id": e["id"]}
+                {
+                    "title": e["title"],
+                    "snippet": e.get("notes"),
+                    "tags": own_tags,
+                    "record_id": e["id"],
+                    "start_date": e.get("start_date"),
+                    "end_date": e.get("end_date"),
+                }
             )
     return results
 
