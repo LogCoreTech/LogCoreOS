@@ -323,6 +323,7 @@ _ADMIN_USER_FIELDS = {
     "workspaces",
     "pool_edit",
     "timezone",
+    "totp_enabled",
 }
 
 

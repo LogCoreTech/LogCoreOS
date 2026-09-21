@@ -28,10 +28,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Tagged household/team calendar events weren't showing up anywhere tags are searched** (including a home's own Tagged Items view) — the shared-pool event search only checked against an empty tag list instead of the event's real tags, so a tag could be applied and confirmed present on the event and still never match. Purely personal calendar events were unaffected.
 - **Creating a new landlord/lender contact from a personal home's edit form could fail with "not a contact you have access to"** right after creating it — the contact picker's "create new" action always created in the household/team pool by default, which didn't match the personal home it was being linked to. It now creates in whichever store the home itself belongs to.
 - **A household/team task, goal, or calendar event tagged with a home's tag showed up in that home's "recent activity" but not in its own Tasks/Events tab.** The tab logic was keying off the wrong field for a shared/pool item; it's now correctly categorized either way.
+- **Homes was silently auto-installing itself on every instance**, including brand-new ones, instead of showing up in Mod Store as an opt-in module like every other non-default one. Now matches Assets'/Contacts'/Finance's own behavior — off by default on a fresh instance.
 
 ### Security
 
 - **The last remaining admin account can no longer be demoted or deleted** — by anyone, through any of the three paths that could previously do it — which would have permanently locked an instance out of its own admin functions with no way back in.
+- **App-level two-factor authentication (2FA).** Turn it on for your own account in Settings → Security — scan a QR code with any authenticator app (Google Authenticator, Authy, etc.), confirm a 6-digit code, and save the 10 one-time recovery codes shown. From then on, logging in asks for that code (or a recovery code) after your password. Admins can also require it instance-wide — off, admins only, or everyone — from Admin → General, and can reset a user's 2FA from their User Detail page if they lose access to their authenticator app. An admin must enroll themselves before they can require it for anyone else, so no one can lock themselves out by flipping the switch. When 2FA is required for you, you can't turn it back off yourself — only an admin reset, or the requirement itself being lifted, can remove it.
 
 ## [0.8.0] — 2026-09-17
 

@@ -10,7 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, Field
 
 from config import settings
-from services import auth_service
+from services import auth_service, totp_service
 from services.features_service import get_effective_disabled
 from services.rate_limiter import rate_limit
 
@@ -218,18 +218,11 @@ def demo_login(req: DemoLoginRequest, response: Response, _rl: None = Depends(_d
     }
 
 
-@router.post("/login")
-def login(req: LoginRequest, response: Response, _rl: None = Depends(_login_limit)):
-    user, locked = auth_service.login_attempt(req.email, req.password)
-    if locked:
-        raise HTTPException(
-            status_code=429,
-            detail=f"Too many failed login attempts. Try again in {locked} seconds.",
-        )
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    token = auth_service.create_token(user)
-    _set_auth_cookie(response, token, auth_service.get_effective_session_minutes())
+def _login_response(user: dict) -> dict:
+    """The user-profile shape returned on a successful /login (and, via
+    2fa/verify-login, the equivalent shape once the second factor clears) —
+    pulled out so both call sites stay byte-for-byte identical rather than
+    two hand-copied dicts drifting apart."""
     effective = get_effective_disabled(
         user.get("feature_role", "member"),
         user.get("disabled_modules", []),
@@ -248,6 +241,26 @@ def login(req: LoginRequest, response: Response, _rl: None = Depends(_login_limi
         "density": user.get("density", "comfortable"),
         "corner_style": user.get("corner_style", "rounded"),
     }
+
+
+@router.post("/login")
+def login(req: LoginRequest, response: Response, _rl: None = Depends(_login_limit)):
+    user, locked = auth_service.login_attempt(req.email, req.password)
+    if locked:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many failed login attempts. Try again in {locked} seconds.",
+        )
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    if user.get("totp_enabled"):
+        return {
+            "totp_required": True,
+            "pending_token": totp_service.create_pending_token(user, mode="cookie"),
+        }
+    token = auth_service.create_token(user)
+    _set_auth_cookie(response, token, auth_service.get_effective_session_minutes())
+    return _login_response(user)
 
 
 @router.post("/logout")
@@ -272,4 +285,9 @@ def get_token(req: LoginRequest, _rl: None = Depends(_login_limit)):
         )
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    if user.get("totp_enabled"):
+        return {
+            "totp_required": True,
+            "pending_token": totp_service.create_pending_token(user, mode="bearer"),
+        }
     return {"token": auth_service.create_token(user)}

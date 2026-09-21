@@ -15,6 +15,7 @@ import SettingsAppearance from './pages/settings/Appearance'
 import SettingsNotifications from './pages/settings/Notifications'
 import SettingsShortcuts from './pages/settings/Shortcuts'
 import SettingsAccount from './pages/settings/Account'
+import SettingsSecurity from './pages/settings/Security'
 import AdminMenu from './pages/settings/AdminMenu'
 import AdminUsers from './pages/settings/admin/Users'
 import AdminNewUser from './pages/settings/admin/NewUser'
@@ -115,6 +116,7 @@ export default function App() {
                   <Route path="/settings/notifications" element={<SettingsNotifications />} />
                   <Route path="/settings/shortcuts" element={<SettingsShortcuts />} />
                   <Route path="/settings/account" element={<SettingsAccount />} />
+                  <Route path="/settings/security" element={<SettingsSecurity />} />
                   <Route path="/settings/admin" element={<AdminOnly><AdminMenu /></AdminOnly>} />
                   <Route path="/settings/admin/users" element={<AdminOnly><AdminUsers /></AdminOnly>} />
                   <Route path="/settings/admin/users/new" element={<AdminOnly><AdminNewUser /></AdminOnly>} />

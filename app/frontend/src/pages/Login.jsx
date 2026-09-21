@@ -16,9 +16,23 @@ export default function Login() {
   const [bgLoaded, setBgLoaded] = useState(false)
   const [demoLoading, setDemoLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [pendingToken, setPendingToken] = useState(null)
+  const [totpCode, setTotpCode] = useState('')
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false)
   const { login, refreshUser, demoMode } = useAuth()
   const navigate = useNavigate()
   const tabRefs = useRef([])
+
+  async function finishLogin(me) {
+    const status = await setupApi.status()
+    login(me.id, me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC', me.accent_color || null, me.dark_mode || 'system', me.background || null, me.density || 'comfortable', me.corner_style || 'rounded', me.workspaces || ['personal'])
+    // login()'s own response above is a narrower shape than /me (no
+    // must_change_password, among others) — refresh from /me itself so
+    // a password-reset admin flagged doesn't slip through to a normal
+    // session until the next 30s poll.
+    await refreshUser()
+    navigate(status.setup_complete ? '/' : '/setup')
+  }
 
   useEffect(() => {
     authApi.status()
@@ -33,20 +47,32 @@ export default function Login() {
     try {
       if (mode === 'login') {
         // Login sets the auth cookie; status check must come after so it has auth
-        const me = await authApi.login(email, password)
-        const status = await setupApi.status()
-        login(me.id, me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC', me.accent_color || null, me.dark_mode || 'system', me.background || null, me.density || 'comfortable', me.corner_style || 'rounded', me.workspaces || ['personal'])
-        // login()'s own response above is a narrower shape than /me (no
-        // must_change_password, among others) — refresh from /me itself so
-        // a password-reset admin flagged doesn't slip through to a normal
-        // session until the next 30s poll.
-        await refreshUser()
-        navigate(status.setup_complete ? '/' : '/setup')
+        const result = await authApi.login(email, password)
+        if (result.totp_required) {
+          setPendingToken(result.pending_token)
+          setMode('totp')
+          return
+        }
+        await finishLogin(result)
       } else {
         const me = await authApi.register(email, password, name)
         login(me.id, me.name, me.role, me.disabled_modules || [], me.timezone || 'UTC', me.accent_color || null, me.dark_mode || 'system', me.background || null, me.density || 'comfortable', me.corner_style || 'rounded', me.workspaces || ['personal'])
         navigate('/setup')
       }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function submitTotp(e) {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    try {
+      const me = await authApi.verifyTotp(pendingToken, totpCode)
+      await finishLogin(me)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -95,6 +121,57 @@ export default function Login() {
         </div>
 
         <div className="card p-6">
+          {mode === 'totp' ? (
+            <form onSubmit={submitTotp} className="space-y-4">
+              <div>
+                <h2 className="text-lg font-semibold text-center mb-1">Two-Factor Authentication</h2>
+                <p className="text-sm text-center text-charcoal-500 dark:text-charcoal-400">
+                  {useRecoveryCode
+                    ? 'Enter one of your recovery codes.'
+                    : 'Enter the 6-digit code from your authenticator app.'}
+                </p>
+              </div>
+              <div>
+                <input
+                  type="text"
+                  inputMode={useRecoveryCode ? 'text' : 'numeric'}
+                  pattern={useRecoveryCode ? undefined : '[0-9]*'}
+                  maxLength={useRecoveryCode ? undefined : 6}
+                  value={totpCode}
+                  onChange={e => setTotpCode(e.target.value)}
+                  placeholder={useRecoveryCode ? 'XXXX-XXXX' : '000000'}
+                  autoFocus
+                  required
+                  className="input text-center tracking-widest"
+                />
+              </div>
+              {error && <p className="text-red-500 text-sm">{error}</p>}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-2 rounded-lg font-medium text-white bg-[#f97316] hover:bg-[#ea580c] transition-colors disabled:opacity-60"
+              >
+                {loading ? 'Verifying…' : 'Verify'}
+              </button>
+              <div className="flex items-center justify-between text-xs">
+                <button
+                  type="button"
+                  onClick={() => { setUseRecoveryCode(v => !v); setTotpCode(''); setError('') }}
+                  className="text-charcoal-500 dark:text-charcoal-400 underline hover:text-charcoal-700 dark:hover:text-charcoal-200"
+                >
+                  {useRecoveryCode ? 'Use an authenticator code instead' : 'Use a recovery code instead'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setMode('login'); setPendingToken(null); setTotpCode(''); setUseRecoveryCode(false); setError('') }}
+                  className="text-charcoal-500 dark:text-charcoal-400 underline hover:text-charcoal-700 dark:hover:text-charcoal-200"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+          <>
           {/* Tab toggle — skeleton while status loads, tabs when open, sign-in only when closed */}
           {registrationOpen === null ? (
             <div className="h-9 bg-charcoal-100 dark:bg-charcoal-700 rounded-lg animate-pulse mb-6" />
@@ -247,6 +324,8 @@ export default function Login() {
               </p>
             )}
           </form>
+          )}
+          </>
           )}
         </div>
       </div>

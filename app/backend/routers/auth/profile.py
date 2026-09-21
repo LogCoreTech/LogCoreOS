@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from services import auth_service
+from services import auth_service, totp_service
 from services.file_service import user_path
 from services.rate_limiter import rate_limit
 
@@ -207,6 +207,11 @@ def me(current_user: dict = Depends(get_current_user), _rl: None = Depends(_get_
         "tasks_filter": current_user.get("tasks_filter", "pending"),
         "tasks_sort_mode": current_user.get("tasks_sort_mode", "priority"),
         "must_change_password": current_user.get("must_change_password", False),
+        "totp_enabled": bool(current_user.get("totp_enabled")),
+        "must_setup_2fa": (
+            totp_service.policy_requires_2fa_for(current_user)
+            and not current_user.get("totp_enabled", False)
+        ),
     }
 
 

@@ -8,6 +8,7 @@ Keep this up to date. When a task is completed, **remove it** rather than checki
 
 ## Now — active build work
 
+- [ ] **Admin/self password-recovery tooling + self-service email/name editing** — agreed-on immediate follow-up to 2FA (owner, 2026-09-20): (a) let admins reset a user's OWN password's recovery path (and their own) from Admin Settings, distinct from the existing `admin_reset_password` random-temp-password flow; (b) let a user change their own email/name in Settings — self-service, no admin needed unless the password itself is forgotten (a remembered-password change already exists via `POST /auth/me/password`, added 2026-09-18)
 - [ ] **Land lead search & qualify workflow** — n8n pulling land listings (multiple sources with a fallback from day one) and AI-qualifying against configurable criteria; posts to the Automation Inbox (`POST /automations/inbox/items`, `GET /inbox/seen` to skip known listings — this generic plumbing is fully built and tested); the actual n8n workflow itself doesn't exist yet (`automations_stubs/` is still empty, `.gitkeep` only, as of 2026-09-07)
 All 14 `module_packages/` modules (the 13-module Mod Store rollout plus Goals) and the app-wide search bar + universal tags feature are confirmed working end-to-end on the owner's real instance — live-instance verification closed 2026-09-06. Full build history and design decisions: `docs/PROJECT.md`'s "Complete — Mod Store" section and `docs/MEMORY.md`'s 2026-08-24 through 2026-08-30 entries.
 
@@ -65,12 +66,12 @@ Full triage of the former "Cross-App UX & Polish" Idea Backlog list (34 items), 
 
 ## Security
 
-From the 2026-07-19 audit (full detail in `docs/Security-Audit-2026-07-19.md`) plus later findings. All CRITICAL/HIGH items are shipped — see `CHANGELOG.md` [0.4.0]. What's left, roughly in order:
+From the 2026-07-19 audit (full detail in `docs/Security-Audit-2026-07-19.md`) plus later findings. All CRITICAL/HIGH items are shipped — see `CHANGELOG.md` [0.4.0]. App-level 2FA (TOTP) — the last open item from the audit's account-takeover threat model — shipped 2026-09-20 (see CHANGELOG.md [Unreleased] and `docs/Daily Notes/2026-09-20.md`); "remember this device" was not part of that pass and isn't tracked separately here since it wasn't a named audit item. What's left, roughly in order:
 
-- [ ] **App-level 2FA (TOTP)** — the last open item from the audit's account-takeover threat model, and a v1.0-trust-stack gate. Needs its own design pass: TOTP enrollment/QR provisioning, recovery codes, storage on the user record, verify step wired into `/auth/login` + `/auth/token` (after the existing lockout check), optional admin enforcement policy, "remember this device"
 - [ ] **Deploy verification for the infra-hardening pass** — the docker socket-proxy / port / image changes need a real-host check (no Docker in the build env): `docker compose config` parses; socket-proxy starts; the app reaches Docker via `DOCKER_HOST=tcp://socket-proxy:2375`; Admin → Automations can start/stop/restart n8n; n8n is reachable at `http://n8n:5678` internally but **not** on the host's public IP; secure installer defaults hold on a fresh boot. **Caution:** never rotate `N8N_ENCRYPTION_KEY` on an instance that already has n8n data
 - [ ] **Defense-in-depth odds and ends** — checksum installer scripts (assessed 2026-08-12: `launch.sh --install-deps`'s `curl | sudo sh` bootstraps for Docker/NodeSource are already transparently documented as trust-on-first-use; a real fix is switching to their GPG-signed apt repositories, not a checksum, since the bootstrap scripts themselves change too often for a pinned hash to stay valid — needs its own pass, not a quick patch); signed-tag verification or a human gate in `update.sh`'s auto-pull (assessed 2026-08-12: a human gate conflicts with `update.sh`'s primary unattended `--cron`/`--watch` use case — needs a deliberate TTY-aware design, not a blind add)
 - [ ] **Enable signed updates on managed instances** — `UPDATE_REQUIRE_SIGNATURE=true` already exists; needs GPG-signed release tags + the signing pubkey imported into each managed instance's updater keyring
+- [ ] **`launch.sh` doesn't auto-generate `TOTP_ENCRYPTION_KEY` on fresh installs** — unlike `INFISICAL_CACHE_KEY`, which `launch.sh` auto-generates via `generate_fernet_key()`/`env_set` at install time (see `docs/MEMORY.md`, 2026-09-20). Without it, a fresh self-hosted install's `totp_secret` sits in plaintext in `auth.json` until an admin manually generates and sets the key — same trust model as the bcrypt hash already there, not a hard blocker, but worth matching the existing pattern
 
 ---
 
@@ -128,6 +129,7 @@ Cross-reference: the per-user JSON write race is tracked under Idea Backlog → 
 
 ## Product Backlog (pull in when demand appears)
 
+- [ ] **Community-platform integration module (owner direction, 2026-09-20)** — LogCoreOS gets a module that talks to the standalone community platform's API (view/post from inside the app) — same shape as the existing `home_assistant` module: an external-service integration, not Brain-file-based, opt-in/uninstallable like any other module. **Sequencing: build after the platform's own API is stable** — don't co-develop the client against a moving target, same reasoning as building `home_assistant` support against Home Assistant's already-stable API rather than in parallel with it. The platform itself (accounts, threads, moderation, hosting) is not LogCoreOS work — tracked in the private Business repo.
 - [ ] **In-app Module Store (owner direction, 2026-08-03)** — owner wants to build out the growing module wishlist (see Idea Backlog below) personally, in-house. The product answer is a browsable in-app catalog where a user self-service activates/deactivates modules, reusing the existing `disabled_modules` + feature-role gating (no new permission model). Prerequisites: route-level code-splitting (today all pages ship in one JS bundle — tolerable at ~14 modules, not once most users have most of 30-40 switched off); curated default-on sets per profile type so onboarding isn't a 40-tile wall; store-eligibility gated per feature role/instance on top of the existing module gate
 - [ ] **Profit First method for Finance** — allocation-based budgeting (Income → Profit / Owner's Comp / Tax / Opex accounts with target percentages, instant-assessment view, quarterly distributions); needs a design pass before build. Likely built on the cross-book Transfer primitive above
 - [ ] **Cross-module linking: any-to-any generalization (last piece)** — the concrete client → job → money links (Deal↔Asset, Transaction↔Asset/Deal, Invoice↔Deal, Asset→Contact) all shipped; what's left is only a *generic* any-record-to-any-record link primitive if the pointer-per-pair pattern ever gets unwieldy
@@ -145,7 +147,7 @@ Cross-reference: the per-user JSON write race is tracked under Idea Backlog → 
 - [ ] **Quick capture** — email-to-inbox (forward email → task/note), PWA share_target, quick-add hotkey; capture must take <2s
 - [ ] **Journal → insight loops** — weekly AI pattern detection (mood vs sleep etc.) beyond the existing weekly review
 - [ ] **Offline-first PWA sync** — local-first data + background sync + conflict resolution; structural advantage of file-based storage, but a big lift
-- [ ] **v1.0 trust stack — gates the Show HN post** — app-level 2FA, automated backups + one-click restore, audit logging, <10-min onboarding, real docs, test-coverage push; plugin API if feasible
+- [ ] **v1.0 trust stack — gates the Show HN post** — automated backups + one-click restore, <10-min onboarding, real docs, test-coverage push; plugin API if feasible. (App-level 2FA and audit logging, the other two named items, both shipped — see CHANGELOG.md)
 
 ---
 
@@ -173,7 +175,7 @@ Generated across a systematic search→generate→compare→document pass over t
 - Add `CODE_OF_CONDUCT.md` (Contributor Covenant) — missing entirely, expected-by-default for OSS.
 - "Good first issue" labeling pass across the existing backlog.
 - Self-hoster showcase / "who's running LogCoreOS" opt-in wall.
-- Real-time community channel (Discord or Matrix), distinct from async GitHub Discussions.
+- ~~Real-time community channel (Discord or Matrix)~~ — superseded 2026-09-20: owner decided on a fully separate, dedicated community platform (own repo/hosting, public-readable for AI/search discoverability) rather than an existing chat tool. Platform build + strategy tracked in the private Business repo, not here — only the LogCoreOS-side integration module (below, Product Backlog) is dev work.
 - "Invite your household/team" prompt after first-user setup — nothing currently nudges an admin toward the multi-user differentiator.
 - Demo → real-signup bridge (carry over what a demo visitor created instead of losing it to the nightly reset).
 - "Bring your own AI key" discount tier — transfers the biggest variable cost off LogCore's books using tech that already exists.

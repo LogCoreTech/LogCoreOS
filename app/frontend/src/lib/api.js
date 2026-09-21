@@ -108,6 +108,7 @@ export const auth = {
   demoLogin:        (timezone)        => post('/auth/demo-login', { timezone }),
   logout:           ()                => post('/auth/logout',  {}),
   token:            (email, password) => post('/auth/token',   { email, password }),
+  verifyTotp:       (pendingToken, code) => post('/auth/2fa/verify-login', { pending_token: pendingToken, code }),
   me:               ()                => get('/auth/me'),
   today:            ()                => get('/auth/today'),
   status:           ()                => get('/auth/status'),
@@ -116,6 +117,15 @@ export const auth = {
     post('/auth/me/password', { current_password: currentPassword, new_password: newPassword }),
   uploadBackground: (file)            => requestFile('POST', '/auth/me/background', file),
   deleteBackground: ()                => del('/auth/me/background'),
+}
+
+export const totp = {
+  status:              ()     => get('/auth/2fa/status'),
+  setup:               ()     => post('/auth/2fa/setup', {}),
+  enable:              (code) => post('/auth/2fa/enable', { code }),
+  disable:             (currentPassword, code) =>
+    post('/auth/2fa/disable', { current_password: currentPassword, code }),
+  regenerateRecovery:  (code) => post('/auth/2fa/recovery-codes/regenerate', { code }),
 }
 
 export const help = {
@@ -159,6 +169,7 @@ export const admin = {
   updateUserRole:    (id, role)                  => patch(`/auth/admin/users/${id}`, { role }),
   deleteUser:        (id)                        => del(`/auth/admin/users/${id}`),
   resetPassword:     (id)                        => post(`/auth/admin/users/${id}/reset-password`, {}),
+  resetTotp:         (id)                        => post(`/auth/admin/users/${id}/2fa/reset`, {}),
   deletionPreview:   (id)                        => get(`/auth/admin/users/${id}/deletion-preview`),
   deletionExecute:   (id, decisions)              => post(`/auth/admin/users/${id}/deletion-execute`, { decisions }),
   updateModules:          (userId, disabledModules)          => patch(`/auth/users/${userId}/modules`, { disabled_modules: disabledModules }),

@@ -8,6 +8,9 @@ const ACTION_LABELS = {
   'user.modules_change': 'Changed module access',
   'module.install': 'Installed module',
   'module.uninstall': 'Uninstalled module',
+  'user.2fa_enrolled': 'Enabled two-factor authentication',
+  'user.2fa_disabled': 'Disabled two-factor authentication',
+  'user.2fa_admin_reset': "Reset a user's two-factor authentication",
 }
 
 function describe(entry) {

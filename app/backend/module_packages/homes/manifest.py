@@ -79,12 +79,32 @@ def _search_homes(query: str, tags: list[str], user: dict, workspace: str) -> li
 
 
 def m033_install_homes(brain: Path) -> None:
+    """Homes is a genuinely new, optional module — unlike Journal/Calendar/
+    Notes/Goals, which deliberately joined the fresh-install default
+    baseline (2026-09-04 UX Polish Batch, item #12, an explicit owner
+    decision), nobody ever decided Homes should auto-install for every
+    instance. This migration originally ran unconditionally (copied from
+    Goals' own migration shape without re-deciding whether that fit), which
+    silently turned Homes on everywhere the moment it shipped — found and
+    corrected 2026-09-20. Now matches the OTHER, more common pattern
+    instead: Assets'/Contacts'/Finance's/Household's/Team's own backfill
+    migrations, which only auto-install for an instance that already
+    existed (has `_system/features.json`) and leave a genuinely fresh
+    instance to opt in via Mod Store. Same existence-guard idiom as
+    assets' own m028.
+
+    Already-migrated instances (this migration is tracked by id and never
+    re-runs) are unaffected either way — including the owner's own, which
+    already has Homes installed and in active use."""
+    features_file = brain / "_system" / "features.json"
+    if not features_file.exists():
+        return
+
+    from services import mod_store_service
     from services.file_service import brain_path
 
     if brain != brain_path():
         return  # test/alternate brain root — file_service helpers always read the live one
-
-    from services import mod_store_service
 
     mod_store_service.mark_installed("homes", by="migration:m033")
 

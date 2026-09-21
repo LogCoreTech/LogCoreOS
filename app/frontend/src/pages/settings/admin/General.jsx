@@ -166,6 +166,80 @@ function WorkspaceVisibilitySection() {
   )
 }
 
+const REQUIRE_2FA_OPTIONS = [
+  { value: 'off', label: 'Optional', desc: 'Anyone can turn it on for their own account.' },
+  { value: 'admin', label: 'Admins only', desc: 'Every admin account must set it up.' },
+  { value: 'all', label: 'Everyone', desc: 'Every account must set it up.' },
+]
+
+function RequireTotpSection() {
+  const [policy, setPolicy] = useState('off')
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState(null)
+
+  useEffect(() => {
+    adminApi.getSettings().then(d => setPolicy(d.require_2fa || 'off')).catch(() => {})
+  }, [])
+
+  async function save(next) {
+    if (next === policy) return
+    setSaving(true)
+    setMsg(null)
+    try {
+      const updated = await adminApi.updateSettings({ require_2fa: next })
+      setPolicy(updated.require_2fa || 'off')
+      setMsg({ ok: true, text: 'Two-factor policy updated.' })
+    } catch (err) {
+      setMsg({ ok: false, text: err.message || 'Failed to save' })
+    } finally {
+      setSaving(false)
+      setTimeout(() => setMsg(null), 4000)
+    }
+  }
+
+  return (
+    <div className="card p-5">
+      <h2 className="font-semibold mb-1">Two-Factor Authentication</h2>
+      <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-4">
+        Anyone can already set up 2FA for their own account in Settings → Security. This
+        decides whether it&apos;s required. You need your own 2FA enabled before requiring it
+        of others.
+      </p>
+
+      <div role="radiogroup" aria-label="Two-factor requirement" className="space-y-2">
+        {REQUIRE_2FA_OPTIONS.map(opt => (
+          <label
+            key={opt.value}
+            className={`flex items-start gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+              policy === opt.value
+                ? 'border-orange-500 bg-orange-500/5'
+                : 'border-charcoal-200 dark:border-charcoal-700'
+            } ${saving ? 'opacity-50 pointer-events-none' : ''}`}
+          >
+            <input
+              type="radio"
+              name="require_2fa"
+              checked={policy === opt.value}
+              onChange={() => save(opt.value)}
+              className="mt-1 accent-orange-500"
+            />
+            <span>
+              <span className="block text-sm font-medium">{opt.label}</span>
+              <span className="block text-xs text-charcoal-400">{opt.desc}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+
+      {msg && (
+        <p className={`text-sm mt-3 ${msg.ok ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+          {msg.text}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function SessionLengthSection() {
   const [sessionMinutes, setSessionMinutes] = useState(10080)
   const [saved, setSaved] = useState(false)
@@ -588,6 +662,7 @@ export default function General() {
       <SettingsPageHeader title="General" backTo="/settings/admin" backLabel="Admin Settings" />
       <RegistrationSection />
       <WorkspaceVisibilitySection />
+      <RequireTotpSection />
       <SessionLengthSection />
       <UpdateSection />
 

@@ -34,6 +34,9 @@ services:
       INFISICAL_TOKEN: ${INFISICAL_TOKEN:-}
       INFISICAL_ENV: ${INFISICAL_ENV:-prod}
       INFISICAL_PROJECT_ID: ${INFISICAL_PROJECT_ID:-}
+      INFISICAL_CACHE_KEY: ${INFISICAL_CACHE_KEY:-}
+      # Optional — encrypts each user's 2FA (TOTP) secret at rest; see docker/.env.example
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:-}
     depends_on:
       - socket-proxy
     healthcheck:

@@ -50,6 +50,7 @@ from . import admin_settings as _admin_settings
 from . import admin_users as _admin_users
 from . import profile as _profile
 from . import session as _session
+from . import totp as _totp
 
 # --- admin_settings.py: instance-wide admin settings --------------------
 from .admin_settings import (
@@ -170,12 +171,31 @@ from .session import (
     registration_status,
 )
 
+# --- totp.py: 2FA enrollment/verification/admin reset --------------------
+from .totp import (
+    DisableTotpRequest,
+    EnableTotpRequest,
+    RegenerateRecoveryCodesRequest,
+    VerifyLoginRequest,
+    _totp_setup_limit,
+    _totp_verify_login_limit,
+    _totp_verify_self_limit,
+    admin_reset_totp,
+    disable_totp,
+    enable_totp,
+    regenerate_recovery_codes,
+    setup_totp,
+    totp_status,
+    verify_login,
+)
+
 # --- assemble the single router main.py mounts --------------------------
 router = APIRouter()
 router.include_router(_session.router)
 router.include_router(_profile.router)
 router.include_router(_admin_users.router)
 router.include_router(_admin_settings.router)
+router.include_router(_totp.router)
 
 __all__ = [
     "router",
@@ -285,4 +305,19 @@ __all__ = [
     "rotate_automation_token",
     "update_admin_settings",
     "update_search_settings",
+    # totp
+    "_totp_setup_limit",
+    "_totp_verify_login_limit",
+    "_totp_verify_self_limit",
+    "DisableTotpRequest",
+    "EnableTotpRequest",
+    "RegenerateRecoveryCodesRequest",
+    "VerifyLoginRequest",
+    "admin_reset_totp",
+    "disable_totp",
+    "enable_totp",
+    "regenerate_recovery_codes",
+    "setup_totp",
+    "totp_status",
+    "verify_login",
 ]

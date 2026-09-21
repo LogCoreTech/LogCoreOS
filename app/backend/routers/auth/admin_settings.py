@@ -7,6 +7,7 @@ Infisical settings live in their own routers/infisical.py, mounted at the
 same "/api/v1/auth" prefix — they were never part of this file."""
 
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
@@ -192,6 +193,7 @@ class AdminSettingsRequest(BaseModel):
     allow_open_registration: bool | None = None
     enabled_workspaces: list[str] | None = None
     session_minutes: int | None = Field(default=None, ge=60, le=129600)
+    require_2fa: Literal["off", "admin", "all"] | None = None
 
     @field_validator("enabled_workspaces")
     @classmethod
@@ -215,6 +217,7 @@ def get_admin_settings(current_user: dict = Depends(require_admin)):
         ),
         "enabled_workspaces": auth_service.enabled_workspaces(),
         "session_minutes": auth_service.get_effective_session_minutes(),
+        "require_2fa": runtime.get("require_2fa", "off"),
     }
 
 
@@ -224,9 +227,18 @@ def update_admin_settings(
     current_user: dict = Depends(require_admin),
     _rl: None = Depends(_admin_limit),
 ):
+    # Don't let the person flipping the switch lock themselves out — mirrors
+    # the last-admin-lockout guards' 409 style, but this is "you personally
+    # need 2FA before requiring it of others," not an admin-scarcity check.
+    if req.require_2fa and req.require_2fa != "off" and not current_user.get("totp_enabled"):
+        raise HTTPException(
+            status_code=409,
+            detail="Enable two-factor authentication on your own account before requiring it for others.",
+        )
     updated = auth_service.update_system_settings(req.model_dump(exclude_none=True))
     return {
         "allow_open_registration": updated.get("allow_open_registration"),
         "enabled_workspaces": auth_service.enabled_workspaces(),
         "session_minutes": auth_service.get_effective_session_minutes(),
+        "require_2fa": updated.get("require_2fa", "off"),
     }

@@ -59,6 +59,9 @@ export default function UserDetail() {
   const [tempPassword, setTempPassword] = useState(null)
   const [resetting, setResetting] = useState(false)
 
+  // 2FA reset
+  const [resettingTotp, setResettingTotp] = useState(false)
+
   function flash(ok, text) {
     setMsg({ ok, text })
     setTimeout(() => setMsg(null), 4000)
@@ -193,6 +196,20 @@ export default function UserDetail() {
       flash(false, err.message || 'Failed to reset password')
     } finally {
       setResetting(false)
+    }
+  }
+
+  async function resetTotp() {
+    if (!confirm(`Reset ${target.name}'s two-factor authentication? They'll need to set it up again.`)) return
+    setResettingTotp(true)
+    try {
+      await adminApi.resetTotp(userId)
+      setTarget(t => ({ ...t, totp_enabled: false }))
+      flash(true, "2FA reset — they'll be prompted to set it up again.")
+    } catch (err) {
+      flash(false, err.message || 'Failed to reset 2FA')
+    } finally {
+      setResettingTotp(false)
     }
   }
 
@@ -507,6 +524,23 @@ export default function UserDetail() {
             {resetting ? 'Resetting…' : 'Reset Password'}
           </button>
         )}
+      </div>
+
+      {/* 2FA reset */}
+      <div className="card p-5">
+        <h2 className="font-semibold mb-1">Two-Factor Authentication</h2>
+        <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-3">
+          {target.totp_enabled
+            ? "This user has 2FA enabled. Reset it if they've lost their device and can't sign in."
+            : 'This user does not have 2FA enabled.'}
+        </p>
+        <button
+          onClick={resetTotp}
+          disabled={resettingTotp || !target.totp_enabled}
+          className="btn-ghost text-sm disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          {resettingTotp ? 'Resetting…' : 'Reset 2FA'}
+        </button>
       </div>
 
       {/* Delete */}
