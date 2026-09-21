@@ -66,6 +66,8 @@ Full triage of the former "Cross-App UX & Polish" Idea Backlog list (34 items), 
 
 ## Security
 
+- [ ] **GitHub reports 1 high-severity Dependabot vulnerability on `master`** — surfaced by the push output after the 2026-09-20 commits, not yet triaged: https://github.com/LogCoreTech/LogCoreOS/security/dependabot/25. No `gh` CLI or GitHub token was available in this environment to pull the actual advisory/affected package, so this is logged generically — check the link directly, or run this down with `gh api repos/LogCoreTech/LogCoreOS/dependabot/alerts/25` from an authenticated session.
+
 From the 2026-07-19 audit (full detail in `docs/Security-Audit-2026-07-19.md`) plus later findings. All CRITICAL/HIGH items are shipped — see `CHANGELOG.md` [0.4.0]. App-level 2FA (TOTP) — the last open item from the audit's account-takeover threat model — shipped 2026-09-20 (see CHANGELOG.md [Unreleased] and `docs/Daily Notes/2026-09-20.md`); "remember this device" was not part of that pass and isn't tracked separately here since it wasn't a named audit item. What's left, roughly in order:
 
 - [ ] **Deploy verification for the infra-hardening pass** — the docker socket-proxy / port / image changes need a real-host check (no Docker in the build env): `docker compose config` parses; socket-proxy starts; the app reaches Docker via `DOCKER_HOST=tcp://socket-proxy:2375`; Admin → Automations can start/stop/restart n8n; n8n is reachable at `http://n8n:5678` internally but **not** on the host's public IP; secure installer defaults hold on a fresh boot. **Caution:** never rotate `N8N_ENCRYPTION_KEY` on an instance that already has n8n data
