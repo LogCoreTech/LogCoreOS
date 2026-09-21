@@ -8,6 +8,7 @@ import { useToast } from '../lib/toast'
 import ConfirmDialog from '../components/ConfirmDialog'
 import EmptyState from '../components/EmptyState'
 import PullToRefreshIndicator from '../components/PullToRefreshIndicator'
+import SettingsPageHeader from '../components/settings/SettingsPageHeader'
 import usePullToRefresh from '../lib/usePullToRefresh'
 
 const MODULE_LABELS = {
@@ -129,7 +130,10 @@ export default function Trash() {
   return (
     <div className="w-full max-w-2xl mx-auto space-y-5 overflow-x-hidden">
       <PullToRefreshIndicator {...pull} />
-      <h1 className="text-2xl font-bold">Trash</h1>
+      {/* No fixed backTo — Trash opens from Settings AND from a "View trash"
+          link on individual module pages (TrashLink.jsx, `?module=`), so the
+          back button must return to wherever it was actually opened from. */}
+      <SettingsPageHeader title="Trash" backLabel="Back" />
 
       {tabs && (
         <div

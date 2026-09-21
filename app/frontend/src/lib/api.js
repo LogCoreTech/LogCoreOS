@@ -115,6 +115,8 @@ export const auth = {
   updateMe:         (data)            => patch('/auth/me', data),
   changePassword:   (currentPassword, newPassword) =>
     post('/auth/me/password', { current_password: currentPassword, new_password: newPassword }),
+  changeEmail:      (currentPassword, newEmail) =>
+    post('/auth/me/email', { current_password: currentPassword, new_email: newEmail }),
   uploadBackground: (file)            => requestFile('POST', '/auth/me/background', file),
   deleteBackground: ()                => del('/auth/me/background'),
 }

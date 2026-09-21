@@ -201,7 +201,7 @@ function RequireTotpSection() {
     <div className="card p-5">
       <h2 className="font-semibold mb-1">Two-Factor Authentication</h2>
       <p className="text-xs text-charcoal-500 dark:text-charcoal-400 mb-4">
-        Anyone can already set up 2FA for their own account in Settings → Security. This
+        Anyone can already set up 2FA for their own account in Settings → Account. This
         decides whether it&apos;s required. You need your own 2FA enabled before requiring it
         of others.
       </p>

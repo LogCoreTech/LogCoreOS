@@ -52,6 +52,7 @@ export function AuthProvider({ children }) {
       const u = {
         id:              me.id,
         name:            me.name,
+        email:           me.email     || null,
         role:            me.role,
         disabledModules: me.disabled_modules || [],
         poolEdit:        me.pool_edit     || [],

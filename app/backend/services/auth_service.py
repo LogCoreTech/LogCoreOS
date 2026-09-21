@@ -182,6 +182,24 @@ def update_user(user_id: str, updates: dict) -> dict | None:
     return None
 
 
+def change_email(user_id: str, new_email: str) -> dict:
+    """Self-service email change. Uniqueness is re-checked here under the
+    lock (not left to plain update_user()) to avoid a race with a concurrent
+    registration/admin-create landing on the same address between check and
+    write."""
+    normalized_email = new_email.lower()
+    with _auth_lock:
+        data = _load_auth()
+        if any(u["email"] == normalized_email and u["id"] != user_id for u in data["users"]):
+            raise ValueError("Email already in use")
+        for u in data["users"]:
+            if u["id"] == user_id:
+                u["email"] = normalized_email
+                _save_auth(data)
+                return u
+    raise ValueError("User not found")
+
+
 def get_system_settings() -> dict:
     """Return the runtime settings block stored in auth.json."""
     return _load_auth().get("settings", {})

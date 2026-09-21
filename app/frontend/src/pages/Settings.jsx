@@ -13,8 +13,7 @@ export default function Settings() {
         <MenuRow icon="🎨" label="Appearance" subtitle="Dark mode, accent color, background, density" to="/settings/appearance" />
         <MenuRow icon="🔔" label="Notifications" subtitle="Push notifications, proactive suggestions" to="/settings/notifications" />
         <MenuRow icon="⭐" label="Shortcuts" subtitle="Pin modules to the bottom bar & sidebar" to="/settings/shortcuts" />
-        <MenuRow icon="🔒" label="Security" subtitle="Two-factor authentication" to="/settings/security" />
-        <MenuRow icon="🗂" label="Account" subtitle="Timezone, your Brain, export data" to="/settings/account" />
+        <MenuRow icon="🗂" label="Account" subtitle="Email, password, 2FA, timezone, your Brain" to="/settings/account" />
         <MenuRow icon="🗑" label="Trash" subtitle="Restore or permanently remove deleted items" to="/trash" />
       </div>
 

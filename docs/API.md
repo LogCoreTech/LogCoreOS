@@ -92,6 +92,7 @@ Returns current user's profile.
 {
   "id": "uuid",
   "name": "Alice",
+  "email": "alice@example.com",
   "role": "member",
   "timezone": "America/Chicago",
   "workspaces": ["personal"],
@@ -102,13 +103,36 @@ Returns current user's profile.
   "background": "gradient:midnight",
   "density": "comfortable",
   "corner_style": "rounded",
-  "shortcuts": { "personal": ["dashboard", "tasks", "chat"] }
+  "shortcuts": { "personal": ["dashboard", "tasks", "chat"] },
+  "must_change_password": false,
+  "totp_enabled": false,
+  "must_setup_2fa": false
 }
 ```
 
 `workspaces` — list of workspaces the user has access to. Possible values: `"personal"`, `"business"`. Defaults to `["personal"]` if absent in auth.json. When a user has both, the frontend shows a toggle pill in the sidebar.
 
 `shortcuts` — workspace-keyed dict of pinned sidebar shortcut module IDs, e.g. `{"personal": ["dashboard", "tasks", "chat"], "business": ["dashboard", "team", "automations"]}`. Each workspace list is capped at 4 entries. Defaults to `{}` (frontend falls back to `DEFAULT_SHORTCUTS`).
+
+`email` (2026-09-20) — added so Settings → Account can display it; previously absent from this response even though every user record has always had one.
+
+### `POST /auth/me/email` (2026-09-20)
+Self-service email change — Settings → Account's "Update Email" popup. Confirmed by current password, same gate as `POST /auth/me/password` below.
+
+**Body** `{ "current_password": "...", "new_email": "new@example.com" }`
+
+**Response** `{ "ok": true, "email": "new@example.com" }`
+
+**Error** `400` if the current password is wrong, or if `new_email` is already registered to a different account.
+
+### `POST /auth/me/password`
+Self-service password change — also how a `must_change_password` admin reset gets cleared (the temp password IS `current_password` here). Settings → Account's "Reset Password" popup.
+
+**Body** `{ "current_password": "...", "new_password": "..." }` (`new_password` min length 8)
+
+**Response** `{ "ok": true }`
+
+**Error** `400` if the current password is wrong.
 
 ### `PATCH /auth/me`
 Update own profile. All fields optional.

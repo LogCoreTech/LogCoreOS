@@ -7,7 +7,7 @@ import re
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 from services import auth_service, totp_service
 from services.file_service import user_path
@@ -185,6 +185,7 @@ def me(current_user: dict = Depends(get_current_user), _rl: None = Depends(_get_
     return {
         "id": current_user["id"],
         "name": current_user["name"],
+        "email": current_user.get("email"),
         "role": current_user["role"],
         "timezone": current_user.get("timezone", "UTC"),
         "feature_role": current_user.get("feature_role", "member"),
@@ -245,6 +246,28 @@ def change_password(
         },
     )
     return {"ok": True}
+
+
+class ChangeEmailRequest(BaseModel):
+    current_password: str
+    new_email: EmailStr
+
+
+@router.post("/me/email")
+def change_email(
+    req: ChangeEmailRequest,
+    current_user: dict = Depends(get_current_user),
+    _rl: None = Depends(_password_limit),
+):
+    """Self-service email change — current password confirms the change,
+    same gate as change_password() above."""
+    if not auth_service.verify_password(req.current_password, current_user["hashed_password"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    try:
+        updated = auth_service.change_email(current_user["id"], req.new_email)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True, "email": updated["email"]}
 
 
 @router.post("/me/background")
