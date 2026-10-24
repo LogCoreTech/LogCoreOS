@@ -9,8 +9,11 @@ COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // ""')
 # Removes everything between <<'WORD' / <<"WORD" / <<WORD markers and the closing WORD line.
 COMMAND=$(echo "$COMMAND" | awk '
   /<<['"'"'"]?[A-Z_]+['"'"'"]?/ {
-    match($0, /<<['"'"'"]?([A-Z_]+)['"'"'"]?/, arr)
-    delim = arr[1]
+    # Portable (mawk/busybox awk too): two-argument match(), then trim the
+    # leading << and any quotes from the matched text.
+    match($0, /<<['"'"'"]?[A-Z_]+['"'"'"]?/)
+    delim = substr($0, RSTART + 2, RLENGTH - 2)
+    gsub(/['"'"'"]/, "", delim)
     in_hd = 1
     print
     next
