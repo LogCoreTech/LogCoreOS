@@ -143,6 +143,29 @@
       ],
       "modules": [],
       "admin_only": true
+    },
+    {
+      "id": "api-keys",
+      "icon": "🔑",
+      "title": "API Keys & MCP",
+      "blurb": "Let outside tools reach your LogCore without sharing a password — a website's lead form, or an AI app like Claude over MCP. Admin-only: each key acts as the admin who created it, limited to the scopes picked for it.",
+      "howto": [
+        "Open Settings → Admin Settings → API Keys and tap + New Key. Name it after what will use it, pick its scopes, its workspace, and when it expires, then confirm with your password.",
+        "Copy the key right away — it's shown only once. If you lose it, revoke it and make a new one.",
+        "Scopes: leads:create only lets a lead form add leads (it can't read anything back); mcp:read lets an AI app read through LogCore's read-only tools; mcp:write also lets it create and change things.",
+        "Website lead form: send each submission to POST /api/v1/contacts/intake/lead with the header Authorization: Bearer <your key> and a JSON body like {\"name\": \"…\", \"phone\": \"…\", \"message\": \"…\", \"source\": \"Website\"}. The lead lands in Contacts, tagged website, with a follow-up reminder for tomorrow (change it with follow_up_days, or add \"to_pool\": true to put it in your shared Team/Household contacts).",
+        "Claude Code: run claude mcp add --transport http logcore https://<your-domain>/api/v1/mcp --header \"Authorization: Bearer <your key>\". Other MCP apps: add a remote (Streamable HTTP) MCP server at the same URL with the same Authorization header.",
+        "Revoke a key from the same page at any time — it stops working on its very next request. The Allow API keys switch at the top turns every key off at once without deleting them."
+      ],
+      "tips": [
+        "Use one key per tool so you can revoke just the one that leaked.",
+        "A lead from a phone number already in Contacts is added to that same contact instead of creating a duplicate — even if the name is spelled differently. Two different people who share a name stay separate.",
+        "Over MCP, the AI only sees tools for modules that are on for your account. Admin tools, the in-app chat's own plan/question tools, and anything that would spend your AI or web-search allowance are never offered.",
+        "Every key creation, revocation, and every change an AI app makes through an mcp:write key is listed in Admin → Audit Log.",
+        "A key stops working if its owner is deleted or is no longer an admin, or if its workspace is turned off."
+      ],
+      "modules": [],
+      "admin_only": true
     }
   ],
   "faq": [
@@ -193,6 +216,10 @@
     {
       "q": "I keep getting \"too many attempts\" when I try to log in.",
       "a": "That's the brute-force protection working: after several wrong passwords, sign-in for your account is paused for a few minutes to shut out attackers. Wait a bit and try again with the correct password, or ask an admin to reset it — it clears on its own."
+    },
+    {
+      "q": "Can I connect Claude (or another AI app) to my LogCore?",
+      "a": "Yes, if you're an admin. Create a key with the mcp:read scope (add mcp:write if the app should be able to make changes) in Settings → Admin Settings → API Keys, then add LogCore as a remote MCP server at https://<your-domain>/api/v1/mcp with the header Authorization: Bearer <your key>. Help → API Keys & MCP has the exact steps."
     }
   ],
   "support": {

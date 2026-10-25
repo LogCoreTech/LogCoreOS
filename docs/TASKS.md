@@ -66,6 +66,7 @@ Full triage of the former "Cross-App UX & Polish" Idea Backlog list (34 items), 
 
 ## Security
 
+- [ ] **Live-verify API keys + lead intake + MCP on a real instance** (shipped 2026-10-25, backend-tested only — 56 new tests, no live HTTP/browser run in that session): create a key in Admin → API Keys, `curl` a lead into `POST /api/v1/contacts/intake/lead`, connect Claude Code (`claude mcp add --transport http …`) and run a read and a write tool, revoke the key and confirm both stop working.
 - [ ] **GitHub reports 1 high-severity Dependabot vulnerability on `master`** — surfaced by the push output after the 2026-09-20 commits, not yet triaged: https://github.com/LogCoreTech/LogCoreOS/security/dependabot/25. No `gh` CLI or GitHub token was available in this environment to pull the actual advisory/affected package, so this is logged generically — check the link directly, or run this down with `gh api repos/LogCoreTech/LogCoreOS/dependabot/alerts/25` from an authenticated session.
 
 From the 2026-07-19 audit (full detail in `docs/Security-Audit-2026-07-19.md`) plus later findings. All CRITICAL/HIGH items are shipped — see `CHANGELOG.md` [0.4.0]. App-level 2FA (TOTP) — the last open item from the audit's account-takeover threat model — shipped 2026-09-20 (see CHANGELOG.md [Unreleased] and `docs/Daily Notes/2026-09-20.md`); "remember this device" was not part of that pass and isn't tracked separately here since it wasn't a named audit item. What's left, roughly in order:
@@ -214,7 +215,8 @@ Generated across a systematic search→generate→compare→document pass over t
 - Bug bounty / vulnerability reward program.
 - Add a server-side confirmation/step-up requirement for physical-security-relevant Home Assistant domains (`lock`, `cover`) — the frontend `confirm()` is trivially bypassable via direct API calls.
 - Consider a higher or NAT-aware login rate limit — a household sharing one IP can have one member's typo lock out the whole family.
-- Scoped/multiple automation tokens instead of one shared instance-wide credential.
+- Retire the one shared instance-wide automation token (`X-Automation-Token`) in favor of the scoped, revocable personal API keys shipped 2026-10-25 — needs automation scopes for the existing Assets/Contacts/Inbox automation APIs plus a migration note for existing n8n workflows. (The keys themselves closed the original "scoped/multiple tokens" item.)
+- MCP over OAuth (the spec's standard auth flow) in addition to static `Authorization: Bearer` API keys — some MCP clients only connect to remote servers through OAuth. Not needed for Claude Code/Desktop-with-headers today.
 - Home Assistant Auto-mode carve-out — require approval for unlock/garage-open actions even in Auto mode, as a permanent exception regardless of how the general AI auto-mode destructive-action fix lands.
 - Biometric/PIN app-lock on launch — the app opens straight to finance/journal data with no re-auth gate.
 - Self-service "Delete my account" in Settings (right-to-erasure, land alongside the cascade-delete bug fix).

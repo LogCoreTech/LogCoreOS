@@ -257,7 +257,7 @@ Set which modules are disabled for a user.
 ### `GET /auth/admin/settings`
 Get runtime admin settings.
 
-**Response** `{ "allow_open_registration": false, "enabled_workspaces": ["personal", "business"], "session_minutes": 10080 }`
+**Response** `{ "allow_open_registration": false, "enabled_workspaces": ["personal", "business"], "session_minutes": 10080, "require_2fa": "off", "api_keys_enabled": true }`
 
 ### `PATCH /auth/admin/settings`
 Update runtime admin settings. All fields optional — only send what changes.
@@ -265,6 +265,8 @@ Update runtime admin settings. All fields optional — only send what changes.
 **Body** `{ "allow_open_registration": true }` and/or `{ "enabled_workspaces": ["personal"] }` and/or `{ "session_minutes": 43200 }`
 
 `enabled_workspaces` — instance-wide list of workspaces available on this install (subset of `["personal", "business"]`, never empty). Hiding a workspace removes it for **everyone, including admins**: `get_current_user()` intersects each user's `workspaces` with this list. Used for personal-only or business-only deployments.
+
+`api_keys_enabled` (default `true`, 2026-10-25) — instance-wide switch for personal API keys; `false` makes every key fail authentication immediately (nothing is deleted) and blocks creating new ones. Toggled from Admin → API Keys.
 
 `session_minutes` (60–129600, default 10080) — a **single instance-wide value**, admin-only, no per-user override. Controls how long every login stays valid (both the JWT `exp` claim and the cookie `max_age`). There used to be a per-user `PATCH /auth/session` self-service endpoint; it was removed in favor of this single admin-controlled setting. Changing it only affects logins from that point forward — already-active sessions are not forcibly invalidated.
 
@@ -324,6 +326,17 @@ Get the instance-wide n8n automation token (admin only). Relocated here from `GE
 Rotate the instance-wide n8n automation token (admin only, rate-limited 30/min). Relocated here from `POST /assets/automation/token/rotate` the same day, same reasoning.
 
 **Response** `{ "token": "..." }` (the new token)
+
+### API keys — `GET`/`POST /auth/admin/api-keys`, `DELETE /auth/admin/api-keys/{key_id}` (2026-10-25)
+Personal API keys (`services/api_key_service.py`, `routers/auth/api_keys.py`) — **admin-only** (owner decision, `docs/MEMORY.md` 2026-10-25). A key is a credential for the admin who created it, not a separate identity.
+
+- `GET` (admin, 30/min) → `{enabled, scopes: {scope: description}, expiry_days: [30, 90, 365], keys: [...]}` — every key on the instance, metadata only (`id, user_id, user_name, name, scopes, workspace, created_at, expires_at, last_used_at, revoked_at, status: active|expired|revoked`). Never a secret or hash.
+- `POST` (admin, 5/min) `{name, scopes: [...], workspace, expires_days: 30|90|365|null, current_password}` → `{key, meta}`. Creates a key **for the caller's own account**; `key` (`lcos_<8 hex>_<secret>`) is returned **only here, once**. 400 on wrong password / unknown scope / workspace not entitled; 409 when keys are turned off; max 20 active keys per user. Audit-logged (`api_key.create`).
+- `DELETE` (admin, 20/min) → `{ok, meta}` — revokes any admin's key, effective on the next request. Idempotent. Audit-logged (`api_key.revoke`).
+
+Scopes (none by default): `leads:create` (POST `/contacts/intake/lead` only), `mcp:read`, `mcp:write` (see `## MCP`). Storage: `brain/_system/api_keys.json`, SHA-256 hash of the secret only.
+
+**How a key authenticates**: `Authorization: Bearer lcos_…` on a route using `require_api_key(scope)` (`routers/auth/deps.py`) — the only routes that accept one. `get_current_user` **rejects** a key outright (401 "API keys can't be used on this endpoint"), so a key can never reach a normal or admin route, including these key-management routes. `require_api_key` ignores the session cookie, re-fetches the owner every request, requires them to **still be an admin** (a demoted owner's keys stop working), re-applies their disabled modules, refuses (403) if the key's bound workspace is no longer available to them, and rate-limits per key on top of the route's per-IP limit. Deleting a user revokes their keys; `api_keys_enabled: false` in admin settings rejects every key without deleting any.
 
 ### `POST /auth/admin/users`
 Create a new user (admin only).
@@ -1362,11 +1375,29 @@ Router mounted at `/api/v1/contacts` (module id `contacts` — converted into `m
 
 | Method | Path | Notes |
 |--------|------|-------|
-| `GET` | `/contacts/automation/lookup?user=&workspace=&email=&name=` | single-contact dedup lookup → `{found, contact_id}`. Deliberately NOT a list endpoint |
-| `POST` | `/contacts/automation/contacts` | create/update by name/email match; `{user, workspace, name, type?, emails?, phones?, tags?, notes?}` |
+| `GET` | `/contacts/automation/lookup?user=&workspace=&email=&name=&phone=&external_id=` | single-contact dedup lookup → `{found, contact_id}`. Deliberately NOT a list endpoint |
+| `POST` | `/contacts/automation/contacts` | create-or-**merge**; `{user, workspace, name, type?, emails?, phones?, tags?, notes?, external_id?}`. Match order across the whole store: `external_id` → email → phone (digits only, last 10, ≥7 digits) → exact name. An update **merges** (2026-10-25 fix — it used to wipe every field the caller omitted): emails/phones/tags are unioned, notes appended, the existing name kept, `external_id` stored if the contact had none. `user` may be `_team` (stored at `business`) or `_household` (stored at `personal`) |
 | `POST` | `/contacts/automation/interactions` · `/deals` | append an interaction / deal to a contact |
 
+**Lead intake** (2026-10-25, `router_intake.py`) — personal API key with the `leads:create` scope (`Authorization: Bearer lcos_…`; see **API keys** under Admin — Users), rate 10/min per key + 20/min per IP. Write-only: the response never contains contact data.
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `POST` | `/contacts/intake/lead` | `{name, phone, email?, message?, source?, external_id?, follow_up_days? (0–365, default 1), to_pool? (default false)}` → `{ok, contact_id, interaction_id, created}`. Upserts by `external_id`/email/phone — **never by name alone** (two people sharing a name stay separate) — via `contacts_service.upsert_external_contact(..., match_name=False)`; tags `website` + slugified `source`; logs a `note` interaction (`[source] message`) with `follow_up` = the key owner's today + `follow_up_days`, so the nightly follow-up sweep reminds them. Stored in the key's bound workspace — the owner's own contacts, or the workspace's pool (`_team`/`_household`) with `to_pool`. 403 if Contacts is disabled/uninstalled for the key's owner |
+
 **Agent tools**: `list_contacts`/`get_contact` (read) + `create_contact`/`update_contact`/`log_interaction`/`create_deal` (approval-gated; create searches for a match first to avoid duplicates).
+
+---
+
+## MCP
+
+`POST /api/v1/mcp` (2026-10-25, `routers/mcp.py` + `services/mcp_service.py`) — a minimal, stateless [Model Context Protocol](https://modelcontextprotocol.io) server over Streamable HTTP. JSON responses only (no SSE stream, no `Mcp-Session-Id`); `GET`/`DELETE` → 405. Auth: `Authorization: Bearer lcos_…` with the `mcp:read` or `mcp:write` scope. Rate 60/min per key, 120/min per IP.
+
+- Methods: `initialize` (negotiates `2025-06-18` or `2025-03-26`, else answers with the newest), `ping`, `tools/list`, `tools/call`; notifications get `202` with no body; JSON-RPC batches (2025-03-26) are accepted. Unknown method → `-32601`; malformed JSON → HTTP 400 + `-32700`.
+- Transport checks: a request carrying an `Origin` header must match the instance's own origin (Admin → Hosting domain, else `ALLOWED_ORIGINS`) or it's 403 — the spec's DNS-rebinding guard; desktop/CLI clients send no `Origin`. An unsupported `MCP-Protocol-Version` header → 400.
+- **Tools = the in-app agent's own registry** (`agent_service._get_tools(user)` → `_execute_tool`), so disabled/uninstalled modules' tools never appear. `mcp:read` → only `_READ_TOOLS` + modules' `read_only_agent_tools` (each annotated `readOnlyHint: true`); `mcp:write` → everything else too, each write call audit-logged as `api_key.mcp_write`. **Never exposed**: core `_ADMIN_TOOLS` and modules' `admin_agent_tools`, `propose_plan`/`ask_user_question` (chat-only), `run_suggestion`/`search_web` (spend the instance's metered AI/web-search budget). A `tools/call` for anything outside that list is refused with `-32602` before it runs. Results: `{content: [{type: "text", text: <JSON>}], isError}`.
+
+Client setup example (Claude Code): `claude mcp add --transport http logcore https://<your-domain>/api/v1/mcp --header "Authorization: Bearer lcos_…"`.
 
 ---
 

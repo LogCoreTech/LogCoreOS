@@ -621,7 +621,7 @@ Create:
 
 - Plugin system
 - Public Brain specification
-- Developer API
+- Developer API — *partly pulled forward 2026-10-25*: admin-only scoped personal API keys, an API-key lead-intake endpoint, and an MCP server exposing the agent tool registry (`docs/API.md` → API keys, Contacts lead intake, `## MCP`). A general REST-with-API-keys surface for every module is still future work.
 - Community marketplace
 
 ---
