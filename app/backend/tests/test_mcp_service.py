@@ -41,15 +41,16 @@ def _everything(level):
 
 
 def _key_user(admin, access=None, overrides=None):
-    _meta, key = api_key_service.create_key(
+    meta = api_key_service.invite_mcp_key(
         admin,
-        "mcp",
+        admin,
         "Claude",
+        "personal",
+        _everything("read") if access is None else access,
+        overrides or {},
         None,
-        workspace="personal",
-        access=_everything("read") if access is None else access,
-        tool_overrides=overrides or {},
     )
+    _meta, key = api_key_service.accept_invite(meta["id"], admin)
     creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=key)
     return require_api_key("mcp")(creds)
 
@@ -249,7 +250,7 @@ def test_get_is_405():
 
 
 def test_integration_key_is_refused(admin):
-    _meta, key = api_key_service.create_key(admin, "integration", "form", None, target="_team")
+    _meta, key = api_key_service.create_integration_key(admin, "form", "_team", None)
     creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=key)
     with pytest.raises(HTTPException) as exc:
         require_api_key("mcp")(creds)
@@ -304,3 +305,19 @@ def test_access_validation_rejects_unknown_and_empty(brain):
         mcp_service.validate_access({"tasks": "none"}, {})
     access, overrides = mcp_service.validate_access({"tasks": "read", "core": "none"}, {})
     assert access == {"tasks": "read"} and overrides == {}
+
+
+def test_member_key_never_reaches_beyond_the_member(admin):
+    """An admin can tick anything in the catalog, but a key acting as a member
+    still only gets what that member can use: their disabled modules drop out."""
+    member = auth_service.create_user("m@example.com", "password123", "Mem")
+    auth_service.update_user(member["id"], {"disabled_modules": ["tasks"]})
+    member = auth_service.get_user_by_id(member["id"])
+    meta = api_key_service.invite_mcp_key(
+        admin, member, "Claude", "personal", _everything("write"), {}, None
+    )
+    _meta, key = api_key_service.accept_invite(meta["id"], member)
+    user = require_api_key("mcp")(HTTPAuthorizationCredentials(scheme="Bearer", credentials=key))
+    names = _tool_names(user)
+    assert "list_tasks" not in names and "add_task" not in names
+    assert "get_priorities" in names

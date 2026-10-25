@@ -40,7 +40,7 @@ def admin(brain):
 
 
 def _principal(admin, target="_team"):
-    _meta, key = api_key_service.create_key(admin, "integration", "Lead form", None, target=target)
+    _meta, key = api_key_service.create_integration_key(admin, "Lead form", target, None)
     creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=key)
     return require_api_key("leads:create")(creds)
 
@@ -95,7 +95,7 @@ def test_response_never_echoes_contact_data(admin):
 
 
 def test_keeps_working_after_creator_is_deleted(admin):
-    _meta, key = api_key_service.create_key(admin, "integration", "Form", None, target="_team")
+    _meta, key = api_key_service.create_integration_key(admin, "Form", "_team", None)
     auth_service.create_user("other@example.com", "password123", "Other", role="admin")
     auth_service.delete_user(admin["id"])
     creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=key)

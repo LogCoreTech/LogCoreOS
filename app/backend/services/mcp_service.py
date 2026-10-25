@@ -82,8 +82,8 @@ def _exposable(names: set[str]) -> set[str]:
 
 
 def catalog() -> list[dict]:
-    """Every tool an MCP key could be granted, grouped for the Admin → API
-    Keys picker: [{id, label, tools: [{name, description, read_only}]}]. Core
+    """Every tool an MCP key could be granted, grouped for the Admin →
+    Integrations & MCP picker: [{id, label, tools: [{name, description, read_only}]}]. Core
     tools first, then each ACTIVE module's own tools. Tools that need extra
     config (e.g. Home Assistant) are listed if their module is installed;
     `allowed_tools()` still drops them at call time when unavailable."""
@@ -161,6 +161,20 @@ def validate_access(access: dict, tool_overrides: dict) -> tuple[dict, dict]:
     if not grants_something:
         raise ValueError("Pick at least one tool this key can use")
     return clean_access, clean_overrides
+
+
+def granted_tools(access: dict, tool_overrides: dict) -> list[dict]:
+    """The catalog tools these settings allow, for showing a person exactly
+    what they're agreeing to: [{name, description, read_only, group, label}].
+    Catalog-based (instance-wide), so it's the most the key could ever do —
+    at call time it's further cut down to what the person themselves can use."""
+    read_names = _read_tool_names()
+    return [
+        {**t, "group": g["id"], "label": g["label"]}
+        for g in catalog()
+        for t in g["tools"]
+        if _tool_allowed(t["name"], g["id"], read_names, access or {}, tool_overrides or {})
+    ]
 
 
 def _tool_allowed(

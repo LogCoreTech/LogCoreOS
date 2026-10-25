@@ -15,7 +15,7 @@ export default function AdminMenu() {
         <MenuRow icon="🏠" label="Household" subtitle="Household priorities, bank connections" to="/settings/admin/household" />
         <MenuRow icon="🌐" label="Hosting" subtitle="Domain, managed hosting, n8n, Home Assistant" to="/settings/admin/hosting" />
         <MenuRow icon="🧩" label="Mod Store" subtitle="Install first-party modules" to="/settings/admin/mod-store" />
-        <MenuRow icon="🔑" label="API Keys" subtitle="Keys for lead intake and MCP clients" to="/settings/admin/api-keys" />
+        <MenuRow icon="🔑" label="Integrations & MCP" subtitle="Website lead forms and AI app access" to="/settings/admin/integrations" />
         <MenuRow icon="📜" label="Audit Log" subtitle="Recent admin actions — deletions, role changes, module access" to="/settings/admin/audit-log" />
       </div>
 

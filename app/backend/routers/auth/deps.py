@@ -188,9 +188,9 @@ def require_api_key(scope: str, max_calls: int = 30, window_seconds: int = 60):
     used to drive these routes cross-site. The per-KEY rate limit sits on top
     of the route's own per-IP one. Returns the request's principal:
 
-    - an **mcp** key → its owner's user dict, re-fetched every request with
-      their current role (must still be admin), disabled modules, and
-      workspace entitlements re-applied;
+    - an **mcp** key → the user it acts as (any role), re-fetched every
+      request with their current disabled modules and workspace entitlements
+      re-applied — the key can never do more than that person can;
     - an **integration** key → a machine principal, NOT a user: `name` is the
       key's target pool (e.g. "_team"), `role` is "integration", and
       `disabled_modules` is empty (the route checks instance-level install
@@ -230,12 +230,10 @@ def require_api_key(scope: str, max_calls: int = 30, window_seconds: int = 60):
             }
 
         user = auth_service.get_user_by_id(record["user_id"])
-        # MCP keys are admin-only (docs/MEMORY.md 2026-10-25): a key whose owner
-        # has since been demoted stops working, it isn't grandfathered in.
-        if not user or user.get("role") != "admin":
+        if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="This API key's account no longer exists or is no longer an admin",
+                detail="This API key's account no longer exists",
             )
         user = _apply_workspace_context(user, workspace)
         if user["_workspace"] != workspace:

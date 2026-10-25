@@ -63,6 +63,8 @@ function NotifBell() {
     if (action?.type === 'open_contact') return deepLinkUrl('contacts', action.contact_id)
     if (action?.type === 'open_chat') return deepLinkUrl('chat', action.chat_id)
     if (action?.type === 'open_settings') return '/settings'
+    if (action?.type === 'open_mcp_access') return `/settings/account?mcp=${action.key_id || ''}`
+    if (action?.type === 'open_admin_integrations') return '/settings/admin/integrations'
     if (action?.type === 'notes_share') return null  // request → Accept/Decline, not a nav
     return null
   }

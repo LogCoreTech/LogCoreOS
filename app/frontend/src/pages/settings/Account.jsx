@@ -9,6 +9,7 @@ import useScrollLock from '../../lib/useScrollLock'
 import SettingsPageHeader from '../../components/settings/SettingsPageHeader'
 import SimpleFormModal from '../../components/SimpleFormModal'
 import TwoFactorSection from '../../components/settings/TwoFactorSection'
+import McpAccessSection from '../../components/settings/McpAccessSection'
 
 function detectTz() {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone || '' } catch { return '' }
@@ -145,6 +146,8 @@ export default function Account() {
 
       {/* Two-Factor Authentication (moved here from its own Security page, 2026-09-20) */}
       <TwoFactorSection />
+
+      <McpAccessSection />
 
       {/* Timezone */}
       <div className="card p-5">

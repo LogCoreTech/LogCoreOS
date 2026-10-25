@@ -29,7 +29,7 @@ import AdminHousehold from './pages/settings/admin/Household'
 import AdminHosting from './pages/settings/admin/Hosting'
 import AdminModStore from './pages/settings/admin/ModStore'
 import AdminAuditLog from './pages/settings/admin/AuditLog'
-import AdminApiKeys from './pages/settings/admin/ApiKeys'
+import AdminIntegrations from './pages/settings/admin/Integrations'
 import Login from './pages/Login'
 import Setup from './pages/Setup'
 import Profile from './pages/Profile'
@@ -130,7 +130,7 @@ export default function App() {
                   <Route path="/settings/admin/hosting" element={<AdminOnly><AdminHosting /></AdminOnly>} />
                   <Route path="/settings/admin/mod-store" element={<AdminOnly><AdminModStore /></AdminOnly>} />
                   <Route path="/settings/admin/audit-log" element={<AdminOnly><AdminAuditLog /></AdminOnly>} />
-                  <Route path="/settings/admin/api-keys" element={<AdminOnly><AdminApiKeys /></AdminOnly>} />
+                  <Route path="/settings/admin/integrations" element={<AdminOnly><AdminIntegrations /></AdminOnly>} />
                   <Route path="/help"     element={<Help />} />
                 </Route>
               </Routes>

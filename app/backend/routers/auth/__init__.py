@@ -101,14 +101,24 @@ from .admin_users import (
     update_workspace_modules,
 )
 
-# --- api_keys.py: Admin → API Keys (integration + MCP keys) -------------
+# --- api_keys.py: Integrations & MCP keys (admin + user sides) -----------
 from .api_keys import (
+    ApiKeyAcceptRequest,
+    ApiKeyAccessRequest,
+    ApiKeyChangeResponse,
     ApiKeyCreateRequest,
     ApiKeyUpdateRequest,
+    accept_my_api_key,
     admin_create_api_key,
+    admin_dismiss_key_request,
     admin_list_api_keys,
     admin_revoke_api_key,
     admin_update_api_key,
+    decline_my_api_key,
+    my_api_keys,
+    request_mcp_access,
+    respond_my_api_key_change,
+    revoke_my_api_key,
 )
 
 # --- deps.py: core dependencies + shared helpers -------------------------
@@ -337,10 +347,20 @@ __all__ = [
     "totp_status",
     "verify_login",
     # api_keys
+    "ApiKeyAcceptRequest",
+    "ApiKeyAccessRequest",
+    "ApiKeyChangeResponse",
     "ApiKeyCreateRequest",
     "ApiKeyUpdateRequest",
+    "accept_my_api_key",
     "admin_create_api_key",
+    "admin_dismiss_key_request",
     "admin_list_api_keys",
     "admin_revoke_api_key",
     "admin_update_api_key",
+    "decline_my_api_key",
+    "my_api_keys",
+    "request_mcp_access",
+    "respond_my_api_key_change",
+    "revoke_my_api_key",
 ]

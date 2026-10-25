@@ -11,10 +11,18 @@ const ACTION_LABELS = {
   'user.2fa_enrolled': 'Enabled two-factor authentication',
   'user.2fa_disabled': 'Disabled two-factor authentication',
   'user.2fa_admin_reset': "Reset a user's two-factor authentication",
-  'api_key.create': 'Created API key',
-  'api_key.revoke': 'Revoked API key',
-  'api_key.update': 'Changed API key',
-  'api_key.mcp_write': 'API key used a write tool',
+  'api_key.create': 'Created integration key',
+  'api_key.invite': 'Set up MCP access',
+  'api_key.accept': 'Accepted MCP access',
+  'api_key.decline': 'Declined MCP access',
+  'api_key.update': 'Changed key',
+  'api_key.change_proposed': 'Proposed more MCP tools',
+  'api_key.change_accept': 'Approved more MCP tools',
+  'api_key.change_decline': 'Rejected more MCP tools',
+  'api_key.revoke': 'Revoked key',
+  'api_key.request': 'Requested MCP access',
+  'api_key.request_dismiss': 'Dismissed MCP request',
+  'api_key.mcp_write': 'MCP key used a write tool',
 }
 
 function describe(entry) {

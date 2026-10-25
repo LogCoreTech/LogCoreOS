@@ -7,17 +7,23 @@ import useScrollLock from '../../../lib/useScrollLock'
 import SettingsPageHeader from '../../../components/settings/SettingsPageHeader'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 
-// API keys — admin-only (docs/MEMORY.md 2026-10-25), two kinds:
-// - integration: belongs to the instance (not a person), pinned to a shared
-//   contacts list; can only send leads in.
-// - mcp: an AI app acting as the admin who made it, limited to the modules /
-//   tools picked here (editable later). The full key is shown exactly once.
+// Admin → Integrations & MCP (docs/MEMORY.md 2026-10-25). Two kinds of key:
+// - Integration: belongs to the instance (not a person), pinned to a shared
+//   contacts list, can only send leads in. Shown to the admin exactly once.
+// - MCP: lets an AI app act as ONE user the admin picks, limited to the tools
+//   picked here. It's an invitation — that user is notified, reviews the
+//   tools, and accepts; the key is generated then and shown only to them.
+//   Widening an accepted key's tools waits for the user's approval again.
 
 const STATUS_STYLES = {
   active: 'text-green-600 dark:text-green-400',
+  pending: 'text-amber-600 dark:text-amber-400',
   expired: 'text-charcoal-400',
+  declined: 'text-charcoal-400',
   revoked: 'text-red-500',
 }
+
+const STATUS_LABELS = { pending: 'waiting for them to accept' }
 
 const TARGET_LABELS = { _team: 'Team contacts', _household: 'Household contacts' }
 const LEVELS = [
@@ -140,6 +146,7 @@ const EMPTY_FORM = {
   kind: 'integration',
   name: '',
   target: '_team',
+  userId: '',
   workspace: 'personal',
   expiresDays: '90',
   access: {},
@@ -147,7 +154,47 @@ const EMPTY_FORM = {
   password: '',
 }
 
-export default function ApiKeys() {
+function KeyRow({ k, catalog, onEdit, onRevoke }) {
+  const live = k.status === 'active' || k.status === 'pending'
+  return (
+    <div className="p-4 flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-sm font-medium truncate">
+          {k.name}{' '}
+          <span className={`text-xs font-normal ${STATUS_STYLES[k.status]}`}>
+            · {STATUS_LABELS[k.status] || k.status}
+          </span>
+        </p>
+        <p className="text-xs text-charcoal-500 dark:text-charcoal-400">
+          {k.kind === 'mcp'
+            ? `Acts as ${k.user_name} · ${k.workspace} · ${accessSummary(k, catalog)}`
+            : `Sends leads to ${TARGET_LABELS[k.target] || k.target}`}
+        </p>
+        {k.proposed_access && (
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            More tools proposed — waiting for {k.user_name} to approve
+          </p>
+        )}
+        <p className="text-xs text-charcoal-400">
+          {k.status === 'pending' ? 'not accepted yet' : `lcos_${k.id}_…`} · set up {formatDate(k.created_at)} by {k.created_by_name}
+          {k.status === 'active' && ` · expires ${k.expires_at ? formatDate(k.expires_at) : 'never'} · last used ${formatDate(k.last_used_at)}`}
+        </p>
+      </div>
+      {live && (
+        <div className="flex flex-col gap-1 shrink-0">
+          <button onClick={() => onEdit(k)} className="btn-ghost text-sm">
+            {k.kind === 'mcp' ? 'Edit tools' : 'Rename'}
+          </button>
+          <button onClick={() => onRevoke(k)} className="btn-ghost text-sm text-red-500">
+            {k.status === 'pending' ? 'Cancel' : 'Revoke'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function Integrations() {
   const toast = useToast()
   const [data, setData] = useState(null)
   const [enabled, setEnabled] = useState(true)
@@ -170,7 +217,7 @@ export default function ApiKeys() {
   function load() {
     adminApi.listApiKeys()
       .then(d => { setData(d); setEnabled(d.enabled) })
-      .catch(err => toast.error(err.message || 'Failed to load API keys'))
+      .catch(err => toast.error(err.message || 'Failed to load keys'))
   }
 
   useEffect(load, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -184,12 +231,15 @@ export default function ApiKeys() {
     setEditing(null)
   }
 
-  function openCreate() {
+  function openCreate(kind, userId = '') {
     const ws = data?.workspaces || []
+    const user = (data?.users || []).find(u => u.id === userId)
     setForm({
       ...EMPTY_FORM,
+      kind,
+      userId,
       target: ws.includes('business') ? '_team' : '_household',
-      workspace: ws.includes('personal') ? 'personal' : ws[0] || 'personal',
+      workspace: user?.workspaces?.[0] || (ws.includes('personal') ? 'personal' : ws[0] || 'personal'),
     })
     setModal('create')
   }
@@ -198,12 +248,18 @@ export default function ApiKeys() {
     setForm(f => ({ ...f, ...fields }))
   }
 
+  function pickUser(userId) {
+    const user = (data?.users || []).find(u => u.id === userId)
+    const ws = user?.workspaces || []
+    update({ userId, workspace: ws.includes(form.workspace) ? form.workspace : ws[0] || 'personal' })
+  }
+
   async function toggleEnabled() {
     setSavingSwitch(true)
     try {
       const updated = await adminApi.updateSettings({ api_keys_enabled: !enabled })
       setEnabled(updated.api_keys_enabled)
-      toast.success(updated.api_keys_enabled ? 'API keys turned on.' : 'API keys turned off — every key is rejected until turned back on.')
+      toast.success(updated.api_keys_enabled ? 'Integrations & MCP turned on.' : 'Turned off — every key is rejected until turned back on.')
     } catch (err) {
       toast.error(err.message || 'Failed to save')
     } finally {
@@ -222,11 +278,16 @@ export default function ApiKeys() {
         current_password: form.password,
       }
       if (form.kind === 'integration') body.target = form.target
-      else Object.assign(body, { workspace: form.workspace, access: form.access, tool_overrides: form.overrides })
+      else Object.assign(body, { user_id: form.userId, workspace: form.workspace, access: form.access, tool_overrides: form.overrides })
       const result = await adminApi.createApiKey(body)
-      setNewKey(result.key)
-      update({ password: '' })
-      setModal('reveal')
+      if (result.key) {
+        setNewKey(result.key)
+        update({ password: '' })
+        setModal('reveal')
+      } else {
+        toast.success(`Sent to ${result.meta.user_name} to review and accept.`)
+        closeModal()
+      }
       load()
     } catch (err) {
       setFormError(err.message || 'Failed to create key')
@@ -237,7 +298,7 @@ export default function ApiKeys() {
 
   function openEdit(key) {
     setEditing(key)
-    setForm({ ...EMPTY_FORM, name: key.name, access: key.access || {}, overrides: key.tool_overrides || {} })
+    setForm({ ...EMPTY_FORM, kind: key.kind, name: key.name, access: key.access || {}, overrides: key.tool_overrides || {} })
     setModal('edit')
   }
 
@@ -247,8 +308,10 @@ export default function ApiKeys() {
     try {
       const body = { name: form.name }
       if (editing.kind === 'mcp') Object.assign(body, { access: form.access, tool_overrides: form.overrides })
-      await adminApi.updateApiKey(editing.id, body)
-      toast.success(`Saved “${form.name}”.`)
+      const result = await adminApi.updateApiKey(editing.id, body)
+      toast.success(result.needs_approval
+        ? `Sent to ${editing.user_name} to approve — their current tools stay until then.`
+        : `Saved “${form.name}”.`)
       closeModal()
       load()
     } catch (err) {
@@ -270,31 +333,48 @@ export default function ApiKeys() {
     setRevoking(null)
     try {
       await adminApi.revokeApiKey(key.id)
-      toast.success(`Revoked “${key.name}”.`)
+      toast.success(key.status === 'pending' ? `Cancelled “${key.name}”.` : `Revoked “${key.name}”.`)
       load()
     } catch (err) {
       toast.error(err.message || 'Failed to revoke key')
     }
   }
 
+  async function dismissRequest(request) {
+    try {
+      await adminApi.dismissKeyRequest(request.id)
+      load()
+    } catch (err) {
+      toast.error(err.message || 'Failed to dismiss')
+    }
+  }
+
   const catalog = data?.mcp_catalog || []
+  const users = data?.users || []
+  const keys = data?.keys || []
+  const integrations = keys.filter(k => k.kind === 'integration')
+  const mcpKeys = keys.filter(k => k.kind === 'mcp')
+  const selectedUser = users.find(u => u.id === form.userId)
   const grantsSomething = catalog.some(g => g.tools.some(t => toolAllowed(g, t, form.access, form.overrides)))
-  const canCreate = form.name.trim() && form.password && (form.kind === 'integration' || grantsSomething)
+  const canCreate = form.name.trim() && form.password && (
+    form.kind === 'integration' || (form.userId && grantsSomething)
+  )
+  const isMcpForm = modal === 'create' ? form.kind === 'mcp' : editing?.kind === 'mcp'
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
-      <SettingsPageHeader title="API Keys" backTo="/settings/admin" backLabel="Admin Settings" />
+      <SettingsPageHeader title="Integrations & MCP" backTo="/settings/admin" backLabel="Admin Settings" />
 
       <p className="text-sm text-charcoal-500 dark:text-charcoal-400">
-        Let outside tools reach LogCore. A <strong>website / integration</strong> key belongs to
-        this instance and can only send leads into a shared contacts list. An <strong>AI app
-        (MCP)</strong> key acts as you, limited to the modules and tools you pick. See Help → API
-        Keys &amp; MCP for setup.
+        Let outside tools reach LogCore without sharing a password. An <strong>integration</strong>
+        {' '}belongs to this instance and can only send leads into a shared contacts list.
+        {' '}<strong>MCP</strong> lets an AI app act as one person, with only the tools you pick —
+        they review and accept it themselves. See Help → Integrations &amp; MCP for setup.
       </p>
 
       <div className="card p-5 flex items-center justify-between gap-3">
         <div>
-          <h2 className="font-semibold">Allow API keys</h2>
+          <h2 className="font-semibold">Allow integrations &amp; MCP</h2>
           <p className="text-xs text-charcoal-500 dark:text-charcoal-400">
             Off rejects every key immediately, without deleting any.
           </p>
@@ -302,7 +382,7 @@ export default function ApiKeys() {
         <button
           role="switch"
           aria-checked={enabled}
-          aria-label="Allow API keys"
+          aria-label="Allow integrations and MCP"
           disabled={savingSwitch || !data}
           onClick={toggleEnabled}
           className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${enabled ? 'bg-orange-500' : 'bg-charcoal-300 dark:bg-charcoal-700'} ${savingSwitch ? 'opacity-50' : ''}`}
@@ -311,50 +391,59 @@ export default function ApiKeys() {
         </button>
       </div>
 
+      {data?.requests?.length > 0 && (
+        <div className="card">
+          <h2 className="font-semibold p-4 border-b border-charcoal-100 dark:border-charcoal-800">MCP requests</h2>
+          <div className="divide-y divide-charcoal-100 dark:divide-charcoal-800">
+            {data.requests.map(r => (
+              <div key={r.id} className="p-4 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{r.user_name}</p>
+                  {r.note && <p className="text-xs text-charcoal-500 dark:text-charcoal-400">“{r.note}”</p>}
+                  <p className="text-xs text-charcoal-400">asked {formatDate(r.created_at)}</p>
+                </div>
+                <div className="flex flex-col gap-1 shrink-0">
+                  <button onClick={() => openCreate('mcp', r.user_id)} disabled={!enabled} className="btn-primary text-sm">Set up</button>
+                  <button onClick={() => dismissRequest(r)} className="btn-ghost text-sm">Dismiss</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="card">
         <div className="flex items-center justify-between p-4 border-b border-charcoal-100 dark:border-charcoal-800">
-          <h2 className="font-semibold">Keys</h2>
-          <button onClick={openCreate} disabled={!enabled || !data} className="btn-primary text-sm">
-            + New Key
+          <h2 className="font-semibold">Integrations</h2>
+          <button onClick={() => openCreate('integration')} disabled={!enabled || !data} className="btn-primary text-sm">
+            + New
           </button>
         </div>
         <div className="divide-y divide-charcoal-100 dark:divide-charcoal-800">
           {!data ? (
             <p className="text-sm text-charcoal-400 p-4">Loading…</p>
-          ) : data.keys.length === 0 ? (
-            <p className="text-sm text-charcoal-400 p-4">No API keys yet.</p>
+          ) : integrations.length === 0 ? (
+            <p className="text-sm text-charcoal-400 p-4">No integrations yet — e.g. a website lead form.</p>
           ) : (
-            data.keys.map(k => (
-              <div key={k.id} className="p-4 flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">
-                    {k.name}{' '}
-                    <span className="text-xs font-normal text-charcoal-400">
-                      · {k.kind === 'mcp' ? 'AI app (MCP)' : 'Integration'}
-                    </span>{' '}
-                    <span className={`text-xs font-normal ${STATUS_STYLES[k.status]}`}>· {k.status}</span>
-                  </p>
-                  <p className="text-xs text-charcoal-500 dark:text-charcoal-400">
-                    {k.kind === 'mcp'
-                      ? `${accessSummary(k, catalog)} · ${k.workspace} · acts as ${k.user_name}`
-                      : `Sends leads to ${TARGET_LABELS[k.target] || k.target}`}
-                  </p>
-                  <p className="text-xs text-charcoal-400">
-                    lcos_{k.id}_… · created {formatDate(k.created_at)} by {k.created_by_name} · expires {k.expires_at ? formatDate(k.expires_at) : 'never'} · last used {formatDate(k.last_used_at)}
-                  </p>
-                </div>
-                {k.status === 'active' && (
-                  <div className="flex flex-col gap-1 shrink-0">
-                    <button onClick={() => openEdit(k)} className="btn-ghost text-sm">
-                      {k.kind === 'mcp' ? 'Edit access' : 'Rename'}
-                    </button>
-                    <button onClick={() => setRevoking(k)} className="btn-ghost text-sm text-red-500">
-                      Revoke
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))
+            integrations.map(k => <KeyRow key={k.id} k={k} catalog={catalog} onEdit={openEdit} onRevoke={setRevoking} />)
+          )}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="flex items-center justify-between p-4 border-b border-charcoal-100 dark:border-charcoal-800">
+          <h2 className="font-semibold">MCP</h2>
+          <button onClick={() => openCreate('mcp')} disabled={!enabled || !data} className="btn-primary text-sm">
+            + Set up
+          </button>
+        </div>
+        <div className="divide-y divide-charcoal-100 dark:divide-charcoal-800">
+          {!data ? (
+            <p className="text-sm text-charcoal-400 p-4">Loading…</p>
+          ) : mcpKeys.length === 0 ? (
+            <p className="text-sm text-charcoal-400 p-4">No one has MCP access yet.</p>
+          ) : (
+            mcpKeys.map(k => <KeyRow key={k.id} k={k} catalog={catalog} onEdit={openEdit} onRevoke={setRevoking} />)
           )}
         </div>
       </div>
@@ -363,54 +452,42 @@ export default function ApiKeys() {
         <div className="modal-overlay">
           <div ref={modalCardRef} className="modal-card p-5 max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold">{modal === 'create' ? 'New API Key' : `Edit “${editing?.name}”`}</h2>
+              <h2 className="font-semibold">
+                {modal === 'edit' ? `Edit “${editing?.name}”` : form.kind === 'mcp' ? 'Set up MCP access' : 'New integration'}
+              </h2>
               <button onClick={closeModal} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
             </div>
 
             <div className="space-y-4 mb-3">
-              {modal === 'create' && (
-                <fieldset>
-                  <legend className="block text-sm font-medium mb-1">What&apos;s it for?</legend>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { value: 'integration', label: 'Website / integration', desc: 'Send leads in. Belongs to this instance.' },
-                      { value: 'mcp', label: 'AI app (MCP)', desc: 'Claude or another AI app, acting as you.' },
-                    ].map(opt => (
-                      <label
-                        key={opt.value}
-                        className={`p-2.5 rounded-lg border cursor-pointer ${form.kind === opt.value ? 'border-orange-500 bg-orange-500/5' : 'border-charcoal-200 dark:border-charcoal-700'}`}
-                      >
-                        <input
-                          type="radio"
-                          name="api-key-kind"
-                          checked={form.kind === opt.value}
-                          onChange={() => update({ kind: opt.value })}
-                          className="sr-only"
-                        />
-                        <span className="block text-sm font-medium">{opt.label}</span>
-                        <span className="block text-xs text-charcoal-400">{opt.desc}</span>
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
+              {modal === 'create' && form.kind === 'mcp' && (
+                <div>
+                  <label className="block text-sm font-medium mb-1" htmlFor="key-user">Acts as</label>
+                  <select id="key-user" value={form.userId} onChange={e => pickUser(e.target.value)} className="input w-full text-base">
+                    <option value="">Pick a person…</option>
+                    {users.map(u => <option key={u.id} value={u.id}>{u.name}{u.role === 'admin' ? ' (admin)' : ''}</option>)}
+                  </select>
+                  <p className="text-xs text-charcoal-400 mt-1">
+                    They get a notification to review and accept. Only they will see the key — you won&apos;t.
+                  </p>
+                </div>
               )}
 
               <div>
-                <label className="block text-sm font-medium mb-1" htmlFor="api-key-name">Name</label>
+                <label className="block text-sm font-medium mb-1" htmlFor="key-name">Name</label>
                 <input
-                  id="api-key-name"
+                  id="key-name"
                   value={form.name}
                   onChange={e => update({ name: e.target.value })}
                   maxLength={60}
-                  placeholder={form.kind === 'integration' ? 'e.g. Website lead form' : 'e.g. Claude on my laptop'}
+                  placeholder={form.kind === 'integration' ? 'e.g. Website lead form' : 'e.g. Claude on their laptop'}
                   className="input w-full text-base"
                 />
               </div>
 
               {modal === 'create' && form.kind === 'integration' && (
                 <div>
-                  <label className="block text-sm font-medium mb-1" htmlFor="api-key-target">Leads go to</label>
-                  <select id="api-key-target" value={form.target} onChange={e => update({ target: e.target.value })} className="input w-full text-base">
+                  <label className="block text-sm font-medium mb-1" htmlFor="key-target">Leads go to</label>
+                  <select id="key-target" value={form.target} onChange={e => update({ target: e.target.value })} className="input w-full text-base">
                     {(data?.workspaces || []).includes('business') && <option value="_team">Team contacts (business)</option>}
                     {(data?.workspaces || []).includes('personal') && <option value="_household">Household contacts (personal)</option>}
                   </select>
@@ -420,23 +497,24 @@ export default function ApiKeys() {
                 </div>
               )}
 
-              {modal === 'create' && form.kind === 'mcp' && (
+              {modal === 'create' && form.kind === 'mcp' && selectedUser && (
                 <div>
-                  <label className="block text-sm font-medium mb-1" htmlFor="api-key-ws">Workspace</label>
-                  <select id="api-key-ws" value={form.workspace} onChange={e => update({ workspace: e.target.value })} className="input w-full text-base">
-                    {(data?.workspaces || []).map(w => (
+                  <label className="block text-sm font-medium mb-1" htmlFor="key-ws">Workspace</label>
+                  <select id="key-ws" value={form.workspace} onChange={e => update({ workspace: e.target.value })} className="input w-full text-base">
+                    {selectedUser.workspaces.map(w => (
                       <option key={w} value={w}>{w === 'business' ? 'Business' : 'Personal'}</option>
                     ))}
                   </select>
                 </div>
               )}
 
-              {(form.kind === 'mcp' && modal === 'create') || editing?.kind === 'mcp' ? (
+              {isMcpForm && (
                 <div>
-                  <p className="block text-sm font-medium mb-1">What it can use</p>
+                  <p className="block text-sm font-medium mb-1">Tools</p>
                   <p className="text-xs text-charcoal-400 mb-2">
-                    Set each module, or tap one to pick individual tools. Tools marked “changes data”
-                    run without asking in LogCore — only your AI app&apos;s own prompt stands in between.
+                    Set each module, or tap one to pick individual tools. The key can never do more than
+                    {' '}{modal === 'edit' ? editing?.user_name : 'this person'} can already do in LogCore.
+                    {modal === 'edit' && editing?.status === 'active' && ' Adding tools sends them a request to approve; removing tools applies right away.'}
                   </p>
                   <ToolAccessPicker
                     catalog={catalog}
@@ -445,13 +523,15 @@ export default function ApiKeys() {
                     onChange={(access, overrides) => update({ access, overrides })}
                   />
                 </div>
-              ) : null}
+              )}
 
               {modal === 'create' && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium mb-1" htmlFor="api-key-exp">Expires</label>
-                    <select id="api-key-exp" value={form.expiresDays} onChange={e => update({ expiresDays: e.target.value })} className="input w-full text-base">
+                    <label className="block text-sm font-medium mb-1" htmlFor="key-exp">
+                      {form.kind === 'mcp' ? 'Key expires (after they accept)' : 'Expires'}
+                    </label>
+                    <select id="key-exp" value={form.expiresDays} onChange={e => update({ expiresDays: e.target.value })} className="input w-full text-base">
                       {(data?.expiry_days || [30, 90, 365]).map(d => (
                         <option key={d} value={String(d)}>In {d} days</option>
                       ))}
@@ -459,9 +539,9 @@ export default function ApiKeys() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1" htmlFor="api-key-pw">Your current password</label>
+                    <label className="block text-sm font-medium mb-1" htmlFor="key-pw">Your current password</label>
                     <input
-                      id="api-key-pw"
+                      id="key-pw"
                       type="password"
                       value={form.password}
                       onChange={e => update({ password: e.target.value })}
@@ -478,12 +558,12 @@ export default function ApiKeys() {
               <button onClick={closeModal} className="btn-ghost flex-1">Cancel</button>
               {modal === 'create' ? (
                 <button onClick={createKey} disabled={busy || !canCreate} className="btn-primary flex-1">
-                  {busy ? 'Creating…' : 'Create Key'}
+                  {busy ? 'Working…' : form.kind === 'mcp' ? 'Send to them' : 'Create key'}
                 </button>
               ) : (
                 <button
                   onClick={saveEdit}
-                  disabled={busy || !form.name.trim() || (editing?.kind === 'mcp' && !grantsSomething)}
+                  disabled={busy || !form.name.trim() || (isMcpForm && !grantsSomething)}
                   className="btn-primary flex-1"
                 >
                   {busy ? 'Saving…' : 'Save'}
@@ -497,10 +577,10 @@ export default function ApiKeys() {
       {modal === 'reveal' && (
         <div className="modal-overlay">
           <div ref={modalCardRef} className="modal-card p-5 max-w-sm">
-            <h2 className="font-semibold mb-2">Copy your new key</h2>
+            <h2 className="font-semibold mb-2">Copy the integration key</h2>
             <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mb-3">
-              This is the only time it will be shown. Store it somewhere safe — if you lose it,
-              revoke it and create a new one.
+              This is the only time it will be shown. Put it in the website&apos;s settings as a secret —
+              if you lose it, revoke it and create a new one.
             </p>
             <code className="block p-3 rounded-lg bg-charcoal-100 dark:bg-charcoal-800 text-xs break-all select-all mb-3">
               {newKey}
@@ -515,9 +595,11 @@ export default function ApiKeys() {
 
       {revoking && (
         <ConfirmDialog
-          title="Revoke API key?"
-          message={`“${revoking.name}” stops working immediately. Anything using it will start getting errors.`}
-          confirmLabel="Revoke"
+          title={revoking.status === 'pending' ? 'Cancel this MCP setup?' : 'Revoke this key?'}
+          message={revoking.status === 'pending'
+            ? `${revoking.user_name} won't be able to accept “${revoking.name}”.`
+            : `“${revoking.name}” stops working immediately. Anything using it will start getting errors.`}
+          confirmLabel={revoking.status === 'pending' ? 'Cancel setup' : 'Revoke'}
           danger
           onConfirm={revokeKey}
           onCancel={() => setRevoking(null)}

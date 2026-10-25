@@ -130,6 +130,17 @@ export const totp = {
   regenerateRecovery:  (code) => post('/auth/2fa/recovery-codes/regenerate', { code }),
 }
 
+// The signed-in user's own MCP keys — admins set them up, the user accepts
+// (the key is in acceptApiKey's response only), declines, or revokes.
+export const mcpAccess = {
+  list:          ()                    => get('/auth/me/api-keys'),
+  accept:        (id, currentPassword) => post(`/auth/me/api-keys/${id}/accept`, { current_password: currentPassword }),
+  decline:       (id)                  => post(`/auth/me/api-keys/${id}/decline`, {}),
+  respondChange: (id, accept)          => post(`/auth/me/api-keys/${id}/change`, { accept }),
+  revoke:        (id)                  => del(`/auth/me/api-keys/${id}`),
+  request:       (note)                => post('/auth/me/api-keys/request', { note }),
+}
+
 export const help = {
   content:       ()     => get('/help/content'),
   whatsNew:      ()     => get('/help/whats-new'),
@@ -181,11 +192,13 @@ export const admin = {
   updateUser:        (userId, data)              => patch(`/auth/users/${userId}`, data),
   updateRole:        (userId, role)              => patch(`/auth/users/${userId}/role`, { role }),
   getAuditLog:       (limit = 100)                => get(`/auth/admin/audit-log?limit=${limit}`),
-  // API keys (admin-only: integration + MCP) — the full key is only in createApiKey's response
+  // Integrations & MCP keys (admin side) — an integration key is only in
+  // createApiKey's response; an MCP key is never returned to the admin at all
   listApiKeys:       ()                          => get('/auth/admin/api-keys'),
   createApiKey:      (data)                      => post('/auth/admin/api-keys', data),
   updateApiKey:      (id, data)                  => patch(`/auth/admin/api-keys/${id}`, data),
   revokeApiKey:      (id)                        => del(`/auth/admin/api-keys/${id}`),
+  dismissKeyRequest: (id)                        => post(`/auth/admin/api-keys/requests/${id}/dismiss`, {}),
   // Registration settings
   getSettings:       ()                          => get('/auth/admin/settings'),
   updateSettings:    (s)                         => patch('/auth/admin/settings', s),
