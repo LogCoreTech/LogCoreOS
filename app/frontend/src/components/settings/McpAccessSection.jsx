@@ -20,28 +20,48 @@ function formatDate(iso) {
   return iso ? new Date(iso).toLocaleDateString() : '—'
 }
 
+const WS_LABELS = { business: 'Business', personal: 'Personal' }
+
+// Grouped by workspace, then module — Business and Personal data are
+// separate, and a key can have different tools in each.
 function ToolList({ tools }) {
-  const groups = {}
-  for (const t of tools || []) (groups[t.label] ||= []).push(t)
+  const byWs = {}
+  for (const t of tools || []) {
+    const ws = (byWs[t.workspace] ||= {})
+    ;(ws[t.label] ||= []).push(t)
+  }
   return (
-    <div className="space-y-2 max-h-64 overflow-y-auto border border-charcoal-200 dark:border-charcoal-700 rounded-lg p-2.5">
-      {Object.entries(groups).map(([label, list]) => (
-        <div key={label}>
-          <p className="text-sm font-medium">{label}</p>
-          <ul className="pl-3 space-y-0.5">
-            {list.map(t => (
-              <li key={t.name} className="text-xs">
-                <span className="font-mono">{t.name}</span>
-                {t.read_only
-                  ? <span className="ml-1 text-charcoal-400">reads</span>
-                  : <span className="ml-1 text-amber-600 dark:text-amber-400">changes data</span>}
-              </li>
+    <div className="space-y-3 max-h-72 overflow-y-auto border border-charcoal-200 dark:border-charcoal-700 rounded-lg p-2.5">
+      {Object.entries(byWs).map(([ws, groups]) => (
+        <div key={ws}>
+          <p className="text-xs font-semibold uppercase tracking-wide text-charcoal-500 dark:text-charcoal-400 mb-1">
+            {WS_LABELS[ws] || ws} workspace
+          </p>
+          <div className="space-y-2 pl-1">
+            {Object.entries(groups).map(([label, list]) => (
+              <div key={label}>
+                <p className="text-sm font-medium">{label}</p>
+                <ul className="pl-3 space-y-0.5">
+                  {list.map(t => (
+                    <li key={t.name} className="text-xs">
+                      <span className="font-mono">{t.name}</span>
+                      {t.read_only
+                        ? <span className="ml-1 text-charcoal-400">reads</span>
+                        : <span className="ml-1 text-amber-600 dark:text-amber-400">changes data</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       ))}
     </div>
   )
+}
+
+function workspacesOf(key) {
+  return Object.keys(key.grants || {}).map(w => WS_LABELS[w] || w).join(' + ')
 }
 
 export default function McpAccessSection() {
@@ -181,7 +201,7 @@ export default function McpAccessSection() {
             <div className="min-w-0">
               <p className="text-sm font-medium truncate">{k.name}</p>
               <p className="text-xs text-charcoal-500 dark:text-charcoal-400">
-                {k.granted_tools.length} tools · {k.workspace} · expires {k.expires_at ? formatDate(k.expires_at) : 'never'} · last used {formatDate(k.last_used_at)}
+                {k.granted_tools.length} tools · {workspacesOf(k)} · expires {k.expires_at ? formatDate(k.expires_at) : 'never'} · last used {formatDate(k.last_used_at)}
               </p>
               {k.proposed_tools && (
                 <button onClick={() => setModal({ type: 'change', key: k })} className="text-xs text-amber-600 dark:text-amber-400 underline">
@@ -226,8 +246,8 @@ export default function McpAccessSection() {
             {modal.type === 'review' && !newKey && !copied && (
               <div className="space-y-3">
                 <p className="text-sm text-charcoal-500 dark:text-charcoal-400">
-                  {modal.key.created_by_name} set this up so an AI app can act as you in your
-                  {' '}{modal.key.workspace} workspace with these tools. Tools that change data run
+                  {modal.key.created_by_name} set this up so an AI app can act as you with these
+                  {' '}tools ({workspacesOf(modal.key)}). The app picks the workspace each time it uses one. Tools that change data run
                   {' '}without asking inside LogCore — only your AI app&apos;s own prompt stands in between.
                 </p>
                 <ToolList tools={modal.key.granted_tools} />

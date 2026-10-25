@@ -46,7 +46,25 @@ def _brain_skip(user: dict) -> set[str]:
         "Finance",
         "Goals",
         "Trash",  # soft-deleted records, structurally mixed JSON+markdown+binary per module
+        # The business workspace's own root is NESTED inside the personal one
+        # (brain/USERS/{name}/Business/) — without this, a personal-workspace
+        # list/read/search walked straight into business files (2026-10-25,
+        # matching routers/brain.py's own skip of the same folder).
+        "Business",
     } | brain_paths_for_disabled(disabled)
+
+
+def _ws_rel_path(rel_path: str, workspace: str) -> str:
+    """A Brain path as list_brain_files/read_brain_file show it (relative to
+    the WORKSPACE root) → relative to the user's root, which is what
+    resolve_user_md_path() resolves against. Before 2026-10-25 write/create
+    skipped this, so in the business workspace they wrote the personal copy
+    of a file listed from Business/. A personal path can't reach into the
+    nested Business/ root either."""
+    first = rel_path.lstrip("/").split("/", 1)[0]
+    if first == "Business":
+        raise ValueError("Access denied")
+    return f"Business/{rel_path.lstrip('/')}" if workspace == "business" else rel_path
 
 
 # Tools available in research mode — read-only access only
@@ -233,7 +251,7 @@ def _execute_tool(
                 return read_markdown(candidate)
 
             case "write_brain_file":
-                path = resolve_user_md_path(user["name"], inputs["path"])
+                path = resolve_user_md_path(user["name"], _ws_rel_path(inputs["path"], workspace))
                 if not path.exists():
                     return {
                         "error": f"File not found: {inputs['path']!r}. Use create_brain_file for new files."
@@ -242,7 +260,7 @@ def _execute_tool(
                 return {"ok": True}
 
             case "create_brain_file":
-                path = resolve_user_md_path(user["name"], inputs["path"])
+                path = resolve_user_md_path(user["name"], _ws_rel_path(inputs["path"], workspace))
                 if path.exists():
                     return {
                         "error": f"File already exists: {inputs['path']!r}. Use write_brain_file to edit it."

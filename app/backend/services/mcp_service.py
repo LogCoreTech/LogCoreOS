@@ -14,15 +14,18 @@ server needs is small — initialize, ping, tools/list, tools/call, and the
 initialized notification. JSON responses only, no SSE stream and no session
 id (both optional in the spec for a server that never pushes).
 
-Per-key access on top of the registry (api_key_service, kind "mcp"): each
-key carries `access: {group: "read" | "write"}` — a group is a module id, or
-"core" for the agent's own built-in tools (Brain files, profile, memory,
-notifications) — plus optional `tool_overrides: {tool_name: bool}` that
-switch one tool on or off regardless of its group. "read" allows only the
-group's tools the agent itself treats as read-only (agent_service._READ_TOOLS
-+ modules' read_only_agent_tools); "write" allows the whole group. A group
-setting covers tools a module adds later; an override names one tool. In-app
-the agent pauses writes for approval; over MCP that approval belongs to the
+Per-key access on top of the registry (api_key_service, kind "mcp") is set
+PER WORKSPACE: `grants: {workspace: {"access": {group: "read"|"write"},
+"tool_overrides": {tool_name: bool}}}`. A group is a module id, or "core" for
+the agent's own built-in tools (Brain files, profile, memory, notifications);
+"read" allows only the group's tools the agent itself treats as read-only
+(agent_service._READ_TOOLS + modules' read_only_agent_tools), "write" the
+whole group, and an override switches one tool on or off regardless. A group
+setting covers tools a module adds later; an override names one tool. Every
+exposed tool gets an extra `workspace` argument listing exactly the
+workspaces it's allowed in for this key (required when more than one), and
+each call runs with that workspace's own data and module access. In-app the
+agent pauses writes for approval; over MCP that approval belongs to the
 client app (which asks before each call), and every write call is
 audit-logged here.
 
@@ -75,6 +78,7 @@ def _admin_tool_names() -> set[str]:
 
 CORE_GROUP = "core"
 ACCESS_LEVELS = ("read", "write")
+WORKSPACES = ("business", "personal")
 
 
 def _exposable(names: set[str]) -> set[str]:
@@ -83,10 +87,11 @@ def _exposable(names: set[str]) -> set[str]:
 
 def catalog() -> list[dict]:
     """Every tool an MCP key could be granted, grouped for the Admin →
-    Integrations & MCP picker: [{id, label, tools: [{name, description, read_only}]}]. Core
-    tools first, then each ACTIVE module's own tools. Tools that need extra
-    config (e.g. Home Assistant) are listed if their module is installed;
-    `allowed_tools()` still drops them at call time when unavailable."""
+    Integrations & MCP picker: [{id, label, tools: [{name, description,
+    read_only}]}]. Core tools first, then each ACTIVE module's own tools. The
+    picker narrows this per person and workspace (their own disabled
+    modules); `allowed_tools()` applies the same cut at call time, plus
+    config-dependent drops (e.g. Home Assistant not configured)."""
     from module_registry import active_manifests
     from services.agent_service import _module_tool_schemas
     from services.agent_tool_schemas import _USER_TOOLS
@@ -133,50 +138,6 @@ def _tool_groups() -> dict[str, str]:
     }
 
 
-def validate_access(access: dict, tool_overrides: dict) -> tuple[dict, dict]:
-    """Clean + validate a key's access settings against the live catalog.
-    Raises ValueError for anything unknown, or if the result grants nothing."""
-    groups = {g["id"]: g for g in catalog()}
-    clean_access: dict[str, str] = {}
-    for group, level in (access or {}).items():
-        if level in (None, "", "none"):
-            continue
-        if group not in groups:
-            raise ValueError(f"Unknown tool group: {group!r}")
-        if level not in ACCESS_LEVELS:
-            raise ValueError(f"Access for {group!r} must be read, write, or none")
-        clean_access[group] = level
-    known = {t["name"] for g in groups.values() for t in g["tools"]}
-    clean_overrides: dict[str, bool] = {}
-    for name, allowed in (tool_overrides or {}).items():
-        if name not in known:
-            raise ValueError(f"Unknown or non-grantable tool: {name!r}")
-        clean_overrides[name] = bool(allowed)
-    read_names = _read_tool_names()
-    grants_something = any(
-        _tool_allowed(t["name"], g["id"], read_names, clean_access, clean_overrides)
-        for g in groups.values()
-        for t in g["tools"]
-    )
-    if not grants_something:
-        raise ValueError("Pick at least one tool this key can use")
-    return clean_access, clean_overrides
-
-
-def granted_tools(access: dict, tool_overrides: dict) -> list[dict]:
-    """The catalog tools these settings allow, for showing a person exactly
-    what they're agreeing to: [{name, description, read_only, group, label}].
-    Catalog-based (instance-wide), so it's the most the key could ever do —
-    at call time it's further cut down to what the person themselves can use."""
-    read_names = _read_tool_names()
-    return [
-        {**t, "group": g["id"], "label": g["label"]}
-        for g in catalog()
-        for t in g["tools"]
-        if _tool_allowed(t["name"], g["id"], read_names, access or {}, tool_overrides or {})
-    ]
-
-
 def _tool_allowed(
     name: str, group: str, read_names: set[str], access: dict, overrides: dict
 ) -> bool:
@@ -186,38 +147,138 @@ def _tool_allowed(
     return level == "write" or (level == "read" and name in read_names)
 
 
-def allowed_tools(user: dict) -> list[dict]:
-    """The tool schemas this key may see/call, in the agent's own order:
-    what the owner can use right now (`_get_tools` — disabled modules gone),
-    minus never-exposed tools, filtered by the key's own access settings."""
-    from services.agent_service import _get_tools
+def _clean_grant(grant: dict, groups: dict, known: set[str]) -> tuple[dict, dict]:
+    clean_access: dict[str, str] = {}
+    for group, level in ((grant or {}).get("access") or {}).items():
+        if level in (None, "", "none"):
+            continue
+        if group not in groups:
+            raise ValueError(f"Unknown tool group: {group!r}")
+        if level not in ACCESS_LEVELS:
+            raise ValueError(f"Access for {group!r} must be read, write, or none")
+        clean_access[group] = level
+    clean_overrides: dict[str, bool] = {}
+    for name, allowed in ((grant or {}).get("tool_overrides") or {}).items():
+        if name not in known:
+            raise ValueError(f"Unknown or non-grantable tool: {name!r}")
+        clean_overrides[name] = bool(allowed)
+    return clean_access, clean_overrides
 
-    key = user.get("_api_key", {})
-    access = key.get("access") or {}
-    overrides = key.get("tool_overrides") or {}
+
+def validate_grants(grants: dict, allowed_workspaces: list[str]) -> dict:
+    """Clean + validate per-workspace grants against the live catalog and the
+    person's own workspaces. Drops workspaces that grant nothing; raises
+    ValueError for anything unknown, or if nothing at all is granted."""
+    groups = {g["id"]: g for g in catalog()}
+    known = {t["name"] for g in groups.values() for t in g["tools"]}
+    read_names = _read_tool_names()
+    clean: dict[str, dict] = {}
+    for workspace, grant in (grants or {}).items():
+        if workspace not in allowed_workspaces:
+            raise ValueError(f"This person can't use the {workspace!r} workspace")
+        access, overrides = _clean_grant(grant, groups, known)
+        if any(
+            _tool_allowed(t["name"], g["id"], read_names, access, overrides)
+            for g in groups.values()
+            for t in g["tools"]
+        ):
+            clean[workspace] = {"access": access, "tool_overrides": overrides}
+    if not clean:
+        raise ValueError("Pick at least one tool this key can use")
+    return clean
+
+
+def granted_tools(grants: dict) -> list[dict]:
+    """The catalog tools these grants allow, for showing a person exactly what
+    they're agreeing to: [{name, description, read_only, group, label,
+    workspace}]. Catalog-based (instance-wide), so it's the most the key could
+    ever do — at call time it's further cut down to what the person can use."""
+    read_names = _read_tool_names()
+    groups = catalog()
+    out = []
+    for workspace, grant in (grants or {}).items():
+        access = grant.get("access") or {}
+        overrides = grant.get("tool_overrides") or {}
+        out.extend(
+            {**t, "group": g["id"], "label": g["label"], "workspace": workspace}
+            for g in groups
+            for t in g["tools"]
+            if _tool_allowed(t["name"], g["id"], read_names, access, overrides)
+        )
+    return out
+
+
+def _context(user: dict, workspace: str) -> dict:
+    """The key's user as seen from one workspace — require_api_key computed
+    each usable workspace's disabled modules into `_mcp_workspaces`."""
+    return {
+        **user,
+        "_workspace": workspace,
+        "disabled_modules": user["_mcp_workspaces"][workspace],
+    }
+
+
+def _allowed_by_workspace(user: dict) -> dict[str, tuple[dict, list[str]]]:
+    """{tool_name: (schema, [workspaces it's allowed in])}, in the agent's own
+    tool order: per granted workspace, what the person can use there right now
+    (`_get_tools` — that workspace's disabled modules gone), minus
+    never-exposed tools, filtered by the key's grant for that workspace."""
+    from services.agent_service import _get_tools
+    from services.api_key_service import grants_of
+
+    grants = grants_of(user.get("_api_key", {}))
     read_names = _read_tool_names()
     groups = _tool_groups()
     blocked = _NEVER_EXPOSED | _admin_tool_names()
-    return [
-        tool
-        for tool in _get_tools(user)
-        if tool["name"] not in blocked
-        and _tool_allowed(
-            tool["name"],
-            groups.get(tool["name"], CORE_GROUP),
-            read_names,
-            access,
-            overrides,
-        )
-    ]
+    out: dict[str, tuple[dict, list[str]]] = {}
+    for workspace in user.get("_mcp_workspaces", {}):
+        grant = grants.get(workspace)
+        if not grant:
+            continue
+        for tool in _get_tools(_context(user, workspace)):
+            name = tool["name"]
+            if name in blocked or not _tool_allowed(
+                name,
+                groups.get(name, CORE_GROUP),
+                read_names,
+                grant.get("access") or {},
+                grant.get("tool_overrides") or {},
+            ):
+                continue
+            out.setdefault(name, (tool, []))[1].append(workspace)
+    return out
 
 
-def _mcp_tool(tool: dict, read_names: set[str]) -> dict:
+def allowed_tools(user: dict) -> list[dict]:
+    """The tool schemas this key may see/call (without the added `workspace`
+    argument — see `_mcp_tool`)."""
+    return [tool for tool, _ws in _allowed_by_workspace(user).values()]
+
+
+def _mcp_tool(tool: dict, workspaces: list[str], read_names: set[str]) -> dict:
+    """MCP view of one tool, with a `workspace` argument added listing exactly
+    the workspaces this key may use it in (required when there's a choice)."""
     is_read = tool["name"] in read_names
+    schema = dict(tool.get("input_schema") or {"type": "object", "properties": {}})
+    properties = dict(schema.get("properties") or {})
+    properties["workspace"] = {
+        "type": "string",
+        "enum": workspaces,
+        "description": (
+            "Which LogCore workspace to act in: 'business' (work data, Team) or "
+            "'personal' (personal data, Household). Data is separate in each."
+            + ("" if len(workspaces) > 1 else f" Only '{workspaces[0]}' is allowed for this key.")
+        ),
+    }
+    schema["properties"] = properties
+    required = [r for r in schema.get("required") or [] if r != "workspace"]
+    if len(workspaces) > 1:
+        required.append("workspace")
+    schema["required"] = required
     return {
         "name": tool["name"],
         "description": tool.get("description", ""),
-        "inputSchema": tool.get("input_schema") or {"type": "object", "properties": {}},
+        "inputSchema": schema,
         "annotations": {"readOnlyHint": is_read, "destructiveHint": not is_read},
     }
 
@@ -274,7 +335,15 @@ def handle_message(message: Any, user: dict) -> dict | None:
         return _result(msg_id, {})
     if method == "tools/list":
         read_names = _read_tool_names()
-        return _result(msg_id, {"tools": [_mcp_tool(t, read_names) for t in allowed_tools(user)]})
+        return _result(
+            msg_id,
+            {
+                "tools": [
+                    _mcp_tool(tool, workspaces, read_names)
+                    for tool, workspaces in _allowed_by_workspace(user).values()
+                ]
+            },
+        )
     if method == "tools/call":
         return _call_tool(msg_id, params, user)
     return _error(msg_id, METHOD_NOT_FOUND, f"Method not found: {method}")
@@ -288,21 +357,40 @@ def _call_tool(msg_id: Any, params: dict, user: dict) -> dict:
     arguments = params.get("arguments") or {}
     if not isinstance(name, str) or not isinstance(arguments, dict):
         return _error(msg_id, INVALID_PARAMS, "tools/call needs a name and an arguments object")
-    allowed = {t["name"] for t in allowed_tools(user)}
-    if name not in allowed:
+    entry = _allowed_by_workspace(user).get(name)
+    if entry is None:
         # Same message whether the tool doesn't exist, belongs to a disabled
-        # module, or is outside this key's scopes — don't map the registry.
+        # module, or is outside this key's grants — don't map the registry.
         return _error(msg_id, INVALID_PARAMS, f"Unknown tool or not allowed for this key: {name}")
+    _tool, workspaces = entry
+    arguments = dict(arguments)
+    workspace = arguments.pop("workspace", None)
+    if workspace is None:
+        if len(workspaces) > 1:
+            return _error(
+                msg_id,
+                INVALID_PARAMS,
+                f"Say which workspace to use for {name}: one of {', '.join(workspaces)}",
+            )
+        workspace = workspaces[0]
+    if workspace not in workspaces:
+        return _error(
+            msg_id,
+            INVALID_PARAMS,
+            f"{name} isn't allowed in the {workspace!r} workspace for this key "
+            f"(allowed: {', '.join(workspaces)})",
+        )
 
+    acting = _context(user, workspace)
     if name not in _read_tool_names():
         key = user.get("_api_key", {})
         audit_log.record(
             user,
             "api_key.mcp_write",
             name,
-            {"key_id": key.get("id"), "key_name": key.get("name")},
+            {"key_id": key.get("id"), "key_name": key.get("name"), "workspace": workspace},
         )
-    output = _execute_tool(name, arguments, user, user["_workspace"])
+    output = _execute_tool(name, arguments, acting, workspace)
     is_error = isinstance(output, dict) and set(output) == {"error"}
     try:
         text = output if isinstance(output, str) else json.dumps(output, default=str)

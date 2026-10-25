@@ -45,14 +45,76 @@ function toolAllowed(group, tool, access, overrides) {
   return groupAllows(access[group.id] || 'none', tool)
 }
 
+const WS_LABELS = { business: 'Business', personal: 'Personal' }
+
+function grantSummary(grant, labels) {
+  const parts = Object.entries(grant?.access || {}).map(
+    ([g, level]) => `${labels[g] || g} ${level === 'write' ? 'read + write' : 'read'}`
+  )
+  const n = Object.keys(grant?.tool_overrides || {}).length
+  if (n) parts.push(`${n} tool exception${n === 1 ? '' : 's'}`)
+  return parts.join(', ') || 'no tools'
+}
+
 function accessSummary(key, catalog) {
   const labels = Object.fromEntries((catalog || []).map(g => [g.id, g.label]))
-  const parts = Object.entries(key.access || {}).map(
-    ([g, level]) => `${labels[g] || g}: ${level === 'write' ? 'read + write' : 'read'}`
+  const parts = Object.entries(key.grants || {}).map(
+    ([ws, grant]) => `${WS_LABELS[ws] || ws}: ${grantSummary(grant, labels)}`
   )
-  const n = Object.keys(key.tool_overrides || {}).length
-  if (n) parts.push(`${n} tool exception${n === 1 ? '' : 's'}`)
   return parts.join(' · ') || 'no tools'
+}
+
+// The catalog groups this person can actually use in one workspace — core
+// always, modules only if they're not disabled for them there.
+function catalogFor(catalog, user, ws) {
+  const disabled = new Set(user?.disabled_modules?.[ws] || [])
+  return (catalog || []).filter(g => g.id === 'core' || !disabled.has(g.id))
+}
+
+function grantAllows(catalog, grant) {
+  return catalog.some(g => g.tools.some(t => toolAllowed(g, t, grant?.access || {}, grant?.tool_overrides || {})))
+}
+
+// The fields + a ready-to-copy request for the lead intake endpoint, built
+// server-side from the endpoint's own model (services/intake_spec.py).
+function IntakeHelp({ spec, apiKey }) {
+  if (!spec) return null
+  const url = `${window.location.origin}${spec.path}`
+  const curl = [
+    `curl -X POST ${url} \\`,
+    `  -H "Authorization: Bearer ${apiKey || '<your integration key>'}" \\`,
+    '  -H "Content-Type: application/json" \\',
+    `  -d '${JSON.stringify(spec.example)}'`,
+  ].join('\n')
+  return (
+    <div className="space-y-3">
+      <div>
+        <p className="text-sm font-medium mb-1">Send each lead as</p>
+        <code className="block p-2 rounded-lg bg-charcoal-100 dark:bg-charcoal-800 text-xs break-all">
+          POST {url}
+        </code>
+      </div>
+      <div className="border border-charcoal-200 dark:border-charcoal-700 rounded-lg divide-y divide-charcoal-100 dark:divide-charcoal-800">
+        {spec.fields.map(f => (
+          <div key={f.name} className="p-2">
+            <p className="text-xs">
+              <span className="font-mono font-medium">{f.name}</span>
+              <span className="text-charcoal-400"> · {f.type}</span>
+              {f.required && <span className="text-orange-600 dark:text-orange-400"> · required</span>}
+            </p>
+            <p className="text-xs text-charcoal-500 dark:text-charcoal-400">{f.description}</p>
+          </div>
+        ))}
+      </div>
+      <div>
+        <p className="text-sm font-medium mb-1">Example</p>
+        <pre className="p-2 rounded-lg bg-charcoal-100 dark:bg-charcoal-800 text-xs whitespace-pre-wrap break-all select-all">{curl}</pre>
+      </div>
+      <p className="text-xs text-charcoal-400">
+        The same field list is at GET {spec.path}, for tools that look it up themselves.
+      </p>
+    </div>
+  )
 }
 
 // Per-module access (none / read / read + write) with an expandable per-tool
@@ -147,14 +209,13 @@ const EMPTY_FORM = {
   name: '',
   target: '_team',
   userId: '',
-  workspace: 'personal',
+  grants: {},
+  activeWs: 'business',
   expiresDays: '90',
-  access: {},
-  overrides: {},
   password: '',
 }
 
-function KeyRow({ k, catalog, onEdit, onRevoke }) {
+function KeyRow({ k, catalog, onEdit, onRevoke, onHelp }) {
   const live = k.status === 'active' || k.status === 'pending'
   return (
     <div className="p-4 flex items-start justify-between gap-3">
@@ -167,7 +228,7 @@ function KeyRow({ k, catalog, onEdit, onRevoke }) {
         </p>
         <p className="text-xs text-charcoal-500 dark:text-charcoal-400">
           {k.kind === 'mcp'
-            ? `Acts as ${k.user_name} · ${k.workspace} · ${accessSummary(k, catalog)}`
+            ? `Acts as ${k.user_name} · ${accessSummary(k, catalog)}`
             : `Sends leads to ${TARGET_LABELS[k.target] || k.target}`}
         </p>
         {k.proposed_access && (
@@ -182,6 +243,9 @@ function KeyRow({ k, catalog, onEdit, onRevoke }) {
       </div>
       {live && (
         <div className="flex flex-col gap-1 shrink-0">
+          {k.kind === 'integration' && (
+            <button onClick={() => onHelp(k)} className="btn-ghost text-sm">How to send</button>
+          )}
           <button onClick={() => onEdit(k)} className="btn-ghost text-sm">
             {k.kind === 'mcp' ? 'Edit tools' : 'Rename'}
           </button>
@@ -200,7 +264,7 @@ export default function Integrations() {
   const [enabled, setEnabled] = useState(true)
   const [savingSwitch, setSavingSwitch] = useState(false)
 
-  const [modal, setModal] = useState(null) // 'create' | 'reveal' | 'edit' | null
+  const [modal, setModal] = useState(null) // 'create' | 'reveal' | 'edit' | 'help' | null
   const modalCardRef = useRef(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [busy, setBusy] = useState(false)
@@ -239,7 +303,7 @@ export default function Integrations() {
       kind,
       userId,
       target: ws.includes('business') ? '_team' : '_household',
-      workspace: user?.workspaces?.[0] || (ws.includes('personal') ? 'personal' : ws[0] || 'personal'),
+      activeWs: user?.workspaces?.[0] || 'business',
     })
     setModal('create')
   }
@@ -251,7 +315,13 @@ export default function Integrations() {
   function pickUser(userId) {
     const user = (data?.users || []).find(u => u.id === userId)
     const ws = user?.workspaces || []
-    update({ userId, workspace: ws.includes(form.workspace) ? form.workspace : ws[0] || 'personal' })
+    // Drop grants for workspaces the new person doesn't have.
+    const grants = Object.fromEntries(Object.entries(form.grants).filter(([w]) => ws.includes(w)))
+    update({ userId, grants, activeWs: ws.includes(form.activeWs) ? form.activeWs : ws[0] || 'business' })
+  }
+
+  function setGrant(ws, access, overrides) {
+    setForm(f => ({ ...f, grants: { ...f.grants, [ws]: { access, tool_overrides: overrides } } }))
   }
 
   async function toggleEnabled() {
@@ -278,7 +348,7 @@ export default function Integrations() {
         current_password: form.password,
       }
       if (form.kind === 'integration') body.target = form.target
-      else Object.assign(body, { user_id: form.userId, workspace: form.workspace, access: form.access, tool_overrides: form.overrides })
+      else Object.assign(body, { user_id: form.userId, grants: form.grants })
       const result = await adminApi.createApiKey(body)
       if (result.key) {
         setNewKey(result.key)
@@ -298,7 +368,15 @@ export default function Integrations() {
 
   function openEdit(key) {
     setEditing(key)
-    setForm({ ...EMPTY_FORM, kind: key.kind, name: key.name, access: key.access || {}, overrides: key.tool_overrides || {} })
+    const user = (data?.users || []).find(u => u.id === key.user_id)
+    setForm({
+      ...EMPTY_FORM,
+      kind: key.kind,
+      name: key.name,
+      userId: key.user_id || '',
+      grants: key.grants || {},
+      activeWs: Object.keys(key.grants || {})[0] || user?.workspaces?.[0] || 'business',
+    })
     setModal('edit')
   }
 
@@ -307,7 +385,7 @@ export default function Integrations() {
     setBusy(true)
     try {
       const body = { name: form.name }
-      if (editing.kind === 'mcp') Object.assign(body, { access: form.access, tool_overrides: form.overrides })
+      if (editing.kind === 'mcp') body.grants = form.grants
       const result = await adminApi.updateApiKey(editing.id, body)
       toast.success(result.needs_approval
         ? `Sent to ${editing.user_name} to approve — their current tools stay until then.`
@@ -354,8 +432,9 @@ export default function Integrations() {
   const keys = data?.keys || []
   const integrations = keys.filter(k => k.kind === 'integration')
   const mcpKeys = keys.filter(k => k.kind === 'mcp')
-  const selectedUser = users.find(u => u.id === form.userId)
-  const grantsSomething = catalog.some(g => g.tools.some(t => toolAllowed(g, t, form.access, form.overrides)))
+  const formUser = users.find(u => u.id === form.userId)
+  const formWorkspaces = formUser?.workspaces || []
+  const grantsSomething = formWorkspaces.some(ws => grantAllows(catalogFor(catalog, formUser, ws), form.grants[ws]))
   const canCreate = form.name.trim() && form.password && (
     form.kind === 'integration' || (form.userId && grantsSomething)
   )
@@ -425,7 +504,7 @@ export default function Integrations() {
           ) : integrations.length === 0 ? (
             <p className="text-sm text-charcoal-400 p-4">No integrations yet — e.g. a website lead form.</p>
           ) : (
-            integrations.map(k => <KeyRow key={k.id} k={k} catalog={catalog} onEdit={openEdit} onRevoke={setRevoking} />)
+            integrations.map(k => <KeyRow key={k.id} k={k} catalog={catalog} onEdit={openEdit} onRevoke={setRevoking} onHelp={() => setModal('help')} />)
           )}
         </div>
       </div>
@@ -443,7 +522,7 @@ export default function Integrations() {
           ) : mcpKeys.length === 0 ? (
             <p className="text-sm text-charcoal-400 p-4">No one has MCP access yet.</p>
           ) : (
-            mcpKeys.map(k => <KeyRow key={k.id} k={k} catalog={catalog} onEdit={openEdit} onRevoke={setRevoking} />)
+            mcpKeys.map(k => <KeyRow key={k.id} k={k} catalog={catalog} onEdit={openEdit} onRevoke={setRevoking} onHelp={() => setModal('help')} />)
           )}
         </div>
       </div>
@@ -497,31 +576,45 @@ export default function Integrations() {
                 </div>
               )}
 
-              {modal === 'create' && form.kind === 'mcp' && selectedUser && (
+              {isMcpForm && formUser && (
                 <div>
-                  <label className="block text-sm font-medium mb-1" htmlFor="key-ws">Workspace</label>
-                  <select id="key-ws" value={form.workspace} onChange={e => update({ workspace: e.target.value })} className="input w-full text-base">
-                    {selectedUser.workspaces.map(w => (
-                      <option key={w} value={w}>{w === 'business' ? 'Business' : 'Personal'}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {isMcpForm && (
-                <div>
-                  <p className="block text-sm font-medium mb-1">Tools</p>
+                  <p className="block text-sm font-medium mb-1">Tools, per workspace</p>
                   <p className="text-xs text-charcoal-400 mb-2">
-                    Set each module, or tap one to pick individual tools. The key can never do more than
-                    {' '}{modal === 'edit' ? editing?.user_name : 'this person'} can already do in LogCore.
-                    {modal === 'edit' && editing?.status === 'active' && ' Adding tools sends them a request to approve; removing tools applies right away.'}
+                    Business and Personal data are separate, so each gets its own tools. Set each module,
+                    or tap one to pick individual tools. The AI picks the workspace on every call, and the
+                    key can never do more than {formUser.name} can already do in LogCore.
+                    {modal === 'edit' && editing?.status === 'active' && ' Adding tools (or a workspace) sends them a request to approve; removing applies right away.'}
                   </p>
-                  <ToolAccessPicker
-                    catalog={catalog}
-                    access={form.access}
-                    overrides={form.overrides}
-                    onChange={(access, overrides) => update({ access, overrides })}
-                  />
+                  {formWorkspaces.length > 1 && (
+                    <div role="tablist" aria-label="Workspace" className="flex gap-1 mb-2">
+                      {formWorkspaces.map(ws => {
+                        const on = grantAllows(catalogFor(catalog, formUser, ws), form.grants[ws])
+                        return (
+                          <button
+                            key={ws}
+                            role="tab"
+                            aria-selected={form.activeWs === ws}
+                            onClick={() => update({ activeWs: ws })}
+                            className={`flex-1 py-1.5 rounded-lg text-sm border ${form.activeWs === ws ? 'border-orange-500 bg-orange-500/5 font-medium' : 'border-charcoal-200 dark:border-charcoal-700'}`}
+                          >
+                            {WS_LABELS[ws]}{on ? ' ✓' : ''}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                  {formWorkspaces.includes(form.activeWs) && (
+                    <ToolAccessPicker
+                      key={form.activeWs}
+                      catalog={catalogFor(catalog, formUser, form.activeWs)}
+                      access={form.grants[form.activeWs]?.access || {}}
+                      overrides={form.grants[form.activeWs]?.tool_overrides || {}}
+                      onChange={(access, overrides) => setGrant(form.activeWs, access, overrides)}
+                    />
+                  )}
+                  {formWorkspaces.length === 1 && (
+                    <p className="text-xs text-charcoal-400 mt-1">{formUser.name} only has the {WS_LABELS[formWorkspaces[0]]} workspace.</p>
+                  )}
                 </div>
               )}
 
@@ -576,7 +669,7 @@ export default function Integrations() {
 
       {modal === 'reveal' && (
         <div className="modal-overlay">
-          <div ref={modalCardRef} className="modal-card p-5 max-w-sm">
+          <div ref={modalCardRef} className="modal-card p-5 max-w-lg max-h-[90vh] overflow-y-auto">
             <h2 className="font-semibold mb-2">Copy the integration key</h2>
             <p className="text-sm text-charcoal-500 dark:text-charcoal-400 mb-3">
               This is the only time it will be shown. Put it in the website&apos;s settings as a secret —
@@ -585,10 +678,23 @@ export default function Integrations() {
             <code className="block p-3 rounded-lg bg-charcoal-100 dark:bg-charcoal-800 text-xs break-all select-all mb-3">
               {newKey}
             </code>
-            <div className="flex gap-2">
+            <div className="flex gap-2 mb-4">
               <button onClick={copyKey} className="btn-ghost flex-1">{copied ? 'Copied ✓' : 'Copy'}</button>
               <button onClick={closeModal} className="btn-primary flex-1">Done</button>
             </div>
+            <IntakeHelp spec={data?.intake_spec} apiKey={newKey} />
+          </div>
+        </div>
+      )}
+
+      {modal === 'help' && (
+        <div className="modal-overlay">
+          <div ref={modalCardRef} className="modal-card p-5 max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold">How to send leads</h2>
+              <button onClick={closeModal} aria-label="Close" className="text-charcoal-400 hover:text-charcoal-700 dark:hover:text-charcoal-200">✕</button>
+            </div>
+            <IntakeHelp spec={data?.intake_spec} />
           </div>
         </div>
       )}

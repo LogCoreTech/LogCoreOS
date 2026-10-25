@@ -76,14 +76,22 @@ def member(admin):
     return auth_service.get_user_by_id(user["id"])
 
 
-def _invite(admin, for_user, access=None, overrides=None, **kw):
+def _g(access, overrides=None, workspace="business"):
+    """One workspace's grant, in the request shape."""
+    return {workspace: {"access": access, "tool_overrides": overrides or {}}}
+
+
+def _access(key: str, workspace: str = "business") -> dict:
+    return api_key_service.grants_of(_use(key)["_api_key"])[workspace]["access"]
+
+
+def _invite(admin, for_user, access=None, overrides=None, grants=None, **kw):
+    workspace = kw.pop("workspace", for_user.get("workspaces", ["personal"])[0])
     req = ApiKeyCreateRequest(
         kind="mcp",
         name=kw.pop("name", "Claude"),
         user_id=for_user["id"],
-        workspace=kw.pop("workspace", for_user.get("workspaces", ["personal"])[0]),
-        access={"tasks": "read"} if access is None else access,
-        tool_overrides=overrides or {},
+        grants=grants or _g({"tasks": "read"} if access is None else access, overrides, workspace),
         current_password=kw.pop("current_password", PW),
         **kw,
     )
@@ -249,7 +257,7 @@ def test_invite_needs_a_real_user_and_a_real_grant(admin, member):
     with pytest.raises(HTTPException):
         admin_create_api_key(
             ApiKeyCreateRequest(
-                kind="mcp", name="x", access={"tasks": "read"}, current_password=PW
+                kind="mcp", name="x", grants=_g({"tasks": "read"}), current_password=PW
             ),
             admin,
             None,
@@ -266,19 +274,19 @@ def test_invite_needs_a_real_user_and_a_real_grant(admin, member):
 def test_narrowing_applies_at_once(admin, member):
     key_id, key = _mcp_key(admin, member, access={"tasks": "write"})
     result = admin_update_api_key(
-        key_id, ApiKeyUpdateRequest(access={"tasks": "read"}), admin, None
+        key_id, ApiKeyUpdateRequest(grants=_g({"tasks": "read"})), admin, None
     )
     assert result["needs_approval"] is False
-    assert _use(key)["_api_key"]["access"] == {"tasks": "read"}
+    assert _access(key) == {"tasks": "read"}
 
 
 def test_widening_waits_for_the_users_approval(admin, member):
     key_id, key = _mcp_key(admin, member, access={"tasks": "read"})
     result = admin_update_api_key(
-        key_id, ApiKeyUpdateRequest(access={"tasks": "write"}), admin, None
+        key_id, ApiKeyUpdateRequest(grants=_g({"tasks": "write"})), admin, None
     )
     assert result["needs_approval"] is True
-    assert _use(key)["_api_key"]["access"] == {"tasks": "read"}  # old access stands
+    assert _access(key) == {"tasks": "read"}  # old access stands
     [key_view] = my_api_keys(member, None)["keys"]
     assert "add_task" in {t["name"] for t in key_view["proposed_tools"]}
     assert any(
@@ -286,30 +294,32 @@ def test_widening_waits_for_the_users_approval(admin, member):
     )
 
     respond_my_api_key_change(key_id, ApiKeyChangeResponse(accept=True), member, None)
-    assert _use(key)["_api_key"]["access"] == {"tasks": "write"}
+    assert _access(key) == {"tasks": "write"}
 
 
 def test_rejecting_a_widening_keeps_the_old_tools(admin, member):
     key_id, key = _mcp_key(admin, member, access={"tasks": "read"})
-    admin_update_api_key(key_id, ApiKeyUpdateRequest(access={"tasks": "write"}), admin, None)
+    admin_update_api_key(key_id, ApiKeyUpdateRequest(grants=_g({"tasks": "write"})), admin, None)
     respond_my_api_key_change(key_id, ApiKeyChangeResponse(accept=False), member, None)
-    meta = _use(key)["_api_key"]
-    assert meta["access"] == {"tasks": "read"} and meta["proposed_access"] is None
+    assert _access(key) == {"tasks": "read"}
+    assert _use(key)["_api_key"]["proposed_grants"] is None
 
 
 def test_editing_a_pending_invite_applies_directly(admin, member):
     key_id = _invite(admin, member, access={"tasks": "read"})["meta"]["id"]
     result = admin_update_api_key(
-        key_id, ApiKeyUpdateRequest(access={"tasks": "write"}), admin, None
+        key_id, ApiKeyUpdateRequest(grants=_g({"tasks": "write"})), admin, None
     )
     assert result["needs_approval"] is False
-    assert result["meta"]["access"] == {"tasks": "write"}
+    assert result["meta"]["grants"]["business"]["access"] == {"tasks": "write"}
 
 
 def test_integration_key_has_no_tools_to_change(admin):
     meta = _create_integration(admin)["meta"]
     with pytest.raises(HTTPException) as exc:
-        admin_update_api_key(meta["id"], ApiKeyUpdateRequest(access={"tasks": "read"}), admin, None)
+        admin_update_api_key(
+            meta["id"], ApiKeyUpdateRequest(grants=_g({"tasks": "read"})), admin, None
+        )
     assert exc.value.status_code == 400
 
 
@@ -450,7 +460,7 @@ def test_instance_switch_off_blocks_keys_invites_accepts_and_requests(admin, mem
 
 def test_every_step_is_audited(admin, member):
     key_id, _key = _mcp_key(admin, member)
-    admin_update_api_key(key_id, ApiKeyUpdateRequest(access={"tasks": "write"}), admin, None)
+    admin_update_api_key(key_id, ApiKeyUpdateRequest(grants=_g({"tasks": "write"})), admin, None)
     respond_my_api_key_change(key_id, ApiKeyChangeResponse(accept=True), member, None)
     revoke_my_api_key(key_id, member, None)
     actions = {e["action"] for e in audit_log.list_entries(20)}
@@ -486,3 +496,80 @@ def test_key_cap_counts_pending_invites(admin, member, monkeypatch):
     _create_integration(admin)
     with pytest.raises(HTTPException):
         _invite(admin, member, name="Third")
+
+
+# --- per-workspace grants -------------------------------------------------------------
+
+
+def test_one_key_can_hold_different_tools_per_workspace(admin):
+    grants = {
+        "business": {"access": {"tasks": "write"}},
+        "personal": {"access": {}, "tool_overrides": {"list_tasks": True}},
+    }
+    key_id, key = _mcp_key(admin, admin, grants=grants)
+    user = _use(key)
+    assert set(user["_mcp_workspaces"]) == {"business", "personal"}
+    stored = api_key_service.grants_of(user["_api_key"])
+    assert stored["personal"] == {"access": {}, "tool_overrides": {"list_tasks": True}}
+    tools = {
+        (t["workspace"], t["name"]) for t in my_api_keys(admin, None)["keys"][0]["granted_tools"]
+    }
+    assert ("business", "add_task") in tools and ("personal", "list_tasks") in tools
+    assert ("personal", "add_task") not in tools
+
+
+def test_grant_for_a_workspace_the_user_lacks_is_rejected(admin, member):
+    with pytest.raises(HTTPException) as exc:
+        _invite(admin, member, grants={"personal": {"access": {"tasks": "read"}}})
+    assert exc.value.status_code == 400
+
+
+def test_workspace_that_grants_nothing_is_dropped(admin):
+    meta = _invite(
+        admin,
+        admin,
+        grants={"business": {"access": {"tasks": "read"}}, "personal": {"access": {}}},
+    )["meta"]
+    assert list(meta["grants"]) == ["business"]
+
+
+def test_adding_a_new_workspace_counts_as_widening(admin):
+    key_id, key = _mcp_key(admin, admin, grants=_g({"tasks": "read"}))
+    result = admin_update_api_key(
+        key_id,
+        ApiKeyUpdateRequest(
+            grants={
+                "business": {"access": {"tasks": "read"}},
+                "personal": {"access": {"tasks": "read"}},
+            }
+        ),
+        admin,
+        None,
+    )
+    assert result["needs_approval"] is True
+    assert set(_use(key)["_mcp_workspaces"]) == {"business"}  # unchanged until approved
+
+
+def test_dropping_a_workspace_applies_at_once(admin):
+    grants = {"business": {"access": {"tasks": "read"}}, "personal": {"access": {"tasks": "read"}}}
+    key_id, key = _mcp_key(admin, admin, grants=grants)
+    result = admin_update_api_key(
+        key_id, ApiKeyUpdateRequest(grants=_g({"tasks": "read"})), admin, None
+    )
+    assert result["needs_approval"] is False
+    assert set(_use(key)["_mcp_workspaces"]) == {"business"}
+
+
+def test_key_keeps_working_in_the_workspaces_still_available(admin):
+    grants = {"business": {"access": {"tasks": "read"}}, "personal": {"access": {"tasks": "read"}}}
+    _key_id, key = _mcp_key(admin, admin, grants=grants)
+    auth_service.update_system_settings({"enabled_workspaces": ["personal"]})
+    assert set(_use(key)["_mcp_workspaces"]) == {"personal"}
+
+
+def test_single_workspace_keys_from_before_still_work(admin):
+    """A key stored in the earlier shape (workspace + access) is read as grants."""
+    legacy = {"workspace": "business", "access": {"tasks": "read"}, "tool_overrides": {}}
+    assert api_key_service.grants_of(legacy) == {
+        "business": {"access": {"tasks": "read"}, "tool_overrides": {}}
+    }

@@ -89,6 +89,7 @@ Overall:  CLEAN | NEEDS ATTENTION
 These are by design — do not flag them:
 
 - `GET /push/vapid-key` has no auth: VAPID public keys are intentionally public; service workers need them before a session exists
+- `GET /api/v1/contacts/intake/lead` has no auth: it is static documentation of the lead-intake request shape (built from the model), contains no data, and is rate-limited — the POST on the same path requires an integration key
 - `GET /auth/status` is unauthenticated: the login page calls it before the user is logged in; it is rate-limited
 - `"_household"`/`"_team"` used as a username in `module_packages/household/backend/router.py`/`module_packages/team/backend/router.py`: these are pool pseudo-user namespaces, not real user accounts
 - `SameSite=strict` on auth cookie: intentionally strict

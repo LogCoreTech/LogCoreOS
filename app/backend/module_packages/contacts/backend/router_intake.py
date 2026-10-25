@@ -12,35 +12,26 @@ nightly follow-up sweep, which notifies every admin for a shared list.
 
 Write-only by design (docs/MEMORY.md 2026-07-14): the response carries ids
 only, never any contact data, so a leaked intake key can add leads but can't
-read a thing back."""
+read a thing back. `GET` on the same path describes the fields."""
 
 import re
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 
 from routers.auth.deps import require_api_key
 from services import contacts_service, mod_store_service
+from services.intake_spec import LeadIntake, intake_spec
 from services.rate_limiter import rate_limit
 
 router = APIRouter()
 
 _intake_ip_limit = rate_limit(20, 60)
+_spec_limit = rate_limit(30, 60)
 _intake_key = require_api_key("leads:create", max_calls=10, window_seconds=60)
 
 _SOURCE_RE = re.compile(r"[^a-z0-9]+")
-
-
-class LeadIntake(BaseModel):
-    name: str = Field(..., min_length=1, max_length=200)
-    phone: str = Field(..., min_length=7, max_length=40)
-    email: str | None = Field(default=None, max_length=200)
-    message: str = Field(default="", max_length=5000)
-    source: str = Field(default="", max_length=40)
-    external_id: str | None = Field(default=None, max_length=128)
-    follow_up_days: int = Field(default=1, ge=0, le=365)
 
 
 def _source_tag(source: str) -> str:
@@ -52,6 +43,16 @@ def _today(tz_name: str):
         return datetime.now(ZoneInfo(tz_name)).date()
     except (ZoneInfoNotFoundError, ValueError):
         return datetime.now(ZoneInfo("UTC")).date()
+
+
+@router.get("/intake/lead")
+def intake_lead_spec(_rl: None = Depends(_spec_limit)):
+    """The fields this endpoint accepts, with descriptions and a ready-to-copy
+    example (services/intake_spec.py). Deliberately unauthenticated: it's
+    static documentation of the request shape, contains no data, and lets an
+    automation tool (or the person wiring up a form) discover the fields
+    before they have a key in hand."""
+    return intake_spec()
 
 
 @router.post("/intake/lead")

@@ -189,8 +189,9 @@ def require_api_key(scope: str, max_calls: int = 30, window_seconds: int = 60):
     of the route's own per-IP one. Returns the request's principal:
 
     - an **mcp** key → the user it acts as (any role), re-fetched every
-      request with their current disabled modules and workspace entitlements
-      re-applied — the key can never do more than that person can;
+      request; `_mcp_workspaces` maps each granted workspace that's still
+      theirs to its own disabled modules — the key can never do more than
+      that person can, in any workspace;
     - an **integration** key → a machine principal, NOT a user: `name` is the
       key's target pool (e.g. "_team"), `role` is "integration", and
       `disabled_modules` is empty (the route checks instance-level install
@@ -213,8 +214,8 @@ def require_api_key(scope: str, max_calls: int = 30, window_seconds: int = 60):
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"This API key can't be used here (needs the '{scope}' scope)",
             )
-        workspace = record["workspace"]
         if record["kind"] == api_key_service.KIND_INTEGRATION:
+            workspace = record["workspace"]
             if workspace not in auth_service.enabled_workspaces():
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -235,13 +236,24 @@ def require_api_key(scope: str, max_calls: int = 30, window_seconds: int = 60):
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="This API key's account no longer exists",
             )
-        user = _apply_workspace_context(user, workspace)
-        if user["_workspace"] != workspace:
-            # Never silently retarget a key at a different workspace's data.
+        raw_disabled = user.get("disabled_modules", [])
+        granted = list(api_key_service.grants_of(record))
+        user = _apply_workspace_context(user, granted[0] if granted else "personal")
+        usable = [w for w in granted if w in user["workspaces"]]
+        if not usable:
+            # Never silently retarget a key at a workspace it wasn't granted.
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"This API key's workspace ({workspace}) is no longer available",
+                detail="None of this API key's workspaces are available to its user any more",
             )
+        # Each usable workspace's own disabled modules — a key acts per call in
+        # whichever granted workspace the AI picks (services/mcp_service.py).
+        user["_mcp_workspaces"] = {
+            w: get_effective_disabled(user.get("feature_role", "member"), raw_disabled, w)
+            for w in usable
+        }
+        user["_workspace"] = usable[0]
+        user["disabled_modules"] = user["_mcp_workspaces"][usable[0]]
         user["_api_key"] = record
         return user
 

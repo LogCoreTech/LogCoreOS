@@ -20,6 +20,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from services import api_key_service, audit_log, auth_service, mcp_service
+from services.features_service import get_effective_disabled
+from services.intake_spec import intake_spec
 from services.rate_limiter import rate_limit
 
 from .deps import _admin_limit, get_current_user, require_admin
@@ -34,6 +36,11 @@ _api_key_write_limit = rate_limit(10, 60)
 _api_key_request_limit = rate_limit(3, 3600)
 
 
+class McpGrant(BaseModel):
+    access: dict[str, str] = Field(default_factory=dict)
+    tool_overrides: dict[str, bool] = Field(default_factory=dict)
+
+
 class ApiKeyCreateRequest(BaseModel):
     kind: Literal["integration", "mcp"]
     name: str = Field(..., min_length=1, max_length=60)
@@ -41,17 +48,19 @@ class ApiKeyCreateRequest(BaseModel):
     current_password: str = Field(..., min_length=1)
     # integration only
     target: Literal["_team", "_household"] | None = None
-    # mcp only — the admin chooses who the key acts as
+    # mcp only — the admin chooses who the key acts as and, per workspace,
+    # what it can use: {"business": {"access": {...}, "tool_overrides": {...}}}
     user_id: str | None = None
-    workspace: Literal["personal", "business"] = "personal"
-    access: dict[str, str] = Field(default_factory=dict)
-    tool_overrides: dict[str, bool] = Field(default_factory=dict)
+    grants: dict[Literal["personal", "business"], McpGrant] = Field(default_factory=dict)
 
 
 class ApiKeyUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=60)
-    access: dict[str, str] | None = None
-    tool_overrides: dict[str, bool] | None = None
+    grants: dict[Literal["personal", "business"], McpGrant] | None = None
+
+
+def _grants_dict(grants) -> dict | None:
+    return None if grants is None else {w: g.model_dump() for w, g in grants.items()}
 
 
 class ApiKeyAcceptRequest(BaseModel):
@@ -98,16 +107,12 @@ def _invite_notice(meta: dict, admin_name: str, change: bool = False) -> None:
 
 
 def _audit_details(meta: dict) -> dict:
-    details = {"key_id": meta["id"], "kind": meta["kind"], "workspace": meta["workspace"]}
+    details = {"key_id": meta["id"], "kind": meta["kind"]}
     if meta["kind"] == api_key_service.KIND_INTEGRATION:
-        details["target"] = meta["target"]
+        details.update({"target": meta["target"], "workspace": meta["workspace"]})
     else:
         details.update(
-            {
-                "user": meta.get("user_name", ""),
-                "access": meta.get("access", {}),
-                "tool_overrides": meta.get("tool_overrides", {}),
-            }
+            {"user": meta.get("user_name", ""), "grants": api_key_service.grants_of(meta)}
         )
     return details
 
@@ -117,13 +122,10 @@ def _with_tools(meta: dict) -> dict:
     widening is waiting for approval) — what the user reviews before saying yes."""
     out = dict(meta)
     if meta["kind"] == api_key_service.KIND_MCP:
-        out["granted_tools"] = mcp_service.granted_tools(
-            meta.get("access", {}), meta.get("tool_overrides", {})
-        )
-        if meta.get("proposed_access") is not None:
-            out["proposed_tools"] = mcp_service.granted_tools(
-                meta["proposed_access"], meta.get("proposed_overrides") or {}
-            )
+        out["grants"] = api_key_service.grants_of(meta)
+        out["granted_tools"] = mcp_service.granted_tools(out["grants"])
+        if meta.get("proposed_grants") is not None:
+            out["proposed_tools"] = mcp_service.granted_tools(meta["proposed_grants"])
     return out
 
 
@@ -141,12 +143,20 @@ def admin_list_api_keys(
     for u in auth_service.list_users():
         full = auth_service.get_user_by_id(u["id"])
         if full:
+            workspaces = api_key_service.usable_workspaces(full)
             users.append(
                 {
                     "id": full["id"],
                     "name": full["name"],
                     "role": full.get("role", "member"),
-                    "workspaces": api_key_service.usable_workspaces(full),
+                    "workspaces": workspaces,
+                    # what the picker may offer per workspace: their own modules
+                    "disabled_modules": {
+                        w: get_effective_disabled(
+                            full.get("feature_role", "member"), full.get("disabled_modules", []), w
+                        )
+                        for w in workspaces
+                    },
                 }
             )
     return {
@@ -156,7 +166,8 @@ def admin_list_api_keys(
         "users": users,
         "mcp_catalog": mcp_service.catalog(),
         "requests": api_key_service.list_requests(),
-        "keys": api_key_service.list_keys(),
+        "keys": [_with_tools(k) for k in api_key_service.list_keys()],
+        "intake_spec": intake_spec(),
     }
 
 
@@ -183,13 +194,7 @@ def admin_create_api_key(
         if not for_user:
             raise ValueError("Pick the user this MCP key will act as")
         meta = api_key_service.invite_mcp_key(
-            current_user,
-            for_user,
-            req.name,
-            req.workspace,
-            req.access,
-            req.tool_overrides,
-            req.expires_days,
+            current_user, for_user, req.name, _grants_dict(req.grants), req.expires_days
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -209,9 +214,7 @@ def admin_update_api_key(
     key's next request; widening an accepted key waits for its user to
     approve (`needs_approval: true`) — until then the old tools stand."""
     try:
-        result = api_key_service.update_key(
-            key_id, name=req.name, access=req.access, tool_overrides=req.tool_overrides
-        )
+        result = api_key_service.update_key(key_id, name=req.name, grants=_grants_dict(req.grants))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if result is None:

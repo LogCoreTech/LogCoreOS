@@ -7,8 +7,9 @@ both set up only by admins:
   write-only scope (`leads:create`). The creating admin gets the key once,
   directly. Survives any one admin's account being deleted or demoted.
 - **mcp** — a credential for ONE user (any role), chosen by the admin, so an AI
-  app can act as that person over MCP with the tools the admin picked
-  (`access`, `tool_overrides`; see services/mcp_service.py). It's an
+  app can act as that person over MCP with the tools the admin picked, set
+  per workspace (`grants: {workspace: {access, tool_overrides}}`; see
+  services/mcp_service.py). It's an
   invitation: the key is created only when that user accepts it (with their
   password), shown once to them alone — the admin never sees it, so an admin
   can't quietly act as someone else. Pending invites expire after 7 days.
@@ -208,40 +209,61 @@ def create_integration_key(
     return _public(record), f"{KEY_PREFIX}{record['id']}_{secret}"
 
 
+def grants_of(record: dict) -> dict:
+    """An MCP key's per-workspace grants: {workspace: {access, tool_overrides}}.
+    Also reads the earlier single-workspace shape (`workspace` + `access` +
+    `tool_overrides`) so a key stored before per-workspace grants still works."""
+    if record.get("grants") is not None:
+        return record["grants"]
+    if record.get("access") is not None or record.get("tool_overrides") is not None:
+        return {
+            record.get("workspace")
+            or "personal": {
+                "access": record.get("access") or {},
+                "tool_overrides": record.get("tool_overrides") or {},
+            }
+        }
+    return {}
+
+
+def _grant_pairs(grants: dict) -> set[tuple[str, str]]:
+    from services.mcp_service import granted_tools
+
+    return {(t["workspace"], t["name"]) for t in granted_tools(grants)}
+
+
+def _user_workspaces(user_id: str) -> list[str]:
+    from services.auth_service import get_user_by_id
+
+    user = get_user_by_id(user_id)
+    return usable_workspaces(user) if user else []
+
+
 def invite_mcp_key(
     creator: dict,
     for_user: dict,
     name: str,
-    workspace: str,
-    access: dict,
-    tool_overrides: dict,
+    grants: dict,
     expires_days: int | None,
 ) -> dict:
-    """Create a PENDING MCP key for `for_user`. No secret exists until they
-    accept — the creating admin never gets one. Marks that user's open access
-    requests handled. Returns metadata."""
-    from services.mcp_service import validate_access
+    """Create a PENDING MCP key for `for_user` with per-workspace `grants`. No
+    secret exists until they accept — the creating admin never gets one.
+    Marks that user's open access requests handled. Returns metadata."""
+    from services.mcp_service import validate_grants
 
     _check_expiry(expires_days)
-    if workspace not in usable_workspaces(for_user):
-        raise ValueError(
-            f"{for_user.get('name', 'That user')} can't use the {workspace!r} workspace"
-        )
-    clean_access, clean_overrides = validate_access(access or {}, tool_overrides or {})
+    clean = validate_grants(grants or {}, usable_workspaces(for_user))
     record = _base_record(creator, KIND_MCP, name)
     record.update(
         {
-            "workspace": workspace,
             "user_id": for_user["id"],
             "user_name": for_user.get("name", ""),
-            "access": clean_access,
-            "tool_overrides": clean_overrides,
+            "grants": clean,
             "expires_days": expires_days,
             "invite_expires_at": (_now() + timedelta(days=INVITE_DAYS)).isoformat(),
             "accepted_at": None,
             "declined_at": None,
-            "proposed_access": None,
-            "proposed_overrides": None,
+            "proposed_grants": None,
             "secret_hash": None,
         }
     )
@@ -297,23 +319,17 @@ def decline_invite(key_id: str, user: dict) -> dict:
     return _public(result["key"])
 
 
-def _tool_names(access: dict, overrides: dict) -> set[str]:
-    from services.mcp_service import granted_tools
-
-    return {t["name"] for t in granted_tools(access, overrides)}
-
-
 def update_key(
     key_id: str,
     *,
     name: str | None = None,
-    access: dict | None = None,
-    tool_overrides: dict | None = None,
+    grants: dict | None = None,
 ) -> tuple[dict, bool] | None:
-    """Rename any active/pending key, or change an MCP key's tools. Returns
-    (metadata, needs_approval) or None if not found. Narrowing (or editing a
-    still-pending invite) applies at once; WIDENING an accepted key is stored
-    as a proposal the user must approve — until then the old access stands."""
+    """Rename any active/pending key, or change an MCP key's per-workspace
+    tools. Returns (metadata, needs_approval) or None if not found. Narrowing
+    (or editing a still-pending invite) applies at once; WIDENING an accepted
+    key — any new (workspace, tool) pair — is stored as a proposal the user
+    must approve; until then the old grants stand."""
     existing = next((k for k in _all() if k["id"] == key_id), None)
     if existing is None:
         return None
@@ -321,30 +337,18 @@ def update_key(
     needs_approval = False
     if name is not None:
         changes["name"] = _clean_name(name)
-    if access is not None or tool_overrides is not None:
+    if grants is not None:
         if existing["kind"] != KIND_MCP:
             raise ValueError("Only MCP keys have tools to change")
-        from services.mcp_service import validate_access
+        from services.mcp_service import validate_grants
 
-        new_access, new_overrides = validate_access(
-            existing.get("access", {}) if access is None else access,
-            existing.get("tool_overrides", {}) if tool_overrides is None else tool_overrides,
-        )
-        widened = _tool_names(new_access, new_overrides) - _tool_names(
-            existing.get("access", {}), existing.get("tool_overrides", {})
-        )
+        new = validate_grants(grants, _user_workspaces(existing["user_id"]))
+        widened = _grant_pairs(new) - _grant_pairs(grants_of(existing))
         if _status(existing) == "active" and widened:
-            changes.update({"proposed_access": new_access, "proposed_overrides": new_overrides})
+            changes["proposed_grants"] = new
             needs_approval = True
         else:
-            changes.update(
-                {
-                    "access": new_access,
-                    "tool_overrides": new_overrides,
-                    "proposed_access": None,
-                    "proposed_overrides": None,
-                }
-            )
+            changes.update({"grants": new, "proposed_grants": None})
     result: dict = {}
 
     def _apply(data):
@@ -353,6 +357,9 @@ def update_key(
                 if _status(k) not in ("active", "pending"):
                     raise ValueError("Only an active or pending key can be changed")
                 k.update(changes)
+                for legacy in ("workspace", "access", "tool_overrides"):
+                    if "grants" in changes:
+                        k.pop(legacy, None)
                 result["key"] = k
 
     _mutate(_apply)
@@ -365,13 +372,13 @@ def respond_to_change(key_id: str, user: dict, accept: bool) -> dict:
 
     def _respond(data):
         record = _own_pending_or_active(data, key_id, user["id"], ("active",))
-        if record.get("proposed_access") is None:
+        if record.get("proposed_grants") is None:
             raise ValueError("There's no change waiting for approval")
         if accept:
-            record["access"] = record["proposed_access"]
-            record["tool_overrides"] = record["proposed_overrides"] or {}
-        record["proposed_access"] = None
-        record["proposed_overrides"] = None
+            record["grants"] = record["proposed_grants"]
+            for legacy in ("workspace", "access", "tool_overrides"):
+                record.pop(legacy, None)
+        record["proposed_grants"] = None
         result["key"] = record
 
     _mutate(_respond)

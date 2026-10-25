@@ -131,3 +131,16 @@ def test_phone_without_enough_digits_is_a_400(admin):
 
 def test_bad_timezone_falls_back_to_utc():
     assert _today("Not/AZone") == _today("UTC")
+
+
+def test_field_list_matches_what_the_endpoint_accepts(brain):
+    from module_packages.contacts.backend.router_intake import intake_lead_spec
+
+    spec = intake_lead_spec(None)
+    fields = {f["name"]: f for f in spec["fields"]}
+    assert set(fields) == set(LeadIntake.model_fields)
+    assert fields["name"]["required"] and fields["phone"]["required"]
+    assert not fields["email"]["required"]
+    assert all(f["description"] for f in spec["fields"])
+    assert spec["method"] == "POST" and spec["path"] == "/api/v1/contacts/intake/lead"
+    LeadIntake(**spec["example"])  # the example itself is a valid request

@@ -151,9 +151,9 @@
       "blurb": "Let outside tools reach LogCore without sharing a password. An integration (like a website's lead form) belongs to the instance; MCP lets an AI app like Claude act as one person, with only the tools an admin picked and that person accepted.",
       "howto": [
         "Admins: open Settings → Admin Settings → Integrations & MCP.",
-        "Integration (website lead form): tap + New under Integrations, name it, pick whether leads go to your Team or Household contacts, and confirm with your password. Copy the key right away — it's shown only once. It belongs to the instance, so it keeps working even if your own account changes.",
+        "Integration (website lead form): tap + New under Integrations, name it, pick whether leads go to your Team or Household contacts, and confirm with your password. Copy the key right away — it's shown only once, together with the exact fields to send and a ready-to-copy example. \"How to send\" on the key shows the fields again any time.",
         "Send leads to POST /api/v1/contacts/intake/lead with the header Authorization: Bearer <the key> and a JSON body like {\"name\": \"…\", \"phone\": \"…\", \"message\": \"…\", \"source\": \"Website\"}. Each lead lands in the key's contacts list, tagged website, with a follow-up reminder for tomorrow (change it with follow_up_days).",
-        "MCP: tap + Set up under MCP (or Set up next to someone's request), pick who the AI app will act as, their workspace, and which tools — set each module to None, Read, or Read + write, or tap a module to tick individual tools. They get a notification to review it; you never see their key.",
+        "MCP: tap + Set up under MCP (or Set up next to someone's request) and pick who the AI app will act as. Then, for each of their workspaces (Business and Personal keep separate data), choose the tools — set each module to None, Read, or Read + write, or tap a module to tick individual tools. They get a notification to review it; you never see their key.",
         "If you were set up for MCP: open the notification (or Settings → Account → MCP), check the list of tools, and accept with your password. Your key is shown once — tap Copy and it disappears from the screen, so paste it into your AI app straight away.",
         "Connect Claude Code: claude mcp add --transport http logcore https://<your-domain>/api/v1/mcp --header \"Authorization: Bearer <your key>\". Other MCP apps: add a remote (Streamable HTTP) MCP server at the same URL with the same Authorization header.",
         "Don't have MCP yet? Settings → Account → MCP → Request MCP access lets your admins know. You can revoke your own key there at any time."
@@ -162,6 +162,7 @@
         "One key per tool or device, so you can revoke just the one that leaked.",
         "A lead from a phone number already in Contacts is added to that same contact instead of creating a duplicate — even if the name is spelled differently. Two different people who share a name stay separate.",
         "An MCP key can never do more than its person can already do in LogCore, whatever tools are ticked.",
+        "With access in both workspaces, the AI app says which one it means each time it uses a tool — it can only use a tool in the workspaces it was given that tool for.",
         "If an admin wants to give your MCP key more tools, you'll be asked to approve first — until then it keeps only what you accepted. Removing tools happens right away.",
         "Tools marked “changes data” run without asking inside LogCore — only your AI app's own approval prompt stands in between.",
         "Admin tools, the in-app chat's own plan/question tools, and anything that would spend your AI or web-search allowance can never be given to a key.",

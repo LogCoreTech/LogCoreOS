@@ -40,16 +40,14 @@ def _everything(level):
     return {g["id"]: level for g in mcp_service.catalog()}
 
 
-def _key_user(admin, access=None, overrides=None):
-    meta = api_key_service.invite_mcp_key(
-        admin,
-        admin,
-        "Claude",
-        "personal",
-        _everything("read") if access is None else access,
-        overrides or {},
-        None,
-    )
+def _key_user(admin, access=None, overrides=None, grants=None):
+    grants = grants or {
+        "personal": {
+            "access": _everything("read") if access is None else access,
+            "tool_overrides": overrides or {},
+        }
+    }
+    meta = api_key_service.invite_mcp_key(admin, admin, "Claude", grants, None)
     _meta, key = api_key_service.accept_invite(meta["id"], admin)
     creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=key)
     return require_api_key("mcp")(creds)
@@ -296,15 +294,22 @@ def test_catalog_never_offers_admin_chat_only_or_metered_tools(brain):
     assert groups[0] == "core" and "tasks" in groups
 
 
-def test_access_validation_rejects_unknown_and_empty(brain):
+def test_grant_validation_rejects_unknown_and_empty(brain):
+    both = ["business", "personal"]
+
+    def _v(grant, allowed=both):
+        return mcp_service.validate_grants({"business": grant}, allowed)
+
     with pytest.raises(ValueError):
-        mcp_service.validate_access({"nope": "read"}, {})
+        _v({"access": {"nope": "read"}})
     with pytest.raises(ValueError):
-        mcp_service.validate_access({}, {"list_users": True})  # admin tool: not grantable
+        _v({"tool_overrides": {"list_users": True}})  # admin tool: not grantable
     with pytest.raises(ValueError):
-        mcp_service.validate_access({"tasks": "none"}, {})
-    access, overrides = mcp_service.validate_access({"tasks": "read", "core": "none"}, {})
-    assert access == {"tasks": "read"} and overrides == {}
+        _v({"access": {"tasks": "none"}})
+    with pytest.raises(ValueError):
+        _v({"access": {"tasks": "read"}}, allowed=["personal"])
+    clean = _v({"access": {"tasks": "read", "core": "none"}})
+    assert clean == {"business": {"access": {"tasks": "read"}, "tool_overrides": {}}}
 
 
 def test_member_key_never_reaches_beyond_the_member(admin):
@@ -314,10 +319,83 @@ def test_member_key_never_reaches_beyond_the_member(admin):
     auth_service.update_user(member["id"], {"disabled_modules": ["tasks"]})
     member = auth_service.get_user_by_id(member["id"])
     meta = api_key_service.invite_mcp_key(
-        admin, member, "Claude", "personal", _everything("write"), {}, None
+        admin, member, "Claude", {"personal": {"access": _everything("write")}}, None
     )
     _meta, key = api_key_service.accept_invite(meta["id"], member)
     user = require_api_key("mcp")(HTTPAuthorizationCredentials(scheme="Bearer", credentials=key))
     names = _tool_names(user)
     assert "list_tasks" not in names and "add_task" not in names
     assert "get_priorities" in names
+
+
+# --- per-workspace grants: the `workspace` argument -------------------------------
+
+
+def _both(admin, business=None, personal=None):
+    return _key_user(
+        admin,
+        grants={
+            "business": {"access": business or {"tasks": "write"}},
+            "personal": {"access": personal or {"tasks": "read"}},
+        },
+    )
+
+
+def _schema(user, name):
+    tools = _rpc(user, "tools/list")["result"]["tools"]
+    return next(t for t in tools if t["name"] == name)["inputSchema"]
+
+
+def test_each_tool_lists_exactly_its_allowed_workspaces(admin):
+    user = _both(admin)
+    list_schema = _schema(user, "list_tasks")
+    assert list_schema["properties"]["workspace"]["enum"] == ["business", "personal"]
+    assert "workspace" in list_schema["required"]
+    add_schema = _schema(user, "add_task")  # write: business only
+    assert add_schema["properties"]["workspace"]["enum"] == ["business"]
+    assert "workspace" not in add_schema["required"]
+
+
+def test_ambiguous_or_disallowed_workspace_is_refused(admin):
+    user = _both(admin)
+    missing = _rpc(user, "tools/call", {"name": "list_tasks", "arguments": {}})
+    assert missing["error"]["code"] == mcp_service.INVALID_PARAMS
+    assert "workspace" in missing["error"]["message"]
+    wrong = _rpc(
+        user,
+        "tools/call",
+        {"name": "add_task", "arguments": {"title": "x", "category": "c", "workspace": "personal"}},
+    )
+    assert wrong["error"]["code"] == mcp_service.INVALID_PARAMS
+
+
+def test_calls_land_in_the_chosen_workspaces_data(admin):
+    user = _both(admin)
+    added = _rpc(
+        user,
+        "tools/call",
+        {"name": "add_task", "arguments": {"title": "Work thing", "category": "Work"}},
+    )["result"]
+    assert added["isError"] is False  # one allowed workspace → no need to say which
+
+    def _titles(workspace):
+        res = _rpc(
+            user, "tools/call", {"name": "list_tasks", "arguments": {"workspace": workspace}}
+        )["result"]
+        return res["content"][0]["text"]
+
+    assert "Work thing" in _titles("business")
+    assert "Work thing" not in _titles("personal")
+
+
+def test_write_audit_records_the_workspace(admin):
+    user = _both(admin)
+    _rpc(user, "tools/call", {"name": "add_task", "arguments": {"title": "t", "category": "c"}})
+    [entry] = [e for e in audit_log.list_entries(20) if e["action"] == "api_key.mcp_write"]
+    assert entry["details"]["workspace"] == "business"
+
+
+def test_module_disabled_in_one_workspace_only_drops_it_there(admin):
+    auth_service.update_user(admin["id"], {"disabled_modules": {"personal": ["tasks"]}})
+    user = _both(admin, personal={"tasks": "write"})
+    assert _schema(user, "list_tasks")["properties"]["workspace"]["enum"] == ["business"]

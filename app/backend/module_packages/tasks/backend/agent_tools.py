@@ -13,12 +13,12 @@ staying core, unowned, until Household/Team's own future conversion: they're
 conceptually Household's domain, just implemented via task_service against
 the "_household" pseudo-user, same as routers/shared.py itself.
 
-All 9 preserve exact pre-conversion behavior: they call task_service/
-priority_service with only (user["name"], inputs) — no workspace param —
-same as the inline match/case they replace, so they still implicitly default
-to the personal workspace regardless of the chat's actual active workspace.
-Not a regression introduced by this move; not fixed here either, since
-fixing it is out of scope for a pure relocation."""
+All 9 act in the caller's ACTIVE workspace (the `workspace` the dispatcher
+passes). Until 2026-10-25 they called task_service/priority_service with no
+workspace at all — a leftover from the original inline match/case — so they
+silently defaulted to PERSONAL tasks even from the Business workspace; fixed
+when per-workspace MCP grants made the wrong-list behavior impossible to
+leave in place."""
 
 from services import priority_service, task_service
 
@@ -200,40 +200,40 @@ TOOL_SCHEMAS = [
 
 
 def execute(name: str, inputs: dict, user: dict, workspace: str = "personal"):
-    # Accepted for signature parity with the generic dispatch (widened
-    # 2026-08-26 for notes/'s own workspace-aware tools) but still
-    # deliberately unused here — see the module docstring above for why
-    # these 9 tools staying implicitly personal-only is a pre-existing,
-    # out-of-scope-for-this-move behavior, not something this signature
-    # change fixes or regresses.
+    # Every call is scoped to `workspace` (2026-10-25) — these tools used to
+    # ignore it and always act on PERSONAL tasks, so the in-app AI in the
+    # Business workspace (and any per-workspace MCP grant) read and wrote the
+    # wrong list. See the module docstring.
     if name == "list_tasks":
-        return task_service.list_tasks(user["name"])
+        return task_service.list_tasks(user["name"], workspace)
 
     if name == "add_task":
-        return task_service.add_task(user["name"], inputs)
+        return task_service.add_task(user["name"], inputs, workspace)
 
     if name == "update_task":
         task_id = inputs["task_id"]
         updates = {k: v for k, v in inputs.items() if k != "task_id"}
-        result = task_service.update_task(user["name"], task_id, updates)
+        result = task_service.update_task(user["name"], task_id, updates, workspace)
         if result is None:
             return {"error": f"Task {task_id!r} not found"}
         return result
 
     if name == "delete_task":
-        ok = task_service.delete_task(user["name"], inputs["task_id"], deleted_by=user["name"])
+        ok = task_service.delete_task(
+            user["name"], inputs["task_id"], workspace, deleted_by=user["name"]
+        )
         return {"deleted": ok}
 
     if name == "get_top3_tasks":
-        return priority_service.get_top3(user["name"])
+        return priority_service.get_top3(user["name"], workspace)
 
     if name == "get_scored_tasks":
-        return priority_service.get_all_scored(user["name"])
+        return priority_service.get_all_scored(user["name"], workspace)
 
     if name == "get_task_history":
         limit = int(inputs.get("limit", 20))
         since = inputs.get("since_date")
-        history = task_service.list_history(user["name"], limit=limit)
+        history = task_service.list_history(user["name"], limit=limit, workspace=workspace)
         if since:
             history = [t for t in history if (t.get("completed_at") or "") >= since]
         return history
@@ -241,7 +241,7 @@ def execute(name: str, inputs: dict, user: dict, workspace: str = "personal"):
     if name == "create_tasks":
         created = []
         for t in inputs.get("tasks", []):
-            created.append(task_service.add_task(user["name"], t))
+            created.append(task_service.add_task(user["name"], t, workspace))
         return created
 
     if name == "get_week_snapshot":
@@ -253,8 +253,8 @@ def execute(name: str, inputs: dict, user: dict, workspace: str = "personal"):
         week_start = today - timedelta(days=today.weekday())
         week_end = week_start + timedelta(days=6)
         ws, we, ts = week_start.isoformat(), week_end.isoformat(), today.isoformat()
-        all_tasks = task_service.list_tasks(user["name"])
-        completed = task_service.list_history(user["name"], limit=50)
+        all_tasks = task_service.list_tasks(user["name"], workspace)
+        completed = task_service.list_history(user["name"], limit=50, workspace=workspace)
         return {
             "week_start": ws,
             "week_end": we,
