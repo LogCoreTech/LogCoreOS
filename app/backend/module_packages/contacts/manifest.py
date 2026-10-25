@@ -15,7 +15,8 @@ import/export, photo, and the finance cross-module read; router_deals.py
 holds interactions + deals; router_sharing.py holds access/sharing
 (including the member/role pickers, matching where Finance's own split put
 those same two picker endpoints) and the leave/respond-share handshake;
-router_automation.py holds the X-Automation-Token-gated n8n API.
+router_automation.py holds the X-Automation-Token-gated n8n API, and
+router_intake.py the API-key-gated lead intake endpoint (2026-10-25).
 `ModuleManifest.get_router()` only supports returning ONE router, so
 `_get_router()` below composes all four. Unlike Finance's own _get_router()
 (a fresh APIRouter with all six of its files include_router()'d into it),
@@ -225,6 +226,7 @@ def _get_router():
     from module_packages.contacts.backend import router as _core
     from module_packages.contacts.backend import router_automation as _automation
     from module_packages.contacts.backend import router_deals as _deals
+    from module_packages.contacts.backend import router_intake as _intake
     from module_packages.contacts.backend import router_sharing as _sharing
 
     # Unlike Finance's own six files, Contacts' core router.py keeps
@@ -249,6 +251,7 @@ def _get_router():
     combined.include_router(_deals.router)
     combined.include_router(_sharing.router)
     combined.include_router(_automation.router)
+    combined.include_router(_intake.router)
     return combined
 
 

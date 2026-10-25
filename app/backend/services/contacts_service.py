@@ -1824,19 +1824,21 @@ def find_match(
 
 
 def upsert_external_contact(
-    store_user: str, workspace: str, data: dict, created_by: str
+    store_user: str, workspace: str, data: dict, created_by: str, *, match_name: bool = True
 ) -> tuple[dict, bool]:
     """Create-or-merge for machine callers (automation token, API-key intake).
     Returns (contact, created). An update MERGES — emails/phones/tags are
     unioned, notes are appended, the existing name is kept — so a sparse
     second call can never wipe what a person curated by hand. Only keys
     actually present in `data` are considered (callers pass
-    model_dump(exclude_unset=True))."""
+    model_dump(exclude_unset=True)). `match_name=False` dedups on hard
+    identifiers only (external_id/email/phone) — for public lead intake, where
+    two different people sharing a name must not be merged into one."""
     fields = _validate_contact(data, partial=True)
     existing = find_match(
         store_user,
         workspace,
-        name=fields.get("name", ""),
+        name=fields.get("name", "") if match_name else "",
         email=(fields.get("emails") or [""])[0],
         phone=(fields.get("phones") or [""])[0],
         external_id=fields.get("external_id") or "",
