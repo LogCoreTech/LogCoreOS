@@ -20,8 +20,12 @@ def _require_automation_token(x_automation_token: str = Header("")) -> None:
 
 
 def _automation_store(user: str, workspace: str) -> tuple[str, str]:
-    if user in ("_team", "_household"):
-        return user, "personal"
+    if user in (contacts_service.POOL_TEAM, contacts_service.POOL_HOUSEHOLD):
+        # Each pool lives at the workspace the app itself reads it from
+        # (contacts_service.pool_for / _candidate_stores): household at
+        # "personal", team at "business". Writing the team pool at "personal"
+        # (the pre-2026-10-25 behavior) put its contacts where no page looks.
+        return user, ("business" if user == contacts_service.POOL_TEAM else "personal")
     if get_user_by_name(user) is None:
         raise HTTPException(status_code=404, detail=f"Unknown user {user!r}")
     return user, workspace

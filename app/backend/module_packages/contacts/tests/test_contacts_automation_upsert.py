@@ -116,3 +116,16 @@ def test_phone_with_country_code_is_not_truncated(brain):
     phones = _only_contact()["phones"]
     assert phones[0] == {"country_code": "1", "number": "5015550100", "extension": ""}
     assert phones[1] == {"country_code": "44", "number": "2079460958", "extension": ""}
+
+
+def test_team_pool_writes_land_where_the_app_reads_them(brain):
+    created = ra.automation_upsert_contact(ra.AutoContact(user="_team", name="Vendor"), None, None)
+    assert crm.get_contact("_team", "business", created["id"]) is not None
+    assert crm.list_contacts("_team", "personal") == []
+
+
+def test_household_pool_stays_personal(brain):
+    created = ra.automation_upsert_contact(
+        ra.AutoContact(user="_household", name="Plumber"), None, None
+    )
+    assert crm.get_contact("_household", "personal", created["id"]) is not None
