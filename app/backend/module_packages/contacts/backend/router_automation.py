@@ -36,7 +36,7 @@ class AutoContact(BaseModel):
     phones: list[str] | None = None
     tags: list[str] | None = None
     notes: str | None = None
-    external_id: str | None = None
+    external_id: str | None = Field(default=None, max_length=128)
 
 
 @router.get("/automation/lookup")
@@ -45,13 +45,17 @@ def automation_lookup(
     workspace: str = "personal",
     email: str = "",
     name: str = "",
+    phone: str = "",
+    external_id: str = "",
     _auth: None = Depends(_require_automation_token),
     _rl: None = Depends(_automation_limit),
 ):
     """Single-contact dedup lookup. Deliberately NOT a list/export endpoint —
     a leaked token cannot dump the contact base."""
     store, store_ws = _automation_store(user, workspace)
-    match = contacts_service.find_match(store, store_ws, name=name, email=email)
+    match = contacts_service.find_match(
+        store, store_ws, name=name, email=email, phone=phone, external_id=external_id
+    )
     return {"found": bool(match), "contact_id": match["id"] if match else None}
 
 
@@ -61,21 +65,20 @@ def automation_upsert_contact(
     _auth: None = Depends(_require_automation_token),
     _rl: None = Depends(_automation_limit),
 ):
+    """Create-or-merge. Matches on external_id, email, phone, then name; an
+    update merges (never wipes fields the caller didn't send — see
+    contacts_service.upsert_external_contact)."""
     store, store_ws = _automation_store(req.user, req.workspace)
-    existing = contacts_service.find_match(
-        store, store_ws, name=req.name, email=(req.emails or [""])[0]
-    )
-    data = req.model_dump(exclude={"user", "workspace", "external_id"})
+    # exclude_unset: an omitted field must mean "leave alone", not "set to None".
+    data = req.model_dump(exclude={"user", "workspace"}, exclude_unset=True)
+    data["name"] = req.name
     try:
-        if existing:
-            contact = contacts_service.update_contact(store, store_ws, existing["id"], data)
-        else:
-            contact = contacts_service.create_contact(
-                store, store_ws, data, created_by="automation"
-            )
+        contact, created = contacts_service.upsert_external_contact(
+            store, store_ws, data, created_by="automation"
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"id": contact["id"], "created": existing is None}
+    return {"id": contact["id"], "created": created}
 
 
 class AutoInteraction(BaseModel):

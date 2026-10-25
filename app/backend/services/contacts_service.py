@@ -469,10 +469,17 @@ def _validate_phones(values) -> list[dict]:
             v = {"number": v}
         if not isinstance(v, dict):
             continue
-        digits = re.sub(r"\D", "", str(v.get("number") or ""))[:10]
+        digits = re.sub(r"\D", "", str(v.get("number") or ""))
+        country = re.sub(r"\D", "", str(v.get("country_code") or ""))[:3]
+        if len(digits) > 10 and not country:
+            # "+1 501-555-0100" — the leading digits are the country code;
+            # keeping the FIRST 10 used to silently corrupt the number.
+            country = digits[:-10][-3:]
+            digits = digits[-10:]
+        digits = digits[:10]
         if not digits:
             continue
-        country = re.sub(r"\D", "", str(v.get("country_code") or "1"))[:3] or "1"
+        country = country or "1"
         ext = re.sub(r"\D", "", str(v.get("extension") or ""))[:6]
         entry = {"country_code": country, "number": digits, "extension": ext}
         if entry not in out:
@@ -626,6 +633,8 @@ def _validate_contact(data: dict, partial: bool = False) -> dict:
         out["status"] = (data.get("status") or "").strip()[:40]
     if "notes" in data:
         out["notes"] = (data.get("notes") or "").strip()[:5000]
+    if "external_id" in data:
+        out["external_id"] = (data.get("external_id") or "").strip()[:128] or None
     if "custom" in data:
         out["custom"] = _validate_custom(data.get("custom"))
     if "gender" in data:
@@ -1773,15 +1782,100 @@ def format_profile_text(contact: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
-def find_match(store_user: str, workspace: str, name: str = "", email: str = "") -> dict | None:
-    name_n = (name or "").strip().lower()
+def _phone_key(value) -> str:
+    """Comparable form of a phone number: digits only, last 10 (drops a
+    leading country code), so "(501) 555-0100" and "+1 501-555-0100" match.
+    Under 7 digits is too short to identify anyone — returns ""."""
+    if isinstance(value, dict):
+        value = value.get("number") or ""
+    digits = re.sub(r"\D", "", str(value or ""))[-10:]
+    return digits if len(digits) >= 7 else ""
+
+
+def find_match(
+    store_user: str,
+    workspace: str,
+    name: str = "",
+    email: str = "",
+    phone: str = "",
+    external_id: str = "",
+) -> dict | None:
+    """Best existing match, strongest signal first across the WHOLE store:
+    external_id, then email, then phone, then exact name — a weaker signal on
+    an earlier contact never beats a stronger one on a later contact."""
+    contacts = list_contacts(store_user, workspace)
+    ext = (external_id or "").strip()
     email_n = (email or "").strip().lower()
-    for c in list_contacts(store_user, workspace):
-        if email_n and email_n in [e.lower() for e in c.get("emails", [])]:
-            return c
-        if name_n and c.get("name", "").strip().lower() == name_n:
-            return c
+    phone_n = _phone_key(phone)
+    name_n = (name or "").strip().lower()
+    checks = [
+        (ext, lambda c: c.get("external_id") == ext),
+        (email_n, lambda c: email_n in [e.lower() for e in c.get("emails", [])]),
+        (phone_n, lambda c: phone_n in [_phone_key(p) for p in c.get("phones", [])]),
+        (name_n, lambda c: c.get("name", "").strip().lower() == name_n),
+    ]
+    for needle, matches in checks:
+        if not needle:
+            continue
+        hit = next((c for c in contacts if matches(c)), None)
+        if hit:
+            return hit
     return None
+
+
+def upsert_external_contact(
+    store_user: str, workspace: str, data: dict, created_by: str
+) -> tuple[dict, bool]:
+    """Create-or-merge for machine callers (automation token, API-key intake).
+    Returns (contact, created). An update MERGES — emails/phones/tags are
+    unioned, notes are appended, the existing name is kept — so a sparse
+    second call can never wipe what a person curated by hand. Only keys
+    actually present in `data` are considered (callers pass
+    model_dump(exclude_unset=True))."""
+    fields = _validate_contact(data, partial=True)
+    existing = find_match(
+        store_user,
+        workspace,
+        name=fields.get("name", ""),
+        email=(fields.get("emails") or [""])[0],
+        phone=(fields.get("phones") or [""])[0],
+        external_id=fields.get("external_id") or "",
+    )
+    if existing is None:
+        if "name" not in fields:
+            raise ValueError("Contact name must be 1-200 characters")
+        return create_contact(store_user, workspace, fields, created_by=created_by), True
+
+    def _merge(c: dict) -> dict:
+        merged = dict(c)
+        for key, cap in (("emails", 20), ("tags", 30)):
+            if fields.get(key):
+                values = list(c.get(key, []))
+                have = {v.lower() for v in values}
+                values += [v for v in fields[key] if v.lower() not in have]
+                merged[key] = values[:cap]
+        if fields.get("phones"):
+            phones = list(c.get("phones", []))
+            have = {_phone_key(p) for p in phones}
+            phones += [p for p in fields["phones"] if _phone_key(p) not in have]
+            merged["phones"] = phones[:20]
+        note = fields.get("notes", "")
+        if note and note not in (c.get("notes") or ""):
+            joined = f"{c['notes']}\n\n{note}" if c.get("notes") else note
+            merged["notes"] = joined[-5000:]
+        if fields.get("external_id") and not c.get("external_id"):
+            merged["external_id"] = fields["external_id"]
+        if "type" in fields and not c.get("self_of"):
+            merged["type"] = fields["type"]
+        merged["updated_at"] = _now()
+        return merged
+
+    contact = _mutate_contact(store_user, workspace, existing["id"], _merge)
+    if fields.get("tags"):
+        from services.tags_service import register_tags
+
+        register_tags(store_user, workspace, fields["tags"])
+    return contact, False
 
 
 def search_contacts(store_user: str, workspace: str, query: str, limit: int = 20) -> list[dict]:
