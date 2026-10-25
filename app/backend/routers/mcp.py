@@ -1,8 +1,9 @@
 """MCP server endpoint — POST /api/v1/mcp (Streamable HTTP transport, JSON
-responses, stateless). Auth: `Authorization: Bearer lcos_…`, a personal API
-key with the `mcp:read` or `mcp:write` scope. All protocol logic lives in
-services/mcp_service.py; this file only does HTTP: origin/version checks,
-body parsing, and turning the result into the right status code."""
+responses, stateless). Auth: `Authorization: Bearer lcos_…`, an MCP-kind API
+key; what it may do is that key's own per-module tool access. All protocol
+logic lives in services/mcp_service.py; this file only does HTTP: origin and
+version checks, body parsing, and turning the result into the right status
+code."""
 
 import asyncio
 import json
@@ -17,7 +18,7 @@ from services.rate_limiter import rate_limit
 router = APIRouter()
 
 _mcp_ip_limit = rate_limit(120, 60)
-_mcp_key = require_api_key(("mcp:read", "mcp:write"), max_calls=60, window_seconds=60)
+_mcp_key = require_api_key("mcp", max_calls=60, window_seconds=60)
 _MAX_BODY = 1_000_000
 
 

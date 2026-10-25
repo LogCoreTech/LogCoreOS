@@ -14,16 +14,22 @@ server needs is small — initialize, ping, tools/list, tools/call, and the
 initialized notification. JSON responses only, no SSE stream and no session
 id (both optional in the spec for a server that never pushes).
 
-Scope filtering on top of the registry (key scopes from api_key_service):
-- mcp:read  → only tools the agent itself treats as read-only
-  (agent_service._READ_TOOLS + every module's read_only_agent_tools).
-- mcp:write → everything else too. In-app the agent pauses writes for the
-  user's approval; over MCP that approval belongs to the client app (which
-  asks before each call), and every write call is audit-logged here.
-- Never exposed: admin tools (core _ADMIN_TOOLS and modules'
-  admin_agent_tools — a key must not be an admin console), the chat-only
-  pause/resume tools, and tools that spend the instance's paid AI or
-  web-search allowance on someone else's behalf.
+Per-key access on top of the registry (api_key_service, kind "mcp"): each
+key carries `access: {group: "read" | "write"}` — a group is a module id, or
+"core" for the agent's own built-in tools (Brain files, profile, memory,
+notifications) — plus optional `tool_overrides: {tool_name: bool}` that
+switch one tool on or off regardless of its group. "read" allows only the
+group's tools the agent itself treats as read-only (agent_service._READ_TOOLS
++ modules' read_only_agent_tools); "write" allows the whole group. A group
+setting covers tools a module adds later; an override names one tool. In-app
+the agent pauses writes for approval; over MCP that approval belongs to the
+client app (which asks before each call), and every write call is
+audit-logged here.
+
+Never exposed, whatever a key says: admin tools (core _ADMIN_TOOLS and
+modules' admin_agent_tools — a key must not be an admin console), the
+chat-only pause/resume tools, and tools that spend the instance's paid AI or
+web-search allowance on someone else's behalf.
 """
 
 import json
@@ -43,7 +49,7 @@ _NEVER_EXPOSED = {"propose_plan", "ask_user_question", "run_suggestion", "search
 _INSTRUCTIONS = (
     "Tools for this person's LogCoreOS instance — tasks, notes, contacts, calendar, "
     "and whatever other modules they have enabled. Every tool acts as the person who "
-    "created this API key, limited to the key's scopes and workspace."
+    "created this API key, limited to the tools and workspace the key was given."
 )
 
 # JSON-RPC 2.0 error codes
@@ -67,23 +73,129 @@ def _admin_tool_names() -> set[str]:
     return {t["name"] for t in _ADMIN_TOOLS} | admin_agent_tool_names()
 
 
+CORE_GROUP = "core"
+ACCESS_LEVELS = ("read", "write")
+
+
+def _exposable(names: set[str]) -> set[str]:
+    return names - _NEVER_EXPOSED - _admin_tool_names()
+
+
+def catalog() -> list[dict]:
+    """Every tool an MCP key could be granted, grouped for the Admin → API
+    Keys picker: [{id, label, tools: [{name, description, read_only}]}]. Core
+    tools first, then each ACTIVE module's own tools. Tools that need extra
+    config (e.g. Home Assistant) are listed if their module is installed;
+    `allowed_tools()` still drops them at call time when unavailable."""
+    from module_registry import active_manifests
+    from services.agent_service import _module_tool_schemas
+    from services.agent_tool_schemas import _USER_TOOLS
+
+    read_names = _read_tool_names()
+
+    def _entry(t: dict) -> dict:
+        return {
+            "name": t["name"],
+            "description": t.get("description", ""),
+            "read_only": t["name"] in read_names,
+        }
+
+    core_names = _exposable({t["name"] for t in _USER_TOOLS})
+    groups = [
+        {
+            "id": CORE_GROUP,
+            "label": "Brain & profile",
+            "tools": [_entry(t) for t in _USER_TOOLS if t["name"] in core_names],
+        }
+    ]
+    schemas = {t["name"]: t for t in _module_tool_schemas()}
+    for module_id, manifest in sorted(
+        active_manifests().items(), key=lambda kv: kv[1].display_name.lower()
+    ):
+        names = _exposable(set(manifest.owned_agent_tools))
+        tools = [
+            _entry(schemas[n]) for n in manifest.owned_agent_tools if n in names and n in schemas
+        ]
+        if tools:
+            groups.append({"id": module_id, "label": manifest.display_name, "tools": tools})
+    return groups
+
+
+def _tool_groups() -> dict[str, str]:
+    """{tool_name: group_id} for every module-owned tool; anything else is core."""
+    from module_registry import discover_manifests
+
+    manifests, _errors = discover_manifests()
+    return {
+        name: module_id
+        for module_id, manifest in manifests.items()
+        for name in manifest.owned_agent_tools
+    }
+
+
+def validate_access(access: dict, tool_overrides: dict) -> tuple[dict, dict]:
+    """Clean + validate a key's access settings against the live catalog.
+    Raises ValueError for anything unknown, or if the result grants nothing."""
+    groups = {g["id"]: g for g in catalog()}
+    clean_access: dict[str, str] = {}
+    for group, level in (access or {}).items():
+        if level in (None, "", "none"):
+            continue
+        if group not in groups:
+            raise ValueError(f"Unknown tool group: {group!r}")
+        if level not in ACCESS_LEVELS:
+            raise ValueError(f"Access for {group!r} must be read, write, or none")
+        clean_access[group] = level
+    known = {t["name"] for g in groups.values() for t in g["tools"]}
+    clean_overrides: dict[str, bool] = {}
+    for name, allowed in (tool_overrides or {}).items():
+        if name not in known:
+            raise ValueError(f"Unknown or non-grantable tool: {name!r}")
+        clean_overrides[name] = bool(allowed)
+    read_names = _read_tool_names()
+    grants_something = any(
+        _tool_allowed(t["name"], g["id"], read_names, clean_access, clean_overrides)
+        for g in groups.values()
+        for t in g["tools"]
+    )
+    if not grants_something:
+        raise ValueError("Pick at least one tool this key can use")
+    return clean_access, clean_overrides
+
+
+def _tool_allowed(
+    name: str, group: str, read_names: set[str], access: dict, overrides: dict
+) -> bool:
+    if name in overrides:
+        return overrides[name]
+    level = access.get(group)
+    return level == "write" or (level == "read" and name in read_names)
+
+
 def allowed_tools(user: dict) -> list[dict]:
-    """The tool schemas this key may see/call, in the agent's own order."""
+    """The tool schemas this key may see/call, in the agent's own order:
+    what the owner can use right now (`_get_tools` — disabled modules gone),
+    minus never-exposed tools, filtered by the key's own access settings."""
     from services.agent_service import _get_tools
 
-    scopes = set(user.get("_api_key", {}).get("scopes", []))
-    can_write = "mcp:write" in scopes
+    key = user.get("_api_key", {})
+    access = key.get("access") or {}
+    overrides = key.get("tool_overrides") or {}
     read_names = _read_tool_names()
+    groups = _tool_groups()
     blocked = _NEVER_EXPOSED | _admin_tool_names()
-    out = []
-    for tool in _get_tools(user):
-        name = tool["name"]
-        if name in blocked:
-            continue
-        if not can_write and name not in read_names:
-            continue
-        out.append(tool)
-    return out
+    return [
+        tool
+        for tool in _get_tools(user)
+        if tool["name"] not in blocked
+        and _tool_allowed(
+            tool["name"],
+            groups.get(tool["name"], CORE_GROUP),
+            read_names,
+            access,
+            overrides,
+        )
+    ]
 
 
 def _mcp_tool(tool: dict, read_names: set[str]) -> dict:

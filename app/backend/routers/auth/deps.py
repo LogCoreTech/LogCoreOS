@@ -181,17 +181,23 @@ def require_pool_edit(pool: str):
     return check
 
 
-def require_api_key(scope: str | tuple[str, ...], max_calls: int = 30, window_seconds: int = 60):
-    """Dependency factory for the few routes that accept a personal API key
+def require_api_key(scope: str, max_calls: int = 30, window_seconds: int = 60):
+    """Dependency factory for the few routes that accept an API key
     (services/api_key_service.py) instead of a session. Bearer header ONLY —
     the session cookie is ignored here, so a logged-in browser can never be
-    used to drive these routes cross-site. Re-fetches the owning user on every
-    request and re-applies their current role, modules, and workspace
-    entitlements; the per-KEY rate limit sits on top of the route's per-IP one.
-    A tuple `scope` accepts a key holding ANY of them (MCP: read or write).
+    used to drive these routes cross-site. The per-KEY rate limit sits on top
+    of the route's own per-IP one. Returns the request's principal:
+
+    - an **mcp** key → its owner's user dict, re-fetched every request with
+      their current role (must still be admin), disabled modules, and
+      workspace entitlements re-applied;
+    - an **integration** key → a machine principal, NOT a user: `name` is the
+      key's target pool (e.g. "_team"), `role` is "integration", and
+      `disabled_modules` is empty (the route checks instance-level install
+      state itself). It belongs to the instance, so no person is consulted.
+
+    Either way `principal["_api_key"]` holds the key's own metadata.
     """
-    accepted = (scope,) if isinstance(scope, str) else tuple(scope)
-    bucket = "|".join(accepted)
 
     def check(credentials: HTTPAuthorizationCredentials = Depends(bearer_optional)) -> dict:
         record = api_key_service.authenticate(credentials.credentials if credentials else "")
@@ -201,28 +207,44 @@ def require_api_key(scope: str | tuple[str, ...], max_calls: int = 30, window_se
                 detail="Invalid, expired, or revoked API key",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        check_rate(f"apikey:{record['id']}:{bucket}", max_calls, window_seconds)
-        if not set(accepted) & set(record["scopes"]):
+        check_rate(f"apikey:{record['id']}:{scope}", max_calls, window_seconds)
+        if scope not in record["scopes"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"This API key doesn't have the '{' or '.join(accepted)}' scope",
+                detail=f"This API key can't be used here (needs the '{scope}' scope)",
             )
+        workspace = record["workspace"]
+        if record["kind"] == api_key_service.KIND_INTEGRATION:
+            if workspace not in auth_service.enabled_workspaces():
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"This API key's workspace ({workspace}) is turned off",
+                )
+            return {
+                "id": f"api-key:{record['id']}",
+                "name": record["target"],
+                "role": "integration",
+                "disabled_modules": [],
+                "_workspace": workspace,
+                "_api_key": record,
+            }
+
         user = auth_service.get_user_by_id(record["user_id"])
-        # Keys are admin-only (docs/MEMORY.md 2026-10-25): a key whose owner has
-        # since been demoted stops working, it isn't grandfathered in.
+        # MCP keys are admin-only (docs/MEMORY.md 2026-10-25): a key whose owner
+        # has since been demoted stops working, it isn't grandfathered in.
         if not user or user.get("role") != "admin":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="This API key's account no longer exists or is no longer an admin",
             )
-        user = _apply_workspace_context(user, record["workspace"])
-        if user["_workspace"] != record["workspace"]:
+        user = _apply_workspace_context(user, workspace)
+        if user["_workspace"] != workspace:
             # Never silently retarget a key at a different workspace's data.
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"This API key's workspace ({record['workspace']}) is no longer available",
+                detail=f"This API key's workspace ({workspace}) is no longer available",
             )
-        user["_api_key"] = {"id": record["id"], "name": record["name"], "scopes": record["scopes"]}
+        user["_api_key"] = record
         return user
 
     return check

@@ -36,10 +36,22 @@ def admin(brain):
     return auth_service.get_user_by_id(user["id"])
 
 
-def _key_user(admin, scopes=("mcp:read",)):
-    _meta, key = api_key_service.create_key(admin, "Claude", list(scopes), "personal", None)
+def _everything(level):
+    return {g["id"]: level for g in mcp_service.catalog()}
+
+
+def _key_user(admin, access=None, overrides=None):
+    _meta, key = api_key_service.create_key(
+        admin,
+        "mcp",
+        "Claude",
+        None,
+        workspace="personal",
+        access=_everything("read") if access is None else access,
+        tool_overrides=overrides or {},
+    )
     creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=key)
-    return require_api_key(("mcp:read", "mcp:write"))(creds)
+    return require_api_key("mcp")(creds)
 
 
 def _rpc(user, method, params=None, msg_id=1):
@@ -95,12 +107,12 @@ def test_read_key_sees_only_read_tools(admin):
 
 
 def test_write_key_adds_write_tools(admin):
-    names = _tool_names(_key_user(admin, scopes=("mcp:write",)))
+    names = _tool_names(_key_user(admin, access=_everything("write")))
     assert {"list_tasks", "add_task", "create_brain_file"} <= names
 
 
 def test_admin_chat_only_and_metered_tools_never_exposed(admin):
-    names = _tool_names(_key_user(admin, scopes=("mcp:read", "mcp:write")))
+    names = _tool_names(_key_user(admin, access=_everything("write")))
     for blocked in (
         "list_users",
         "read_system_file",
@@ -119,7 +131,7 @@ def test_admin_chat_only_and_metered_tools_never_exposed(admin):
 
 def test_disabled_module_tools_hidden_and_refused(admin):
     auth_service.update_user(admin["id"], {"disabled_modules": ["tasks"]})
-    user = _key_user(admin, scopes=("mcp:write",))
+    user = _key_user(admin, access=_everything("write"))
     assert "list_tasks" not in _tool_names(user)
     res = _rpc(user, "tools/call", {"name": "list_tasks", "arguments": {}})
     assert res["error"]["code"] == mcp_service.INVALID_PARAMS
@@ -138,7 +150,7 @@ def test_read_key_cannot_call_write_tool(admin):
 
 
 def test_write_then_read_round_trip(admin):
-    user = _key_user(admin, scopes=("mcp:read", "mcp:write"))
+    user = _key_user(admin, access=_everything("write"))
     added = _rpc(
         user,
         "tools/call",
@@ -151,7 +163,7 @@ def test_write_then_read_round_trip(admin):
 
 
 def test_write_calls_are_audited_reads_are_not(admin):
-    user = _key_user(admin, scopes=("mcp:read", "mcp:write"))
+    user = _key_user(admin, access=_everything("write"))
     _rpc(user, "tools/call", {"name": "list_tasks", "arguments": {}})
     _rpc(user, "tools/call", {"name": "add_task", "arguments": {"title": "t", "category": "c"}})
     entries = [e for e in audit_log.list_entries(20) if e["action"] == "api_key.mcp_write"]
@@ -160,7 +172,7 @@ def test_write_calls_are_audited_reads_are_not(admin):
 
 
 def test_tool_error_sets_is_error(admin):
-    user = _key_user(admin, scopes=("mcp:write",))
+    user = _key_user(admin, access=_everything("write"))
     res = _rpc(user, "tools/call", {"name": "read_brain_file", "arguments": {"path": "../x.md"}})
     assert res["result"]["isError"] is True
 
@@ -236,9 +248,59 @@ def test_get_is_405():
     assert mcp_no_stream(None).status_code == 405
 
 
-def test_key_without_mcp_scope_is_refused(admin):
-    _meta, key = api_key_service.create_key(admin, "form", ["leads:create"], "personal", None)
+def test_integration_key_is_refused(admin):
+    _meta, key = api_key_service.create_key(admin, "integration", "form", None, target="_team")
     creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=key)
     with pytest.raises(HTTPException) as exc:
-        require_api_key(("mcp:read", "mcp:write"))(creds)
+        require_api_key("mcp")(creds)
     assert exc.value.status_code == 403
+
+
+# --- per-key access -------------------------------------------------------------
+
+
+def test_module_level_access_limits_to_that_module(admin):
+    user = _key_user(admin, access={"tasks": "read"})
+    names = _tool_names(user)
+    assert "list_tasks" in names
+    assert "add_task" not in names
+    assert "get_priorities" not in names  # core group not granted
+
+
+def test_override_adds_one_write_tool_to_a_read_group(admin):
+    user = _key_user(admin, access={"tasks": "read"}, overrides={"add_task": True})
+    names = _tool_names(user)
+    assert {"list_tasks", "add_task"} <= names
+    assert "delete_task" not in names
+
+
+def test_override_removes_one_tool_from_a_write_group(admin):
+    user = _key_user(admin, access={"tasks": "write"}, overrides={"delete_task": False})
+    names = _tool_names(user)
+    assert "add_task" in names and "delete_task" not in names
+    res = _rpc(user, "tools/call", {"name": "delete_task", "arguments": {"task_id": "x"}})
+    assert res["error"]["code"] == mcp_service.INVALID_PARAMS
+
+
+def test_override_alone_can_grant_a_single_tool(admin):
+    user = _key_user(admin, access={}, overrides={"add_task": True})
+    assert _tool_names(user) == {"add_task"}
+
+
+def test_catalog_never_offers_admin_chat_only_or_metered_tools(brain):
+    offered = {t["name"] for g in mcp_service.catalog() for t in g["tools"]}
+    for blocked in ("list_users", "run_tests", "propose_plan", "ask_user_question", "search_web"):
+        assert blocked not in offered
+    groups = [g["id"] for g in mcp_service.catalog()]
+    assert groups[0] == "core" and "tasks" in groups
+
+
+def test_access_validation_rejects_unknown_and_empty(brain):
+    with pytest.raises(ValueError):
+        mcp_service.validate_access({"nope": "read"}, {})
+    with pytest.raises(ValueError):
+        mcp_service.validate_access({}, {"list_users": True})  # admin tool: not grantable
+    with pytest.raises(ValueError):
+        mcp_service.validate_access({"tasks": "none"}, {})
+    access, overrides = mcp_service.validate_access({"tasks": "read", "core": "none"}, {})
+    assert access == {"tasks": "read"} and overrides == {}

@@ -101,12 +101,14 @@ from .admin_users import (
     update_workspace_modules,
 )
 
-# --- api_keys.py: Admin → API Keys (personal API keys) ------------------
+# --- api_keys.py: Admin → API Keys (integration + MCP keys) -------------
 from .api_keys import (
     ApiKeyCreateRequest,
+    ApiKeyUpdateRequest,
     admin_create_api_key,
     admin_list_api_keys,
     admin_revoke_api_key,
+    admin_update_api_key,
 )
 
 # --- deps.py: core dependencies + shared helpers -------------------------
@@ -336,7 +338,9 @@ __all__ = [
     "verify_login",
     # api_keys
     "ApiKeyCreateRequest",
+    "ApiKeyUpdateRequest",
     "admin_create_api_key",
     "admin_list_api_keys",
     "admin_revoke_api_key",
+    "admin_update_api_key",
 ]

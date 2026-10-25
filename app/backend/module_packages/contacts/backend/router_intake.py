@@ -1,24 +1,28 @@
-"""Lead intake — POST /api/v1/contacts/intake/lead, authenticated by a personal
-API key with the `leads:create` scope (routers/auth/deps.py:require_api_key).
+"""Lead intake — POST /api/v1/contacts/intake/lead, authenticated by an
+integration API key (`leads:create`; routers/auth/deps.py:require_api_key).
 
 Built for an external lead form (e.g. a website's "request a call" form) to
-drop a lead straight into Contacts as something to call back: the contact is
-upserted by phone (contacts_service.upsert_external_contact — merges, never
-wipes), tagged `website`, and gets a note interaction whose `follow_up` date
-puts it on the nightly follow-up reminder sweep.
+drop a lead straight into Contacts as something to call back. An integration
+key belongs to the instance, not a person, and is pinned at creation to one
+shared contacts list (Team or Household) — the form can't pick or change
+where its leads go. The contact is upserted by phone/email/external_id
+(contacts_service.upsert_external_contact — merges, never wipes), tagged
+`website`, and gets a note interaction whose `follow_up` date puts it on the
+nightly follow-up sweep, which notifies every admin for a shared list.
 
 Write-only by design (docs/MEMORY.md 2026-07-14): the response carries ids
 only, never any contact data, so a leaked intake key can add leads but can't
 read a thing back."""
 
 import re
-from datetime import timedelta
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from routers.auth.deps import require_api_key
-from services import auth_service, contacts_service
+from services import contacts_service, mod_store_service
 from services.rate_limiter import rate_limit
 
 router = APIRouter()
@@ -37,28 +41,33 @@ class LeadIntake(BaseModel):
     source: str = Field(default="", max_length=40)
     external_id: str | None = Field(default=None, max_length=128)
     follow_up_days: int = Field(default=1, ge=0, le=365)
-    to_pool: bool = False
 
 
 def _source_tag(source: str) -> str:
     return _SOURCE_RE.sub("-", source.strip().lower()).strip("-")[:40]
 
 
+def _today(tz_name: str):
+    try:
+        return datetime.now(ZoneInfo(tz_name)).date()
+    except (ZoneInfoNotFoundError, ValueError):
+        return datetime.now(ZoneInfo("UTC")).date()
+
+
 @router.post("/intake/lead")
 def intake_lead(
     req: LeadIntake,
-    current_user: dict = Depends(_intake_key),
+    principal: dict = Depends(_intake_key),
     _rl: None = Depends(_intake_ip_limit),
 ):
     """Upsert the contact by phone/email/external_id (never by name alone),
-    tag it, and log a follow-up interaction. `to_pool` drops it into the active workspace's shared pool (Team for
-    business, Household for personal) so everyone who works leads sees it."""
-    if "contacts" in current_user.get("disabled_modules", []):
-        raise HTTPException(status_code=403, detail="Contacts is disabled for this key's account")
+    tag it, and log a follow-up interaction in the key's shared list."""
+    if not mod_store_service.is_installed("contacts"):
+        raise HTTPException(status_code=403, detail="Contacts isn't installed on this instance")
     if not contacts_service._phone_key(req.phone):
         raise HTTPException(status_code=400, detail="phone must contain at least 7 digits")
-    workspace = current_user["_workspace"]
-    store = contacts_service.pool_for(workspace) if req.to_pool else current_user["name"]
+    key = principal["_api_key"]
+    store, workspace = key["target"], key["workspace"]
 
     tags = ["website"]
     source_tag = _source_tag(req.source)
@@ -70,14 +79,12 @@ def intake_lead(
     if req.external_id:
         contact_data["external_id"] = req.external_id
 
-    key_name = current_user["_api_key"]["name"]
+    created_by = f"api-key:{key['name']}"
     try:
         contact, created = contacts_service.upsert_external_contact(
-            store, workspace, contact_data, created_by=f"api-key:{key_name}", match_name=False
+            store, workspace, contact_data, created_by=created_by, match_name=False
         )
-        follow_up = auth_service.today_for_user(current_user["name"]) + timedelta(
-            days=req.follow_up_days
-        )
+        follow_up = _today(key.get("timezone") or "UTC") + timedelta(days=req.follow_up_days)
         summary = req.message.strip() or "New lead — no message left."
         if req.source.strip():
             summary = f"[{req.source.strip()}] {summary}"
@@ -85,12 +92,8 @@ def intake_lead(
             store,
             workspace,
             contact["id"],
-            {
-                "type": "note",
-                "summary": summary,
-                "follow_up": follow_up.isoformat(),
-            },
-            created_by=f"api-key:{key_name}",
+            {"type": "note", "summary": summary, "follow_up": follow_up.isoformat()},
+            created_by=created_by,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

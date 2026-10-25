@@ -13,6 +13,7 @@ const ACTION_LABELS = {
   'user.2fa_admin_reset': "Reset a user's two-factor authentication",
   'api_key.create': 'Created API key',
   'api_key.revoke': 'Revoked API key',
+  'api_key.update': 'Changed API key',
   'api_key.mcp_write': 'API key used a write tool',
 }
 
