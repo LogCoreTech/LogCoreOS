@@ -27,6 +27,7 @@ from routers import (
     health,
     help,
     infisical,
+    mcp,
     mod_store,
     presence,
     priorities,
@@ -404,6 +405,7 @@ app.include_router(mod_store.router, prefix="/api/v1/mod-store", tags=["mod-stor
 app.include_router(welcome_back.router, prefix="/api/v1/welcome-back", tags=["welcome-back"])
 app.include_router(pwa.router, prefix="/api/v1/pwa", tags=["pwa"])
 app.include_router(trash.router, prefix="/api/v1/trash", tags=["trash"])
+app.include_router(mcp.router, prefix="/api/v1/mcp", tags=["mcp"])
 
 # Serve React frontend — must come last
 static_dir = Path(__file__).parent.parent / "frontend" / "dist"
