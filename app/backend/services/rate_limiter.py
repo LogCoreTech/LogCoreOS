@@ -51,23 +51,29 @@ def rate_limit(max_calls: int, window_seconds: int, bucket: str | None = None):
     """
 
     def dependency(request: Request) -> None:
-        global _sweep_n
-        ip = _client_ip(request)
-        key = f"{bucket or request.url.path}:{ip}"
-        now = time.monotonic()
-
-        _sweep_n += 1
-        if _sweep_n >= 5_000:
-            _sweep_n = 0
-            _sweep(now)
-
-        recent = [t for t in _hits.get(key, []) if now - t < window_seconds]
-        if len(recent) >= max_calls:
-            raise HTTPException(
-                status_code=429,
-                detail="Too many requests — please wait before trying again.",
-            )
-        recent.append(now)
-        _hits[key] = recent
+        check_rate(f"{bucket or request.url.path}:{_client_ip(request)}", max_calls, window_seconds)
 
     return dependency
+
+
+def check_rate(key: str, max_calls: int, window_seconds: int) -> None:
+    """Count one hit against an arbitrary bucket key and raise 429 past the
+    limit. rate_limit() uses it per IP; API-key routes also call it per KEY
+    (services/api_key_service.py) so one leaked key can't spread its traffic
+    across many IPs to get many allowances."""
+    global _sweep_n
+    now = time.monotonic()
+
+    _sweep_n += 1
+    if _sweep_n >= 5_000:
+        _sweep_n = 0
+        _sweep(now)
+
+    recent = [t for t in _hits.get(key, []) if now - t < window_seconds]
+    if len(recent) >= max_calls:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests — please wait before trying again.",
+        )
+    recent.append(now)
+    _hits[key] = recent

@@ -333,6 +333,12 @@ def delete_user(user_id: str) -> None:
         if len(data["users"]) == original:
             raise ValueError("User not found")
         _save_auth(data)
+    # Outside _auth_lock (api_keys.json has its own update_json lock). A deleted
+    # account's keys must die with it — require_api_key would already reject
+    # them (no user), but revoking makes that explicit and visible in the list.
+    from services.api_key_service import revoke_all_for_user
+
+    revoke_all_for_user(user_id)
 
 
 def authenticate(email: str, password: str) -> dict | None:

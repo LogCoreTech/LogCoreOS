@@ -181,6 +181,10 @@ export const admin = {
   updateUser:        (userId, data)              => patch(`/auth/users/${userId}`, data),
   updateRole:        (userId, role)              => patch(`/auth/users/${userId}/role`, { role }),
   getAuditLog:       (limit = 100)                => get(`/auth/admin/audit-log?limit=${limit}`),
+  // Personal API keys (admin-only) — the full key is only in createApiKey's response
+  listApiKeys:       ()                          => get('/auth/admin/api-keys'),
+  createApiKey:      (data)                      => post('/auth/admin/api-keys', data),
+  revokeApiKey:      (id)                        => del(`/auth/admin/api-keys/${id}`),
   // Registration settings
   getSettings:       ()                          => get('/auth/admin/settings'),
   updateSettings:    (s)                         => patch('/auth/admin/settings', s),

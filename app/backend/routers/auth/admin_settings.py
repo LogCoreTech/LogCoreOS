@@ -194,6 +194,7 @@ class AdminSettingsRequest(BaseModel):
     enabled_workspaces: list[str] | None = None
     session_minutes: int | None = Field(default=None, ge=60, le=129600)
     require_2fa: Literal["off", "admin", "all"] | None = None
+    api_keys_enabled: bool | None = None
 
     @field_validator("enabled_workspaces")
     @classmethod
@@ -218,6 +219,7 @@ def get_admin_settings(current_user: dict = Depends(require_admin)):
         "enabled_workspaces": auth_service.enabled_workspaces(),
         "session_minutes": auth_service.get_effective_session_minutes(),
         "require_2fa": runtime.get("require_2fa", "off"),
+        "api_keys_enabled": runtime.get("api_keys_enabled", True),
     }
 
 
@@ -241,4 +243,5 @@ def update_admin_settings(
         "enabled_workspaces": auth_service.enabled_workspaces(),
         "session_minutes": auth_service.get_effective_session_minutes(),
         "require_2fa": updated.get("require_2fa", "off"),
+        "api_keys_enabled": updated.get("api_keys_enabled", True),
     }

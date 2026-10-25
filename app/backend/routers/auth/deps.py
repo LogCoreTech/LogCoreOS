@@ -15,10 +15,10 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import Depends, Header, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from services import auth_service
+from services import api_key_service, auth_service
 from services.features_service import get_effective_disabled
 from services.hosting_service import effective_cookie_secure
-from services.rate_limiter import rate_limit
+from services.rate_limiter import check_rate, rate_limit
 
 bearer_optional = HTTPBearer(auto_error=False)
 logger = logging.getLogger("logcore.auth")
@@ -73,6 +73,13 @@ def get_current_user(
         token = credentials.credentials
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    if token.startswith(api_key_service.KEY_PREFIX):
+        # Fail closed: an API key only works on routes that explicitly opt in
+        # via require_api_key(scope) — never on the app's normal routes.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API keys can't be used on this endpoint",
+        )
     payload = auth_service.decode_token(token)
     if not payload:
         raise HTTPException(
@@ -84,7 +91,16 @@ def get_current_user(
     # Attach jti and exp so logout can revoke with persistence
     user["_jti"] = payload.get("jti")
     user["_exp"] = payload.get("exp")
-    workspace = x_workspace if x_workspace in ("personal", "business") else "personal"
+    return _apply_workspace_context(user, x_workspace)
+
+
+def _apply_workspace_context(user: dict, requested_workspace: str) -> dict:
+    """Effective workspaces, the validated active workspace, and disabled
+    modules — shared by the session path (get_current_user) and the API-key
+    path (require_api_key) so the two can never drift apart."""
+    workspace = (
+        requested_workspace if requested_workspace in ("personal", "business") else "personal"
+    )
     enabled_ws = auth_service.enabled_workspaces()
     # Lazy migration: admins get every instance-enabled workspace (persisted so
     # access is restored automatically if a hidden workspace is re-enabled).
@@ -161,5 +177,49 @@ def require_pool_edit(pool: str):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to make changes here.",
         )
+
+    return check
+
+
+def require_api_key(scope: str, max_calls: int = 30, window_seconds: int = 60):
+    """Dependency factory for the few routes that accept a personal API key
+    (services/api_key_service.py) instead of a session. Bearer header ONLY —
+    the session cookie is ignored here, so a logged-in browser can never be
+    used to drive these routes cross-site. Re-fetches the owning user on every
+    request and re-applies their current role, modules, and workspace
+    entitlements; the per-KEY rate limit sits on top of the route's per-IP one.
+    """
+
+    def check(credentials: HTTPAuthorizationCredentials = Depends(bearer_optional)) -> dict:
+        record = api_key_service.authenticate(credentials.credentials if credentials else "")
+        if record is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid, expired, or revoked API key",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        check_rate(f"apikey:{record['id']}:{scope}", max_calls, window_seconds)
+        if scope not in record["scopes"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"This API key doesn't have the '{scope}' scope",
+            )
+        user = auth_service.get_user_by_id(record["user_id"])
+        # Keys are admin-only (docs/MEMORY.md 2026-10-25): a key whose owner has
+        # since been demoted stops working, it isn't grandfathered in.
+        if not user or user.get("role") != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="This API key's account no longer exists or is no longer an admin",
+            )
+        user = _apply_workspace_context(user, record["workspace"])
+        if user["_workspace"] != record["workspace"]:
+            # Never silently retarget a key at a different workspace's data.
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"This API key's workspace ({record['workspace']}) is no longer available",
+            )
+        user["_api_key"] = {"id": record["id"], "name": record["name"], "scopes": record["scopes"]}
+        return user
 
     return check

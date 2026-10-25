@@ -48,6 +48,7 @@ from fastapi import APIRouter
 # ahead of the named `from .X import (...)` blocks that follow.
 from . import admin_settings as _admin_settings
 from . import admin_users as _admin_users
+from . import api_keys as _api_keys
 from . import profile as _profile
 from . import session as _session
 from . import totp as _totp
@@ -98,6 +99,14 @@ from .admin_users import (
     update_user_role_legacy,
     update_user_workspaces,
     update_workspace_modules,
+)
+
+# --- api_keys.py: Admin → API Keys (personal API keys) ------------------
+from .api_keys import (
+    ApiKeyCreateRequest,
+    admin_create_api_key,
+    admin_list_api_keys,
+    admin_revoke_api_key,
 )
 
 # --- deps.py: core dependencies + shared helpers -------------------------
@@ -198,6 +207,7 @@ router.include_router(_profile.router)
 router.include_router(_admin_users.router)
 router.include_router(_admin_settings.router)
 router.include_router(_totp.router)
+router.include_router(_api_keys.router)
 
 __all__ = [
     "router",
@@ -324,4 +334,9 @@ __all__ = [
     "setup_totp",
     "totp_status",
     "verify_login",
+    # api_keys
+    "ApiKeyCreateRequest",
+    "admin_create_api_key",
+    "admin_list_api_keys",
+    "admin_revoke_api_key",
 ]
