@@ -127,3 +127,10 @@ def test_invalid_email_is_a_400(admin):
     with pytest.raises(HTTPException) as exc:
         _lead(_key_user(admin), email="not-an-email")
     assert exc.value.status_code == 400
+
+
+def test_phone_without_enough_digits_is_a_400(admin):
+    with pytest.raises(HTTPException) as exc:
+        _lead(_key_user(admin), phone="call me pls")
+    assert exc.value.status_code == 400
+    assert crm.list_contacts("Owner", "personal") == []

@@ -55,6 +55,8 @@ def intake_lead(
     business, Household for personal) so everyone who works leads sees it."""
     if "contacts" in current_user.get("disabled_modules", []):
         raise HTTPException(status_code=403, detail="Contacts is disabled for this key's account")
+    if not contacts_service._phone_key(req.phone):
+        raise HTTPException(status_code=400, detail="phone must contain at least 7 digits")
     workspace = current_user["_workspace"]
     store = contacts_service.pool_for(workspace) if req.to_pool else current_user["name"]
 
